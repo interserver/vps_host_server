@@ -1,0 +1,55 @@
+<domain type='kvm'>
+  <name>linux</name>
+  <uuid>7d8578f8-788e-a9c6-d472-3639105f1915</uuid>
+  <memory unit='KiB'>524288</memory>
+  <currentMemory unit='KiB'>524288</currentMemory>
+  <vcpu placement='static'>1</vcpu>
+  <os>
+	<type arch='x86_64' machine='rhel5.5.0'>hvm</type>
+	<boot dev='hd'/>
+  </os>
+  <features>
+	<acpi/>
+	<apic/>
+	<pae/>
+  </features>
+  <clock offset='utc'>
+	<timer name='pit' tickpolicy='delay'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <devices>
+	<emulator>/usr/libexec/qemu-kvm</emulator>
+	<disk type='block' device='disk'>
+	  <driver name='qemu' type='raw' cache='none' io='native'/>
+	  <source dev='/dev/vz/linux'/>
+	  <target dev='vda' bus='virtio'/>
+	  <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+	</disk>
+	<controller type='ide' index='0'>
+	  <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+	</controller>
+	<interface type='bridge'>
+	  <mac address='54:52:00:39:c7:8a'/>
+	  <source bridge='br0'/>
+	  <model type='virtio'/>
+	  <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+	</interface>
+	<serial type='pty'>
+	  <target port='0'/>
+	</serial>
+	<console type='pty'>
+	  <target type='serial' port='0'/>
+	</console>
+	<input type='mouse' bus='ps2'/>
+	<graphics type='vnc' port='-1' autoport='yes' keymap='en-us'/>
+	<video>
+	  <model type='cirrus' vram='9216' heads='1'/>
+	  <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+	</video>
+	<memballoon model='virtio'>
+	  <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+	</memballoon>
+  </devices>
+</domain>
