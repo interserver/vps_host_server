@@ -1,0 +1,19 @@
+#!/bin/sh
+
+#current bug
+# each ip is limited, not each account
+
+export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin
+
+IFS="
+"
+
+for vm in `cat /etc/dhcpd.vps | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`; do
+        ip=`echo $vm | cut -d" " -f2`;
+        host=`echo $vm | cut -d" " -f1`;
+        vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;
+        echo "Limiting $ip";
+        echo /scripts/tclimit $ip $vnet $host
+        echo
+done
+
