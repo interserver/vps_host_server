@@ -1,0 +1,103 @@
+#!/bin/bash
+
+if [ ! -x /usr/local/sbin/ebtables ]; then
+	echo '/usr/local/sbin/ebtables does not exist or is not executable';
+	exit;
+fi
+
+debug=0;
+
+# interface
+eth=eth0;
+
+#bridge
+bridge=br0;
+
+# gateway
+gateway=173.214.175.1;
+br=173.214.175.2;
+
+# maybe we want --all?
+list=`/usr/bin/virsh list | grep running | awk '{print $2}'`
+
+# output script header
+if [ ! "$debug" = "1" ]; then
+	cat <<EOF
+#!/bin/sh
+export PATH=$PATH:/sbin:/usr/local/sbin
+/sbin/iptables --flush
+iptables -F INPUT
+iptables -F OUTPUT
+iptables -F FORWARD
+echo "1" > /proc/sys/net/ipv4/ip_forward
+/sbin/iptables -P INPUT ACCEPT
+/sbin/iptables -P OUTPUT ACCEPT
+/sbin/iptables -P FORWARD ACCEPT
+/sbin/iptables -A INPUT -i lo -j ACCEPT
+iptables -I FORWARD -m physdev --physdev-is-bridged -j ACCEPT
+ebtables -F
+ebtables -P INPUT ACCEPT
+ebtables -P OUTPUT ACCEPT
+ebtables -P FORWARD ACCEPT
+EOF
+	# end script header
+fi
+
+# this outputs all the protection for each individual server
+for user in $list; do
+	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
+	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2`;
+	# improve getting the ip in the future
+	ip=`cat /etc/dhcpd.vps  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
+	if [ "$debug" = "1" ]; then
+		echo "found user $user"
+		echo "	found mac $mac"
+		echo "	found dev $dev"
+		echo "	found ip $ip"
+	else
+		echo "# begin $user"
+		echo "# $user allow arp, $gateway is gw and $ip is ip of server. $dev changes as well based on server"
+		echo "ebtables -A FORWARD -p ARP --arp-ip-src $gateway --arp-ip-dst $ip -i $eth -o $dev -j ACCEPT"
+		echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gateway -i $dev -o $eth -j ACCEPT"
+		echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $ip -i $eth -o $dev -j ACCEPT"
+                echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $br -i $dev -o $eth -j ACCEPT"
+		# new addition
+                echo "# new addition"
+                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $dev -o $eth -j ACCEPT"
+                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $eth -o $dev -j ACCEPT"
+                # end
+		ips="$(grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2)"
+		if [ ! "$ips" = "" ]; then
+			for extraip in $ips; do
+				echo "# $user allow arp, $gateway is gw and $extraip is ip of server. $dev changes as well based on server"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $gateway --arp-ip-dst $extraip -i $eth -o $dev -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gateway -i $dev -o $eth -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $extraip -i $eth -o $dev -j ACCEPT"
+		                echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $br -i $dev -o $eth -j ACCEPT"
+				# new addition
+                                echo "# new addition"
+                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $dev -o $eth -j ACCEPT"
+                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $eth -o $dev -j ACCEPT"
+                                # end
+			done
+		fi
+		echo "# $user mac spoof protect"
+		echo "ebtables -A FORWARD -i $dev -s ! $mac -j DROP"
+		echo "# $user IP PROTECT"
+		echo "ebtables -A FORWARD -p IPv4 --ip-src $ip -s ! $mac --log-prefix \"$user\" --log-ip --log-arp -j DROP"
+		if [ ! "$ips" = "" ]; then
+			for extraip in $ips; do
+				echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip -s ! $mac --log-prefix \"$user\" --log-ip --log-arp -j DROP"
+			done
+		fi
+		echo "# end $user"
+		echo
+		
+	fi
+done
+
+# output final line / footer that disable's arp
+if [ ! "$debug" = "1" ]; then
+	echo '# dump arp (seems to solve arping ip stealing, what is the draw back?)'
+	echo 'ebtables -A FORWARD -p ARP --log-prefix "arp" --log-ip --log-arp -j DROP'
+fi
