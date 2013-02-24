@@ -31,7 +31,10 @@ if which virsh >/dev/null 2>&1; then
  else
   snap=vz-snap
  fi
- if [ -e /dev/mapper/${snap}${id}p3 ]; then
+ if [ -e /dev/mapper/${snap}${id}p6 ]; then
+  mount /dev/mapper/${snap}${id}p6 /${image}
+  mount /dev/mapper/${snap}${id}p1 /${image}/boot
+ elif [ -e /dev/mapper/${snap}${id}p3 ]; then
   mount /dev/mapper/${snap}${id}p3 /${image}
   mount /dev/mapper/${snap}${id}p1 /${image}/boot
  elif [ -e /dev/mapper/${snap}${id}p2 ]; then

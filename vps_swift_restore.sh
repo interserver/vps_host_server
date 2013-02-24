@@ -47,7 +47,10 @@ for i in $destids; do
       else
        mapdir=vz-$i
       fi
-	  if [ -e /dev/mapper/${mapdir}p3 ]; then
+	  if [ -e /dev/mapper/${mapdir}p6 ]; then
+		mount -o rw /dev/mapper/${mapdir}p6 /${image} || exit
+		mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
+	  elif [ -e /dev/mapper/${mapdir}p3 ]; then
 		mount -o rw /dev/mapper/${mapdir}p3 /${image} || exit
 		mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	  elif [ -e /dev/mapper/${mapdir}p2 ]; then
