@@ -21,11 +21,11 @@ if which virsh >/dev/null 2>&1; then
   	echo "Invalid Image name - directory exists";
   	exit;
   fi
-  mkdir -p /${image}
   if [ $# -gt 1 ]; then
 	/admin/swift/isget vps${sourceid} ${image}
 	mv ${image} /${image}.tar.gz
   fi
+  mkdir -p /${image}
 else
   if [ -e /vz/${image} ]; then
   	echo "Invalid Image name - directory exists";
