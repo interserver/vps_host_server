@@ -62,7 +62,7 @@ for i in $destids; do
 	  if [ $# -gt 1 ]; then
 		tar xzf /${image}.tar.gz
 	  else
-		/admin/swift/isget vps${sourceid} ${image} | tar xzf -
+		/admin/swift/isget vps${sourceid} ${image} -out | tar xzf -
 	  fi
 	  if [ -e /dev/mapper/${mapdir}p6 ]; then
 		umount /${image}/boot
