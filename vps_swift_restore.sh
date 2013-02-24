@@ -64,7 +64,9 @@ for i in $destids; do
 	  else
 		/admin/swift/isget vps${sourceid} ${image} | tar xzf -
 	  fi
-	  if [ -e /dev/mapper/${mapdir}p3 ]; then
+	  if [ -e /dev/mapper/${mapdir}p6 ]; then
+		umount /${image}/boot
+	  elif [ -e /dev/mapper/${mapdir}p3 ]; then
 		umount /${image}/boot
 	  fi
 	  umount /${image}
