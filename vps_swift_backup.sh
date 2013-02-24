@@ -18,6 +18,10 @@ if which virsh >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
   exit;
  fi
+ if [ -e /${image} ]; then
+ 	echo "Invalid Image name - directory exists";
+ 	exit;
+ fi
  /admin/swift/mkdir_p vps$id --force
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  mkdir -p /${image}
@@ -47,6 +51,10 @@ else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
   exit;
+ fi
+ if [ -e /vz/${image} ]; then
+ 	echo "Invalid Image name - directory exists";
+ 	exit;
  fi
  /admin/swift/mkdir_p vps$id --force
  mkdir -p /vz/${image}
