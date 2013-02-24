@@ -43,6 +43,9 @@ if which virsh >/dev/null 2>&1; then
   mount /dev/mapper/${snap}${id}p1 /${image}
  fi
  /admin/swift/fly vps$id /${image}
+ if [ -e /dev/mapper/${snap}${id}p6 ]; then
+  umount /${image}/boot
+ fi
  if [ -e /dev/mapper/${snap}${id}p3 ]; then
   umount /${image}/boot
  fi
