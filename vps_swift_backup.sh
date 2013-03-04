@@ -42,7 +42,8 @@ if which virsh >/dev/null 2>&1; then
  else
   mount /dev/mapper/${snap}${id}p1 /${image}
  fi
- /admin/swift/isrm vps$id ${image}
+ #/admin/swift/isrm vps$id ${image}
+ /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
  if [ -e /dev/mapper/${snap}${id}p6 ]; then
   umount /${image}/boot
@@ -70,7 +71,8 @@ else
  rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids /vz/private/${vzid}/ /vz/${image}
  vzctl resume $vzid
  cd /vz
- /admin/swift/isrm vps$id ${image}
+ #/admin/swift/isrm vps$id ${image}
+ /admin/swift/fly vps$id ${image} delete
  /admin/swift/fly vps$id ${image}
  /bin/rm -rf /vz/${image}
 fi
