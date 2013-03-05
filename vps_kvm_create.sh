@@ -239,6 +239,8 @@ fi
  /scripts/buildebtablesrules | sh
  /scripts/tclimit $ip
  vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
+ sleep 1s
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 
+ sleep 2s
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 
 fi
