@@ -113,7 +113,7 @@ function get_vps_iptables_traffic($ips)
 		}
 		else
 		{
-			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L -Z FORWARD 2>/dev/null | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]"`));
+			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L -Z FORWARD 2>/dev/null | grep -v DROP | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]"`));
 			foreach ($lines as $line)
 			{
 				$parts = explode(' ', trim($line));
