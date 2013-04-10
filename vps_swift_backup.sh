@@ -5,6 +5,11 @@ if [ $# -lt 2 ]; then
 	echo "or $0 5732 windows5732"
 	exit
 fi
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 set -x
 id=$1
 vzid=$2
@@ -25,7 +30,7 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/mkdir_p vps$id --force
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  mkdir -p /${image}
- kpartx -av /dev/vz/snap${id}
+ kpartx $kpartxopts -av /dev/vz/snap${id}
  if [ -e /dev/mapper/snap${id}p1 ]; then
   snap=snap
  else
@@ -52,7 +57,7 @@ if which virsh >/dev/null 2>&1; then
   umount /${image}/boot
  fi
  umount /${image}
- kpartx -dv /dev/vz/snap$id
+ kpartx $kpartxopts -dv /dev/vz/snap$id
  rmdir /${image}
  echo y | lvremove /dev/vz/snap$id
 else
