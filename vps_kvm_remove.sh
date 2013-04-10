@@ -1,6 +1,11 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
 set -x
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 name=$1
 if [ $# -ne 1 ]; then
  echo "Removew VPS"
@@ -20,7 +25,7 @@ else
  fi
  if [ -e /dev/vz/$name ]; then
   echo "Removing LVM"
-  /sbin/kpartx -dv /dev/vz/$name
+  /sbin/kpartx $kpartxopts -dv /dev/vz/$name
   echo y | lvremove /dev/vz/$name
  fi
  if [ ! "$(grep "host ${name} {" /etc/dhcpd.vps)" = "" ]; then

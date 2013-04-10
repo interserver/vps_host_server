@@ -1,5 +1,10 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 name=$1
 size=$2
 IFS="
@@ -33,7 +38,7 @@ w
 print
 q
 " | fdisk -u /dev/vz/${name}
-   kpartx -av /dev/vz/${name}
+   kpartx $kpartxopts -av /dev/vz/${name}
 if [ -e "/dev/mapper/vz-${name}p${pn}" ]; then
  pname="vz-${name}"
 else
@@ -46,7 +51,7 @@ fi
     resizefs="resize2fs"
    fi
    $resizefs /dev/mapper/${pname}p${pn}
-   kpartx -d /dev/vz/${name}
+   kpartx $kpartxopts -d /dev/vz/${name}
   fi
  fi
 fi

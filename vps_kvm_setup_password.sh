@@ -1,6 +1,11 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
 set -x
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 name=$1
 pass=$2
 if [ $# -ne 2 ]; then
@@ -13,7 +18,7 @@ elif ! virsh dominfo ${name} >/dev/null 2>&1; then
 else
  virsh destroy ${name}
  echo "Creating Partition Table Links" && \
- /sbin/kpartx -av /dev/vz/${name} && \
+ /sbin/kpartx $kpartxopts -av /dev/vz/${name} && \
  if [ -e "/dev/mapper/vz-${name}p1" ]; then
   pname="vz-${name}"
  else
@@ -31,7 +36,7 @@ else
 break;
  echo "Saving Changes"
  umount /vz/mounts/${name}p2 2>/dev/null
- /sbin/kpartx -dv /dev/vz/${name}
+ /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  echo "Starting VPS"
  virsh start ${name};
 fi

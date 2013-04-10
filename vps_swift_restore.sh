@@ -6,6 +6,11 @@ if [ $# -lt 3 ]; then
   exit
 fi
 set -x
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 sourceid="$1"
 shift
 image="$1"
@@ -41,7 +46,7 @@ for i in $destids; do
 	else
 	  echo "working on $i";
 	  virsh destroy $i
-	  kpartx -av /dev/vz/$i
+	  kpartx $kpartxopts -av /dev/vz/$i
       if [ -e /dev/mapper/${i}p1 ]; then
        mapdir=$i
       else
@@ -70,7 +75,7 @@ for i in $destids; do
 		umount /${image}/boot
 	  fi
 	  umount /${image}
-	  kpartx -dv /dev/vz/$i
+	  kpartx $kpartxopts -dv /dev/vz/$i
 	  virsh start $i
 	fi
   else

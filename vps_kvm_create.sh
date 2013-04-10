@@ -1,6 +1,11 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
 set -x
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 url="https://myvps2.interserver.net/vps_queue.php"
 vcpu=2
 size=101000
@@ -151,7 +156,7 @@ w
 print
 q
 " | fdisk -u /dev/vz/${name}
-  kpartx -av /dev/vz/${name}
+  kpartx $kpartxopts -av /dev/vz/${name}
 if [ -e "/dev/mapper/vz-${name}p${pn}" ]; then
  pname="vz-${name}"
 else
@@ -168,7 +173,7 @@ fi
   mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn}; 
   PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
   umount /dev/mapper/${pname}p${pn}
-  kpartx -d /dev/vz/${name}
+  kpartx $kpartxopts -d /dev/vz/${name}
  fi
 
 # echo "Coyping MBR"
@@ -176,8 +181,8 @@ fi
 # echo "Copying Partition Table" 
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
 # echo "Creating Partition Table Links" 
-# /sbin/kpartx -a /dev/vz/${template}
-# /sbin/kpartx -a /dev/vz/${name}
+# /sbin/kpartx $kpartxopts -a /dev/vz/${template}
+# /sbin/kpartx $kpartxopts -a /dev/vz/${name}
 # for i in $(sfdisk -d /dev/vz/${name} | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
 #  pname="$(echo "$i" | cut -d" " -f1)"
 #  tpname="$(echo "$pname" | sed s#"${name}"#"${template}"#g)"
@@ -219,8 +224,8 @@ fi
 #   dd if=/dev/mapper/${tpname} of=/dev/mapper/${pname} >/dev/null 2>&1
 #  fi
 # done
-# /sbin/kpartx -d /dev/vz/${template}
-# /sbin/kpartx -d /dev/vz/${name}
+# /sbin/kpartx $kpartxopts -d /dev/vz/${template}
+# /sbin/kpartx $kpartxopts -d /dev/vz/${name}
 
 # /usr/bin/virsh setmaxmem ${name} ${memory};
 # /usr/bin/virsh setmem ${name} ${memory};

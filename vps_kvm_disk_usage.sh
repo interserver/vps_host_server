@@ -1,5 +1,10 @@
 #!/bin/bash
 exit;
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
 #set -x
 IFS="
@@ -17,7 +22,7 @@ for i in $(lvdisplay --all -c | sed s#" "#""#g | grep "/dev/vz/$name"); do
 	free=0
 	total=0
 #	echo "vz:$vz"
-	for j in $(kpartx -av $vz | cut -d" " -f3 | tail -n 1); do
+	for j in $(kpartx $kpartxopts -av $vz | cut -d" " -f3 | tail -n 1); do
 #		echo "J:$j"
 		# Sample sfdisk output
 		#windows1p1 7
@@ -45,5 +50,5 @@ for i in $(lvdisplay --all -c | sed s#" "#""#g | grep "/dev/vz/$name"); do
 			echo "$vzname:$total:$free"
 		fi
 	done
-	kpartx -d $vz
+	kpartx $kpartxopts -d $vz
 done	
