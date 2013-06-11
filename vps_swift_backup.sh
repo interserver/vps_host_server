@@ -71,9 +71,9 @@ else
  fi
  /admin/swift/mkdir_p vps$id --force
  mkdir -p /vz/${image}
- rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids /vz/root/${vzid}/ /vz/${image}
+ rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/root/${vzid}/ /vz/${image}
  vzctl suspend $vzid
- rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids /vz/private/${vzid}/ /vz/${image}
+ rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/private/${vzid}/ /vz/${image}
  vzctl resume $vzid
  cd /vz
  #/admin/swift/isrm vps$id ${image}
@@ -81,3 +81,4 @@ else
  /admin/swift/fly vps$id ${image}
  /bin/rm -rf /vz/${image}
 fi
+
