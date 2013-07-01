@@ -7,6 +7,7 @@ else
 	kpartxopts="-s"
 fi
 url="https://myvps2.interserver.net/vps_queue.php"
+softraid=0
 vcpu=2
 size=101000
 name=$1
@@ -90,6 +91,12 @@ else
 	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
 	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+	if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+		softraid="$(grep -l v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+		for softfile in $softraid; do
+			echo idle > $softfile
+		done
+	fi		
 	echo "$completed%"
 	sleep 10s
   done
@@ -106,6 +113,12 @@ else
 	  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+			softraid="$(grep -l v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+			for softfile in $softraid; do
+				echo idle > $softfile
+			done
+		fi		
 	  echo "$completed%"
 	fi
   done
@@ -125,10 +138,21 @@ else
 	  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+			softraid="$(grep -l v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+			for softfile in $softraid; do
+				echo idle > $softfile
+			done
+		fi		
 	  echo "$completed%"
 	fi
   done
   rm -f dd.progress  
+ fi
+ if [ "$softraid" != "0" ]; then
+	for softfile in $softraid; do
+		echo check > $softfile
+	done
  fi
  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
  sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
