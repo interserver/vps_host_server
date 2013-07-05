@@ -7,7 +7,7 @@ else
 	kpartxopts="-s"
 fi
 url="https://myquickserver2.interserver.net/qs_queue.php"
-softraid=0
+softraid=""
 vcpu=2
 size=101000
 name=$1
@@ -86,7 +86,7 @@ else
 	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 	if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-		softraid="$(grep -l v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+		softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 		for softfile in $softraid; do
 			echo idle > $softfile
 		done
@@ -108,7 +108,7 @@ else
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-			softraid="$(grep -l v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 			for softfile in $softraid; do
 				echo idle > $softfile
 			done
@@ -133,7 +133,7 @@ else
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-			softraid="$(grep -l v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 			for softfile in $softraid; do
 				echo idle > $softfile
 			done
@@ -143,7 +143,7 @@ else
   done
   rm -f dd.progress  
  fi
- if [ "$softraid" != "0" ]; then
+ if [ "$softraid" != "" ]; then
 	for softfile in $softraid; do
 		echo check > $softfile
 	done
