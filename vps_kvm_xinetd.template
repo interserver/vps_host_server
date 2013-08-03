@@ -6,8 +6,8 @@ service NAME
         wait                    = no
         user                    = nobody
         redirect                = 127.0.0.1 PORT
-        bind                    = MYIP 66.45.228.200
-        only_from               = IP
+        bind                    = MYIP
+        only_from               = IP 66.45.228.200
         port                    = PORT
         nice                    = 10
 
