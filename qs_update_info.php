@@ -7,6 +7,11 @@
 	 */
 	function update_qs_info()
 	{
+		$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
+		if ($root_used > 90)
+		{
+			mail('hardware@interserver.net', $root_used . '% Disk Usage on ' . $_SERVER['hostname'], $root_used . '% Disk Usage on ' . $_SERVER['hostname']);
+		}
 		$url = 'https://myquickserver2.interserver.net/qs_queue.php';
 		$servers = array();
         switch (trim(`uname -p`))
