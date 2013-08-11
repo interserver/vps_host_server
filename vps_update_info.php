@@ -10,7 +10,8 @@
 		$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 		if ($root_used > 90)
 		{
-			mail('hardware@interserver.net', $root_used . '% Disk Usage on ' . $_SERVER['hostname'], $root_used . '% Disk Usage on ' . $_SERVER['hostname']);
+			$hostname = trim(`hostname;`);
+			mail('hardware@interserver.net', $root_used . '% Disk Usage on ' . $hostname, $root_used . '% Disk Usage on ' . $hostname);
 		}
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
 		$servers = array();
