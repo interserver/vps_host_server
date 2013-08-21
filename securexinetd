@@ -1,0 +1,18 @@
+#!/bin/sh
+
+cd /etc/xinetd.d/
+for i in *; do
+	if [ -f $i ]; then
+		#echo $i
+		detainthinks=`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`;
+		virshknows=`virsh dumpxml $i | grep vnc | grep port | cut -d\' -f4`;
+
+		if [ "$detainthinks" = "$virshknows" ]; then
+			echo "$i is good"
+		else
+			echo "$i is incorrect, fixing"
+			/bin/rm /etc/xinetd.d/$i
+		fi
+
+	 fi
+done

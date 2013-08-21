@@ -50,14 +50,14 @@ if [ $# -lt 3 ]; then
 #check if vps exists
 else
  /root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size}
- cd /etc/libvirt/qemu 
+ cd /etc/libvirt/qemu
  if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
   /usr/bin/virsh destroy ${name}
   cp ${name}.xml ${name}.xml.backup
   /usr/bin/virsh undefine ${name}
   mv -f ${name}.xml.backup ${name}.xml
  else
-  echo "Generating XML Config" 
+  echo "Generating XML Config"
   if [ "${template:0:7}" = "windows" ]; then
    templatef="windows"
   else
@@ -96,7 +96,7 @@ else
 		for softfile in $softraid; do
 			echo idle > $softfile
 		done
-	fi		
+	fi
 	echo "$completed%"
 	sleep 10s
   done
@@ -118,11 +118,11 @@ else
 			for softfile in $softraid; do
 				echo idle > $softfile
 			done
-		fi		
+		fi
 	  echo "$completed%"
 	fi
   done
-  rm -f dd.progress  
+  rm -f dd.progress
  else
   echo "Suspending ${template} For Copy"
   /usr/bin/virsh suspend ${template}
@@ -143,11 +143,11 @@ else
 			for softfile in $softraid; do
 				echo idle > $softfile
 			done
-		fi		
+		fi
 	  echo "$completed%"
 	fi
   done
-  rm -f dd.progress  
+  rm -f dd.progress
  fi
  if [ "$softraid" != "" ]; then
 	for softfile in $softraid; do
@@ -187,14 +187,14 @@ else
  pname="$name"
 fi
   fsck -f -y /dev/mapper/${pname}p${pn}
-  if [ -f "$(which resize4fs 2>/dev/null)" ]; then 
+  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
    resizefs="resize4fs"
   else
    resizefs="resize2fs"
   fi
   $resizefs -p /dev/mapper/${pname}p${pn}
   mkdir -p /vz/mounts/${name}p${pn}
-  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn}; 
+  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
   PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
   umount /dev/mapper/${pname}p${pn}
   kpartx $kpartxopts -d /dev/vz/${name}
@@ -202,9 +202,9 @@ fi
 
 # echo "Coyping MBR"
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=512 count=1 >/dev/null 2>&1
-# echo "Copying Partition Table" 
+# echo "Copying Partition Table"
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
-# echo "Creating Partition Table Links" 
+# echo "Creating Partition Table Links"
 # /sbin/kpartx $kpartxopts -a /dev/vz/${template}
 # /sbin/kpartx $kpartxopts -a /dev/vz/${name}
 # for i in $(sfdisk -d /dev/vz/${name} | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
@@ -214,11 +214,11 @@ fi
 #  psize="$(echo "$i" | cut -d" " -f3)"
 #  if [ $psize -gt 205000 ] && [ "$ptype" = 7 ]; then
 #   mkdir -p /vz/mounts/${tpname}
-#   mkdir -p /vz/mounts/${pname} 
+#   mkdir -p /vz/mounts/${pname}
 #   mount /dev/mapper/${tpname} /vz/mounts/${tpname}
 #   mount /dev/mapper/${pname} /vz/mounts/${pname} >/dev/null 2>&1
 #   if [ "$(mount | grep /vz/mounts/${pname})" = "" ]; then
-#    echo "MKNTFS On $pname Partition" 
+#    echo "MKNTFS On $pname Partition"
 #    mkntfs -Q -L ${name} -v /dev/mapper/${pname}
 #    mount /dev/mapper/${pname} /vz/mounts/${pname}
 #    if [ "$(mount | grep /vz/mounts/${pname})" = "" ]; then
@@ -241,10 +241,10 @@ fi
 #   fi
 #   umount /vz/mounts/${pname}
 #   umount /vz/mounts/${tpname}
-#   echo "Copying Partition Boot Record $pname (dd)" 
+#   echo "Copying Partition Boot Record $pname (dd)"
 #   dd if=/dev/mapper/${tpname} of=/dev/mapper/${pname} bs=512 count=1 >/dev/null 2>&1
 #  else
-#   echo "Copying Partition $pname (dd)" 
+#   echo "Copying Partition $pname (dd)"
 #   dd if=/dev/mapper/${tpname} of=/dev/mapper/${pname} >/dev/null 2>&1
 #  fi
 # done
@@ -265,11 +265,23 @@ fi
  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
  /usr/bin/virsh start ${name};
  #/usr/bin/virsh resume ${template}
+ if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
+	echo "CGroups Not Detected, Bailing"
+ else
+  slices="$(echo $memory / 1000 |bc -l | cut -d\. -f1)";
+  cpushares="$(($slices * 512))";
+  ioweight="$(echo "200 + (50 * $slices)" | bc -l | cut -d\. -f1)";
+  echo "$vps$(printf %$((15-${#name}))s)${cpushares} Mb$(printf %$((11-${#cpushares}))s) = ${slices}$(printf %$((2-${#slices}))s) Slices -----> IO: $ioweight$(printf %$((6-${#ioweight}))s)CPU: $cpushares";
+  virsh schedinfo ${name} --set cpu_shares=$cpushares --current;
+  virsh schedinfo ${name} --set cpu_shares=$cpushares --config;
+  virsh blkiotune ${name} --weight $ioweight --current;
+  virsh blkiotune ${name} --weight $ioweight --config;
+ fi
  /scripts/buildebtablesrules | sh
  /scripts/tclimit $ip
  vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
  sleep 1s
- /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 
+ /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
  sleep 2s
- /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 
+ /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
 fi
