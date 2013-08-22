@@ -260,18 +260,18 @@ fi
 # /usr/bin/virsh setmem ${name} ${memory};
 # /usr/bin/virsh setvcpus ${name} ${vcpu};
 
- /usr/bin/virsh autostart ${name}
- mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)"
- mv -f /etc/dhcpd.vps /etc/dhcpd.vps.backup
+ /usr/bin/virsh autostart ${name};
+ mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)";
+ mv -f /etc/dhcpd.vps /etc/dhcpd.vps.backup;
  grep -v -e "host ${name} " -e "fixed-address $ip;" /etc/dhcpd.vps.backup > /etc/dhcpd.vps
  echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> /etc/dhcpd.vps
- rm -f /etc/dhcpd.vps.backup
- /etc/init.d/dhcpd restart
+ rm -f /etc/dhcpd.vps.backup;
+ /etc/init.d/dhcpd restart;
  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
  /usr/bin/virsh start ${name};
- #/usr/bin/virsh resume ${template}
+ #/usr/bin/virsh resume ${template};
  if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
-	echo "CGroups Not Detected, Bailing"
+	echo "CGroups Not Detected, Bailing";
  else
   slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
   cpushares="$(($slices * 512))";
@@ -281,24 +281,24 @@ fi
   virsh schedinfo ${name} --set cpu_shares=$cpushares --config;
   virsh blkiotune ${name} --weight $ioweight --current;
   virsh blkiotune ${name} --weight $ioweight --config;
- fi
+ fi;
  /scripts/buildebtablesrules | sh
- /scripts/tclimit $ip
- vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))"
+ /scripts/tclimit $ip;
+ vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
  if [ "$vnc" == "" ]; then
  	sleep 2s;
- 	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))"
+ 	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 	if [ "$vnc" == "" ]; then
 		sleep 2s;
-		vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
-	fi
- fi
+		vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+	fi;
+ fi;
  /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name"
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name"
- #vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
- sleep 1s
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name"
- sleep 2s
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name"
-fi
+ /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+ /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+ #vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+ sleep 1s;
+ /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+ sleep 2s;
+ /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+fi;
