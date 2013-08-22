@@ -268,7 +268,7 @@ fi
  if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
 	echo "CGroups Not Detected, Bailing"
  else
-  slices="$(echo $memory / 1000 |bc -l | cut -d\. -f1)";
+  slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
   cpushares="$(($slices * 512))";
   ioweight="$(echo "200 + (50 * $slices)" | bc -l | cut -d\. -f1)";
   echo "$vps$(printf %$((15-${#name}))s)${cpushares} Mb$(printf %$((11-${#cpushares}))s) = ${slices}$(printf %$((2-${#slices}))s) Slices -----> IO: $ioweight$(printf %$((6-${#ioweight}))s)CPU: $cpushares";
