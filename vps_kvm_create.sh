@@ -39,6 +39,11 @@ fi
 if [ "$7" != "" ]; then
  password=$7
 fi
+if [ "$8" != "" ]; then
+ clientip="$8"
+else
+ clientip=""
+fi
 if [ $# -lt 3 ]; then
  echo "Create a New KVM"
  echo " - Creates LVM"
@@ -279,7 +284,11 @@ fi
  fi
  /scripts/buildebtablesrules | sh
  /scripts/tclimit $ip
- vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
+ vnc="$((5900 + $(virsh vncdisplay linux15957 | cut -d: -f2 | head -n 1)))"
+ /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip;
+ /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
+ /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
+ #vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
  sleep 1s
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
  sleep 2s

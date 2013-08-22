@@ -1,7 +1,7 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
 display=$1
-url="$2"
+url="$2&vnc=$1"
 if [ $# -lt 1 ]; then
  echo "Take Screenshot Of VNC Session"
  echo " Grabs screenshot, saves as shot.jpg"
@@ -9,10 +9,10 @@ if [ $# -lt 1 ]; then
  echo " ie $0 2 url.com"
 else
  function timer() {
-  sleep 15 && kill $$
+  sleep 20 && kill $$
  }
  timer & timerpid=$!
- rm -f shot_$1.jpg shot1_$1.jpg; 
+ rm -f shot_$1.jpg shot1_$1.jpg;
  /root/cpaneldirect/vncsnapshot -compresslevel 9 \
  -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
  -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
