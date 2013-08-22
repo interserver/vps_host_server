@@ -284,7 +284,7 @@ fi
  fi
  /scripts/buildebtablesrules | sh
  /scripts/tclimit $ip
- vnc="$((5900 + $(virsh vncdisplay linux15957 | cut -d: -f2 | head -n 1)))"
+ vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))"
  /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip;
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
