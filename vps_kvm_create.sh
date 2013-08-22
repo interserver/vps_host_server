@@ -285,6 +285,14 @@ fi
  /scripts/buildebtablesrules | sh
  /scripts/tclimit $ip
  vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))"
+ if [ "$vnc" == "" ]; then
+ 	sleep 2s;
+ 	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))"
+	if [ "$vnc" == "" ]; then
+		sleep 2s;
+		vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
+	fi
+ fi
  /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
  /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name"
  /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name"
