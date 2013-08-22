@@ -10,7 +10,7 @@ else
 		vps="$(echo $i | cut -d" " -f1)";  mem="$(echo $i | cut -d" " -f2)";
 		mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
 		memtxt="${mem}Mb Ram";
-		if [ "$slices" == "" ] || [ $slices -lt 512 ]; then
+		if [ "$mem" == "" ] || [ $mem -lt 512 ]; then
 			slices=1
 		else
 			slices="$(echo $mem / 512 |bc -l | cut -d\. -f1)";
