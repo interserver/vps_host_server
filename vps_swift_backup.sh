@@ -11,6 +11,7 @@ else
 	kpartxopts="-s"
 fi
 set -x
+url="https://myvps2.interserver.net/vps_queue.php"
 id=$1
 vzid=$2
 if [ "$3" = "" ]; then
@@ -21,10 +22,12 @@ fi
 if which virsh >/dev/null 2>&1; then
  if ! virsh dominfo $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
+  curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
   exit;
  fi
  if [ -e /${image} ]; then
  	echo "Invalid Image name - directory exists";
+ 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
  	exit;
  fi
  /admin/swift/mkdir_p vps$id --force
@@ -63,10 +66,12 @@ if which virsh >/dev/null 2>&1; then
 else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
+  curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
   exit;
  fi
  if [ -e /vz/${image} ]; then
  	echo "Invalid Image name - directory exists";
+ 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
  	exit;
  fi
  /admin/swift/mkdir_p vps$id --force
@@ -81,4 +86,5 @@ else
  /admin/swift/fly vps$id ${image}
  /bin/rm -rf /vz/${image}
 fi
+curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 
