@@ -9,7 +9,6 @@
  * @package MyAdmin
  * @category QuickServer
  */
-$_SERVER['HTTP_HOST'] = 'interserver.net';
 if (ini_get('date.timezone') == '')
 {
 	ini_set('date.timezone', 'America/New_York');
@@ -43,6 +42,14 @@ echo `$cmd`;
 if (!file_exists('/usr/sbin/vzctl'))
 {
 	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getipmap '$url' 2>/dev/null;";
+	//echo "Running Command: $cmd\n";
+	$out = trim(`$cmd`);
+	//echo "Get IP List Running:	$out\n";
+	if ($out != '')
+	{
+		echo `$out`;
+	}
+	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getvncmap '$url' 2>/dev/null;";
 	//echo "Running Command: $cmd\n";
 	$out = trim(`$cmd`);
 	//echo "Get IP List Running:	$out\n";
