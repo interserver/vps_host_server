@@ -29,7 +29,7 @@ function get_qs_ipmap()
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
-			$extra = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
+			$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
 			if ($extra != '')
 			{
 				$parts = array_merge($parts, explode("\n", $extra));
