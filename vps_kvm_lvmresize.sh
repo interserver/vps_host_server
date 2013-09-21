@@ -16,7 +16,7 @@ if [ $# -ne 2 ]; then
 #check if vps exists
 else
  echo " + Resizing LVM ${name} To ${size}" 
- if [ "$(lvdisplay /dev/vz/$name | grep "LV Size.*"$(echo "$size / 1024" | bc -l | cut -d\. -f1))" = "" ]; then
+ if [ "$(lvdisplay /dev/vz/$name | grep "LV Size *"$(echo "$size / 1024" | bc -l | cut -d\. -f1))" = "" ]; then
   echo y | lvresize -L${size} /dev/vz/${name}
   sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
   t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
@@ -53,5 +53,7 @@ fi
    $resizefs /dev/mapper/${pname}p${pn}
    kpartx $kpartxopts -d /dev/vz/${name}
   fi
+ else
+  echo "I think im already at the desired size"
  fi
 fi
