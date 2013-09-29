@@ -36,15 +36,10 @@ if which virsh >/dev/null 2>&1; then
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  sync
  mkdir -p /${image}
- if [ -e /dev/vz/snap${id} ]; then
-  snap=snap
- else
-  snap=vz-snap
- fi
- $INSTDIR/vps_kvm_automount.sh ${snap}${id} /${image}
+ $INSTDIR/vps_kvm_automount.sh snap${id} /${image}
  /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
- $INSTDIR/vps_kvm_automount.sh ${snap}${id} /${image} unmount
+ $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
  rmdir /${image}
  echo y | lvremove /dev/vz/${snap}${id}
 else
