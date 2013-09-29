@@ -42,7 +42,6 @@ else
 fi
 kpartx $kpartxopts -av /dev/vz/$VZID
 sync
-ls -al /dev/mapper/ |grep $VZID
 if [ -e /dev/mapper/vz-${VZID}p1 ]; then
 	VZDEV=/dev/mapper/vz-
 else
@@ -54,7 +53,7 @@ IFS="
 found_boot=0;
 found_root=0;
 for part in $(fdisk ${fdiskopts} -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
-	echo "All: $part"
+	#echo "All: $part"
 	partdev="$(echo $part | awk '{ print $1 }')"
     partname="${partdev#$VZDEV}"
 	parttype="$(echo $part | awk '{ print $2 }')"
