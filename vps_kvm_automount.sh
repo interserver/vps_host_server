@@ -41,6 +41,7 @@ else
 	fdiskopts=""
 fi
 kpartx $kpartxopts -av /dev/vz/$VZID
+sync
 if [ -e /dev/mapper/vz-$VZID ]; then
 	VZDEV=/dev/mapper/vz-
 else
@@ -54,7 +55,7 @@ found_root=0;
 for part in $(fdisk ${fdiskopts} -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
 	echo "All: $part"
 	partdev="$(echo $part | awk '{ print $1 }')"
-    partname="${partdev#/dev/mapper/vz-}"
+    partname="${partdev#$VZDEV}"
 	parttype="$(echo $part | awk '{ print $2 }')"
 	echo "Part: [${partdev}]  Name: [$partname]    Type: [$parttype]"
 	# check if linux partition
