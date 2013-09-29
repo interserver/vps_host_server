@@ -35,6 +35,11 @@ if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 else
 	kpartxopts="-s"
 fi
+if [[ $(fdisk -v | sed s#".*fdisk (util-linux \(.*\))"#"\1"#g) > 2.17 ]]; then
+	fdiskopts="-c"
+else
+	fdiskopts=""
+fi
 kpartx $kpartxopts -av /dev/vz/$VZID
 if [ -e /dev/mapper/vz-$VZID ]; then
 	VZDEV=/dev/mapper/vz-
@@ -46,7 +51,7 @@ IFS="
 "
 found_boot=0;
 found_root=0;
-for part in $(fdisk -c -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
+for part in $(fdisk ${fdiskopts} -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
 	#echo "All: $part"
 	partdev="$(echo $part | awk '{ print $1 }')"
         partname="${partdev#/dev/mapper/vz-}"
