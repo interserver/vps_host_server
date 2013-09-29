@@ -54,10 +54,9 @@ found_root=0;
 for part in $(fdisk ${fdiskopts} -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
 	#echo "All: $part"
 	partdev="$(echo $part | awk '{ print $1 }')"
-        partname="${partdev#/dev/mapper/vz-}"
+    partname="${partdev#/dev/mapper/vz-}"
 	parttype="$(echo $part | awk '{ print $2 }')"
-	echo "Part: [${partdev}]"
-	echo "Type: [$parttype]"
+	echo "Part: [${partdev}]  Name: [$partname]    Type: [$parttype]"
 	# check if linux partition
 	if [ $UNMOUNT == 1 ]; then
 		umount /tmp/${partname}
@@ -91,7 +90,7 @@ for part in $(fdisk ${fdiskopts} -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"
 			umount /tmp/${partname}
 		fi
 	else
-		echo "Dont know how to handle partition ${partdev} Type $parttype"
+		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${partdev} | cut -d: -f2-)"
 	fi
 done
 IFS="$OIFS"
