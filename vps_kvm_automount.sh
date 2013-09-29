@@ -55,7 +55,7 @@ found_root=0;
 #for part in $(fdisk ${fdiskopts} -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
 for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' ); do
 	#echo "All: $part"
-	partdev="$(echo $part | awk '{ print $1 }' | sed s#"/dev/vz/"#"/dev/mapper"#g)"
+	partdev="$(echo $part | awk '{ print $1 }' | sed s#"/dev/vz/"#"/dev/mapper/"#g)"
     partname="${partdev#$VZDEV}"
 	parttype="$(echo $part | awk '{ print $2 }')"
 	echo "Part: [${partdev}]  Name: [$partname]    Type: [$parttype]"
