@@ -14,7 +14,7 @@ while [ $# -gt 0 ]; do
 		UNMOUNT=1
 		if [ -d ${TARGET}/boot ]; then
 			umount ${TARGET}/boot
-		fi	
+		fi
 		umount ${TARGET}
 		shift
 	elif [ "$1" != "" ]; then
@@ -30,7 +30,12 @@ if [ ! -d ${TARGET} ]; then
 	echo "Target Directory ${TARGET} Does Not Exist, please create it"
 	exit
 fi
-kpartx -sav /dev/vz/$VZID
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
+kpartx $kpartxopts -av /dev/vz/$VZID
 if [ -e /dev/mapper/vz-$VZID ]; then
 	VZDEV=/dev/mapper/vz-
 else
@@ -52,7 +57,7 @@ for part in $(fdisk -c -u -l ${VZDEV}${VZID} |grep ^${VZDEV} | sed s#"\*"#""#g |
 	if [ $UNMOUNT == 1 ]; then
 		umount /tmp/${partname}
 		rmdir /tmp/${partname}
-	elif [ "$(file -L -s ${partdev} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then 
+	elif [ "$(file -L -s ${partdev} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
 		mounttype="$(file -L -s ${partdev} |  sed -e s#"^.*: Linux rev [0-9\.]* \(.*\) filesystem.*$"#"\1"#g)"
 		if [ "$mounttype" != "" ]; then
 			mkdir -p /tmp/${partname}
@@ -88,7 +93,7 @@ IFS="$OIFS"
 
 if [ $UNMOUNT == 1 ]; then
 	umount ${TARGET}
-	kpartx -sdv /dev/vz/$VZID
+	kpartx $kpartxopts -dv /dev/vz/$VZID
 	echo "Finished Unmounting"
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
 	echo "Mounted Successfully"
