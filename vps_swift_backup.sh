@@ -34,6 +34,7 @@ if which virsh >/dev/null 2>&1; then
  fi
  /admin/swift/mkdir_p vps$id --force
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
+ sync
  mkdir -p /${image}
  if [ -e /dev/vz/snap${id} ]; then
   snap=snap
