@@ -35,37 +35,17 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/mkdir_p vps$id --force
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  mkdir -p /${image}
- if [ -e /dev/mapper/vz-snap ]; then
-  snap=vz-snap
- else
+ if [ -e /dev/vz/snap${id} ]; then
   snap=snap
+ else
+  snap=vz-snap
  fi
- $INSTDIR/vps_kvm_automount.sh snap${id} /${image}
-# kpartx $kpartxopts -av /dev/vz/snap${id}
-#  if [ -e /dev/mapper/${snap}${id}p6 ]; then
-#  mount /dev/mapper/${snap}${id}p6 /${image}
-#  mount /dev/mapper/${snap}${id}p1 /${image}/boot
-# elif [ -e /dev/mapper/${snap}${id}p3 ]; then
-#  mount /dev/mapper/${snap}${id}p3 /${image}
-#  mount /dev/mapper/${snap}${id}p1 /${image}/boot
-# elif [ -e /dev/mapper/${snap}${id}p2 ]; then
-#  mount /dev/mapper/${snap}${id}p2 /${image}
-# else
-#  mount /dev/mapper/${snap}${id}p1 /${image}
-# fi
+ $INSTDIR/vps_kvm_automount.sh ${snap}${id} /${image}
  /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
- $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
-# if [ -e /dev/mapper/${snap}${id}p6 ]; then
-#  umount /${image}/boot
-# fi
-# if [ -e /dev/mapper/${snap}${id}p3 ]; then
-#  umount /${image}/boot
-# fi
-# umount /${image}
-# kpartx $kpartxopts -dv /dev/vz/snap$id
+ $INSTDIR/vps_kvm_automount.sh ${snap}${id} /${image} unmount
  rmdir /${image}
- echo y | lvremove /dev/vz/snap$id
+ echo y | lvremove /dev/vz/${snap}${id}
 else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
