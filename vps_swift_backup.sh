@@ -19,6 +19,8 @@ if [ "$3" = "" ]; then
 else
  image=$3
 fi
+cd "$(dirname $0)"
+INSTDIR="$(pwd -L)"
 if which virsh >/dev/null 2>&1; then
  if ! virsh dominfo $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
@@ -33,34 +35,35 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/mkdir_p vps$id --force
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  mkdir -p /${image}
- kpartx $kpartxopts -av /dev/vz/snap${id}
- if [ -e /dev/mapper/snap${id}p1 ]; then
-  snap=snap
- else
+ if [ -e /dev/mapper/vz-snap ]; then
   snap=vz-snap
- fi
- if [ -e /dev/mapper/${snap}${id}p6 ]; then
-  mount /dev/mapper/${snap}${id}p6 /${image}
-  mount /dev/mapper/${snap}${id}p1 /${image}/boot
- elif [ -e /dev/mapper/${snap}${id}p3 ]; then
-  mount /dev/mapper/${snap}${id}p3 /${image}
-  mount /dev/mapper/${snap}${id}p1 /${image}/boot
- elif [ -e /dev/mapper/${snap}${id}p2 ]; then
-  mount /dev/mapper/${snap}${id}p2 /${image}
  else
-  mount /dev/mapper/${snap}${id}p1 /${image}
+  snap=snap
  fi
- #/admin/swift/isrm vps$id ${image}
+ $INSTDIR/vps_kvm_automount.sh snap${id} /${image}
+# kpartx $kpartxopts -av /dev/vz/snap${id}
+#  if [ -e /dev/mapper/${snap}${id}p6 ]; then
+#  mount /dev/mapper/${snap}${id}p6 /${image}
+#  mount /dev/mapper/${snap}${id}p1 /${image}/boot
+# elif [ -e /dev/mapper/${snap}${id}p3 ]; then
+#  mount /dev/mapper/${snap}${id}p3 /${image}
+#  mount /dev/mapper/${snap}${id}p1 /${image}/boot
+# elif [ -e /dev/mapper/${snap}${id}p2 ]; then
+#  mount /dev/mapper/${snap}${id}p2 /${image}
+# else
+#  mount /dev/mapper/${snap}${id}p1 /${image}
+# fi
  /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
- if [ -e /dev/mapper/${snap}${id}p6 ]; then
-  umount /${image}/boot
- fi
- if [ -e /dev/mapper/${snap}${id}p3 ]; then
-  umount /${image}/boot
- fi
- umount /${image}
- kpartx $kpartxopts -dv /dev/vz/snap$id
+ $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
+# if [ -e /dev/mapper/${snap}${id}p6 ]; then
+#  umount /${image}/boot
+# fi
+# if [ -e /dev/mapper/${snap}${id}p3 ]; then
+#  umount /${image}/boot
+# fi
+# umount /${image}
+# kpartx $kpartxopts -dv /dev/vz/snap$id
  rmdir /${image}
  echo y | lvremove /dev/vz/snap$id
 else
@@ -81,7 +84,6 @@ else
  rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/private/${vzid}/ /vz/${image}
  vzctl resume $vzid
  cd /vz
- #/admin/swift/isrm vps$id ${image}
  /admin/swift/fly vps$id ${image} delete
  /admin/swift/fly vps$id ${image}
  /bin/rm -rf /vz/${image}
