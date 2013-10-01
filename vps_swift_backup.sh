@@ -41,7 +41,7 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/fly vps$id /${image}
  $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
  rmdir /${image}
- echo y | lvremove /dev/vz/${snap}${id}
+ echo y | lvremove /dev/vz/snap${id}
 else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
