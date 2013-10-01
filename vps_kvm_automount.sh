@@ -43,6 +43,7 @@ fi
 kpartx $kpartxopts -av /dev/vz/$VZID
 sync
 sleep 1s
+ls /dev/mapper |grep "${VZID}"
 if [ -e /dev/mapper/vz-${VZID}p1 ]; then
 	VZDEV=/dev/mapper/vz-
     mapdir="vz-${VZID}"
