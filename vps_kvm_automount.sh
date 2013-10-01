@@ -62,40 +62,40 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	partdev="$(echo $part | awk '{ print $1 }' | sed s#"/dev/vz/"#"/dev/mapper/"#g)"
     partname="${partdev#$VZDEV}"
 	parttype="$(echo $part | awk '{ print $2 }')"
-	echo "Part: [${partdev}]  Name: [$partname]    Type: [$parttype] MDIR:[$mapdir}"
+	echo "Part: [${partdev}]  Name: [$partname]    Type: [$parttype] MDIR:[$mapprefix}"
 	# check if linux partition
 	if [ $UNMOUNT == 1 ]; then
-		umount /tmp/${mapdir}
-		rmdir /tmp/${mapdir}
-	elif [ "$(file -L -s /dev/mapper/${mapdir} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
-		mounttype="$(file -L -s /dev/mapper/${mapdir} |  sed -e s#"^.*: Linux rev [0-9\.]* \(.*\) filesystem.*$"#"\1"#g)"
+		umount /tmp/${mapprefix}${partname}
+		rmdir /tmp/${mapprefix}${partname}
+	elif [ "$(file -L -s /dev/mapper/${mapprefix}${partname} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
+		mounttype="$(file -L -s /dev/mapper/${mapprefix}${partname} |  sed -e s#"^.*: Linux rev [0-9\.]* \(.*\) filesystem.*$"#"\1"#g)"
 		if [ "$mounttype" != "" ]; then
-			mkdir -p /tmp/${mapdir}
-			#mount -t $mounttype ${partdev} /tmp/${mapdir}
-			mount -t $mounttype /dev/mapper/${mapdir} /tmp/${mapdir}
-			if [ -e /tmp/${mapdir}/etc/fstab ]; then
-				mount --bind /tmp/${mapdir} ${TARGET}
+			mkdir -p /tmp/${mapprefix}${partname}
+			#mount -t $mounttype ${partdev} /tmp/${mapprefix}${partname}
+			mount -t $mounttype /dev/mapper/${mapprefix}${partname} /tmp/${mapprefix}${partname}
+			if [ -e /tmp/${mapprefix}${partname}/etc/fstab ]; then
+				mount --bind /tmp/${mapprefix}${partname} ${TARGET}
 				found_root=1
 				echo "FSTAB:"
-				grep -v -e "^$" -e "^#" /tmp/${mapdir}/etc/fstab
-			elif [ -d /tmp/${mapdir}/grub ] && [ $found_boot == 0 ]; then
-				mount --bind /tmp/${mapdir} ${TARGET}/boot
+				grep -v -e "^$" -e "^#" /tmp/${mapprefix}${partname}/etc/fstab
+			elif [ -d /tmp/${mapprefix}${partname}/grub ] && [ $found_boot == 0 ]; then
+				mount --bind /tmp/${mapprefix}${partname} ${TARGET}/boot
 				found_boot=1
 			else
-				echo "not sure where to mount ${mapdir} yet"
+				echo "not sure where to mount ${mapprefix}${partname} yet"
 			fi
 		fi
 	#elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
-	elif [ "$(file -L -s /dev/mapper/${mapdir} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
-		mkdir -p /tmp/${mapdir}
-		mount ${partdev} /tmp/${mapdir}
-		if [ -e /tmp/${mapdir}/pagefile.sys ] || [ -d /tmp/${mapdir}/Windows ]; then
-			mount --bind /tmp/${mapdir} ${TARGET}
+	elif [ "$(file -L -s /dev/mapper/${mapprefix}${partname} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
+		mkdir -p /tmp/${mapprefix}${partname}
+		mount ${partdev} /tmp/${mapprefix}${partname}
+		if [ -e /tmp/${mapprefix}${partname}/pagefile.sys ] || [ -d /tmp/${mapprefix}${partname}/Windows ]; then
+			mount --bind /tmp/${mapprefix}${partname} ${TARGET}
 			found_boot=1
 			found_root=1
 		else
-			echo "${mapdir} is not part of main windows drive"
-			umount /tmp/${mapdir}
+			echo "${mapprefix}${partname} is not part of main windows drive";
+			umount /tmp/${mapprefix}${partname};
 		fi
 	else
 		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${partdev} | cut -d: -f2-)"
