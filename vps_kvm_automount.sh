@@ -94,6 +94,7 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 		if [ -e /tmp/${mapname}/pagefile.sys ] || [ -d /tmp/${mapname}/Windows ]; then
 			mount --bind /tmp/${mapname} ${TARGET}
 			found_boot=1
+			found_root=1
 		else
 			echo "${mapname} is not part of main windows drive";
 			umount /tmp/${mapname};
