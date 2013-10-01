@@ -45,7 +45,7 @@ sync
 sleep 1s
 ls /dev/mapper |grep "${VZID}"
 if [ -e /dev/mapper/vz-${VZID}p1 ]; then
-	VZDEV="/dev/mapper/vz-"
+	VZDEV="/dev/mapper/"
     mapprefix="vz-"
 else
 	VZDEV="/dev/mapper/"
