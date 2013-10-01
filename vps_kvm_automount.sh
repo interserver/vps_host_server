@@ -62,6 +62,7 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
     partname="${partdev#$VZDEV}"
     partname="${partname#$mapprefix}"
     mapname="${mapprefix}${partname}"
+    partdev="${VZDEV}${mapname}"
 	parttype="$(echo $part | awk '{ print $2 }')"
 	echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype "
 	# check if linux partition
@@ -98,7 +99,7 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 			umount /tmp/${mapname};
 		fi
 	else
-		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${partdev} | cut -d: -f2-)"
+		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${VZDEV}${mapname} | cut -d: -f2-)"
 	fi
 done
 IFS="$OIFS"
