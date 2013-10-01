@@ -10,7 +10,7 @@ if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 else
 	kpartxopts="-s"
 fi
-set -x
+#set -x
 url="https://myvps2.interserver.net/vps_queue.php"
 id=$1
 vzid=$2

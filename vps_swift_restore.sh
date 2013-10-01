@@ -5,7 +5,7 @@ if [ $# -lt 3 ]; then
   echo "Example: $0 5732 windows9044 snap9044 windows9055 windows9066 windows9077"
   exit
 fi
-set -x
+#set -x
 url="https://myvps2.interserver.net/vps_queue.php"
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
