@@ -42,10 +42,14 @@ else
 fi
 kpartx $kpartxopts -av /dev/vz/$VZID
 sync
+sleep 1s
+if [ "$("
 if [ -e /dev/mapper/vz-${VZID}p1 ]; then
 	VZDEV=/dev/mapper/vz-
+    mapdir="vz-${VZID}"
 else
 	VZDEV=/dev/mapper/
+    mapdir="${VZID}"
 fi
 OIFS="$IFS"
 IFS="
@@ -63,11 +67,12 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	if [ $UNMOUNT == 1 ]; then
 		umount /tmp/${partname}
 		rmdir /tmp/${partname}
-	elif [ "$(file -L -s ${partdev} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
-		mounttype="$(file -L -s ${partdev} |  sed -e s#"^.*: Linux rev [0-9\.]* \(.*\) filesystem.*$"#"\1"#g)"
+	elif [ "$(file -L -s /dev/mapper/${partname} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
+		mounttype="$(file -L -s /dev/mapper/${partname} |  sed -e s#"^.*: Linux rev [0-9\.]* \(.*\) filesystem.*$"#"\1"#g)"
 		if [ "$mounttype" != "" ]; then
 			mkdir -p /tmp/${partname}
-			mount -t $mounttype ${partdev} /tmp/${partname}
+			#mount -t $mounttype ${partdev} /tmp/${partname}
+			mount -t $mounttype /dev/mapper/${partname} /tmp/${partname}
 			if [ -e /tmp/${partname}/etc/fstab ]; then
 				mount --bind /tmp/${partname} ${TARGET}
 				found_root=1
@@ -80,7 +85,8 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 				echo "not sure where to mount ${partname} yet"
 			fi
 		fi
-	elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
+	#elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
+	elif [ "$(file -L -s /dev/mapper/${partname} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
 		mkdir -p /tmp/${partname}
 		mount ${partdev} /tmp/${partname}
 		if [ -e /tmp/${partname}/pagefile.sys ] || [ -d /tmp/${partname}/Windows ]; then
