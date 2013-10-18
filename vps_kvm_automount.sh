@@ -113,7 +113,7 @@ if [ $UNMOUNT == 1 ]; then
 	kpartx $kpartxopts -dv /dev/vz/$VZID
 	echo "Finished Unmounting"
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
-    if [ "$boor_dir" != "" ]; then
+    if [ "$boot_dir" != "" ]; then
 		mount --bind ${boot_dir} ${TARGET}/boot
     fi
 	echo "Mounted Successfully"
