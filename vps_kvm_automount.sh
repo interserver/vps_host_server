@@ -54,6 +54,7 @@ fi
 OIFS="$IFS"
 IFS="
 "
+boot_dir="";
 found_boot=0;
 found_root=0;
 for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' | sed s#"\/dev\/vz"#"\/dev\/mapper"#g); do
@@ -81,7 +82,9 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 				echo "FSTAB:"
 				grep -v -e "^$" -e "^#" /tmp/${mapname}/etc/fstab
 			elif [ -d /tmp/${mapname}/grub ] && [ $found_boot == 0 ]; then
-				mount --bind /tmp/${mapname} ${TARGET}/boot
+				#set boot_dir to mount it later instead of right away
+				#mount --bind /tmp/${mapname} ${TARGET}/boot
+				boot_dir=/tmp/${mapname}
 				found_boot=1
 			else
 				echo "not sure where to mount ${mapname} yet"
@@ -110,6 +113,9 @@ if [ $UNMOUNT == 1 ]; then
 	kpartx $kpartxopts -dv /dev/vz/$VZID
 	echo "Finished Unmounting"
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
+    if [ "$boor_dir" != "" ]; then
+		mount --bind ${boot_dir} ${TARGET}/boot
+    fi
 	echo "Mounted Successfully"
 elif [ $found_root == 1 ]; then
 	echo "Root but no Boot found"
