@@ -28,6 +28,8 @@
         $servers['ram'] = trim(`free -m | grep Mem: | awk '{ print \$2 }'`);
         $servers['cpu_model'] = trim(`grep "model name" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
         $servers['cpu_mhz'] = trim(`grep "cpu MHz" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
+		$servers['cores'] = trim(`echo \$((\$(lscpu |grep "^Core(s) per socket" | awk '{ print \$4 }') * \$(lscpu |grep "^Socket" | awk '{ print \$2 }')))`);
+
         
 		if (file_exists('/usr/sbin/vzctl'))
 		{
