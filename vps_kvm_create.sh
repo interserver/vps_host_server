@@ -72,7 +72,7 @@ else
   echo "Defining Config As VPS"
  fi
  mv -f ${name}.xml ${name}.xml.backup
- cat ${name}.xml.backup | sed s#"<vcpu>.*</vcpu>"#"<vcpu>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
+ cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
  if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo)" != "" ]; then
   sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
  fi
