@@ -75,7 +75,8 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 		if [ "$mounttype" != "" ]; then
 			mkdir -p /tmp/${mapname}
 			#mount -t $mounttype ${partdev} /tmp/${mapname}
-			mount -o ro -t $mounttype /dev/mapper/${mapname} /tmp/${mapname}
+			fsck -y /dev/mapper/${mapname}
+			mount -t $mounttype /dev/mapper/${mapname} /tmp/${mapname}
 			if [ -e /tmp/${mapname}/etc/fstab ]; then
 				mount --bind /tmp/${mapname} ${TARGET}
 				found_root=1
@@ -93,7 +94,8 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	#elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
 	elif [ "$(file -L -s /dev/mapper/${mapname} |grep -e ":\(.*\)x86 boot sector")" != "" ];then
 		mkdir -p /tmp/${mapname}
-		mount -o ro ${partdev} /tmp/${mapname}
+		fsck -y ${partdev}
+		mount ${partdev} /tmp/${mapname}
 		if [ -e /tmp/${mapname}/pagefile.sys ] || [ -d /tmp/${mapname}/Windows ]; then
 			mount --bind /tmp/${mapname} ${TARGET}
 			found_boot=1
