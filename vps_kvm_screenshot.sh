@@ -9,7 +9,7 @@ if [ $# -lt 1 ]; then
  echo " ie $0 2 url.com"
 else
  function timer() {
-  sleep 20 && kill $$
+  sleep 40 && kill $$
  }
  timer & timerpid=$!
  rm -f shot_$1.jpg shot1_$1.jpg;
