@@ -57,20 +57,20 @@ for i in $destids; do
        mapdir=vz-$i
       fi
 	  if [ -e /dev/mapper/${mapdir}p6 ]; then
-	    fsck -y /dev/mapper/${mapdir}p6
+	    fsck -y /dev/mapper/${mapdir}p6 || ntfsfix /dev/mapper/${mapdir}p6
 		mount -o rw /dev/mapper/${mapdir}p6 /${image} || exit
-	    fsck -y /dev/mapper/${mapdir}p1
+	    fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
 		mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	  elif [ -e /dev/mapper/${mapdir}p3 ]; then
-	    fsck -y /dev/mapper/${mapdir}p3
+	    fsck -y /dev/mapper/${mapdir}p3 || ntfsfix /dev/mapper/${mapdir}p1
 		mount -o rw /dev/mapper/${mapdir}p3 /${image} || exit
-	    fsck -y /dev/mapper/${mapdir}p1
+	    fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
 		mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	  elif [ -e /dev/mapper/${mapdir}p2 ]; then
-	    fsck -y /dev/mapper/${mapdir}p2
+	    fsck -y /dev/mapper/${mapdir}p2 || ntfsfix /dev/mapper/${mapdir}p2
 		mount -o rw /dev/mapper/${mapdir}p2 /${image} || exit
 	  else
-	    fsck -y /dev/mapper/${mapdir}p1
+	    fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
 		mount -o rw /dev/mapper/${mapdir}p1 /${image} || exit
 	  fi
 	  /bin/rm -rf /${image}/* 2>/dev/null
@@ -100,11 +100,10 @@ for i in $destids; do
   fi
 done
 curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+set -x
 if which virsh >/dev/null 2>&1; then
   /bin/rmdir /${image}
-  if [ $# -gt 1 ]; then
-	rm -f /${image}.tar.gz
-  fi
+  rm -f /${image}.tar.gz
 else
   /bin/rm -rf /vz/${image}
 fi
