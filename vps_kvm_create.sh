@@ -70,6 +70,10 @@ else
   fi
   grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
   echo "Defining Config As VPS"
+  if [ "$template" = "windows2012" ]; then
+   sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
+   sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
+  fi
  fi
  mv -f ${name}.xml ${name}.xml.backup
  cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
