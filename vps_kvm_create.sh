@@ -73,6 +73,10 @@ else
   if [ "$template" = "windows2012" ]; then
    sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
    sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
+   mv -f ${name}.xml ${name}.xml.backup
+   grep -v "address type='drive'" ${name}.xml.backup > ${name}.xml
+   rm -f ${name}.xml.backup
+   
   fi
  fi
  mv -f ${name}.xml ${name}.xml.backup
