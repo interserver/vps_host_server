@@ -32,8 +32,7 @@ else
   mount /dev/mapper/${pname}p1 /vz/mounts/${pname}p2
  fi
  echo "Setting Password"
- /root/cpaneldirect/vps_kvm_setup_password.expect $name $pass
-break;
+ /root/cpaneldirect/vps_kvm_setup_password.expect $pname $pass
  echo "Saving Changes"
  umount /vz/mounts/${pname}p2 2>/dev/null
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}

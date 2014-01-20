@@ -31,10 +31,9 @@ else
   mount /dev/mapper/${pname}p1 /vz/mounts/${pname}p2
  fi
  echo "Clearing Password"
- /root/cpaneldirect/vps_kvm_setup_password_clear.expect ${name}p2
-break;
+ /root/cpaneldirect/vps_kvm_setup_password_clear.expect ${pname}p2
  echo "Saving Changes"
- mount /vz/mounts/${pname}p2 2>/dev/null
+ umount /vz/mounts/${pname}p2 2>/dev/null
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  echo "Starting VPS"
  virsh start ${name};
