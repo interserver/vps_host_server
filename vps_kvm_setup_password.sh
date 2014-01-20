@@ -27,15 +27,15 @@ else
  mkdir -p /vz/mounts/${pname}p2 && \
  echo "Mounting Partition"
  if [ -e /dev/mapper/${pname}p2 ]; then
-  mount /dev/mapper/${pname}p2 /vz/mounts/${name}p2
+  mount /dev/mapper/${pname}p2 /vz/mounts/${pname}p2
  else
-  mount /dev/mapper/${pname}p1 /vz/mounts/${name}p2
+  mount /dev/mapper/${pname}p1 /vz/mounts/${pname}p2
  fi
  echo "Setting Password"
  /root/cpaneldirect/vps_kvm_setup_password.expect $name $pass
 break;
  echo "Saving Changes"
- umount /vz/mounts/${name}p2 2>/dev/null
+ umount /vz/mounts/${pname}p2 2>/dev/null
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  echo "Starting VPS"
  virsh start ${name};
