@@ -30,7 +30,9 @@ if which virsh >/dev/null 2>&1; then
   	exit;
   fi
   #if [ $# -gt 1 ]; then
+    trap "/admin/swift/isget vps${sourceid} ${image} -c;" SIGHUP
 	/admin/swift/isget vps${sourceid} ${image}
+	trap - SIGHUP
 	mv ${image} /${image}.tar.gz
   #fi
   mkdir -p /${image}
