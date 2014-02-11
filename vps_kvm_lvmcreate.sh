@@ -11,6 +11,11 @@ if [ $# -ne 2 ]; then
 #check if vps exists
 else
  echo "Creating LVM ${name}" 
+ if [ "$(lvdisplay  |grep 'Allocated pool')" = "" ]; then
+   thin="no"
+ else
+   thing="yes"
+ fi
  if [ "$size" = "all" ]; then
   if [  "$(lvdisplay /dev/vz/$name)" = "" ]; then
    lvcreate -l +100%FREE -n${name} vz
@@ -19,7 +24,11 @@ else
    lvextend -l +100%FREE /dev/vz/$name
   fi
  elif [ "$(lvdisplay /dev/vz/$name | grep "LV Size.*"$(echo "$size / 1024" | bc -l | cut -d\. -f1))" = "" ]; then
-  lvcreate -L${size} -n${name} vz
+  if [ "$thin" = "yes" ]; then
+   lvcreate -V${size} -T vz/thin -n${name} 
+  else
+   lvcreate -L${size} -n${name} vz
+  fi
  else
   echo "already exists, skipping"
  fi
