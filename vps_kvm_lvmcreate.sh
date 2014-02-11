@@ -14,7 +14,7 @@ else
  if [ "$(lvdisplay  |grep 'Allocated pool')" = "" ]; then
    thin="no"
  else
-   thing="yes"
+   thin="yes"
  fi
  if [ "$size" = "all" ]; then
   if [  "$(lvdisplay /dev/vz/$name)" = "" ]; then
