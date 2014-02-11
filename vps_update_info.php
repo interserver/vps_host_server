@@ -1,8 +1,8 @@
-#!/usr/bin/php -q 
+#!/usr/bin/php -q
 <?php
 	/**
 	 * update_vps_info()
-	 * 
+	 *
 	 * @return
 	 */
 	function update_vps_info()
@@ -32,20 +32,29 @@
 		$servers['cpu_mhz'] = trim(`grep "cpu MHz" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
 //		$servers['cores'] = trim(`echo \$((\$(lscpu |grep "^Core(s) per socket" | awk '{ print \$4 }') * \$(lscpu |grep "^Socket" | awk '{ print \$2 }')))`);
 		$servers['cores'] = trim(`echo \$((\$(cat /proc/cpuinfo|grep '^physical id' | sort | uniq | wc -l) * \$(grep '^cpu cores' /proc/cpuinfo  | tail -n 1|  awk '{ print \$4 }')))`);
-		
+
 		if (file_exists('/usr/sbin/vzctl'))
 		{
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
 		}
 		else
 		{
-			$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c`));
-			$pesize = $parts[7];
-			$totalpe = $parts[8];
-			$freepe = $parts[9];
-			$totalg = ceil($pesize * $totalpe / 1000000);
-			$freeg = ceil($pesize * $freepe / 1000000);
-			$out = "$totalg $freeg";
+			if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
+			{
+				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c`));
+				$pesize = $parts[7];
+				$totalpe = $parts[8];
+				$freepe = $parts[9];
+				$totalg = ceil($pesize * $totalpe / 1000000);
+				$freeg = ceil($pesize * $freepe / 1000000);
+				$out = "$totalg $freeg";
+			}
+			else
+			{
+				$totalg = trim(`lvdisplay /dev/vz/thin |grep 'LV Size' | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut -d\. -f1`);
+				$freeg = trim(`echo "\$(lvdisplay /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) - ( \$(lvdisplay /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g) / 100 * \$(lvdisplay /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) )" |bc -l |cut -d\. -f1`);
+				$out = "$totalg $freeg";
+			}
 		}
 		$parts = explode(' ', $out);
 		if (sizeof($parts) == 2)
@@ -58,5 +67,5 @@
 		}
 	}
 
-	update_vps_info();	
+	update_vps_info();
 ?>
