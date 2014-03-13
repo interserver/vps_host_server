@@ -34,7 +34,14 @@
 //		$servers['cores'] = trim(`echo \$((\$(cat /proc/cpuinfo|grep '^physical id' | sort | uniq | wc -l) * \$(grep '^cpu cores' /proc/cpuinfo  | tail -n 1|  awk '{ print \$4 }')))`);
 //		$servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
 		$servers['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
-
+		if (!file_exists('/usr/bin/iostat'))
+		{
+			echo `yum -y install sysstat;`;
+		}
+		if (file_exists('/usr/bin/iostat'))
+		{
+			$servers['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
+		}
 		if (file_exists('/usr/sbin/vzctl'))
 		{
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
