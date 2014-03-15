@@ -9,7 +9,7 @@ if [ "$1" = "enable" ]; then
   sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i "$i";
   virsh define "$i";
  done
- running="$(virsh list --name)"
+ running="$(virsh list |grep -v -e "^--" -e "Id .*Name .*State" -e "^$" | awk '{ print $2 })"
  for i in $running; do
    virsh shutdown $i;
  done
@@ -29,7 +29,7 @@ elif [ "$1" = "disable" ]; then
   sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i "$i";
   virsh define "$i";
  done
- running="$(virsh list --name)"
+ running="$(virsh list |grep -v -e "^--" -e "Id .*Name .*State" -e "^$" | awk '{ print $2 })"
  for i in $running; do
    virsh shutdown $i;
  done
