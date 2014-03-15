@@ -1,6 +1,8 @@
 #!/bin/bash
 # Converts systemsto using io=native
 cd /etc/libvirt/qemu
+sleeptime=10m
+delaytime=1s
 if [ "$1" = "enable" ]; then
  for i in *xml; do
   a="$(echo "$i" |sed s#".xml"#""#g)";
@@ -12,10 +14,11 @@ if [ "$1" = "enable" ]; then
    virsh shutdown $i;
  done
  echo "Sleeping 5minutes to let the systems shutdown cleanly"
- sleep 5m
+ sleep $sleeptime
  echo "waking up and finishing the job"
  for i in $running; do
    virsh destroy $i;
+   sleep $delaytime
    virsh start $i;
  done
  sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/windows.xml
@@ -31,10 +34,11 @@ elif [ "$1" = "disable" ]; then
    virsh shutdown $i;
  done
  echo "Sleeping 5minutes to let the systems shutdown cleanly"
- sleep 5m
+ sleep $sleeptime
  echo "waking up and finishing the job"
  for i in $running; do
    virsh destroy $i;
+   sleep $delaytime
    virsh start $i;
  done
  sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i /root/cpaneldirect/windows.xml
