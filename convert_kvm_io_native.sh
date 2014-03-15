@@ -1,7 +1,7 @@
 #!/bin/bash
 # Converts systemsto using io=native
 cd /etc/libvirt/qemu
-if [ "$1" -eq "enable" ]; then
+if [ "$1" = "enable" ]; then
  for i in *xml; do
   a="$(echo "$i" |sed s#".xml"#""#g)";
   sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i "$i";
@@ -20,7 +20,7 @@ if [ "$1" -eq "enable" ]; then
  done
  sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/windows.xml
  sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/linux.xml
-elif [ "$1" -eq "disable" ]; then
+elif [ "$1" = "disable" ]; then
  for i in *xml; do
   a="$(echo "$i" |sed s#".xml"#""#g)";
   sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i "$i";
