@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #current bug
 # each ip is limited, not each account

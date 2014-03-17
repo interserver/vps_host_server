@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Script for generating VMware MAC Addresses
 # http://www.easyvmx.com
 #
