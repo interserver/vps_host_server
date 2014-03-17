@@ -74,6 +74,7 @@ else
    sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
   fi
   if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
+   sed s#"rhel5.5.0"#"pc-1.0"#g -i ${name}.xml
    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
   fi
   sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
