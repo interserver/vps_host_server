@@ -36,7 +36,22 @@
 		$servers['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
 		if (!file_exists('/usr/bin/iostat'))
 		{
-			echo `yum -y install sysstat;`;
+			echo "Installing iostat..";
+			if (trim(`which yum;`) != '')
+			{
+				echo "CentOS Detected...";
+				`yum -y install sysstat;`;
+			}
+			elseif (trim(`which apt-get;`) != '')
+			{	
+				echo "Ubuntu Detected...";
+				`apt-get -y install sysstat;`;
+			}
+			echo "done\n\n";
+			if (!file_exists('/usr/bin/iostat'))
+			{
+				echo "Error installing iostat\n";
+			}
 		}
 		if (file_exists('/usr/bin/iostat'))
 		{
