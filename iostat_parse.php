@@ -20,6 +20,7 @@ if (!file_exists('/usr/bin/iostat'))
 	{	
 		echo "Ubuntu Detected...";
 		`apt-get -y install sysstat;`;
+        `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
 	}
 	echo "done\n\n";
 	if (!file_exists('/usr/bin/iostat'))
