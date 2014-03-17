@@ -68,6 +68,10 @@ else
  fi
  mv -f ${name}.xml ${name}.xml.backup
  cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
+  if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
+   sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
+  fi
+
  rm -f ${name}.xml.backup
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
