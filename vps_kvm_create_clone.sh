@@ -25,7 +25,11 @@ else
  grep -v -e \"host $name \" -e \"fixed-address $ip;\" /etc/dhcpd.vps.backup > /etc/dhcpd.vps 
  echo \"host $name { hardware ethernet \$mac; fixed-address $ip;}\" >> /etc/dhcpd.vps 
  rm -f /etc/dhcpd.vps.backup 
- /etc/init.d/dhcpd restart 
+ if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
+  /etc/init.d/isc-dhcp-server restart
+ else
+  /etc/init.d/dhcpd restart
+ fi
  /scripts/buildebtablesrules > /scripts/sh
  /bin/sh /scripts/sh
  /scripts/tclimit $ip

@@ -33,7 +33,11 @@ else
   mv -f /etc/dhcpd.vps /etc/dhcpd.vps.backup && \
   grep -v -e "host ${name} " /etc/dhcpd.vps.backup > /etc/dhcpd.vps && \
   rm -f /etc/dhcpd.vps.backup && \
-  /etc/init.d/dhcpd restart
+  if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
+   /etc/init.d/isc-dhcp-server restart
+  else
+   /etc/init.d/dhcpd restart
+  fi
  fi
 fi
 

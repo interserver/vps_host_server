@@ -9,4 +9,8 @@ for user in $(/usr/bin/virsh list | grep running | awk '{print $2}'); do
 	cat /etc/dhcpd.vps | sed s#"host $user { hardware ethernet .*; fix"#"host $user { hardware ethernet $mac; fix"#g > /etc/dhcpd.vps.new
 	/bin/mv -f /etc/dhcpd.vps.new /etc/dhcpd.vps
 done
-/etc/init.d/dhcpd restart
+ if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
+  /etc/init.d/isc-dhcp-server restart
+ else
+  /etc/init.d/dhcpd restart
+ fi
