@@ -6,7 +6,7 @@ function format_size($size) {
 	for ($i = 0; $size > $mod; $i++) {
 		$size /= $mod;
 	}
-	return round($size, 2) . ' ' . $units[$i];
+	return round($size, 2) . (strlen($units[$i]) == 1 ? '  ' : ' ') . $units[$i];
 }
 if (!file_exists('/usr/bin/iostat'))
 {
