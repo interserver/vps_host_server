@@ -143,6 +143,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 	function get_vps_list()
 	{
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
+		$curl_cmd = '';
 		if (!file_exists('/usr/sbin/vzctl'))
 		{
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
@@ -179,16 +180,20 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 							$server['diskmax'] = $dparts[1];
 						}
 */
-						if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900)
+						$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
+						if ($port >= 5900)
 						{
 							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
-							$vncdisplay = (integer)abs($xml['domain']['devices']['graphics_attr']['port'] - 5900);
-							$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+							$vncdisplay = (integer)abs($port - 5900);
+							$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot1_${port}.jpg >/dev/null 2>&1; convert shot1_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.started; };\n shot_${port} &\n";
+							$curl_cmd .= " -F shot".$port."=@shot_".$port.".gif";
+							//$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
 						}
 					}
 					$servers[$veid] = $server;
 				}
 			}
+			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
 			//echo "CMD:$cmd\n";
 			echo `$cmd`;
 		}
@@ -268,7 +273,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 			}
 		}
 		//print_r($servers);
-		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -d action=serverlist -d servers="' . urlencode(base64_encode(gzcompress(serialize($servers), 9))) . '" "' . $url . '" 2>/dev/null;';
+		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
 	}
