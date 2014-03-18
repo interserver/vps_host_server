@@ -74,10 +74,12 @@ $info['procs'] = array();
 if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm'))
 {
 	$out = `pidstat -l -C kvm;`;
+	$regex = '/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+\/usr\/bin\/kvm.* \-m (?<ram>[\d]*)\s.*sockets=(?P<cores>\d+),.*\-name (?<vps>[^\s]+)\s+.*$/';
 }
 else
 {
 	$out = `pidstat -l -C qemu-kvm;`;
+	$regex = '/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+\/usr\/libexec\/qemu-kvm \-name (?<vps>[^\s]+)\s+.* \-m (?<ram>[\d]*)\s.*sockets=(?P<cores>\d+),.*$/';
 }
 //echo "$out\n";
 /*
@@ -95,7 +97,7 @@ $out = `pidstat -l -C qemu-kvm |\
 $lines = explode("\n", $out);
 for ($x = 1; $x < sizeof($lines); $x++)
 {
-	if (!preg_match('/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+\/usr\/libexec\/qemu-kvm \-name (?<vps>[^\s]+)\s+.* \-m (?<ram>[\d]*)\s.*sockets=(?P<cores>\d+),.*$/', $lines[$x], $matches))
+	if (!preg_match($regex, $lines[$x], $matches))
 		continue;
 	//preg_match('/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+/', $lines[$x], $matches);
 	//print_r($matches);
