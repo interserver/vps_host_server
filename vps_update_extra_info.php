@@ -7,7 +7,7 @@
 	 */
 	function update_vps_extra_info()
 	{
-		$flags = explode(' ', trim(`grep "^flags" /proc/cpuinfo | head -n 1 | cut -d: -f2-;`)));
+		$flags = explode(' ', trim(`grep "^flags" /proc/cpuinfo | head -n 1 | cut -d: -f2-;`));
 		sort($flags);
 		$flagsnew = implode(' ', $flags);
 		$flags = $flagsnew;
