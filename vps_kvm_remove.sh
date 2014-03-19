@@ -7,6 +7,11 @@ else
 	kpartxopts="-s"
 fi
 name=$1
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+	DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+	DHCPVPS=/etc/dhcpd.vps
+fi
 if [ $# -ne 1 ]; then
  echo "Removew VPS"
  echo " - Suspend Processes"
@@ -28,11 +33,11 @@ else
   /sbin/kpartx $kpartxopts -dv /dev/vz/$name
   echo y | lvremove /dev/vz/$name
  fi
- if [ ! "$(grep "host ${name} {" /etc/dhcpd.vps)" = "" ]; then
+ if [ ! "$(grep "host ${name} {" ${DHCPVPS})" = "" ]; then
   echo "Removing DHCP"
-  mv -f /etc/dhcpd.vps /etc/dhcpd.vps.backup && \
-  grep -v -e "host ${name} " /etc/dhcpd.vps.backup > /etc/dhcpd.vps && \
-  rm -f /etc/dhcpd.vps.backup && \
+  /bin/cp -f ${DHCPVPS} ${DHCPVPS}.backup && \
+  grep -v -e "host ${name} " ${DHCPVPS}.backup > ${DHCPVPS} && \
+  rm -f ${DHCPVPS}.backup && \
   if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
    /etc/init.d/isc-dhcp-server restart
   else

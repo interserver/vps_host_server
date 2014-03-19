@@ -8,7 +8,12 @@ export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/lo
 IFS="
 "
 
-for vm in `cat /etc/dhcpd.vps | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`; do
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+	DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+	DHCPVPS=/etc/dhcpd.vps
+fi
+for vm in `cat $DHCPVPS | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`; do
         ip=`echo $vm | cut -d" " -f2`;
         host=`echo $vm | cut -d" " -f1`;
         vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;

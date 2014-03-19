@@ -3,6 +3,11 @@ export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/l
 name=$1
 myip=$(ifconfig eth0 | grep "inet addr" | cut -d: -f2| cut -d" " -f1)
 ip=$2
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+	DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+	DHCPVPS=/etc/dhcpd.vps
+fi
 if [ $# -ne 2 ]; then
  echo "Create a New KVM"
  echo " - Creates LVM"
@@ -21,10 +26,10 @@ else
  /usr/bin/virsh resume windows1
  /usr/bin/virsh autostart $name
  mac=\"$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)\" 
- mv -f /etc/dhcpd.vps /etc/dhcpd.vps.backup 
- grep -v -e \"host $name \" -e \"fixed-address $ip;\" /etc/dhcpd.vps.backup > /etc/dhcpd.vps 
- echo \"host $name { hardware ethernet \$mac; fixed-address $ip;}\" >> /etc/dhcpd.vps 
- rm -f /etc/dhcpd.vps.backup 
+ /bin/cp -f ${DHCPVPS} ${DHCPVPS}.backup 
+ grep -v -e \"host $name \" -e \"fixed-address $ip;\" ${DHCPVPS}.backup > ${DHCPVPS} 
+ echo \"host $name { hardware ethernet \$mac; fixed-address $ip;}\" >> ${DHCPVPS} 
+ rm -f ${DHCPVPS}.backup 
  if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
   /etc/init.d/isc-dhcp-server restart
  else

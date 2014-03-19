@@ -6,6 +6,11 @@ if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 else
 	kpartxopts="-s"
 fi
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+    DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+    DHCPVPS=/etc/dhcpd.vps
+fi
 url="https://myquickserver2.interserver.net/qs_queue.php"
 softraid=""
 vcpu=2
@@ -250,10 +255,10 @@ fi
 # /usr/bin/virsh setvcpus ${name} ${vcpu};
  /usr/bin/virsh autostart ${name}
  mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)"
- mv -f /etc/dhcpd.vps /etc/dhcpd.vps.backup
- grep -v -e "host ${name} " -e "fixed-address $ip;" /etc/dhcpd.vps.backup > /etc/dhcpd.vps
- echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> /etc/dhcpd.vps
- rm -f /etc/dhcpd.vps.backup
+ /bin/cp -f $DHCPVPS ${DHCPVPS}.backup
+ grep -v -e "host ${name} " -e "fixed-address $ip;" ${DHCPVPS}.backup > $DHCPVPS
+ echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
+ rm -f ${DHCPVPS}.backup
  if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
   /etc/init.d/isc-dhcp-server restart
  else

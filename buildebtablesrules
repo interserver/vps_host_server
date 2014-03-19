@@ -112,13 +112,17 @@ if [ -f /cloud ]; then
 	echo "#quickserver exiting";
 	exit;
 fi
-
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+	DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+	DHCPVPS=/etc/dhcpd.vps
+fi
 # this outputs all the protection for each individual server
 for user in $list; do
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2`;
 	# improve getting the ip in the future
-	ip=`cat /etc/dhcpd.vps  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
+	ip=`cat $DHCPVPS  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
 	if [ "$debug" = "1" ]; then
 		echo "found user $user"
 		echo "	found mac $mac"
