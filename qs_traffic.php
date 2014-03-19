@@ -14,7 +14,7 @@ function get_qs_ipmap()
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == '')
 	{
-		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi; grep "^host" $DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
+		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi; grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
 	}
 	else
 	{
