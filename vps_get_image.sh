@@ -1,7 +1,7 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
 img="$1"
-if [ $# -ne 2 ]; then
+if [ $# -ne 1 ]; then
 	echo "Downloads a custom image to a temp LVM directory"
 	echo ""
 	echo "Syntax $0 [url]"
