@@ -43,8 +43,10 @@ mkdir -p /image_storage
 mount /dev/vz/image_storage /image_storage
 curl -L -o /image_storage/image.img "$img"
 format="$(qemu-img info /image_storage/image.img |grep "file format:" | awk '{ print $3 }')"
+echo "Image Format Is $format"
 if [ "$format" != "raw" ] ; then
-	qemu-img convert /image_storage/image.img -O raw /image_storage/image.raw.img
+	echo "Converting to Raw"
+	qemu-img convert -p /image_storage/image.img -O raw /image_storage/image.raw.img
 	rm -f /image_storage/image.img
 else
 	mv -f /image_storage/image.img /image_storage/image.raw.img
