@@ -1,18 +1,15 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
-vps="$1"
-img="$2"
+img="$1"
 if [ $# -ne 2 ]; then
-	echo "Install a custom image to a VPS"
-	echo "Syntax $0 [vps] [url]"
-	echo " ie $0 windows1 http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img"
+	echo "Downloads a custom image to a temp LVM directory"
+	echo ""
+	echo "Syntax $0 [url]"
+	echo " ie $0 http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img"
+	echo ""
+	echo "Warning - Leaves /image_storage mounted and creatd as an LVM"
 	exit;
-elif ! virsh dominfo $vps >/dev/null 2>&1; then
-	echo "Invalid VPS $vps";
-	exit
 fi
-destdev=/dev/vz/$vps
-virsh destroy $vps
 #first we get the free disk space on the KVM in G
 p="$(pvdisplay -c)"
 pesize=$(($(echo "$p" | cut -d: -f8) * 1000))
@@ -25,14 +22,14 @@ freeg=$((${freeb}/1000000000))
 #next we get the size of the image in G
 echo "LVM  $freeb / $totalb Free"
 imgsize=$(curl -L -s -I "$img" | grep "^Content-Length:" | sed -e s#"\n"#""#g | cut -d" " -f2 | sed s#"\r"#""#g)
-imgbuff=$(echo "$imgsize + 10000000" | bc -l)
+#imgbuff=$(echo "(4 * $imgsize)" | bc -l)
+imgbuff=$(($imgsize*4))
 if [ "$imgsize" == "" ]; then
 	echo "Error with $img"
 	echo "headers are"
 	cat curl_headers.txt
 	exit
 fi
-imgbuff=$(($imgsize+10000000))
 if [ $imgbuff -ge $freeb ]; then
 	echo "Not Enough Free Space"
 	echo "Image Size $imgsize"
@@ -46,13 +43,10 @@ mkdir -p /image_storage
 mount /dev/vz/image_storage /image_storage
 curl -L -o /image_storage/image.img "$img"
 format="$(qemu-img info /image_storage/image.img |grep "file format:" | awk '{ print $3 }')"
-if [ "$format" = "raw" ] ; then
-	dd if=/image_storage/image.img of=$destdev
+if [ "$format" ! "raw" ] ; then
+	qemu-img convert /image_storage/image.img -O raw /image_storage/image.raw.img
+	rm -f /image_storage/image.img
 else
-	qemu-img convert /image_storage/image.img -O raw "$destdev"
+	mv -f /image_storage/image.img /image_storage/image.raw.img
 fi
-umount /image_storage
-rmdir /image_storage
-echo y |lvremove /dev/vz/image_storage
-virsh start $vps
-/root/cpaneldirect/vps_refresh_vnc.sh $vps
+rm -f curl_headers.txt
