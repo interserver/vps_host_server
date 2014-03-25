@@ -49,6 +49,7 @@ if [ "$8" != "" ]; then
 else
  clientip=""
 fi
+error=0
 if [ $# -lt 3 ]; then
  echo "Create a New KVM"
  echo " - Creates LVM"
@@ -57,6 +58,7 @@ if [ $# -lt 3 ]; then
  echo " - Startup"
  echo "Syntax $0 <name> <ip> <template> [diskspace] [memory] [vcpu]"
  echo " ie $0 windows1337 1.2.3.4 windows1"
+ error=$(($error + 1))
 #check if vps exists
 else
  /root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size}
@@ -103,6 +105,7 @@ else
   /root/cpaneldirect/vps_get_image.sh "$template"
   if [ ! -e "/image_storage/image.raw.img" ]; then
    echo "There must have been a problem, the image does not exist"
+   error=$(($error + 1))
   else 
 	  echo "Copying $template Image"
 	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
@@ -206,27 +209,29 @@ else
   rm -f dd.progress
  else
   echo "Template Does Not Exist"
+  error=$(($error + 1))
  fi
  if [ "$softraid" != "" ]; then
 	for softfile in $softraid; do
 		echo check > $softfile
 	done
  fi
- curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
- sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
- t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
- p="$(echo $t | awk '{ print $1 }')"
- fs="$(echo $t | awk '{ print $5 }')"
- pn="$(echo "$p" | sed s#"/dev/vz/${name}p"#""#g)"
- if [ $pn -gt 4 ]; then
-  pt=l
- else
-  pt=p
- fi
- start="$(echo $t | awk '{ print $2 }')"
- if [ "$fs" = "83" ]; then
-  echo "Resizing Last Partition To Use All Free Space"
-  echo -e "d
+ if [ $error -eq 0 ]; then
+	 curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
+	 sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
+	 t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
+	 p="$(echo $t | awk '{ print $1 }')"
+	 fs="$(echo $t | awk '{ print $5 }')"
+	 pn="$(echo "$p" | sed s#"/dev/vz/${name}p"#""#g)"
+	 if [ $pn -gt 4 ]; then
+	  pt=l
+	 else
+	  pt=p
+	 fi
+	 start="$(echo $t | awk '{ print $2 }')"
+	 if [ "$fs" = "83" ]; then
+	  echo "Resizing Last Partition To Use All Free Space"
+	  echo -e "d
 $pn
 n
 $pt
@@ -238,25 +243,25 @@ w
 print
 q
 " | fdisk -u /dev/vz/${name}
-  kpartx $kpartxopts -av /dev/vz/${name}
-if [ -e "/dev/mapper/vz-${name}p${pn}" ]; then
- pname="vz-${name}"
-else
- pname="$name"
-fi
-  fsck -f -y /dev/mapper/${pname}p${pn}
-  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
-   resizefs="resize4fs"
-  else
-   resizefs="resize2fs"
-  fi
-  $resizefs -p /dev/mapper/${pname}p${pn}
-  mkdir -p /vz/mounts/${name}p${pn}
-  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
-  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
-  umount /dev/mapper/${pname}p${pn}
-  kpartx $kpartxopts -d /dev/vz/${name}
- fi
+	  kpartx $kpartxopts -av /dev/vz/${name}
+	if [ -e "/dev/mapper/vz-${name}p${pn}" ]; then
+	 pname="vz-${name}"
+	else
+	 pname="$name"
+	fi
+	  fsck -f -y /dev/mapper/${pname}p${pn}
+	  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
+	   resizefs="resize4fs"
+	  else
+	   resizefs="resize2fs"
+	  fi
+	  $resizefs -p /dev/mapper/${pname}p${pn}
+	  mkdir -p /vz/mounts/${name}p${pn}
+	  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
+	  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
+	  umount /dev/mapper/${pname}p${pn}
+	  kpartx $kpartxopts -d /dev/vz/${name}
+	 fi
 
 # echo "Coyping MBR"
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=512 count=1 >/dev/null 2>&1
@@ -313,50 +318,51 @@ fi
 # /usr/bin/virsh setmem ${name} ${memory};
 # /usr/bin/virsh setvcpus ${name} ${vcpu};
 
- /usr/bin/virsh autostart ${name};
- mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)";
- /bin/cp -f ${DHCPVPS} ${DHCPVPS}.backup;
- grep -v -e "host ${name} " -e "fixed-address $ip;" ${DHCPVPS}.backup > ${DHCPVPS}
- echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> ${DHCPVPS}
- rm -f ${DHCPVPS}.backup;
- if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
-  /etc/init.d/isc-dhcp-server restart
- else
-  /etc/init.d/dhcpd restart
- fi
- curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
- /usr/bin/virsh start ${name};
- #/usr/bin/virsh resume ${template};
- if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
-	echo "CGroups Not Detected, Bailing";
- else
-  slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
-  cpushares="$(($slices * 512))";
-  ioweight="$(echo "400 + (37 * $slices)" | bc -l | cut -d\. -f1)";
-  echo "$vps$(printf %$((15-${#name}))s)${cpushares} Mb$(printf %$((11-${#cpushares}))s) = ${slices}$(printf %$((2-${#slices}))s) Slices -----> IO: $ioweight$(printf %$((6-${#ioweight}))s)CPU: $cpushares";
-  virsh schedinfo ${name} --set cpu_shares=$cpushares --current;
-  virsh schedinfo ${name} --set cpu_shares=$cpushares --config;
-  virsh blkiotune ${name} --weight $ioweight --current;
-  virsh blkiotune ${name} --weight $ioweight --config;
- fi;
- /scripts/buildebtablesrules | sh
- /scripts/tclimit $ip;
- vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
- if [ "$vnc" == "" ]; then
-	sleep 2s;
-	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
-	if [ "$vnc" == "" ]; then
+	 /usr/bin/virsh autostart ${name};
+	 mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)";
+	 /bin/cp -f ${DHCPVPS} ${DHCPVPS}.backup;
+	 grep -v -e "host ${name} " -e "fixed-address $ip;" ${DHCPVPS}.backup > ${DHCPVPS}
+	 echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> ${DHCPVPS}
+	 rm -f ${DHCPVPS}.backup;
+	 if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
+	  /etc/init.d/isc-dhcp-server restart
+	 else
+	  /etc/init.d/dhcpd restart
+	 fi
+	 curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
+	 /usr/bin/virsh start ${name};
+	 #/usr/bin/virsh resume ${template};
+	 if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
+		echo "CGroups Not Detected, Bailing";
+	 else
+	  slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
+	  cpushares="$(($slices * 512))";
+	  ioweight="$(echo "400 + (37 * $slices)" | bc -l | cut -d\. -f1)";
+	  echo "$vps$(printf %$((15-${#name}))s)${cpushares} Mb$(printf %$((11-${#cpushares}))s) = ${slices}$(printf %$((2-${#slices}))s) Slices -----> IO: $ioweight$(printf %$((6-${#ioweight}))s)CPU: $cpushares";
+	  virsh schedinfo ${name} --set cpu_shares=$cpushares --current;
+	  virsh schedinfo ${name} --set cpu_shares=$cpushares --config;
+	  virsh blkiotune ${name} --weight $ioweight --current;
+	  virsh blkiotune ${name} --weight $ioweight --config;
+	 fi;
+	 /scripts/buildebtablesrules | sh
+	 /scripts/tclimit $ip;
+	 vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
+	 if [ "$vnc" == "" ]; then
 		sleep 2s;
-		vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
-	fi;
- fi;
- /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
- #vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
- sleep 1s;
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
- sleep 2s;
- /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
- /admin/kvmenable blocksmtp $name
+		vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
+		if [ "$vnc" == "" ]; then
+			sleep 2s;
+			vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+		fi;
+	 fi;
+	 /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
+	 /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	 /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	 #vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+	 sleep 1s;
+	 /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	 sleep 2s;
+	 /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	 /admin/kvmenable blocksmtp $name
+ fi
 fi;
