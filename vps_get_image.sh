@@ -38,7 +38,7 @@ if [ $imgbuff -ge $freeb ]; then
 fi
 lvsize=$(($(($(($imgbuff/512))+1))*512))
 lvcreate -L${lvsize}B -nimage_storage vz
-mke2fs /dev/vz/image_storage
+mke2fs -q /dev/vz/image_storage
 mkdir -p /image_storage
 mount /dev/vz/image_storage /image_storage
 curl -L -o /image_storage/image.img "$img"

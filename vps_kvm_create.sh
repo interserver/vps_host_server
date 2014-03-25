@@ -93,7 +93,7 @@ else
  fi
  mv -f ${name}.xml ${name}.xml.backup
  cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
- if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo)" != "" ]; then
+ if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
   sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
  fi
  rm -f ${name}.xml.backup
@@ -112,7 +112,7 @@ else
 	  echo "Copying $template Image"
 	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
 	  pid=$!
-	  tsize=$(stat -c%s "/$template.img")
+	  tsize=$(stat -c%s "/image_storage/image.raw.img")
 	  while [ -d /proc/$pid ]; do
 		sleep 9s
 		kill -SIGUSR1 $pid;
