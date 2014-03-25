@@ -38,4 +38,5 @@ else
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  echo "Starting VPS"
  virsh start ${name};
+ /root/cpaneldirect/vps_refresh_vnc.sh $name
 fi

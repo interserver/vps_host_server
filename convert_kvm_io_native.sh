@@ -20,6 +20,7 @@ if [ "$1" = "enable" ]; then
    virsh destroy $i;
    sleep $delaytime
    virsh start $i;
+   /root/cpaneldirect/vps_refresh_vnc.sh $i
  done
  sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/windows.xml
  sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/linux.xml
@@ -40,6 +41,7 @@ elif [ "$1" = "disable" ]; then
    virsh destroy $i;
    sleep $delaytime
    virsh start $i;
+   /root/cpaneldirect/vps_refresh_vnc.sh $i
  done
  sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i /root/cpaneldirect/windows.xml
  sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i /root/cpaneldirect/linux.xml

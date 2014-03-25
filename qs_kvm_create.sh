@@ -266,6 +266,8 @@ fi
  fi
  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
  /usr/bin/virsh start ${name};
+ /root/cpaneldirect/vps_refresh_vnc.sh $name
+
  #/usr/bin/virsh resume ${template}
  /scripts/buildebtablesrules | sh
  /scripts/tclimit $ip

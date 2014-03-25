@@ -89,6 +89,7 @@ for i in $destids; do
 	  umount /${image}
 	  kpartx $kpartxopts -dv /dev/vz/$i
 	  virsh start $i
+      /root/cpaneldirect/vps_refresh_vnc.sh $i
 	fi
   else
 	if ! vzlist $i >/dev/null 2>&1; then

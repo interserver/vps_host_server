@@ -55,4 +55,4 @@ umount /image_storage
 rmdir /image_storage
 echo y |lvremove /dev/vz/image_storage
 virsh start $vps
-
+/root/cpaneldirect/vps_refresh_vnc.sh $vps
