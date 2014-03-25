@@ -110,7 +110,7 @@ else
    error=$(($error + 1))
   else
 	  echo "Copying $template Image"
-	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
+	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} >dd.progress 2>&1 &
 	  pid=$!
 	  tsize=$(stat -c%s "/image_storage/image.raw.img")
 	  while [ -d /proc/$pid ]; do
