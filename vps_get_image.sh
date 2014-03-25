@@ -23,7 +23,7 @@ freeg=$((${freeb}/1000000000))
 echo "LVM  $freeb / $totalb Free"
 imgsize=$(curl -L -s -I "$img" | grep "^Content-Length:" | sed -e s#"\n"#""#g | cut -d" " -f2 | sed s#"\r"#""#g)
 #imgbuff=$(echo "(4 * $imgsize)" | bc -l)
-imgbuff=$(($imgsize*4))
+imgbuff=$(($imgsize*5))
 if [ "$imgsize" == "" ]; then
 	echo "Error with $img"
 	echo "headers are"
