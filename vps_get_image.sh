@@ -1,7 +1,16 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
-vps=windows24484
-img="http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-uefi1.img"
+vps="$1"
+img="$2"
+if [ $# -ne 2 ]; then
+	echo "Install a custom image to a VPS"
+	echo "Syntax $0 [vps] [url]"
+	echo " ie $0 windows1 http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img"
+	exit;
+elif ! virsh dominfo $vps >/dev/null 2>&1; then
+	echo "Invalid VPS $vps";
+	exit
+fi
 destdev=/dev/vz/$vps
 virsh destroy $vps
 #first we get the free disk space on the KVM in G
