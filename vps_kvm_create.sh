@@ -108,7 +108,7 @@ else
   if [ ! -e "/image_storage/image.raw.img" ]; then
    echo "There must have been a problem, the image does not exist"
    error=$(($error + 1))
-  else 
+  else
 	  echo "Copying $template Image"
 	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
 	  pid=$!

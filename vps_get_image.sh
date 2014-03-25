@@ -42,6 +42,15 @@ mke2fs -q /dev/vz/image_storage
 mkdir -p /image_storage
 mount /dev/vz/image_storage /image_storage
 curl -L -o /image_storage/image.img "$img"
+if [ "$(file /image_storage/image.img|grep ":.*bzip2")" != "" ]; then
+ echo "BZIP2 Image detected, uncompressing"
+ mv -f /image_storage/image.img /image_storage/image.img.bz2
+ bunzip2 /image_storage/image.img.bz2 
+elif [ "$(file /image_storage/image.img|grep ":.*gzip")" != "" ]; then
+ echo "GZIP Image detected, uncompressing"
+ mv -f /image_storage/image.img /image_storage/image.img.gz
+ gunzip /image_storage/image.img.gz 
+fi 
 format="$(qemu-img info /image_storage/image.img |grep "file format:" | awk '{ print $3 }')"
 echo "Image Format Is $format"
 if [ "$format" != "raw" ] ; then
