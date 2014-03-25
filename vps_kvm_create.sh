@@ -101,33 +101,37 @@ else
  if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
   echo "Downloading $template Image"
   /root/cpaneldirect/vps_get_image.sh "$template"
-  echo "Copying $template Image"
-  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
-  pid=$!
-  if [ "$(pidof dd)" != "" ]; then
-   pid="$(pidof dd)"
+  if [ ! -e "/image_storage/image.raw.img" ]; then
+   echo "There must have been a problem, the image does not exist"
+  else 
+	  echo "Copying $template Image"
+	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
+	  pid=$!
+	  if [ "$(pidof dd)" != "" ]; then
+	   pid="$(pidof dd)"
+	  fi
+	  if [ "$(echo "$pid" | grep " ")" != "" ]; then
+	   pid=$(pgrep -f 'dd if')
+	  fi
+	  tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
+	  while [ -d /proc/$pid ]; do
+		copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
+		completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+		curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+			for softfile in $softraid; do
+				echo idle > $softfile
+			done
+		fi
+		echo "$completed%"
+		sleep 10s
+	  done
+	  echo "Removing Downloaded Image"
+	  umount /image_storage
+	  echo y | lvremove /dev/vz/image_storage
+	  rmdir /image_storage
   fi
-  if [ "$(echo "$pid" | grep " ")" != "" ]; then
-   pid=$(pgrep -f 'dd if')
-  fi
-  tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
-  while [ -d /proc/$pid ]; do
-	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
-	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
-	if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-		softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-		for softfile in $softraid; do
-			echo idle > $softfile
-		done
-	fi
-	echo "$completed%"
-	sleep 10s
-  done
-  echo "Removing Downloaded Image"
-  umount /image_storage
-  echo y | lvremove /dev/vz/image_storage
-  rmdir /image_storage
  elif [ -e "/${template}.img.gz" ]; then
   echo "Copying $template Image"
   gzip -dc "/${template}.img.gz"  | dd of=/dev/vz/${name} 2>&1 &
