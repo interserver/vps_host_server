@@ -50,6 +50,10 @@ elif [ "$(file /image_storage/image.img|grep ":.*gzip")" != "" ]; then
  echo "GZIP Image detected, uncompressing"
  mv -f /image_storage/image.img /image_storage/image.img.gz
  gunzip /image_storage/image.img.gz 
+elif [ "$(file /image_storage/image.img|grep ":.*XZ")" != "" ]; then
+ echo "XZ Image detected, uncompressing"
+ mv -f /image_storage/image.img /image_storage/image.img.xz
+ xz -d /image_storage/image.img.xz 
 fi 
 format="$(qemu-img info /image_storage/image.img |grep "file format:" | awk '{ print $3 }')"
 echo "Image Format Is $format"
