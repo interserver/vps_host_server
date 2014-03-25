@@ -110,28 +110,29 @@ else
    error=$(($error + 1))
   else 
 	  echo "Copying $template Image"
-	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
-	  pid=$!
-	  if [ "$(pidof dd)" != "" ]; then
-	   pid="$(pidof dd)"
-	  fi
-	  if [ "$(echo "$pid" | grep " ")" != "" ]; then
-	   pid=$(pgrep -f 'dd if')
-	  fi
-	  tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
-	  while [ -d /proc/$pid ]; do
-		copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
-		completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-		curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
-		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-			for softfile in $softraid; do
-				echo idle > $softfile
-			done
-		fi
-		echo "$completed%"
-		sleep 10s
-	  done
+	  dd if=/image_storage/image.raw.img of=/dev/vz/${name}
+#	  dd if=/image_storage/image.raw.img of=/dev/vz/${name} 2>&1 &
+#	  pid=$!
+#	  if [ "$(pidof dd)" != "" ]; then
+#	   pid="$(pidof dd)"
+#	  fi
+#	  if [ "$(echo "$pid" | grep " ")" != "" ]; then
+#	   pid=$(pgrep -f 'dd if')
+#	  fi
+#	  tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
+#	  while [ -d /proc/$pid ]; do
+#		copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
+#		completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+#		curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+#		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+#			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+#			for softfile in $softraid; do
+#				echo idle > $softfile
+#			done
+#		fi
+#		echo "$completed%"
+#		sleep 10s
+#	  done
 	  echo "Removing Downloaded Image"
 	  umount /image_storage
 	  echo y | lvremove /dev/vz/image_storage
