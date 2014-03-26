@@ -107,8 +107,12 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	#elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
 	elif [ "$(file -L -s /dev/mapper/${mapname} |grep -e ":\(.*\)x86 boot sector")" != "" ];then
 		mkdir -p /tmp/${mapname}
-		fsck -y ${partdev}
-		mount ${partdev} /tmp/${mapname}
+		fsck -y ${partdev} || ntfsfix ${partdev}
+		if [ "$RO" = "1" ]; then
+			mount ${partdev} -o ro /tmp/${mapname}
+		else
+			mount ${partdev} /tmp/${mapname}
+		fi
 		if [ -e /tmp/${mapname}/pagefile.sys ] || [ -d /tmp/${mapname}/Windows ]; then
 			mount --bind /tmp/${mapname} ${TARGET}
 			found_boot=1
