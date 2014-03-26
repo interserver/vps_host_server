@@ -2,16 +2,30 @@
 #set -x
 if [ "$*" = "" ]; then
 	echo "Correct Syntax:"
-	echo "$0 <vzid> [mount point] [unmount]"
+	echo "$0 <vzid> [mount point] [unmount] [readonly]"
 	exit
 fi
 VZID=$1
 shift
 UNMOUNT=0
+RO=0
 TARGET=/mnt
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+	kpartxopts=""
+else
+	kpartxopts="-s"
+fi
 while [ $# -gt 0 ]; do
 	if [ "$1" == "unmount" ] || [ "$1" == "umount" ]; then
 		UNMOUNT=1
+		if [ -d ${TARGET}/boot ]; then
+			umount ${TARGET}/boot
+			kpartx $kpartxopts -dv /dev/vz/$VZID
+		fi
+		umount ${TARGET}
+		shift
+	elif [ "$1" == "ro" ] || [ "$1" == "readonly" ]; then
+		RO=1
 		if [ -d ${TARGET}/boot ]; then
 			umount ${TARGET}/boot
 		fi
@@ -30,11 +44,6 @@ if [ ! -d ${TARGET} ]; then
 	echo "Target Directory ${TARGET} Does Not Exist, please create it"
 	exit
 fi
-if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
-	kpartxopts=""
-else
-	kpartxopts="-s"
-fi
 if [[ $(fdisk -v | sed s#".*fdisk (util-linux \(.*\))"#"\1"#g) > 2.17 ]]; then
 	fdiskopts="-c"
 else
@@ -46,10 +55,10 @@ sleep 1s
 #ls /dev/mapper |grep "${VZID}"
 if [ -e /dev/mapper/vz-${VZID}p1 ]; then
 	VZDEV="/dev/mapper/"
-    mapprefix="vz-"
+	mapprefix="vz-"
 else
 	VZDEV="/dev/mapper/"
-    mapprefix=""
+	mapprefix=""
 fi
 OIFS="$IFS"
 IFS="
@@ -60,10 +69,10 @@ found_root=0;
 for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' | sed s#"\/dev\/vz"#"\/dev\/mapper"#g); do
 	#echo "All: $part"
 	partdev="$(echo $part | awk '{ print $1 }' | sed s#"/dev/vz/"#"/dev/mapper/"#g)"
-    partname="${partdev#$VZDEV}"
-    partname="${partname#$mapprefix}"
-    mapname="${mapprefix}${partname}"
-    partdev="${VZDEV}${mapname}"
+	partname="${partdev#$VZDEV}"
+	partname="${partname#$mapprefix}"
+	mapname="${mapprefix}${partname}"
+	partdev="${VZDEV}${mapname}"
 	parttype="$(echo $part | awk '{ print $2 }')"
 	echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype "
 	# check if linux partition
@@ -76,7 +85,11 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 			mkdir -p /tmp/${mapname}
 			#mount -t $mounttype ${partdev} /tmp/${mapname}
 			fsck -y /dev/mapper/${mapname}
-			mount -t $mounttype /dev/mapper/${mapname} /tmp/${mapname}
+			if [ "$RO" = "1" ]; then
+				mount -t $mounttype -o ro /dev/mapper/${mapname} /tmp/${mapname}
+			else
+				mount -t $mounttype /dev/mapper/${mapname} /tmp/${mapname}
+			fi
 			if [ -e /tmp/${mapname}/etc/fstab ]; then
 				mount --bind /tmp/${mapname} ${TARGET}
 				found_root=1
@@ -115,9 +128,9 @@ if [ $UNMOUNT == 1 ]; then
 	kpartx $kpartxopts -dv /dev/vz/$VZID
 	echo "Finished Unmounting"
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
-    if [ "$boot_dir" != "" ]; then
+	if [ "$boot_dir" != "" ]; then
 		mount --bind ${boot_dir} ${TARGET}/boot
-    fi
+	fi
 	echo "Mounted Successfully"
 elif [ $found_root == 1 ]; then
 	echo "Root but no Boot found"

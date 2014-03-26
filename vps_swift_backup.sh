@@ -28,15 +28,15 @@ if which virsh >/dev/null 2>&1; then
   exit;
  fi
  if [ -e /${image} ]; then
- 	echo "Invalid Image name - directory exists";
- 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
- 	exit;
+	echo "Invalid Image name - directory exists";
+	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+	exit;
  fi
  /admin/swift/mkdir_p vps$id --force
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  sync
  mkdir -p /${image}
- $INSTDIR/vps_kvm_automount.sh snap${id} /${image}
+ $INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
  /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
  $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
@@ -49,9 +49,9 @@ else
   exit;
  fi
  if [ -e /vz/${image} ]; then
- 	echo "Invalid Image name - directory exists";
- 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
- 	exit;
+	echo "Invalid Image name - directory exists";
+	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+	exit;
  fi
  /admin/swift/mkdir_p vps$id --force
  mkdir -p /vz/${image}
