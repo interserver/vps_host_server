@@ -86,8 +86,8 @@ freepct="\$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"A
 free_gb="\$(echo "\$freepct * \$pct_gb" | bc -l)"
 pct_gb="\$(echo "\$total_gig / 100" |bc -l)"
 simul_gb="\$(echo "\$free_gb + (40 * \$pct_gb)")"
-echo $total_gb;
-echo $simul_gb;
+echo \$total_gb;
+echo \$simul_gb;
 `));
 				$out = "$totalg $freeg";
 			}
