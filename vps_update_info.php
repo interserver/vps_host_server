@@ -92,9 +92,9 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 //echo 'Total GB '.$TOTAL_GB.'Used % '.$USED_PCT.'GB Per % '.$GB_PER_PCT.'USED GB  '.$USED_GB.'MAX % '.$MAX_PCT.'FREE PCT '.$FREE_PCT.'FREE GB '.$FREE_GB;
 
 
-						$parts= explode("\n", trim(`$cmd`));
-					$totalg = $TOTAL_GB;
-					$freeg = $FREE_GB;
+					//$parts= explode("\n", trim(`$cmd`));
+					$totalg = trim(`echo $TOTAL_GB;`);
+					$freeg = trim(`echo $FREE_GB;`);
 					$out = "$totalg $freeg";
 			}
 		}
