@@ -2,21 +2,20 @@
 <?php
 // heh this was just to help me mentally work through some crap .. i mae it way harder htan it was supposed to be
 
-define('TOTAL_GB', '$(lvdisplay --units g /dev/vz/thin |grep "LV Size" | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut  -d\. -f1)');
-define('USED_PCT', '$(lvdisplay --units g /dev/vz/thin |grep "Allocated .*data" | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)');
-define('GB_PER_PCT', '$(echo "'.TOTAL_GB.' / 100" |bc -l | cut -d\. -f1)');
-define('USED_GB', '$(echo "'.USED_PCT.' * '.GB_PER_PCT.'" | bc -l)');
-define('MAX_PCT', 60);
-define('FREE_PCT', '$(echo "'.MAX_PCT.' - '.USED_PCT.'" |bc -l)');
-define('FREE_GB', '$(echo "'.GB_PER_PCT.' * '.FREE_PCT.'" |bc -l)');
-echo 'Total GB '.TOTAL_GB.'
-Used % '.USED_PCT.'
-GB Per % '.GB_PER_PCT.'
-USED GB  '.USED_GB.'
-MAX % '.MAX_PCT.'
-FREE PCT '.FREE_PCT.'
-FREE GB '.FREE_GB.'
-';
+$TOTAL_GB = '$(lvdisplay --units g /dev/vz/thin |grep "LV Size" | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut  -d\. -f1)';
+$USED_PCT = '$(lvdisplay --units g /dev/vz/thin |grep "Allocated .*data" | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)';
+$GB_PER_PCT = '$(echo "'.TOTAL_GB.' / 100" |bc -l | cut -d\. -f1)';
+$USED_GB = '$(echo "'.USED_PCT.' * '.GB_PER_PCT.'" | bc -l)';
+$MAX_PCT =  60;
+$FREE_PCT = '$(echo "'.MAX_PCT.' - '.USED_PCT.'" |bc -l)';
+$FREE_GB = '$(echo "'.GB_PER_PCT.' * '.FREE_PCT.'" |bc -l)';
+echo 'Total GB '.$TOTAL_GB.
+'Used % '.$USED_PCT.
+'GB Per % '.$GB_PER_PCT.
+'USED GB  '.$USED_GB.
+'MAX % '.$MAX_PCT.
+'FREE PCT '.$FREE_PCT.
+'FREE GB '.$FREE_GB;
 
 //define('N', "\n");
 //echo TOTAL_GB.N.USED_PCT.N.GB_PER_PCT.N.USED_GB.N.MAX_PCT.N.BUFFER_PCT.N.BUFFER_BG.N;
