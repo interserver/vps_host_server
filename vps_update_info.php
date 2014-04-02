@@ -85,7 +85,7 @@ total_gb="\$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"^.*LV Siz
 freepct="\$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)"
 free_gb="\$(echo "\$freepct * \$pct_gb" | bc -l)"
 pct_gb="\$(echo "\$total_gig / 100" |bc -l)"
-simul_gb="\$(echo "\$free_gb + (40 * \$pct_gb)")"
+simul_gb="\$(echo "\$free_gb + (40 * \$pct_gb)" | bc -l | cut -d\. -f1)"
 echo \$total_gb;
 echo \$simul_gb;
 `));
