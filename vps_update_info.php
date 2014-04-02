@@ -89,6 +89,8 @@ simul_gb="\$(echo "\$free_gb + (40 * \$pct_gb)")"
 echo \$total_gb;
 echo \$simul_gb;
 `));
+					$totalg = $parts[0];
+					$freeg = $parts[1];
 				$out = "$totalg $freeg";
 			}
 		}
