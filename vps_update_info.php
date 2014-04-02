@@ -81,13 +81,10 @@
 				// this one doubles the space usage to make it stop at 50%
 				//$freeg = trim(`echo "\$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) - ( \$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g) / 100 * \$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) * 2 )" |bc -l |cut -d\. -f1`);
 $parts= explode("\n", trim(`
-total_gb="\$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut -d\. -f1)"
-freepct="\$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)"
-free_gb="\$(echo "\$freepct * \$pct_gb" | bc -l)"
-pct_gb="\$(echo "\$total_gig / 100" |bc -l)"
-simul_gb="\$(echo "\$free_gb + (40 * \$pct_gb)" | bc -l | cut -d\. -f1)"
-echo \$total_gb;
-echo \$simul_gb;
+$cmd = 'total_gb="$(lvdisplay --units g /dev/vz/thin |grep "LV Size" | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut -d\. -f1)";
+freepct="$(lvdisplay --units g /dev/vz/thin |grep "Allocated .*data" | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)";
+free_gb="$(echo "$freepct * $pct_gb" | bc -l)"; pct_gb="$(echo "$total_gig / 100" |bc -l)";
+simul_gb="$(echo "$free_gb + (40 * $pct_gb)" | bc -l | cut -d\. -f1)"; echo $total_gb; echo $simul_gb;
 `));
 					$totalg = $parts[0];
 					$freeg = $parts[1];
