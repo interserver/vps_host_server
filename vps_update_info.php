@@ -4,11 +4,11 @@
 
 $TOTAL_GB = '$(lvdisplay --units g /dev/vz/thin |grep "LV Size" | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut  -d\. -f1)';
 $USED_PCT = '$(lvdisplay --units g /dev/vz/thin |grep "Allocated .*data" | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)';
-$GB_PER_PCT = '$(echo "'.TOTAL_GB.' / 100" |bc -l | cut -d\. -f1)';
-$USED_GB = '$(echo "'.USED_PCT.' * '.GB_PER_PCT.'" | bc -l)';
+$GB_PER_PCT = '$(echo "'.$TOTAL_GB.' / 100" |bc -l | cut -d\. -f1)';
+$USED_GB = '$(echo "'.$USED_PCT.' * '.$GB_PER_PCT.'" | bc -l)';
 $MAX_PCT =  60;
-$FREE_PCT = '$(echo "'.MAX_PCT.' - '.USED_PCT.'" |bc -l)';
-$FREE_GB = '$(echo "'.GB_PER_PCT.' * '.FREE_PCT.'" |bc -l)';
+$FREE_PCT = '$(echo "'.$MAX_PCT.' - '.$USED_PCT.'" |bc -l)';
+$FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 echo 'Total GB '.$TOTAL_GB.
 'Used % '.$USED_PCT.
 'GB Per % '.$GB_PER_PCT.
