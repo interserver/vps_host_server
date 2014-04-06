@@ -1,6 +1,5 @@
 #!/usr/bin/php -q
 <?php
-// heh this was just to help me mentally work through some crap .. i mae it way harder htan it was supposed to be
 
 	/**
 	 * update_vps_info()
