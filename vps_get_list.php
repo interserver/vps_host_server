@@ -166,9 +166,15 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 						'name' => $name,
 						'hostname' => $name, 
 						'kmemsize' => $xml['domain']['memory'], 
-						'mac' => $xml['domain']['devices']['interface']['mac_attr']['address'],
-						'vnc' => $xml['domain']['devices']['graphics_attr']['port']
 					);
+					if (isset($xml['domain']['devices']['interface']))
+					{
+						$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
+					}
+					if (isset($xml['domain']['devices']['graphics_attr']))
+					{
+						$server['vnc'] = $xml['domain']['devices']['graphics_attr']['port'];
+					}
 					if ($status == 'running')
 					{
 /*
