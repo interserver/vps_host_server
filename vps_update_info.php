@@ -35,6 +35,19 @@
 //		$servers['cores'] = trim(`echo \$((\$(cat /proc/cpuinfo|grep '^physical id' | sort | uniq | wc -l) * \$(grep '^cpu cores' /proc/cpuinfo  | tail -n 1|  awk '{ print \$4 }')))`);
 //		$servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
 		$servers['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
+		$cmd = 'df --block-size=1G |grep "^/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
+for i in $(pvdisplay -c); do 
+  d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
+  blocksize="$(echo "$i" | cut -d: -f8)";
+  total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
+  free="$(echo "$(echo "$i" | cut -d: -f10) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
+  used="$(echo "$(echo "$i" | cut -d: -f11) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
+  target="$(echo "$i" | cut -d: -f2)";
+  echo "$d:$total:$used:$free:$target";
+done
+';
+		$servers['mounts'] = trim(`$cmd`);
+		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.pl`);
 		if (!file_exists('/usr/bin/iostat'))
 		{
 			echo "Installing iostat..";
