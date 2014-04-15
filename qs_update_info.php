@@ -43,7 +43,7 @@ for i in $(pvdisplay -c); do
   echo "$d:$total:$used:$free:$target";
 done
 ';
-		$servers['mounts'] = trim(`$cmd`);
+		$servers['mounts'] = str_replace("\n", ',', trim(`$cmd`));
 		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.pl`);
 		if (!file_exists('/usr/bin/iostat'))
 		{
