@@ -186,15 +186,18 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 							$server['diskmax'] = $dparts[1];
 						}
 */
-						$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
-						if ($port >= 5900)
+						if (isset($xml['domain']['devices']['graphics_attr']))
 						{
-							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
-							//$vncdisplay = (integer)abs($port - 5900);
-							//$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot_${port}.jpg >/dev/null 2>&1; convert shot_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.jpg shot_${port}.started; };\n shot_${port} &\n";
-							$cmd .= "/root/cpaneldirect/vps_kvm_screenshot_new.sh ${port} &\n";
-							$curl_cmd .= " -F shot".$port."=@shot_".$port.".gif";
-							//$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+							$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
+							if ($port >= 5900)
+							{
+								//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
+									//$vncdisplay = (integer)abs($port - 5900);
+								//$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot_${port}.jpg >/dev/null 2>&1; convert shot_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.jpg shot_${port}.started; };\n shot_${port} &\n";
+								$cmd .= "/root/cpaneldirect/vps_kvm_screenshot_new.sh ${port} &\n";
+								$curl_cmd .= " -F shot".$port."=@shot_".$port.".gif";
+								//$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+							}
 						}
 					}
 					$servers[$veid] = $server;

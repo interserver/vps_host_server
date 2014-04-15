@@ -185,11 +185,14 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 							$server['diskmax'] = $dparts[1];
 						}
 */
-						if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900)
+						if (isset($xml['domain']['devices']['graphics_attr']))
 						{
-							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
-							$vncdisplay = (integer)abs($xml['domain']['devices']['graphics_attr']['port'] - 5900);
-							$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+							if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900)
+							{
+								//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
+								$vncdisplay = (integer)abs($xml['domain']['devices']['graphics_attr']['port'] - 5900);
+								$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+							}
 						}
 					}
 					$servers[$veid] = $server;
