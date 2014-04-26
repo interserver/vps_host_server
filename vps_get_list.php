@@ -192,7 +192,8 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 							if ($port >= 5900)
 							{
 // vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
-$cmd .= "if ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1; then export curlcmd=\"\${curlcmd} -F shot{$port}=@shot{$port}.jpg\"; fi;\n";
+$cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;\n";
+//$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
 								//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
 									//$vncdisplay = (integer)abs($port - 5900);
@@ -286,8 +287,9 @@ $cmd .= "if ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -
 			}
 		}
 		//print_r($servers);
+		$cmd .= 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $(for i in shot_*jpg; do p=$(echo $i | cut -c5-9); echo -n " -F shot$p=@$i"; done;) "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
-		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
+//		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
 	}
