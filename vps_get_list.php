@@ -191,11 +191,14 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 							$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
 							if ($port >= 5900)
 							{
+// vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
+$cmd .= "if ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1; then export curlcmd=\"\${curlcmd} -F shot{$port}=@shot{$port}.jpg\"; fi;\n";
+//					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
 								//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
 									//$vncdisplay = (integer)abs($port - 5900);
 								//$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot_${port}.jpg >/dev/null 2>&1; convert shot_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.jpg shot_${port}.started; };\n shot_${port} &\n";
-								$cmd .= "/root/cpaneldirect/vps_kvm_screenshot_new.sh ${port} &\n";
-								$curl_cmd .= " -F shot".$port."=@shot_".$port.".gif";
+//								$cmd .= "/root/cpaneldirect/vps_kvm_screenshot_new.sh ${port} &\n";
+//								$curl_cmd .= " -F shot".$port."=@shot_".$port.".gif";
 								//$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
 							}
 						}
@@ -283,7 +286,8 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 			}
 		}
 		//print_r($servers);
-		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
+//		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
+		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
 	}
