@@ -207,7 +207,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 					$servers[$veid] = $server;
 				}
 			}
-			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
+			$curl_cmd = '$(for i in shot_*jpg; do p=$(echo $i | cut -c5-9); echo -n " -F shot$p=@$i"; done;)';
+//			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
 			//echo "CMD:$cmd\n";
 			echo `$cmd`;
 		}
@@ -287,8 +288,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			}
 		}
 		//print_r($servers);
-		$cmd .= 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $(for i in shot_*jpg; do p=$(echo $i | cut -c5-9); echo -n " -F shot$p=@$i"; done;) "' . $url . '" 2>/dev/null;';
-//		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
+		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
