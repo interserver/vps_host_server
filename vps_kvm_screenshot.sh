@@ -13,7 +13,7 @@ else
  }
  timer & timerpid=$!
  rm -f shot_$1.jpg shot1_$1.jpg;
- /root/cpaneldirect/vncsnapshot -compresslevel 9 \
+ /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
  -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
  -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
  convert shot1_$1.jpg -quality 75 shot_$1.gif;
