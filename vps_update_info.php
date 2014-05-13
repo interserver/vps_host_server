@@ -28,7 +28,7 @@
 		$servers['raid_building'] = (trim(`grep -v idle /sys/block/md*/md/sync_action 2>/dev/null`) == '' ? 0 : 1);
 		$servers['kernel'] = trim(`uname -r`);
 		$servers['load'] = trim(`cat /proc/loadavg | cut -d" " -f1`);
-		if (file_exists('/dev/bcache0'))
+		if (file_exists('/dev/bcache0') && $servers['load'] >= 2.00)
 		{
 			$servers['load'] -= 2.00;
 		}
