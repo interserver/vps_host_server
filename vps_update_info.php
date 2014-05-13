@@ -28,6 +28,10 @@
 		$servers['raid_building'] = (trim(`grep -v idle /sys/block/md*/md/sync_action 2>/dev/null`) == '' ? 0 : 1);
 		$servers['kernel'] = trim(`uname -r`);
 		$servers['load'] = trim(`cat /proc/loadavg | cut -d" " -f1`);
+		if (file_exists('/dev/bcache0'))
+		{
+			$servers['load'] -= 2.00;
+		}
 		$servers['ram'] = trim(`free -m | grep Mem: | awk '{ print \$2 }'`);
 		$servers['cpu_model'] = trim(`grep "model name" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
 		$servers['cpu_mhz'] = trim(`grep "cpu MHz" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
