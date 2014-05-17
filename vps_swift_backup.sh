@@ -45,6 +45,8 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/fly vps$id /${image}
  if which guestunmount >/dev/null 2>/dev/null; then 
   guestunmount /${image}
+ elif which guestmount >/dev/null 2>/dev/null; then 
+  fusermount -u /${image}
  else
   $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
  fi

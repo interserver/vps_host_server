@@ -87,6 +87,8 @@ for i in $destids; do
 	  #fi
       if which guestunmount >/dev/null 2>/dev/null; then
        guestunmount /${image}
+      elif which guestmount >/dev/null 2>/dev/null; then 
+       fusermount -u /${image}
       else
 	   if [ -e /dev/mapper/${mapdir}p6 ]; then
 		 umount /${image}/boot
