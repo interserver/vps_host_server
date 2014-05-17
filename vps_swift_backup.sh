@@ -44,7 +44,7 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
  if which guestunmount >/dev/null 2>/dev/null; then 
-  guestunmount /${image}
+  guestunmount /${image} || fusermount -u /${image}
  elif which guestmount >/dev/null 2>/dev/null; then 
   fusermount -u /${image}
  else
