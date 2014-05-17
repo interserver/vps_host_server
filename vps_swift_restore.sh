@@ -81,7 +81,8 @@ for i in $destids; do
       fi
 	  /bin/rm -rf /${image}/* 2>/dev/null
 	  #if [ $# -gt 1 ]; then
-		tar xzf /${image}.tar.gz
+		#tar xzf /${image}.tar.gz
+        zcat -c /${image}.tar.gz |tar xvf -
 	  #else
 		#/admin/swift/isget vps${sourceid} ${image} -out | tar xzf -
 	  #fi
