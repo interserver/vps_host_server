@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# added ipv6 support
+# needs to be in /root/cpaneldirect/vps.ip6map
 
 if [ ! -x /usr/local/sbin/ebtables ] && [ ! -x /sbin/ebtables ]; then
        echo 'neither /usr/local/sbin/ebtables nor /sbin/ebtables exist or is not executable';
@@ -18,13 +20,37 @@ fi
 
 debug=0;
 
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+    DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+    DHCPVPS=/etc/dhcpd.vps
+fi
+
+#/etc/dhcpd.conf
+
+if [ -e /etc/dhcp/dhcpd.conf ]; then
+    DHCPCONF=/etc/dhcp/dhcpd.conf
+else
+    DHCPCONF=/etc/dhcpd.conf
+fi
+
+
+
+
 #check libvirtd is running
-check=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
+if [ -e /etc/redhat-release ]; then
+	service='libvirtd';
+	check=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
+else
+	check=`ps auxw | grep "libvirtd -d" | grep -v grep`;
+	service='libvirt-bin';
+fi
+
 if [ "$check" = "" ]; then
         echo "#Libvirtd is not running";
 
         sleep 1s;
-        /etc/init.d/libvirtd restart
+	service $service restart
 
         check2=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
         if [ "$check" = "" ]; then
@@ -46,10 +72,19 @@ fi
 # interface
 hostname=`hostname`
 if [ "$hostname" = "kvm1.trouble-free.net" -o "$hostname" = "kvm2.interserver.net" -o "$hostname" = "kvm50.interserver.net" ]; then
-	eth=eth1;
+        eth=eth1;
+elif [ -e /etc/debian_version ]; then
+	if [ -e /sys/class/net/p2p1 ]; then
+		eth=p2p1;
+	elif  [ -e /sys/class/net/em1 ]; then
+		eth=em1;
+	else
+		eth=eth0;
+	fi
 else
-	eth=eth0;
+        eth=eth0;
 fi
+echo "#eth is $eth"
 
 #bridge
 bridge=br0;
@@ -57,14 +92,30 @@ bridge=br0;
 # gateway
 
 multi_gw=0;
-gw_check=`cat /etc/dhcpd.conf  | grep routers | awk '{print $3}' | cut -d\; -f1 | wc -l`
+gw_check=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1 | wc -l`
 if [ "$gw_check" -gt "1" ]; then
 	multi_gw=1;
 	echo "#more than one gw found"
-	gateways=`cat /etc/dhcpd.conf  | grep routers | awk '{print $3}' | cut -d\; -f1`;
+	gateways=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1`;
 fi
 
-gateway=`cat /etc/sysconfig/network-scripts/ifcfg-br0 | grep ^GATEWAY= | cut -d= -f2`;
+# ipv6 addition
+ipv6=0;
+# fix me ubuntu support
+if [ -e /etc/sysconfig/network-scripts/ifcfg-br0 ]; then
+	ip6_gw=`cat /etc/sysconfig/network-scripts/ifcfg-br0  | grep ^IPV6_DEFAULTGW | cut -d= -f2`;
+fi
+if [ ! "$ip6_gw" = "" ]; then
+	ipv6=1;
+	echo "#found ipv6 gw of $ip6_gw";
+fi
+
+if [ -e /etc/redhat-release ]; then
+	gateway=`cat /etc/sysconfig/network-scripts/ifcfg-br0 | grep ^GATEWAY= | cut -d= -f2`;
+else
+	gateway=`cat /etc/network/interfaces  | grep gateway | awk '{print $2}' | grep -v ^gateway`;
+fi
+
 if [ "$gateway" = "" ]; then
 	gateway=`cat /etc/sysconfig/network | grep ^GATEWAY= | cut -d= -f2 | tr '\n' '\t'`;
 	# still blank?
@@ -112,11 +163,7 @@ if [ -f /cloud ]; then
 	echo "#quickserver exiting";
 	exit;
 fi
-if [ -e /etc/dhcp/dhcpd.vps ]; then
-	DHCPVPS=/etc/dhcp/dhcpd.vps
-else
-	DHCPVPS=/etc/dhcpd.vps
-fi
+
 # this outputs all the protection for each individual server
 for user in $list; do
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
@@ -215,11 +262,31 @@ for user in $list; do
 		echo "# $user mac spoof protect"
 		echo "ebtables -A FORWARD -i $dev -s ! $mac -j DROP"
 		echo "# $user IP PROTECT"
-		echo "ebtables -A FORWARD -p IPv4 --ip-src $ip -s ! $mac --log-prefix \"$user\" --log-ip --log-arp -j DROP"
+		echo "ebtables -A FORWARD -p IPv4 --ip-src $ip -s ! $mac -j DROP"
 		if [ ! "$ips" = "" ]; then
 			for extraip in $ips; do
-				echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip -s ! $mac --log-prefix \"$user\" --log-ip --log-arp -j DROP"
+				echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip -s ! $mac -j DROP"
 			done
+		fi
+		if [ "$ipv6" = "1" ]; then
+			if [ -e /root/cpaneldirect/vps.ip6map ]; then
+				ip6ips=`cat /root/cpaneldirect/vps.ip6map | grep ^$user | cut -d"|" -f2`;
+				if [ ! "$ip6ips" = "" ]; then
+					echo "#found ipv6 for $user ip is $ip6ips";
+					echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ips -i $dev -o $eth -j ACCEPT"
+					echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ips -i $eth -o $dev -j ACCEPT"
+					echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ips -i $dev -o $eth -j ACCEPT"
+                                        echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ips -i $eth -o $dev -j ACCEPT"
+					
+					echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ips -i $dev -o $eth -j ACCEPT"
+                                        echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ips -i $eth -o $dev -j ACCEPT"
+                                        echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ips -i $dev -o $eth -j ACCEPT"
+                                        echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ips -i $eth -o $dev -j ACCEPT"
+
+					echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ips -s ! $mac -j DROP"
+					#echo "ebtables -A FORWARD -p IPv6 --ip6-dst $ip6ips -s ! $mac --log-ip6 -j DROP"
+				fi
+			fi
 		fi
 		echo "# end $user"
 		echo
@@ -235,8 +302,12 @@ done
 if [ ! "$debug" = "1" ]; then
 	echo '# DISABLE ARP Rules';
 	echo '# dump arp (seems to solve arping ip stealing, what is the draw back?)'
-	echo 'ebtables -A FORWARD -p ARP --log-prefix "arp" --log-ip --log-arp -j DROP'
-	
+	echo 'ebtables -A FORWARD -p ARP -j DROP'
+
+	# does not work
+	#echo '#disable ipv6 for non matches';	
+	#--log-ip6
+	echo 'ebtables -A FORWARD -p IPv6 -j DROP';
 
 	###
 	# Block SMTP
