@@ -99,6 +99,8 @@ for i in $destids; do
 	   umount /${image}
 	   kpartx $kpartxopts -dv /dev/vz/$i
       fi
+      sync
+      sleep 5s;
 	  virsh start $i
       /root/cpaneldirect/vps_refresh_vnc.sh $i
 	fi
