@@ -86,8 +86,10 @@ for i in $destids; do
 	  #else
 		#/admin/swift/isget vps${sourceid} ${image} -out | tar xzf -
 	  #fi
+      sync
+      sleep 5s;
       if which guestunmount >/dev/null 2>/dev/null; then
-       guestunmount /${image}
+       guestunmount /${image} || fusermount -u /${image}
       elif which guestmount >/dev/null 2>/dev/null; then 
        fusermount -u /${image}
       else
