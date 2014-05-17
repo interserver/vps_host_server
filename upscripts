@@ -1,0 +1,4 @@
+#!/bin/sh
+
+rsync -av rsync://vpsadmin.interserver.net/vps/cpaneldirect/ /root/cpaneldirect/
+/admin/upscripts
