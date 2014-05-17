@@ -33,13 +33,21 @@ if which virsh >/dev/null 2>&1; then
 	exit;
  fi
  /admin/swift/mkdir_p vps$id --force
- lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
+ lvcreate --size 10000m --snapshot --name snap$id /dev/vz/$vzid
  sync
  mkdir -p /${image}
- $INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
+ if which guestmount >/dev/null 2>/dev/null; then 
+  guestmount -d $vzid -i --ro /${image}
+ else
+  $INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
+ fi
  /admin/swift/fly vps$id /${image} delete
  /admin/swift/fly vps$id /${image}
- $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
+ if which guestunmount >/dev/null 2>/dev/null; then 
+  guestunmount /${image}
+ else
+  $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
+ fi
  rmdir /${image}
  echo y | lvremove /dev/vz/snap${id}
 else

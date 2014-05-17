@@ -52,42 +52,50 @@ for i in $destids; do
 	else
 	  echo "working on $i";
 	  virsh destroy $i
-	  kpartx $kpartxopts -av /dev/vz/$i
-      if [ -e /dev/mapper/${i}p1 ]; then
-       mapdir=$i
+      if which guestmount >/dev/null 2>/dev/null; then
+       guestmount -d $i -i --rw /${image}
       else
-       mapdir=vz-$i
+ 	   kpartx $kpartxopts -av /dev/vz/$i
+       if [ -e /dev/mapper/${i}p1 ]; then
+        mapdir=$i
+       else
+        mapdir=vz-$i
+       fi
+	   if [ -e /dev/mapper/${mapdir}p6 ]; then
+	     fsck -y /dev/mapper/${mapdir}p6 || ntfsfix /dev/mapper/${mapdir}p6
+  		 mount -o rw /dev/mapper/${mapdir}p6 /${image} || exit
+	     fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
+	   elif [ -e /dev/mapper/${mapdir}p3 ]; then
+	     fsck -y /dev/mapper/${mapdir}p3 || ntfsfix /dev/mapper/${mapdir}p1
+		 mount -o rw /dev/mapper/${mapdir}p3 /${image} || exit
+	     fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
+	   elif [ -e /dev/mapper/${mapdir}p2 ]; then
+	     fsck -y /dev/mapper/${mapdir}p2 || ntfsfix /dev/mapper/${mapdir}p2
+		 mount -o rw /dev/mapper/${mapdir}p2 /${image} || exit
+	   else
+	     fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 mount -o rw /dev/mapper/${mapdir}p1 /${image} || exit
+	   fi
       fi
-	  if [ -e /dev/mapper/${mapdir}p6 ]; then
-	    fsck -y /dev/mapper/${mapdir}p6 || ntfsfix /dev/mapper/${mapdir}p6
-		mount -o rw /dev/mapper/${mapdir}p6 /${image} || exit
-	    fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
-		mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
-	  elif [ -e /dev/mapper/${mapdir}p3 ]; then
-	    fsck -y /dev/mapper/${mapdir}p3 || ntfsfix /dev/mapper/${mapdir}p1
-		mount -o rw /dev/mapper/${mapdir}p3 /${image} || exit
-	    fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
-		mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
-	  elif [ -e /dev/mapper/${mapdir}p2 ]; then
-	    fsck -y /dev/mapper/${mapdir}p2 || ntfsfix /dev/mapper/${mapdir}p2
-		mount -o rw /dev/mapper/${mapdir}p2 /${image} || exit
-	  else
-	    fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
-		mount -o rw /dev/mapper/${mapdir}p1 /${image} || exit
-	  fi
 	  /bin/rm -rf /${image}/* 2>/dev/null
 	  #if [ $# -gt 1 ]; then
 		tar xzf /${image}.tar.gz
 	  #else
 		#/admin/swift/isget vps${sourceid} ${image} -out | tar xzf -
 	  #fi
-	  if [ -e /dev/mapper/${mapdir}p6 ]; then
-		umount /${image}/boot
-	  elif [ -e /dev/mapper/${mapdir}p3 ]; then
-		umount /${image}/boot
-	  fi
-	  umount /${image}
-	  kpartx $kpartxopts -dv /dev/vz/$i
+      if which guestunmount >/dev/null 2>/dev/null; then
+       guestunmount /${image}
+      else
+	   if [ -e /dev/mapper/${mapdir}p6 ]; then
+		 umount /${image}/boot
+	   elif [ -e /dev/mapper/${mapdir}p3 ]; then
+		 umount /${image}/boot
+	   fi
+	   umount /${image}
+	   kpartx $kpartxopts -dv /dev/vz/$i
+      fi
 	  virsh start $i
       /root/cpaneldirect/vps_refresh_vnc.sh $i
 	fi
@@ -103,10 +111,13 @@ for i in $destids; do
   fi
 done
 curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
-set -x
+#set -x
 if which virsh >/dev/null 2>&1; then
-  /bin/rmdir /${image}
-  rm -f /${image}.tar.gz
+  for i in $(ls /dev/mapper/*p[0-9] | sed s#"/dev/mapper/vz-"#""#g | sed s#"/dev/mapper/"#""#g | sed s#"p[0-9]$"#""#g); do
+   kpartx $kpartxopts -dv /dev/vz/$i
+  done
+  /bin/rm -rf /${image}
+  /bin/rm -rf /${image}.tar.gz
 else
   /bin/rm -rf /vz/${image}
 fi
