@@ -78,9 +78,6 @@ else
   fi
   grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
   echo "Defining Config As VPS"
-  if [ "$template" = "windows2012" ] || [ "$template" = "windowsr2" ]; then
-   sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
-  fi
   if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
    sed s#"rhel5.5.0"#"pc-1.0"#g -i ${name}.xml
    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
@@ -100,6 +97,9 @@ else
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
   template=windows2
+ fi
+ if [ "$template" != "windows2" ]
+	sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
  fi
  if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
 	adjust_partitions=0
