@@ -98,7 +98,7 @@ else
  if [ "$template" = "windows1" ]; then
   template=windows2
  fi
- if [ "$template" != "windows2" ]
+ if [ "$template" != "windows2" ]; then
 	sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
  fi
  if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
