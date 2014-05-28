@@ -94,12 +94,12 @@ else
   sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
  fi
  rm -f ${name}.xml.backup
+ if [ "$template" != "windows2" ]; then
+	sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
+ fi
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
   template=windows2
- fi
- if [ "$template" != "windows2" ]; then
-	sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
  fi
  if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
 	adjust_partitions=0
