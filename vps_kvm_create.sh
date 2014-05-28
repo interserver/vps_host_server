@@ -95,7 +95,7 @@ else
  fi
  rm -f ${name}.xml.backup
  if [ "$template" != "windows2" ]; then
-	sed s#"<mac add"#"<model type='virtio'/>\n          <mac add"#g -i ${name}.xml
+	sed s#"<source bridge='br0'\/>"#"<model type='virtio'/>\n          <source bridge='br0'/>"#g -i ${name}.xml
  fi
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
