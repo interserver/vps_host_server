@@ -8,7 +8,8 @@ if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
 	echo "CGroups Not Detected, Bailing"
 else
 	for i in $(grep -i '<memory ' /etc/libvirt/qemu/*xml | cut -d/ -f5 | tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $1 " " $5 }'); do
-		vps="$(echo $i | cut -d" " -f1)";  mem="$(echo $i | cut -d" " -f2)";
+		vps="$(echo $i | cut -d" " -f1)";  
+		mem="$(echo $i | cut -d" " -f2)";
 		mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
 		memtxt="${mem}Mb Ram";
 		if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
