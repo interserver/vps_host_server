@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+sliceram=1024
 OIFS="$IFS";
 IFS="
 ";
@@ -10,12 +11,12 @@ else
 		vps="$(echo $i | cut -d" " -f1)";  mem="$(echo $i | cut -d" " -f2)";
 		mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
 		memtxt="${mem}Mb Ram";
-		if [ "$mem" == "" ] || [ $mem -lt 512 ]; then
+		if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
 			slices=1
 		else
-			slices="$(echo $mem / 512 |bc -l | cut -d\. -f1)";
+			slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
 		fi
-		cpushares="$(($slices * 512))";
+		cpushares="$(($slices * ${sliceram}))";
 		ioweight="$(echo "200 + (50 * $slices)" | bc -l | cut -d\. -f1)";
 		echo "$vps$(printf %$((15-${#vps}))s)${memtxt}$(printf %$((11-${#memtxt}))s) = ${slices}$(printf %$((2-${#slices}))s) Slices -----> IO: $ioweight$(printf %$((6-${#ioweight}))s)CPU: $cpushares";
 		virsh schedinfo $vps --set cpu_shares=$cpushares --current >/dev/null;
