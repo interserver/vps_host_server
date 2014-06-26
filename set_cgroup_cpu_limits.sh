@@ -1,4 +1,7 @@
 #!/bin/bash
+if [ ! -e /cgroup/blkio/libvirt/qemu ]; then
+	exit;
+fi
 sliceram=1024
 iopslimitbase=25
 iopslimitmodifier=5
