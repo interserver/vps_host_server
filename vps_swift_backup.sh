@@ -65,14 +65,25 @@ else
  fi
  /admin/swift/mkdir_p vps$id --force
  mkdir -p /vz/${image}
- rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/root/${vzid}/ /vz/${image}
- vzctl suspend $vzid
- rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/private/${vzid}/ /vz/${image}
- vzctl resume $vzid
+ if [ -e /vz/$private/{id}/root.hdd/root.hdd ]; then 
+  UUID="$(uuidgen)"
+  vzctl snapshot $id --id "$UUID" --skip-suspend --skip-config
+  vzctl snapshot-mount $id --id "$UUID" --target /vz/${image}
+ else
+  rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/root/${vzid}/ /vz/${image}
+  vzctl suspend $vzid
+  rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/private/${vzid}/ /vz/${image}
+  vzctl resume $vzid
+ fi
  cd /vz
  /admin/swift/fly vps$id ${image} delete
  /admin/swift/fly vps$id ${image}
- /bin/rm -rf /vz/${image}
+ if [ -e /vz/$private/{id}/root.hdd/root.hdd ]; then
+  vzctl snapshot-umount $id --id "$UUID"
+  vzctl snapshot-delete $id --id "$UUID"  
+ else 
+  /bin/rm -rf /vz/${image}
+ fi
 fi
 curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 
