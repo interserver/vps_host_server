@@ -32,7 +32,7 @@ if which virsh >/dev/null 2>&1; then
 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
  fi
- /admin/swift/mkdir_p vps$id --force
+ /admin/swift/mkdir_p vps${id} --force
  lvcreate --size 10000m --snapshot --name snap$id /dev/vz/$vzid
  sync
  mkdir -p /${image}
@@ -41,8 +41,8 @@ if which virsh >/dev/null 2>&1; then
  else
   $INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
  fi
- /admin/swift/fly vps$id /${image} delete
- /admin/swift/fly vps$id /${image}
+ /admin/swift/fly vps${id} /${image} delete
+ /admin/swift/fly vps${id} /${image}
  if which guestunmount >/dev/null 2>/dev/null; then 
   guestunmount /${image} || fusermount -u /${image}
  elif which guestmount >/dev/null 2>/dev/null; then 
@@ -63,9 +63,9 @@ else
 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
  fi
- /admin/swift/mkdir_p vps$id --force
+ /admin/swift/mkdir_p vps${id} --force
  mkdir -p /vz/${image}
- if [ -e /vz/$private/{id}/root.hdd/root.hdd ]; then 
+ if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then 
   UUID="$(uuidgen)"
   vzctl snapshot $id --id "$UUID" --skip-suspend --skip-config
   vzctl snapshot-mount $id --id "$UUID" --target /vz/${image}
@@ -76,11 +76,12 @@ else
   vzctl resume $vzid
  fi
  cd /vz
- /admin/swift/fly vps$id ${image} delete
- /admin/swift/fly vps$id ${image}
- if [ -e /vz/$private/{id}/root.hdd/root.hdd ]; then
+ /admin/swift/fly vps${id} ${image} delete
+ /admin/swift/fly vps${id} ${image}
+ if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then
   vzctl snapshot-umount $id --id "$UUID"
-  vzctl snapshot-delete $id --id "$UUID"  
+  vzctl snapshot-delete $id --id "$UUID"
+  rmdir /vz/${image}
  else 
   /bin/rm -rf /vz/${image}
  fi
