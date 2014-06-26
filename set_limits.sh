@@ -11,7 +11,7 @@ cpuweightmodifier=1
 onembyte=1048576
 IFS="
 "
-if [ ! -e /cgroup/blkio/libvirt/qemu ]; then
+if [ -e /cgroup/blkio/libvirt/qemu ]; then
 	cgdir=/cgroup/blkio/libvirt/qemu;
 	for i in ${cgdir}/*/blkio.throttle.read_iops_device; do
 		id="$(echo "$i" | cut -d/ -f6)";
