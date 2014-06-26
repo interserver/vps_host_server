@@ -26,8 +26,8 @@ for i in ${cgdir}/*/blkio.throttle.read_iops_device; do
 	echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
 	echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.read_bps_device;
 	echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.write_bps_device;
-	echo "# VPS ID=$id HOST=${host} SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}"
+	echo "# VPS ID=$id SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}"
 	#, CPU MAX USAGE=${cpulimit}% GARAUNTEED USAGE=${cpuweightpct}% (${cpuweightpower})"
-	echo "$iopslimit iops read/write limit set on $slices slice vps $id (device $majorminor)";
-	echo "$bpslimit bps read/write limit set on $slices slice vps $id (device $majorminor)";
+	#echo "$iopslimit iops read/write limit set on $slices slice vps $id (device $majorminor)";
+	#echo "$bpslimit bps read/write limit set on $slices slice vps $id (device $majorminor)";
 done
