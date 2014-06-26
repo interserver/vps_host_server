@@ -12,6 +12,10 @@ onembyte=1048576
 IFS="
 "
 if [ -e /cgroup/blkio/libvirt/qemu ]; then
+	# vcpu_shares 0-2621440-262144 weighted balance
+	# vcpu_period 1000-1000000 time in ms maybe 
+	# vcpu_quota 1000-18446744073709551  how much max time in ms of each period can you get
+	# If --live is specified, set scheduler information of a running guest. If --config is specified, affect the next boot of a persistent guest. If --current is specified, affect the current guest state. 
 	cgdir=/cgroup/blkio/libvirt/qemu;
 	for i in ${cgdir}/*/blkio.throttle.read_iops_device; do
 		id="$(echo "$i" | cut -d/ -f6)";
