@@ -1,13 +1,13 @@
 #!/bin/bash
 sliceram=1024
-iopslimitbase=25
-iopslimitmodifier=5
-bpslimitbase=5
-bpslimitmodifier=1
-cpulimitbase=20
-cpulimitmodifier=5
-cpuweightbase=2
-cpuweightmodifier=1
+iopslimitbase=40
+iopslimitmodifier=10
+mbpslimitbase=7
+mbpslimitmodifier=2
+cpulimitbase=40
+cpulimitmodifier=4
+cpuweightbase=5
+cpuweightmodifier=2
 onembyte=1048576
 IFS="
 "
@@ -28,7 +28,7 @@ if [ -e /cgroup/blkio/libvirt/qemu ]; then
 		fi
 		majorminor="$(ls -al /dev/vz/$(ls -al /dev/vz/$id | awk '{ print $11 }') | awk '{ print $5 ":" $6 }' |sed s#","#""#g)";
 		iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)"
-		mbpslimit="$(echo "(${bpslimitbase} + (${bpslimitmodifier} * ${slices}))" |bc -l)"
+		mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)"
 		bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)"
 		echo "$majorminor $iopslimit" > $i;
 		echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
@@ -61,7 +61,7 @@ elif [ -e /etc/vz/vz.conf ]; then
 			fi
 		fi
 		iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)"
-		mbpslimit="$(echo "(${bpslimitbase} + (${bpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)"
+		mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)"
 		bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)"
 		cpulimit="$(echo "${cpulimitbase} + (${cpulimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)"
 		cpuweightpct="$(echo "(${cpuweightbase} + (${cpuweightmodifier} * ${slices}))" |bc -l)"
