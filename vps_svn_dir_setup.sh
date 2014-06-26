@@ -2,7 +2,6 @@
 svn update --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect;
 mkdir -p /root/.subversion/auth/svn.simple/; 
 chmod go-rwx /root/.subversion/auth;
-rm -rf /root/.subversion/auth/svn.simple/* ; 
 echo 'K 8
 passtype
 V 6
