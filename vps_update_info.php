@@ -51,7 +51,7 @@ for i in $(pvdisplay -c); do
 done
 ';
 		$servers['mounts'] = str_replace("\n", ',', trim(`$cmd`));
-		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.pl`);
+		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.pl 2>/dev/null`);
 		if (!file_exists('/usr/bin/iostat'))
 		{
 			echo "Installing iostat..";
