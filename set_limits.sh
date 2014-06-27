@@ -30,14 +30,14 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e /sys/fs/cgroup/blkio/machine/*.libv
 		mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')"
 		mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
 		if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
-			slices=1
+			slices=1;
 		else
 			slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
 		fi
 		majorminor="$(ls -al /dev/vz/$(ls -al /dev/vz/$id | awk '{ print $11 }') | awk '{ print $5 ":" $6 }' |sed s#","#""#g)";
-		iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)"
-		mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)"
-		bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)"
+		iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
+		mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)";
+		bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
 		echo "$majorminor $iopslimit" > $i;
 		echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
 		echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.read_bps_device;
