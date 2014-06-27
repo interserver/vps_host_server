@@ -1,13 +1,13 @@
 #!/bin/bash
 sliceram=1024
-iopslimitbase=40
-iopslimitmodifier=10
+iopslimitbase=35
+iopslimitmodifier=7
 mbpslimitbase=7
 mbpslimitmodifier=2
-cpulimitbase=40
+cpulimitbase=35
 cpulimitmodifier=4
 cpuweightbase=5
-cpuweightmodifier=2
+cpuweightmodifier=1
 onembyte=1048576
 IFS="
 "
@@ -33,11 +33,14 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/
         id="${cgid}";
         mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')";
         mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
-        if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
-            slices=1;
-        else
-            slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
-        fi
+        slices="$(grep "${id}" /root/cpaneldirect/vps.slicemap | sed s#"[[:alpha:]]"#""#g | grep "^${id}:")";
+        if [ "$slices" = "" ]; then
+            if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
+                slices=1;
+            else
+                slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
+            fi;
+        fi;
         majorminor="$(ls -al /dev/vz/$(ls -al /dev/vz/$id | awk '{ print $11 }') | awk '{ print $5 ":" $6 }' |sed s#","#""#g)";
         iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
         mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)";
@@ -70,12 +73,15 @@ elif [ -e /etc/vz/vz.conf ]; then
         status="$(echo "$line" | awk '{ print $2 }')"
         host="$(echo "$line" | awk '{ print $3 }')"
         mem="${memlimits[$id]}"
-        if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
-            slices=1
-        else
-            slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
-            if [ $slices -gt 16 ]; then
-                slices=16;
+        slices="$(grep "^${id}:" /root/cpaneldirect/vps.slicemap)"
+		if [ "$slices" = "" ]; then
+            if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
+                slices=1
+            else
+                slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
+                if [ $slices -gt 16 ]; then
+                    slices=16;
+                fi
             fi
         fi
         iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
