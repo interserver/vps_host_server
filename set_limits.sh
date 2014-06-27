@@ -33,7 +33,7 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/
         id="${cgid}";
         mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')";
         mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
-        slices="$(grep "${id}" /root/cpaneldirect/vps.slicemap | sed s#"[[:alpha:]]"#""#g | grep "^${id}:" | cut -d: -f1)";
+        slices="$(grep "${id}" /root/cpaneldirect/vps.slicemap | sed s#"[[:alpha:]]"#""#g | grep "^${id}:" | cut -d: -f2)";
         if [ "$slices" = "" ]; then
             if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
                 slices=1;
@@ -73,7 +73,7 @@ elif [ -e /etc/vz/vz.conf ]; then
         status="$(echo "$line" | awk '{ print $2 }')"
         host="$(echo "$line" | awk '{ print $3 }')"
         mem="${memlimits[$id]}"
-        slices="$(grep "^${id}:" /root/cpaneldirect/vps.slicemap | cut -d: -f1)"
+        slices="$(grep "^${id}:" /root/cpaneldirect/vps.slicemap | cut -d: -f2)"
 		if [ "$slices" = "" ]; then
             if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
                 slices=1
