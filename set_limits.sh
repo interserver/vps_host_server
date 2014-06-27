@@ -78,14 +78,15 @@ elif [ -e /etc/vz/vz.conf ]; then
                 slices=16;
             fi
         fi
-        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)"
-        mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)"
-        bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)"
-        cpulimit="$(echo "${cpulimitbase} + (${cpulimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)"
-        cpuweightpct="$(echo "(${cpuweightbase} + (${cpuweightmodifier} * ${slices}))" |bc -l)"
-        cpuweightpower="$(echo "${cpuweightpct} / 100 * ${cpupower}" |bc -l | cut -d\. -f1)"
-        echo "# VPS ID=$id HOST=${host} SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}, CPU MAX USAGE=${cpulimit}% GARAUNTEED USAGE=${cpuweightpct}% (${cpuweightpower})"
-        vzctl set $id --iolimit ${mbpslimit}M --iopslimit ${iopslimit} --cpuunits ${cpuweightpower} --cpulimit ${cpulimit} --save | grep -v "CT configuration saved to /etc/vz/conf" | sed ':a;N;$!ba;s/\n/  /g'
+        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
+        mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)";
+        bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
+        cpulimit="$(echo "${cpulimitbase} + (${cpulimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
+        cpuweightpct="$(echo "(${cpuweightbase} + (${cpuweightmodifier} * ${slices}))" |bc -l)";
+        cpuweightpower="$(echo "${cpuweightpct} / 100 * ${cpupower}" |bc -l | cut -d\. -f1)";
+        echo "# VPS ID=$id HOST=${host} SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}, CPU MAX USAGE=${cpulimit}% GARAUNTEED USAGE=${cpuweightpct}% (${cpuweightpower})";
+        output="$(vzctl set $id --iolimit ${mbpslimit}M --iopslimit ${iopslimit} --cpuunits ${cpuweightpower} --cpulimit ${cpulimit} --save | grep -v "CT configuration saved to /etc/vz/conf" | sed ':a;N;$!ba;s/\n/  /g')";
+		#echo $output;
     done
 else
     echo "Dont know how to handle this type"
