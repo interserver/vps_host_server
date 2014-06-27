@@ -11,13 +11,21 @@ cpuweightmodifier=2
 onembyte=1048576
 IFS="
 "
-if [ -e /cgroup/blkio/libvirt/qemu ]; then
+if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e /sys/fs/cgroup/blkio/machine/*.libvirt-qemu/blkio.throttle.read_iops_device ]; then
 	# vcpu_shares 0-2621440-262144 weighted balance
 	# vcpu_period 1000-1000000 time in ms maybe 
 	# vcpu_quota 1000-18446744073709551  how much max time in ms of each period can you get
 	# If --live is specified, set scheduler information of a running guest. If --config is specified, affect the next boot of a persistent guest. If --current is specified, affect the current guest state. 
-	cgdir=/cgroup/blkio/libvirt/qemu;
-	for i in ${cgdir}/*/blkio.throttle.read_iops_device; do
+	if [ -e /cgroup/blkio/libvirt/qemu ]; then
+		cgdir=/cgroup/blkio/libvirt/qemu;
+		cgall=${cgdir}/*/blkio.throttle.read_iops_device;
+		cgid=$(echo \$id | cut -d/ -f6)";
+	else
+		cgdir=/sys/fs/cgroup/blkio/machine;
+		cgall=/sys/fs/cgroup/blkio/machine/*.libvirt-qemu/blkio.throttle.read_bps_device
+		cgid=$(echo \$id |  cut -d/ -f7 | sed s#"\.libvirt-qemu$"#""#g)
+	fi
+	for i in $(ls $cgall); do
 		id="$(echo "$i" | cut -d/ -f6)";
 		mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')"
 		mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
