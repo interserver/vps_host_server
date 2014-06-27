@@ -39,6 +39,14 @@ if ($out != '')
 $cmd = dirname(__FILE__) . '/vps_traffic.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
+$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getslicemap '$url' 2>/dev/null;";
+//echo "Running Command: $cmd\n";
+$out = trim(`$cmd`);
+//echo "Get IP List Running:	$out\n";
+if ($out != '')
+{
+	echo `$out`;
+}
 if (!file_exists('/usr/sbin/vzctl'))
 {
 	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getipmap '$url' 2>/dev/null;";
@@ -50,14 +58,6 @@ if (!file_exists('/usr/sbin/vzctl'))
 		echo `$out`;
 	}
 	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getvncmap '$url' 2>/dev/null;";
-	//echo "Running Command: $cmd\n";
-	$out = trim(`$cmd`);
-	//echo "Get IP List Running:	$out\n";
-	if ($out != '')
-	{
-		echo `$out`;
-	}
-	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getslicemap '$url' 2>/dev/null;";
 	//echo "Running Command: $cmd\n";
 	$out = trim(`$cmd`);
 	//echo "Get IP List Running:	$out\n";
