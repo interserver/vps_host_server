@@ -57,6 +57,14 @@ if (!file_exists('/usr/sbin/vzctl'))
 	{
 		echo `$out`;
 	}
+	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getslicemap '$url' 2>/dev/null;";
+	//echo "Running Command: $cmd\n";
+	$out = trim(`$cmd`);
+	//echo "Get IP List Running:	$out\n";
+	if ($out != '')
+	{
+		echo `$out`;
+	}
 }
 $cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getqueue '$url' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
