@@ -27,8 +27,8 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e $(ls /sys/fs/cgroup/blkio/machine/*
         cgid="$(echo \"\$i\" |  cut -d/ -f7 | sed s#"\.libvirt-qemu$"#""#g)"
     fi
     for i in $(ls $cgall); do
-        id="$(echo "$i" | cut -d/ -f6)";
-        mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')"
+        id="${cgid}";
+        mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')";
         mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
         if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
             slices=1;
