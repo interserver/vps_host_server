@@ -19,11 +19,11 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e /sys/fs/cgroup/blkio/machine/*.libv
 	if [ -e /cgroup/blkio/libvirt/qemu ]; then
 		cgdir=/cgroup/blkio/libvirt/qemu;
 		cgall=${cgdir}/*/blkio.throttle.read_iops_device;
-		cgid=$(echo \$id | cut -d/ -f6)";
+		cgid=$(echo \"\$i\" | cut -d/ -f6)";
 	else
 		cgdir=/sys/fs/cgroup/blkio/machine;
 		cgall=/sys/fs/cgroup/blkio/machine/*.libvirt-qemu/blkio.throttle.read_bps_device
-		cgid=$(echo \$id |  cut -d/ -f7 | sed s#"\.libvirt-qemu$"#""#g)
+		cgid=$(echo \"\$i\" |  cut -d/ -f7 | sed s#"\.libvirt-qemu$"#""#g)
 	fi
 	for i in $(ls $cgall); do
 		id="$(echo "$i" | cut -d/ -f6)";
