@@ -20,14 +20,17 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e $(ls /sys/fs/cgroup/blkio/machine/*
     if [ -e /cgroup/blkio/libvirt/qemu ]; then
         cgdir=/cgroup/blkio/libvirt/qemu;
         cgall=${cgdir}/*/blkio.throttle.read_iops_device;
-        cgid="$(echo \"\$i\" | cut -d/ -f6)";
     else
         cgdir=/sys/fs/cgroup/blkio/machine;
         cgall=/sys/fs/cgroup/blkio/machine/*.libvirt-qemu/blkio.throttle.read_bps_device
-        cgid="$(echo \"\$i\" |  cut -d/ -f7 | sed s#"\.libvirt-qemu$"#""#g)"
     fi
     for i in $(ls $cgall); do
-        id="$(eval ${cgid})";
+        if [ -e /cgroup/blkio/libvirt/qemu ]; then
+            cgid="$(echo "$i" | cut -d/ -f6)";
+        else
+            cgid="$(echo "$i" |  cut -d/ -f7 | sed s#"\.libvirt-qemu$"#""#g)"
+        fi;
+        id="${cgid}";
         mem="$(grep -i '<memory ' /etc/libvirt/qemu/${id}.xml |  tr '>' ' ' | tr '<' ' ' | tr \. ' ' | awk '{ print $3 }')";
         mem="$(echo $mem / 1000 |bc -l | cut -d\. -f1)";
         if [ "$mem" == "" ] || [ $mem -lt ${sliceram} ]; then
@@ -40,9 +43,15 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e $(ls /sys/fs/cgroup/blkio/machine/*
         mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)";
         bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
         echo "$majorminor $iopslimit" > $i;
-        echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
-        echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.read_bps_device;
-        echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.write_bps_device;
+        if [ -e /cgroup/blkio/libvirt/qemu ]; then
+            echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
+            echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.read_bps_device;
+            echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.write_bps_device;
+        else
+            echo "$majorminor $iopslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.write_iops_device;
+            echo "$majorminor $bpslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.read_bps_device;
+            echo "$majorminor $bpslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.write_bps_device;
+        fi
         echo "# VPS ID=$id SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}"
         #, CPU MAX USAGE=${cpulimit}% GARAUNTEED USAGE=${cpuweightpct}% (${cpuweightpower})"
         #echo "$iopslimit iops read/write limit set on $slices slice vps $id (device $majorminor)";
