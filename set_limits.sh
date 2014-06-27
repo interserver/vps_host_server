@@ -13,6 +13,7 @@ IFS="
 "
 if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e /sys/fs/cgroup/blkio/machine/*.libvirt-qemu/blkio.throttle.read_iops_device ]; then
 	# vcpu_shares 0-2621440-262144 weighted balance
+	# Within each given "period" (microseconds), a group is allowed to consume only up to "quota" microseconds of CPU time. 
 	# vcpu_period 1000-1000000 time in ms maybe 
 	# vcpu_quota 1000-18446744073709551  how much max time in ms of each period can you get
 	# If --live is specified, set scheduler information of a running guest. If --config is specified, affect the next boot of a persistent guest. If --current is specified, affect the current guest state. 
