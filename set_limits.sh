@@ -15,7 +15,8 @@ IFS="
 # Within each given "period" (microseconds), a group is allowed to consume only up to "quota" microseconds of CPU time. 
 # vcpu_period 1000-1000000 time in ms maybe 
 # vcpu_quota 1000-18446744073709551  how much max time in ms of each period can you get
-# If --live is specified, set scheduler information of a running guest. If --config is specified, affect the next boot of a persistent guest. If --current is specified, affect the current guest state. 
+# If --live is specified, set scheduler information of a running guest. If --config is specified, affect the next boot of a persistent guest.
+# If --current is specified, affect the current guest state. 
 if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/*.libvirt-qemu/blkio.throttle.read_iops_device 2>/dev/null | head -n 1)" ]; then
     if [ -e /cgroup/blkio/libvirt/qemu ]; then
         cgdir=/cgroup/blkio/libvirt/qemu;
@@ -84,12 +85,17 @@ elif [ -e /etc/vz/vz.conf ]; then
                 fi
             fi
         fi
+        cores="$(grep "^CPUS=" /etc/vz/conf/${id}.conf | cut -d" -f2)"
+		if [ "$cores" = "" ] || [ "$cores" -lt 1 ]; then
+			cores=1
+		fi
         iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
         mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)";
         bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
         cpulimit="$(echo "${cpulimitbase} + (${cpulimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
         cpuweightpct="$(echo "(${cpuweightbase} + (${cpuweightmodifier} * ${slices}))" |bc -l)";
         cpuweightpower="$(echo "${cpuweightpct} / 100 * ${cpupower}" |bc -l | cut -d\. -f1)";
+        cpulimit="$(($cpulimit * ${cores}))";
         echo "# VPS ID=$id HOST=${host} SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}, CPU MAX USAGE=${cpulimit}% GARAUNTEED USAGE=${cpuweightpct}% (${cpuweightpower})";
         output="$(vzctl set $id --iolimit ${mbpslimit}M --iopslimit ${iopslimit} --cpuunits ${cpuweightpower} --cpulimit ${cpulimit} --save | grep -v "CT configuration saved to /etc/vz/conf" | sed ':a;N;$!ba;s/\n/  /g')";
 		#echo $output;
