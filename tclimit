@@ -50,6 +50,21 @@ elif [ -e /tools/bandwidth/$id/25 ]; then
 	DNLD=25mbit          # DOWNLOAD Limit
 	# Upload limit (in mega bits)
 	UPLD=25mbit          # UPLOAD Limit
+elif [ -e /tools/bandwidth/$id/50 ]; then
+	# Download limit (in mega bits)
+	DNLD=50mbit          # DOWNLOAD Limit
+	# Upload limit (in mega bits)
+	UPLD=50mbit          # UPLOAD Limit
+elif [ -e /tools/bandwidth/$id/75 ]; then
+	# Download limit (in mega bits)
+	DNLD=75mbit          # DOWNLOAD Limit
+	# Upload limit (in mega bits)
+	UPLD=75mbit          # UPLOAD Limit
+elif [ -e /tools/bandwidth/$id/100 ]; then
+	# Download limit (in mega bits)
+	DNLD=100mbit          # DOWNLOAD Limit
+	# Upload limit (in mega bits)
+	UPLD=100mbit          # UPLOAD Limit
 # just in case nothing passed
 else
 	# Download limit (in mega bits)
