@@ -85,7 +85,7 @@ elif [ -e /etc/vz/vz.conf ]; then
                 fi
             fi
         fi
-        cores="$(grep "^CPUS=" /etc/vz/conf/${id}.conf | cut -d" -f2)"
+        cores="$(grep "^CPUS=" /etc/vz/conf/${id}.conf | cut -d\" -f2)"
 		if [ "$cores" = "" ] || [ "$cores" -lt 1 ]; then
 			cores=1
 		fi
