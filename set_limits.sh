@@ -104,7 +104,7 @@ elif [ -e /etc/vz/vz.conf ]; then
     	    mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)";
         	bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
 		fi
-		if [ -e "/tools/io/${id}.disabled" ]; then
+		if [ -e "/tools/cpu/${id}.disabled" ]; then
 			cpulimit=0
 			cpuweightpct=0
 			cpuweightpower=0
