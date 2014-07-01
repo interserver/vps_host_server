@@ -43,9 +43,15 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/
             fi;
         fi;
         majorminor="$(ls -al /dev/vz/$(ls -al /dev/vz/$id | awk '{ print $11 }') | awk '{ print $5 ":" $6 }' |sed s#","#""#g)";
-        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
-        mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)";
-        bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
+		if [ -e "/tools/io/${id}.disabled" ]; then
+			iopslimit=0
+			mbpslimit=0
+			bpslimit=0
+		else
+	        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
+    	    mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)";
+        	bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
+		fi
         echo "$majorminor $iopslimit" > $i;
         if [ -e /cgroup/blkio/libvirt/qemu ]; then
             echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
@@ -89,13 +95,26 @@ elif [ -e /etc/vz/vz.conf ]; then
 		if [ "$cores" = "" ] || [ "$cores" -lt 1 ]; then
 			cores=1
 		fi
-        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
-        mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)";
-        bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
-        cpulimit="$(echo "${cpulimitbase} + (${cpulimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
-        cpuweightpct="$(echo "(${cpuweightbase} + (${cpuweightmodifier} * ${slices}))" |bc -l)";
-        cpuweightpower="$(echo "${cpuweightpct} / 100 * ${cpupower}" |bc -l | cut -d\. -f1)";
-        cpulimit="$(($cpulimit * ${cores}))";
+		if [ -e "/tools/io/${id}.disabled" ]; then
+			iopslimit=0
+			mbpslimit=0
+			bpslimit=0
+		else
+	        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
+    	    mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l | cut -d\. -f1)";
+        	bpslimit="$(echo "${onembyte} * ${mbpslimit}" |bc -l | cut -d\. -f1)";
+		fi
+		if [ -e "/tools/io/${id}.disabled" ]; then
+			cpulimit=0
+			cpuweightpct=0
+			cpuweightpower=0
+			cpulimit=0
+		else
+	        cpulimit="$(echo "${cpulimitbase} + (${cpulimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
+			cpuweightpct="$(echo "(${cpuweightbase} + (${cpuweightmodifier} * ${slices}))" |bc -l)";
+ 			cpuweightpower="$(echo "${cpuweightpct} / 100 * ${cpupower}" |bc -l | cut -d\. -f1)";
+			cpulimit="$(($cpulimit * ${cores}))";
+		fi
         echo "# VPS ID=$id HOST=${host} SLICES=${slices}, IO OPS=${iopslimit} MBPS=${mbpslimit}, CPU MAX USAGE=${cpulimit}% GARAUNTEED USAGE=${cpuweightpct}% (${cpuweightpower})";
         output="$(vzctl set $id --iolimit ${mbpslimit}M --iopslimit ${iopslimit} --cpuunits ${cpuweightpower} --cpulimit ${cpulimit} --save | grep -v "CT configuration saved to /etc/vz/conf" | sed ':a;N;$!ba;s/\n/  /g')";
 		#echo $output;
