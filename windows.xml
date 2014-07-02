@@ -8,6 +8,7 @@
 	<type arch='x86_64' machine='pc'>hvm</type>
 	<boot dev='hd'/>
   </os>
+  <cpu mode='host-model'/>
   <features>
 	<acpi/>
 	<pae/>
