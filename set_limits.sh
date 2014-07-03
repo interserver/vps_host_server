@@ -44,9 +44,9 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/
         fi;
         majorminor="$(ls -al /dev/vz/$(ls -al /dev/vz/$id | awk '{ print $11 }') | awk '{ print $5 ":" $6 }' |sed s#","#""#g)";
 		if [ -e "/tools/io/${id}.disabled" ]; then
-			iopslimit=0
-			mbpslimit=0
-			bpslimit=0
+			iopslimit=-1
+			mbpslimit=-1
+			bpslimit=-1
 		else
 	        iopslimit="$(echo "${iopslimitbase} + (${iopslimitmodifier} * ${slices})" |bc -l | cut -d\. -f1)";
     	    mbpslimit="$(echo "(${mbpslimitbase} + (${mbpslimitmodifier} * ${slices}))" |bc -l)";
