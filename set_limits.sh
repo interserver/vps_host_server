@@ -1,13 +1,13 @@
 #!/bin/bash
 sliceram=1024
-iopslimitbase=25
-iopslimitmodifier=4
+iopslimitbase=35
+iopslimitmodifier=5
 mbpslimitbase=7
 mbpslimitmodifier=2
 cpulimitbase=50
 cpulimitmodifier=5
-cpuweightbase=5
-cpuweightmodifier=1
+cpuweightbase=10
+cpuweightmodifier=2
 onembyte=1048576
 IFS="
 "
@@ -55,10 +55,12 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/
         echo "$majorminor $iopslimit" > $i;
         if [ -e /cgroup/blkio/libvirt/qemu ]; then
             echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.write_iops_device;
+            echo "$majorminor $iopslimit" > $cgdir/$id/blkio.throttle.read_iops_device;
             echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.read_bps_device;
             echo "$majorminor $bpslimit" > $cgdir/$id/blkio.throttle.write_bps_device;
         else
             echo "$majorminor $iopslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.write_iops_device;
+            echo "$majorminor $iopslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.read_iops_device;
             echo "$majorminor $bpslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.read_bps_device;
             echo "$majorminor $bpslimit" > $cgdir/${id}.libvirt-qemu/blkio.throttle.write_bps_device;
         fi
