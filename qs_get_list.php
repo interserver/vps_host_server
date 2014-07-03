@@ -27,7 +27,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
     xml_parse_into_struct($parser, trim($contents), $xml_values);
     xml_parser_free($parser);
 
-    if(!$xml_values) return;//Hmm...
+    if(!$xml_values) return false;//Hmm...
 
     //Initializations
     $xml_array = array();
