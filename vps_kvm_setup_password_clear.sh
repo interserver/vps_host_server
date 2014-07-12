@@ -33,7 +33,11 @@ else
  echo "Clearing Password"
  /root/cpaneldirect/vps_kvm_setup_password_clear.expect ${pname}p2
  echo "Saving Changes"
+ sync;
+ sleep 2s;
  umount /vz/mounts/${pname}p2 2>/dev/null
+ sync;
+ sleep 1s;
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  echo "Starting VPS"
  virsh start ${name};
