@@ -31,7 +31,7 @@ else
   mount /dev/mapper/${pname}p1 /vz/mounts/${pname}p2
  fi
  echo "Clearing Password"
- /root/cpaneldirect/vps_kvm_setup_password_clear.expect ${pname}p2
+ /root/cpaneldirect/sampasswd -r -u Administrator -v /vz/mounts/${pname}p2/Windows/System32/config/SAM
  echo "Saving Changes"
  sync;
  sleep 2s;
