@@ -18,7 +18,7 @@ if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron
 	exit;
 }
 $url = 'https://myquickserver2.interserver.net/qs_queue.php';
-echo "[" . date('Y-m-d H:i:s') . "] Crontab Startup\n";
+echo "[" . date(MYSQL_DATE_FORMAT) . "] Crontab Startup\n";
 $cmd = dirname(__FILE__) . '/qs_update_info.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
