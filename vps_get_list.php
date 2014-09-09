@@ -305,9 +305,10 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 					continue;
 				$ips[$parts[0]][] = $ip;
 			}
+			//$servers[$id]['ips'] = $ips[$parts[0];
 		}
-		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -d action=serverlist -d servers="' . base64_encode(gzcompress(serialize($ips), 9)) . '"  -d ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
-//		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -d action=serverlist -d servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
+		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
+//		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
 	}
