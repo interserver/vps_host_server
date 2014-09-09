@@ -293,7 +293,20 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			}
 		}
 		//print_r($servers);
-		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
+		$ips = arrau();
+		$tips = explode("\n", trim(`vps_show_ip_assignments.sh`));
+		foreach ($tips as $line)
+		{
+			$parts = explode(' ', $line);
+			$ips[$parts[0]] = arrau();
+			foreach ($parts as $idx => $ip)
+			{
+				if ($idx == 0)
+					continue;
+				$ips[$parts[0]][] = $ip;
+			}
+		}
+		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($ips), 9)) . '"  -F ips="' . base64_encode(gzcompress(serialize($sips), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
