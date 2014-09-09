@@ -293,7 +293,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			}
 		}
 		//print_r($servers);
-		$ips = arrau();
+		$ips = array();
 		$tips = explode("\n", trim(`vps_show_ip_assignments.sh`));
 		foreach ($tips as $line)
 		{
