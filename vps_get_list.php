@@ -298,7 +298,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		foreach ($tips as $line)
 		{
 			$parts = explode(' ', $line);
-			$ips[$parts[0]] = arrau();
+			$ips[$parts[0]] = array();
 			foreach ($parts as $idx => $ip)
 			{
 				if ($idx == 0)
