@@ -55,6 +55,7 @@ Command line arguments
 	-p  --plugin <name(s)>  Force the use of selected plugins, comma separated
 	    --noraid=STATE      Set status as STATE if RAID controller is found. Defaults to `UNKNOWN`, but can be: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
 	    --resync=STATE      Set status as STATE if RAID is in resync state. Defaults to `WARNING`, but can be: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
+	    --check=STATE       Set status as STATE if RAID is in check state. Defaults to `OK`, but can be: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
 	-l  --list-plugins      Lists active plugins
 
 ## Reporting bugs
@@ -105,7 +106,7 @@ License: GPL v2
 http://www.steveshipway.org/forum/viewtopic.php?f=20&t=417&p=3211
 Steve Shipway Thanks M Carmier for megaraid section.
 
-(c) 2009-2013 Elan Ruusamäe <glen@pld-linux.org> (maintainer from version 2.1 and upwards)
+(c) 2009-2014 Elan Ruusamäe <glen@pld-linux.org> (maintainer from version 2.1 and upwards)
 
 
 

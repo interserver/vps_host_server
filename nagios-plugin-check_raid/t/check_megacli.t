@@ -6,7 +6,7 @@ BEGIN {
 
 use strict;
 use warnings;
-use constant TESTS => 11;
+use constant TESTS => 15;
 use Test::More tests => TESTS*7;
 use test;
 
@@ -112,20 +112,43 @@ my @tests = (
 		perfdata => 'Battery0_T=29;;;; Battery0_V=4069;;;;',
 		longoutput => "Battery0:\n - State: Faulty\n - Charging status: None\n - Learn cycle requested: No\n - Learn cycle active: No\n - Missing: No\n - Replacement required: No\n - Temperature: OK (29 C)\n - Voltage: OK (4069 mV)",
 	},
-);
-
-=cut
 	{
 		status => OK,
-		pdlist => 'issue49/pdlist',
-		ldinfo => '', # MISSING
-		battery => 'issue49/battery',
-		message => 'Volumes(7): DISK0.0:Optimal,DISK1.1:Optimal,DISK2.2:Optimal,DISK3.3:Optimal,DISK4.4:Optimal,DISK5.5:Optimal,DISK6.6:Optimal; Devices(1): 10 ()=; Batteries(1): 0=Faulty',
+		pdlist => 'pr74/pdlist',
+		ldinfo => 'pr74/ldinfo',
+		battery => 'empty',
+		message => 'Volumes(1): raid10:Optimal; Devices(6): 00,01,02,03,04,05=Online',
 		perfdata => '',
 		longoutput => '',
 	},
-
-=cut
+	{
+		status => CRITICAL,
+		pdlist => 'issue49/pdlist',
+		ldinfo => 'empty', # faked, as original is MISSING, see #49
+		battery => 'issue49/battery',
+		message => 'Volumes(0): ; Devices(6): 10,09,13,08,11=Online 14 (IBM-ESXSST9300603SS F B53B3SE0WJ1Y0825B53B)=Predictive; Batteries(1): 0=Faulty',
+		perfdata => 'Battery0_T=36;;;; Battery0_V=4049;;;;',
+		longoutput => "Battery0:\n - State: Faulty\n - Charging status: None\n - Learn cycle requested: No\n - Learn cycle active: No\n - Missing: No\n - Replacement required: Yes\n - Temperature: OK (36 C)\n - Voltage: OK (4049 mV)"
+	},
+	{
+		status => CRITICAL,
+		pdlist => 'empty', # faked
+		ldinfo => 'empty', # faked, as original is MISSING, see #32
+		battery => 'issue32/bbustatus.MegaCli-8.01.06-1',
+		message => 'Volumes(0): ; Devices(0): ',
+		perfdata => '',
+		longoutput => '',
+	},
+	{
+		status => CRITICAL,
+		pdlist => 'empty', # faked
+		ldinfo => 'empty', # faked, as original is MISSING, see #32
+		battery => 'issue32/bbustatus.MegaCli-8.07.10-1',
+		message => 'Volumes(0): ; Devices(0): ',
+		perfdata => '',
+		longoutput => '',
+	},
+);
 
 # save default value
 my $saved_bbulearn_status = $plugin::bbulearn_status;
