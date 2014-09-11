@@ -291,23 +291,23 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 					}
 				}
 			}
-		}
-		//print_r($servers);
-		$ips = array();
-		$tips = explode("\n", trim(`/root/cpaneldirect/vps_show_ip_assignments.sh`));
-		foreach ($tips as $line)
-		{
-			$parts = explode(' ', $line);
-			$ips[$parts[0]] = array();
-			foreach ($parts as $idx => $ip)
+			//print_r($servers);
+			$ips = array();
+			$tips = explode("\n", trim(`/root/cpaneldirect/vps_show_ip_assignments.sh`));
+			foreach ($tips as $line)
 			{
-				if ($idx == 0)
-					continue;
-				$ips[$parts[0]][] = $ip;
+				$parts = explode(' ', $line);
+				$ips[$parts[0]] = array();
+				foreach ($parts as $idx => $ip)
+				{
+					if ($idx == 0)
+						continue;
+					$ips[$parts[0]][] = $ip;
+				}
+				//$servers[$id]['ips'] = $ips[$parts[0];
 			}
-			//$servers[$id]['ips'] = $ips[$parts[0];
 		}
-		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
+		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  ' . (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '') . $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
