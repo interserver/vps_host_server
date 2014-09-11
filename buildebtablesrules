@@ -11,14 +11,19 @@ fi
 check=`crontab -l | grep qs_cron`;
 if [ ! "$check" = "" ]; then
 	echo "#skipping for qs";
-	service ksm stop
-	service ksmtuned stop
-	chkconfig ksm off
-	chkconfig ksmtuned off
+	if [ -e /sbin/service ]; then
+		echo "# stopping cgroups and ksm";
+		service ksm stop > /dev/null 2>&1
+		service ksmtuned stop > /dev/null 2>&1
+		chkconfig ksm off > /dev/null 2>&1
+		chkconfig ksmtuned off > /dev/null 2>&1
+	fi
 	exit;
 fi
 
 debug=0;
+#beta packet limit
+limit=1000;
 
 if [ -e /etc/dhcp/dhcpd.vps ]; then
     DHCPVPS=/etc/dhcp/dhcpd.vps
@@ -101,9 +106,10 @@ fi
 
 # ipv6 addition
 ipv6=0;
-# fix me ubuntu support
 if [ -e /etc/sysconfig/network-scripts/ifcfg-br0 ]; then
 	ip6_gw=`cat /etc/sysconfig/network-scripts/ifcfg-br0  | grep ^IPV6_DEFAULTGW | cut -d= -f2`;
+elif [ -e /etc/network/interfaces ]; then
+	ip6_gw=`cat /etc/network/interfaces | grep gateway | grep : | awk '{print $2}'`;
 fi
 if [ ! "$ip6_gw" = "" ]; then
 	ipv6=1;
@@ -113,7 +119,7 @@ fi
 if [ -e /etc/redhat-release ]; then
 	gateway=`cat /etc/sysconfig/network-scripts/ifcfg-br0 | grep ^GATEWAY= | cut -d= -f2`;
 else
-	gateway=`cat /etc/network/interfaces  | grep gateway | awk '{print $2}' | grep -v ^gateway`;
+	gateway=`cat /etc/network/interfaces  | grep gateway | awk '{print $2}' | grep -v ^gateway | grep -v :`;
 fi
 
 if [ "$gateway" = "" ]; then
@@ -145,6 +151,11 @@ export PATH=$PATH:/sbin:/usr/local/sbin
 iptables -F INPUT
 iptables -F OUTPUT
 iptables -F FORWARD
+# beta packet limit
+if [ -e /limitpacket ]; then
+	iptables -X LOGGING
+	echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
+fi
 echo "1" > /proc/sys/net/ipv4/ip_forward
 /sbin/iptables -P INPUT ACCEPT
 /sbin/iptables -P OUTPUT ACCEPT
@@ -152,6 +163,7 @@ echo "1" > /proc/sys/net/ipv4/ip_forward
 /sbin/iptables -A INPUT -i lo -j ACCEPT
 iptables -I FORWARD -m physdev --physdev-is-bridged -j ACCEPT
 ebtables -F
+ebtables -X
 ebtables -P INPUT ACCEPT
 ebtables -P OUTPUT ACCEPT
 ebtables -P FORWARD ACCEPT
@@ -163,6 +175,13 @@ if [ -f /cloud ]; then
 	echo "#quickserver exiting";
 	exit;
 fi
+
+#VMS
+#http://serverfault.com/questions/334139/how-to-prevent-ip-spoofing-using-mac-and-ebtables
+echo "#ebtables vms chain";
+echo "ebtables -N VMS"
+echo "ebtables -P VMS DROP"
+
 
 # this outputs all the protection for each individual server
 for user in $list; do
@@ -205,6 +224,15 @@ for user in $list; do
                 echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $eth -o $dev -j ACCEPT"
                 # end
 
+                echo "#VMS main rules"
+                echo "ebtables -A FORWARD -p ip -i $dev -j VMS"
+		echo "ebtables -A VMS -p ip --ip-src $ip -s $mac -j ACCEPT"
+		echo "ebtables -A VMS -p ip --ip-src $ip -s $mac -j ACCEPT"
+		  if [ -e /limitpacket ]; then
+					echo "#beta packet limit"
+                                        echo "iptables -I FORWARD 1 -o $bridge -s $ip -m limit --limit $limit/sec -j ACCEPT"
+                                        echo "iptables -I FORWARD 2 -o $bridge -s $ip -j DROP"
+                  fi
 
 		###
 		# EXTRA IPS Rules
@@ -234,6 +262,15 @@ for user in $list; do
                                 echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $dev -o $eth -j ACCEPT"
                                 echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $eth -o $dev -j ACCEPT"
                                 # end
+		                echo "#VMS extra"
+                		echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac -j ACCEPT"
+                		echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac -j ACCEPT"
+				if [ -e /limitpacket ]; then
+					echo "#beta packet limit"
+					echo "iptables -I FORWARD 1 -o $eth -s $extraip -m limit --limit $limit/sec -j ACCEPT"
+					echo "iptables -I FORWARD 2 -o $eth -s $extraip -j DROP"
+				fi
+
 			done
 		fi
 
@@ -272,19 +309,21 @@ for user in $list; do
 			if [ -e /root/cpaneldirect/vps.ip6map ]; then
 				ip6ips=`cat /root/cpaneldirect/vps.ip6map | grep ^$user | cut -d"|" -f2`;
 				if [ ! "$ip6ips" = "" ]; then
-					echo "#found ipv6 for $user ip is $ip6ips";
-					echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ips -i $dev -o $eth -j ACCEPT"
-					echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ips -i $eth -o $dev -j ACCEPT"
-					echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ips -i $dev -o $eth -j ACCEPT"
-                                        echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ips -i $eth -o $dev -j ACCEPT"
+					for ip6ip in $ip6ips; do
+						echo "#found ipv6 for $user ip is $ip6ip";
+						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $dev -o $eth -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $eth -o $dev -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $dev -o $eth -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $eth -o $dev -j ACCEPT"
 					
-					echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ips -i $dev -o $eth -j ACCEPT"
-                                        echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ips -i $eth -o $dev -j ACCEPT"
-                                        echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ips -i $dev -o $eth -j ACCEPT"
-                                        echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ips -i $eth -o $dev -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $dev -o $eth -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $eth -o $dev -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $dev -o $eth -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $eth -o $dev -j ACCEPT"
 
-					echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ips -s ! $mac -j DROP"
-					#echo "ebtables -A FORWARD -p IPv6 --ip6-dst $ip6ips -s ! $mac --log-ip6 -j DROP"
+						echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ip -s ! $mac -j DROP"
+						#echo "ebtables -A FORWARD -p IPv6 --ip6-dst $ip6ip -s ! $mac --log-ip6 -j DROP"
+					done
 				fi
 			fi
 		fi
@@ -345,3 +384,19 @@ if [ -e /proxyarp ]; then
 	echo "echo 1 > /proc/sys/net/ipv4/conf/$eth/proxy_arp"
 	echo "echo 1 > /proc/sys/net/ipv4/conf/$bridge/proxy_arp"
 fi
+
+if [ -e /scripts/limitbw ]; then
+	if [ ! -e /nolimitbw ]; then
+		echo "#limiting bandwidth"
+		echo "/scripts/limitbw"
+	fi
+fi
+
+if [ -e /limitpacket ]; then
+        echo "#beta packet limit"
+        echo "iptables -N LOGGING"
+        echo "iptables -A FORWARD -j LOGGING"
+        echo "iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped: " --log-level 4"
+        echo "iptables -A LOGGING -j DROP"
+fi
+
