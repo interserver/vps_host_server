@@ -15,8 +15,15 @@ if [ $# -ne 1 ]; then
 elif ! virsh dominfo ${name} >/dev/null 2>&1; then
  echo "VPS ${name} doesnt exists!";
 else
+ count=0;
+ virsh shutdown ${name};
+ while [ $count -le 1000 ] && [ "$(virsh list --all |grep ${name}  | awk '{ print $3 }')" = "running" ]; do
+  sleep 1s;
+  count=$(($count + 1));
+ done;
+ echo "$count intervals till ${name} was down, now ($(virsh list --all |grep ${name}  | awk '{ print $3 }'))";
  virsh destroy ${name};
- echo "Creating Partition Table Links" && \
+ echo "Creating Partition Table Links"; \
  /sbin/kpartx $kpartxopts -av /dev/vz/${name} && \
  if [ -e "/dev/mapper/vz-${name}p1" ]; then
   pname="vz-${name}";
@@ -35,7 +42,9 @@ else
   rm -f "/vz/mounts/${pname}p2/Windows/winsxs/pending.xml";
  fi;
  echo "Clearing Password";
- /root/cpaneldirect/sampasswd -r -u Administrator -v /vz/mounts/${pname}p2/Windows/System32/config/SAM;
+ #/root/cpaneldirect/vps_kvm_setup_password_clear.expect ${pname}p2
+ echo -e "1\nq\ny\n" | /root/cpaneldirect/chntpw -u Administrator /vz/mounts/${pname}p2/Windows/System32/config/SAM /vz/mounts/${pname}p2/Windows/System32/config/SECURITY /vz/mounts/${pname}p2/Windows/System32/config/SYSTEM
+ #/root/cpaneldirect/sampasswd -r -u Administrator -v /vz/mounts/${pname}p2/Windows/System32/config/SAM;
  echo "Saving Changes";
  sync;
  sleep 2s;
