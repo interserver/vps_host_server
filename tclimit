@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 if [ "$1" = "" -o "$2" = "" ]; then
         exit;
@@ -13,64 +13,43 @@ id=$3;
 #
 # Name of the traffic control command.
 TC=/sbin/tc
+START=1
 
 # The network interface we're planning on limiting bandwidth.
 #this in the vnetX
 IF=$2               # Interface (changes)
 
-OF=eth0              # up note sure why its eth0??
+OF=eth0
 
 # Filter options for limiting the intended interface.
 U32IF="$TC filter add dev $IF protocol ip parent 1:0 prio 1 u32"
 U32OF="$TC filter add dev $OF protocol ip parent 1:0 prio 1 u32"
+skip=0;
 
-
-if [ -e /tools/bandwidth/$id/20 ]; then
-	# Download limit (in mega bits)
-	DNLD=20mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=20mbit          # UPLOAD Limit
-elif [ -e /tools/bandwidth/$id/5 ]; then
-	# Download limit (in mega bits)
-	DNLD=5mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=5mbit          # UPLOAD Limit
+if [ -e /tools/bandwidth/$id/skip ]; then
+        echo "Skipping $id";
+        skip=1;
+elif [ -e /tools/bandwidth/$id/80 ]; then
+        # Download limit (in mega bits)
+        DNLD=80mbit          # DOWNLOAD Limit
+        # Upload limit (in mega bits)
+        UPLD=80mbit
+elif [ -e /tools/bandwidth/$id/20 ]; then
+        # Download limit (in mega bits)
+        DNLD=20mbit          # DOWNLOAD Limit
+        # Upload limit (in mega bits)
+        UPLD=20mbit
 elif [ -e /tools/bandwidth/$id/10 ]; then
-	# Download limit (in mega bits)
-	DNLD=10mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=10mbit          # UPLOAD Limit
-elif [ -e /tools/bandwidth/$id/15 ]; then
-	# Download limit (in mega bits)
-	DNLD=15mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=15mbit          # UPLOAD Limit
-elif [ -e /tools/bandwidth/$id/25 ]; then
-	# Download limit (in mega bits)
-	DNLD=25mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=25mbit          # UPLOAD Limit
-elif [ -e /tools/bandwidth/$id/50 ]; then
-	# Download limit (in mega bits)
-	DNLD=50mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=50mbit          # UPLOAD Limit
-elif [ -e /tools/bandwidth/$id/75 ]; then
-	# Download limit (in mega bits)
-	DNLD=75mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=75mbit          # UPLOAD Limit
-elif [ -e /tools/bandwidth/$id/100 ]; then
-	# Download limit (in mega bits)
-	DNLD=100mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=100mbit          # UPLOAD Limit
+        # Download limit (in mega bits)
+        DNLD=10mbit          # DOWNLOAD Limit
+        # Upload limit (in mega bits)
+        UPLD=10mbit
 # just in case nothing passed
 else
-	# Download limit (in mega bits)
-	DNLD=10mbit          # DOWNLOAD Limit
-	# Upload limit (in mega bits)
-	UPLD=10mbit          # UPLOAD Limit
+        # Download limit (in mega bits)
+        DNLD=50mbit          # DOWNLOAD Limit
+        # Upload limit (in mega bits)
+        UPLD=50mbit          # UPLOAD Limit
 fi
 
 # IP address of the machine we are controlling
@@ -80,13 +59,22 @@ IP=$1  # Host IP
 $TC qdisc del dev $IF root
 $TC qdisc del dev $OF root
 
-# create parent
-$TC qdisc add dev $IF root handle 1:0 htb default 30
-$TC qdisc add dev $OF root handle 1:0 htb default 30
+if [ -e /nobwlimit ]; then
+	echo "no bw limit set";
+	exit;
+fi
 
-# make rules
-$TC class add dev $IF parent 1:0 classid 1:1 htb rate $DNLD
-$TC class add dev $OF parent 1:0 classid 1:1 htb rate $UPLD
-$U32IF match ip dst $IP/32 flowid 1:1
-$U32OF match ip src $IP/32 flowid 1:1
-# add support for multiple ips
+if [ "$skip" = "0" ]; then
+        # create parent
+        $TC qdisc add dev $IF root handle 1:0 htb default 30 r2q 30
+        $TC qdisc add dev $OF root handle 1:0 htb default 30 r2q 30
+
+        # make rules
+        $TC class add dev $IF parent 1:0 classid 1:$START htb rate $DNLD
+        $TC class add dev $OF parent 1:0 classid 1:$START htb rate $UPLD
+        $U32IF match ip dst $IP/32 flowid 1:$START
+        $U32OF match ip src $IP/32 flowid 1:$START
+        # add support for multiple ips
+        START=`expr $START + 1`
+fi
+

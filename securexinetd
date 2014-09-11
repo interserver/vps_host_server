@@ -1,4 +1,38 @@
-#!/bin/bash
+#!/bin/sh
+
+function age() {
+   local filename=$1
+   local changed=`stat -c %Y "$filename"`
+   local now=`date +%s`
+   local elapsed
+
+   let elapsed=now-changed
+   echo $elapsed
+}
+
+
+lockfile="/tmp/_securexinetd"
+
+
+if [ -e $file ]; then
+        if [ $(age "$file") -gt "600" ]; then
+                echo "Lock file is too old"
+        else
+                echo "Lock file found, exiting";
+                exit;
+        fi
+fi
+
+touch $lockfile
+
+for file in klogin eklogin ekrb5-telnet gssftp krb5-telnet kshell rsync; do
+	if [ -e /etc/xinetd.d/$file ]; then
+		echo "  Cleaning $file"
+        	/bin/rm /etc/xinetd.d/$file
+	fi
+done
+
+
 
 cd /etc/xinetd.d/
 for i in *; do
@@ -16,3 +50,5 @@ for i in *; do
 
 	 fi
 done
+
+/bin/rm -v $lockfile

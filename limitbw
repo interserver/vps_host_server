@@ -1,24 +1,41 @@
-#!/bin/bash
+#!/bin/sh
 
 #current bug
 # each ip is limited, not each account
+
+if [ -e /etc/dhcp/dhcpd.vps ]; then
+    DHCPVPS=/etc/dhcp/dhcpd.vps
+else
+    DHCPVPS=/etc/dhcpd.vps
+fi
+
+
+
 
 export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin
 
 IFS="
 "
 
-if [ -e /etc/dhcp/dhcpd.vps ]; then
-	DHCPVPS=/etc/dhcp/dhcpd.vps
-else
-	DHCPVPS=/etc/dhcpd.vps
+# don't run on qs
+check=`crontab -l | grep qs_cron`;
+if [ ! "$check" = "" ]; then
+        echo "#skipping for qs";
+        exit;
 fi
+
+
 for vm in `cat $DHCPVPS | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`; do
         ip=`echo $vm | cut -d" " -f2`;
         host=`echo $vm | cut -d" " -f1`;
-        vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;
-        echo "Limiting $ip";
-        echo /scripts/tclimit $ip $vnet $host
+	check=`virsh list | grep $host | grep run`;
+	if [ "$check" = "" ]; then
+        	echo "$host not running";
+	else
+		vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;     
+		echo "Limiting $ip";
+        	/scripts/tclimit $ip $vnet $host
+	fi
         echo
 done
 
