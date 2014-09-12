@@ -293,7 +293,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			}
 			//print_r($servers);
 			$ips = array();
-			$tips = explode("\n", trim(`/root/cpaneldirect/vps_show_ip_assignments.sh`));
+			$tips = explode("\n", trim(`/root/cpaneldirect/vps_get_ip_assignments.sh`));
 			foreach ($tips as $line)
 			{
 				$parts = explode(' ', $line);
