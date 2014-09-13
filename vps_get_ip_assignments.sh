@@ -3,7 +3,6 @@
 export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 if [ "$(which vzctl)" != "" ]; then
 	grep "^IP_ADDRESS" /etc/vz/conf/[0-9]*.conf 2>/dev/null | sed s#"^.*/\([0-9]*\)\.conf:IP_ADDRESS=\"\([0-9\. :a-f\/]*\)\""#"\1 \2"#g;
-	grep IP_ADDRESS /etc/vz/conf/[0-9]*.conf 2>/dev/null | sed s#"^.*/\([0-9]*\)\.conf:IP_ADDRESS=\"\([0-9\. :a-f\/]*\)\""#"\1 \2"#g;
 fi;
 #Sample output:
 #100 69.10.46.222 209.159.155.10
