@@ -86,9 +86,16 @@ else
  if [ -e "/${template}.img.gz" ]; then
   echo "Copying $template Image"
   gzip -dc "/${template}.img.gz"  | dd of=/dev/vz/${name} 2>&1 &
-  pid="$(pidof gzip)"
+  #pid="$(pidof gzip)"
+  pid=$!
+  echo "Got gzip PID $pid";
+  if [ "$(pidof gzip)" != "" ]; then
+   pid="$(pidof gzip)"
+   echo "Tried again, got gzpi PID $pid"
+  fi
   if [ "$(echo "$pid" | grep " ")" != "" ]; then
    pid=$(pgrep -f 'gzip -dc')
+   echo "Didnt like gzip pid (had a space?), going with gzip PID $pid"
   fi
   tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
   while [ -d /proc/$pid ]; do
