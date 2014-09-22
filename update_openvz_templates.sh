@@ -5,7 +5,7 @@ unset VZTPL; \
 if [ ! -e /usr/sbin/vztmpl-dl ]; then
  echo "No vztmpl-dl, bailing";
 else
- vztmpl-dl --update-all;
+ vztmpl-dl --quiet --update-all;
 fi; \
 if [ ! -e /usr/bin/xz ]; then 
  yum -y install xz; 
