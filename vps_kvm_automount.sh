@@ -19,17 +19,25 @@ while [ $# -gt 0 ]; do
 	if [ "$1" == "unmount" ] || [ "$1" == "umount" ]; then
 		UNMOUNT=1
 		if [ -d ${TARGET}/boot ]; then
-			umount ${TARGET}/boot
-			kpartx $kpartxopts -dv /dev/vz/$VZID
+			if [ "$(mount |grep "${TARGET}/boot")" != "" ]; then 
+				umount -f ${TARGET}/boot;
+			fi;
 		fi
-		umount ${TARGET}
+		if [ "$(mount |grep "${TARGET}")" != "" ]; then 
+			umount -f ${TARGET};
+		fi;
+		kpartx $kpartxopts -dv /dev/vz/$VZID
 		shift
 	elif [ "$1" == "ro" ] || [ "$1" == "readonly" ]; then
 		RO=1
 		if [ -d ${TARGET}/boot ]; then
-			umount ${TARGET}/boot
-		fi
-		umount ${TARGET}
+			if [ "$(mount |grep "${TARGET}/boot")" != "" ]; then 
+				umount -f ${TARGET}/boot;
+			fi;
+		fi;
+		if [ "$(mount |grep "${TARGET}")" != "" ]; then 
+			umount -f ${TARGET};
+		fi;
 		shift
 	elif [ "$1" != "" ]; then
 		TARGET=$1
@@ -77,7 +85,7 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype "
 	# check if linux partition
 	if [ $UNMOUNT == 1 ]; then
-		umount /tmp/${mapname}
+		umount -f /tmp/${mapname}
 		rmdir /tmp/${mapname}
 	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
 		mounttype="$(file -L -s /dev/mapper/${mapname} |  sed -e s#"^.*: Linux rev [0-9\.]* \(.*\) filesystem.*$"#"\1"#g)"
@@ -106,29 +114,31 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 		fi
 	#elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
 	elif [ "$(file -L -s /dev/mapper/${mapname} |grep -e ":\(.*\)x86 boot sector")" != "" ];then
-		mkdir -p /tmp/${mapname}
-		fsck -y ${partdev} || ntfsfix ${partdev}
+		mkdir -p /tmp/${mapname};
+		fsck -y ${partdev} || ntfsfix ${partdev};
 		if [ "$RO" = "1" ]; then
-			mount ${partdev} -o ro /tmp/${mapname}
+			mount ${partdev} -o ro /tmp/${mapname};
 		else
-			mount ${partdev} /tmp/${mapname}
-		fi
+			mount ${partdev} /tmp/${mapname};
+		fi;
 		if [ -e /tmp/${mapname}/pagefile.sys ] || [ -d /tmp/${mapname}/Windows ]; then
-			mount --bind /tmp/${mapname} ${TARGET}
-			found_boot=1
-			found_root=1
+			mount --bind /tmp/${mapname} ${TARGET};
+			found_boot=1;
+			found_root=1;
 		else
 			echo "${mapname} is not part of main windows drive";
-			umount /tmp/${mapname};
-		fi
+			umount -f /tmp/${mapname};
+		fi;
+	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e "Linux.* swap file")" != "" ]; then
+		echo "Skipping Swap File";
 	else
-		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${VZDEV}${mapname} | cut -d: -f2-)"
-	fi
-done
-IFS="$OIFS"
+		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${VZDEV}${mapname} | cut -d: -f2-)";
+	fi;
+done;
+IFS="$OIFS";
 
 if [ $UNMOUNT == 1 ]; then
-	umount ${TARGET}
+	umount -f ${TARGET}
 	kpartx $kpartxopts -dv /dev/vz/$VZID
 	echo "Finished Unmounting"
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
