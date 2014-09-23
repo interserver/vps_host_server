@@ -26,12 +26,20 @@ function umount_check() {
 while [ $# -gt 0 ]; do
 	if [ "$1" == "unmount" ] || [ "$1" == "umount" ]; then
 		UNMOUNT=1;
+		for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
+			umount_check /tmp/${part};
+			umount_check /tmp/vz-${part};
+		done;
 		umount_check ${TARGET}/boot;
 		umount_check ${TARGET};
 		kpartx $kpartxopts -dv /dev/vz/$VZID;
 		shift;
 	elif [ "$1" == "ro" ] || [ "$1" == "readonly" ]; then
 		RO=1;
+		for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
+			umount_check /tmp/${part};
+			umount_check /tmp/vz-${part};
+		done;
 		umount_check ${TARGET}/boot;
 		umount_check ${TARGET};
 		shift;
@@ -81,7 +89,6 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype ";
 	# check if linux partition
 	if [ $UNMOUNT == 1 ]; then
-		umount_check /tmp/${mapname}/boot;
 		umount_check /tmp/${mapname};
 		rmdir /tmp/${mapname} 2>/dev/null
 	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
@@ -124,7 +131,6 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 			found_root=1;
 		else
 			echo "${mapname} is not part of main windows drive";
-			umount_check /tmp/${mapname}/boot;
 			umount_check /tmp/${mapname};
 		fi;
 	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e "Linux.* swap file")" != "" ]; then
