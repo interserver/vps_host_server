@@ -2,7 +2,7 @@
 #set -x
 if [ "$*" = "" ]; then
 	echo "Correct Syntax:";
-	echo "$0 <vzid> [mount point] [unmount] [readonly]";
+	echo "$0 <vzid> [mount point] [umount] [readonly]";
 	exit;
 fi;
 VZID=$1;
@@ -15,7 +15,7 @@ if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 else
 	kpartxopts="-s";
 fi;
-function unmount_check() {
+function umount_check() {
 	dir="$1"
 	if [ -d "${1}" ]; then
 		if [ "$(mount |grep "${1}")" != "" ]; then
