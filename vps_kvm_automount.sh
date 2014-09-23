@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
 		RO=1;
 		umount_check ${TARGET}/boot;
 		umount_check ${TARGET};
-		shiftl;
+		shift;
 	elif [ "$1" != "" ]; then
 		TARGET=$1;
 		shift;
