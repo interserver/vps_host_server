@@ -1102,65 +1102,30 @@ fi
 # sqlite function to store md5sums
 . /admin/swift/include/sqlite
 
-
+if [ "$script" = "qswift" ]; then
+	script=$1;
+	shift;
+fi;
 
 case "$script" in
- isstat)
-  getstats $1 $2
-;;
- fileinfo)
-  showfileinfo $1 $2
-;;
- isls)
-  listcontainers $1
- ;;
-split)
- split $1 $2 $3
-;;
-isput)
-  upload $1 $2
- ;;
-isrm)
-  delete $1 $2
- ;;
-ismkdir)
-  makedir $1
- ;;
-isget)
- download $1 $2 $3
-;;
-iscp)
- rcopy $1 $2 $3
-;;
-isrmdir)
- rrmdir $1 
-;;
-ismv)
- rmove $1 $2 $3
-;;
-rsync)
-  rsyncfile $1 $2 $3 $4
-;;
-mkpub)
- makepublic $1 $2
- ;;
-mkdir_p)
- check_container_exists $1 $2 
-;;
-deleteafter)
- delete_after $1 $2 $3
-  ;;
-isrmsplit)
- delete_splits $1 $2 $3 $4
- ;;
-fly)
- onthefly $1 $2 $3 $4
- ;;
-isbackup)
- runabackup $1
- ;;
-  *)
-	echo 'Unknown call';
-  ;;
- esac
+	isstat) 	getstats $1 $2 ;;
+	fileinfo)	showfileinfo $1 $2 ;;
+	isls)		listcontainers $1 ;;
+	split)		split $1 $2 $3 ;;
+	isput)		upload $1 $2 ;;
+	isrm)		delete $1 $2 ;;
+	ismkdir)	makedir $1 ;;
+	isget)		download $1 $2 $3 ;;
+	iscp)		rcopy $1 $2 $3 ;;
+	isrmdir)	rrmdir $1 ;;
+	ismv)		rmove $1 $2 $3 ;;
+	rsync)		rsyncfile $1 $2 $3 $4 ;;
+	mkpub)		makepublic $1 $2 ;;
+	mkdir_p)	check_container_exists $1 $2 ;;
+	deleteafter)	delete_after $1 $2 $3 ;;
+	isrmsplit)	delete_splits $1 $2 $3 $4 ;;
+	fly)		onthefly $1 $2 $3 $4 ;;
+	isbackup)	runabackup $1 ;;
+	*)		echo 'Unknown call' ;;
+esac
 

@@ -17,7 +17,7 @@ shift
 image="$1"
 shift
 destids="$*"
-if [ "$(/admin/swift/isls vps${sourceid} |grep "^${image}/")" = "" ]; then
+if [ "$(/root/cpaneldirect/qswift listcontainers vps${sourceid} |grep "^${image}/")" = "" ]; then
 	echo "Backup does not exist"
 	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 	exit
@@ -30,8 +30,8 @@ if which virsh >/dev/null 2>&1; then
 	exit;
   fi
   #if [ $# -gt 1 ]; then
-	trap "download vps${sourceid} ${image} -c;" SIGHUP
-	download vps${sourceid} ${image}
+	trap "/root/cpaneldirect/qswift isget vps${sourceid} ${image} -c;" SIGHUP
+	/root/cpaneldirect/qswift isget vps${sourceid} ${image}
 	trap - SIGHUP
 	mv ${image} /${image}.tar.gz
   #fi
@@ -43,7 +43,7 @@ else
 	exit;
   fi
   cd /vz
-  download vps${sourceid} ${image} -out | tar xzf -
+  /root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzf -
 fi
 for i in $destids; do
   if which virsh >/dev/null 2>&1; then
@@ -84,7 +84,7 @@ for i in $destids; do
 		#tar xzf /${image}.tar.gz
 		zcat -c /${image}.tar.gz |tar --ignore-failed-read --atime-preserve --preserve-permissions -x -f -
 	  #else
-		#download vps${sourceid} ${image} -out | tar xzf -
+		#/root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzf -
 	  #fi
 	  sync
 	  sleep 5s;
