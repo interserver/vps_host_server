@@ -105,8 +105,8 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 			if [ -e /tmp/${mapname}/etc/fstab ]; then
 				mount --bind /tmp/${mapname} ${TARGET};
 				found_root=1;
-				echo "FSTAB:";
-				grep -v -e "^$" -e "^#" /tmp/${mapname}/etc/fstab;
+				#echo "FSTAB:";
+				#grep -v -e "^$" -e "^#" /tmp/${mapname}/etc/fstab;
 			elif [ -d /tmp/${mapname}/grub ] && [ $found_boot == 0 ]; then
 				#set boot_dir to mount it later instead of right away
 				#mount --bind /tmp/${mapname} ${TARGET}/boot;
