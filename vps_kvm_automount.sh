@@ -32,7 +32,7 @@ while [ $# -gt 0 ]; do
 			umount_check /tmp/${part};
 			umount_check /tmp/vz-${part};
 		done;
-		kpartx $kpartxopts -dv /dev/vz/$VZID;
+		kpartx $kpartxopts -d /dev/vz/$VZID;
 		shift;
 	elif [ "$1" == "ro" ] || [ "$1" == "readonly" ]; then
 		RO=1;
@@ -61,7 +61,7 @@ if [[ $(fdisk -v | sed s#".*fdisk (util-linux \(.*\))"#"\1"#g) > 2.17 ]]; then
 else
 	fdiskopts="";
 fi;
-kpartx $kpartxopts -av /dev/vz/$VZID;
+kpartx $kpartxopts -a /dev/vz/$VZID;
 sync;
 sleep 1s;
 #ls /dev/mapper |grep "${VZID}"
@@ -146,7 +146,7 @@ if [ $UNMOUNT == 1 ]; then
 		umount_check /tmp/${part};
 		umount_check /tmp/vz-${part};
 	done;
-	kpartx $kpartxopts -dv /dev/vz/$VZID;
+	kpartx $kpartxopts -d /dev/vz/$VZID;
 	echo "Finished Unmounting";
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
 	if [ "$boot_dir" != "" ]; then
