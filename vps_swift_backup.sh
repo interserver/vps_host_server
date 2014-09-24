@@ -41,8 +41,8 @@ if which virsh >/dev/null 2>&1; then
 	else
 		$INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
 	fi
-	/admin/swift/fly vps${id} /${image} delete
-	/admin/swift/fly vps${id} /${image}
+	thefly vps${id} /${image} delete
+	thefly vps${id} /${image}
 	if which guestunmount >/dev/null 2>/dev/null; then 
 		guestunmount /${image} || fusermount -u /${image}
 	elif which guestmount >/dev/null 2>/dev/null; then 
@@ -76,8 +76,8 @@ else
 		vzctl resume $vzid
 	fi
 	cd /vz
-	/admin/swift/fly vps${id} ${image} delete
-	/admin/swift/fly vps${id} ${image}
+	thefly vps${id} ${image} delete
+	thefly vps${id} ${image}
 	if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then
 		vzctl snapshot-umount $id --id "$UUID"
 		vzctl snapshot-delete $id --id "$UUID"

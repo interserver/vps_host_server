@@ -743,7 +743,7 @@ function delete_splits()
 
 		for SPLITNAME in $listsplits; do
 			echo "Removing ${SPLITNAME} in container ${CONTAINER}":
-			/admin/swift/isrm ${CONTAINER} ${SPLITNAME}
+			delete ${CONTAINER} ${SPLITNAME}
 		done
 
 		# delete from dq
@@ -753,11 +753,11 @@ function delete_splits()
 
 			# remove metadata
                         if [ "$3" = "nodb" ]; then
-                                /admin/swift/isrm ${CONTAINER} ${FILENAME}
+                                delete ${CONTAINER} ${FILENAME}
                         fi
 
 			if [ "$4" = "rmdir" ]; then
-				/admin/swift/isrmdir ${CONTAINER}
+				rrmdir ${CONTAINER}
 			fi
 		fi
 
@@ -872,8 +872,8 @@ function onthefly()
 				echo "No on the fly files returned";
 			else
 				if [ "$3" = "delete" ]; then
-					/admin/swift/isrm ${CONTAINER} ${SAVENAME}
-					/admin/swift/isrm ${CONTAINER} $flyfiles
+					delete ${CONTAINER} ${SAVENAME}
+					delete ${CONTAINER} $flyfiles
 				elif [ "$3" = "deleteafter" ]; then
 					delete_after ${CONTAINER} ${SAVENAME} ${DELETETIME}
 					delete_after ${CONTAINER} $flyfiles ${DELETETIME}
@@ -934,7 +934,7 @@ function checkif_fly__exists()
 			echo "Checked for existing files, none exist";
 		else
 			if [ "$delete" = "1" ]; then
-				/admin/swift/isrm ${CONTAINER} $files
+				delete ${CONTAINER} $files
 			else
 				echo "Checked for existing $CUT file, found: $files - this may cause a conflict";
 			fi

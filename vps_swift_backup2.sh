@@ -37,8 +37,8 @@ if which virsh >/dev/null 2>&1; then
  lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  sync
  time qemu-img convert -c -p -O qcow2 /dev/vz/snap${id} /vz/image_storage/${image} 
- /admin/swift/isrm vps${id} ${image}
- time /admin/swift/isput vps${id} /vz/image_storage/${image} 
+ delete vps${id} ${image}
+ time upload vps${id} /vz/image_storage/${image} 
  umount /vz/image_storage
  echo y | lvremove /dev/vz/image_storage
  rmdir /vz/image_storage
@@ -67,8 +67,8 @@ else
   vzctl resume $vzid
  fi
  cd /vz
- /admin/swift/fly vps${id} ${image} delete
- /admin/swift/fly vps${id} ${image}
+ thefly vps${id} ${image} delete
+ thefly vps${id} ${image}
  if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then
   vzctl snapshot-umount $id --id "$UUID"
   vzctl snapshot-delete $id --id "$UUID"
