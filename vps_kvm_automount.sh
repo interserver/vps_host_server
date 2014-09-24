@@ -26,22 +26,22 @@ function umount_check() {
 while [ $# -gt 0 ]; do
 	if [ "$1" == "unmount" ] || [ "$1" == "umount" ]; then
 		UNMOUNT=1;
+		umount_check ${TARGET}/boot;
+		umount_check ${TARGET};
 		for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
 			umount_check /tmp/${part};
 			umount_check /tmp/vz-${part};
 		done;
-		umount_check ${TARGET}/boot;
-		umount_check ${TARGET};
 		kpartx $kpartxopts -dv /dev/vz/$VZID;
 		shift;
 	elif [ "$1" == "ro" ] || [ "$1" == "readonly" ]; then
 		RO=1;
+		umount_check ${TARGET}/boot;
+		umount_check ${TARGET};
 		for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
 			umount_check /tmp/${part};
 			umount_check /tmp/vz-${part};
 		done;
-		umount_check ${TARGET}/boot;
-		umount_check ${TARGET};
 		shift;
 	elif [ "$1" != "" ]; then
 		TARGET=$1;
@@ -142,6 +142,10 @@ done;
 if [ $UNMOUNT == 1 ]; then
 	umount_check ${TARGET}/boot;
 	umount_check ${TARGET};
+	for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
+		umount_check /tmp/${part};
+		umount_check /tmp/vz-${part};
+	done;
 	kpartx $kpartxopts -dv /dev/vz/$VZID;
 	echo "Finished Unmounting";
 elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
