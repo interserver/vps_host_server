@@ -17,7 +17,7 @@ shift
 image="$1"
 shift
 destids="$*"
-if [ "$(/root/cpaneldirect/qswift listcontainers vps${sourceid} |grep "^${image}/")" = "" ]; then
+if [ "$(/root/cpaneldirect/qswift isls vps${sourceid} |grep "^${image}/")" = "" ]; then
 	echo "Backup does not exist"
 	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 	exit
