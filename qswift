@@ -901,7 +901,7 @@ function onthefly()
 			checkif_fly__exists ${CONTAINER} ${SAVENAME} $3
 			sleep 4s;
 
-			${tar} -c ${FILENAME} | ${gzip} -1c | ${splitprog} -d --bytes=4999M --filter="${curl}  $CURLOPTS -o/dev/null -f -X PUT -T - -H \"X-Auth-Token: ${APIKEY}\" \"$STORAGE_URL/${CONTAINER}/${SAVENAME}/split-\${FILE}\""  
+			${tar} -c ${FILENAME} 2>/dev/null | ${gzip} -1c | ${splitprog} -d --bytes=4999M --filter="${curl}  $CURLOPTS -o/dev/null -f -X PUT -T - -H \"X-Auth-Token: ${APIKEY}\" \"$STORAGE_URL/${CONTAINER}/${SAVENAME}/split-\${FILE}\""  
 			${curl}  $CURLOPTS -o/dev/null -X PUT -H "X-Object-Manifest: ${CONTAINER}/${SAVENAME}/" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${SAVENAME}" --data-binary ''
 		else
 			echo "$FILENAME is not a directory";

@@ -43,7 +43,7 @@ else
 	exit;
   fi
   cd /vz
-  /root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzf -
+  /root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzf - 2>/dev/null
 fi
 for i in $destids; do
   if which virsh >/dev/null 2>&1; then
@@ -82,7 +82,7 @@ for i in $destids; do
 	  /bin/rm -rf /${image}/* 2>/dev/null
 	  #if [ $# -gt 1 ]; then
 		#tar xzf /${image}.tar.gz
-		zcat -c /${image}.tar.gz |tar --ignore-failed-read --atime-preserve --preserve-permissions -x -f -
+		zcat -c /${image}.tar.gz |tar --ignore-failed-read --atime-preserve --preserve-permissions -x -f - 2>/dev/null
 	  #else
 		#/root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzf -
 	  #fi
