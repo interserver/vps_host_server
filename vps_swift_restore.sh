@@ -62,20 +62,20 @@ for i in $destids; do
 		mapdir=vz-$i
 	   fi
 	   if [ -e /dev/mapper/${mapdir}p6 ]; then
-		 fsck -y /dev/mapper/${mapdir}p6 || ntfsfix /dev/mapper/${mapdir}p6
+		 fsck -T -p /dev/mapper/${mapdir}p6 || ntfsfix /dev/mapper/${mapdir}p6
 		 mount -o rw /dev/mapper/${mapdir}p6 /${image} || exit
-		 fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	   elif [ -e /dev/mapper/${mapdir}p3 ]; then
-		 fsck -y /dev/mapper/${mapdir}p3 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p3 || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p3 /${image} || exit
-		 fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	   elif [ -e /dev/mapper/${mapdir}p2 ]; then
-		 fsck -y /dev/mapper/${mapdir}p2 || ntfsfix /dev/mapper/${mapdir}p2
+		 fsck -T -p /dev/mapper/${mapdir}p2 || ntfsfix /dev/mapper/${mapdir}p2
 		 mount -o rw /dev/mapper/${mapdir}p2 /${image} || exit
 	   else
-		 fsck -y /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p1 /${image} || exit
 	   fi
 	  fi

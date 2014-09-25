@@ -254,7 +254,7 @@ q
 		else
 		 pname="$name"
 		fi
-		  fsck -f -y /dev/mapper/${pname}p${pn}
+		  fsck -T -p -f /dev/mapper/${pname}p${pn}
 		  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
 		   resizefs="resize4fs"
 		  else
