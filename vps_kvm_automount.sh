@@ -86,7 +86,7 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	mapname="${mapprefix}${partname}";
 	partdev="${VZDEV}${mapname}";
 	parttype="$(echo $part | awk '{ print $2 }')";
-	echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype ";
+	#echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype ";
 	# check if linux partition
 	if [ $UNMOUNT == 1 ]; then
 		umount_check /tmp/${mapname};
