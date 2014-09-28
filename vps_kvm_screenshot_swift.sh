@@ -17,9 +17,8 @@ else
  /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
  -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
  -quiet 127.0.0.1:$display "$ifile" >/dev/null 2>&1;
- makedir vps${vps}; 
- upload vps${vps} "$ifile"; 
+ /root/cpaneldirect/qswift ismkdir vps${vps}; 
+ /root/cpaneldirect/qswift isput vps${vps} "$ifile"; 
  /bin/rm -f "$ifile";
  kill "$timerpid"
-fi
-
+fi;
