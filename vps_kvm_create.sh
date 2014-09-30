@@ -349,7 +349,7 @@ q
 	  virsh blkiotune ${name} --weight $ioweight --current;
 	  virsh blkiotune ${name} --weight $ioweight --config;
 	 fi;
-	 /scripts/buildebtablesrules | sh
+	 /root/cpaneldirect/run_buildebtables.sh
 	 /scripts/tclimit $ip;
 	 vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 	 if [ "$vnc" == "" ]; then

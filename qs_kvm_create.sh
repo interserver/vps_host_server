@@ -276,7 +276,7 @@ fi
  /root/cpaneldirect/vps_refresh_vnc.sh $name
 
  #/usr/bin/virsh resume ${template}
- /scripts/buildebtablesrules | sh
+ /root/cpaneldirect/run_buildebtables.sh
  /scripts/tclimit $ip
  vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 

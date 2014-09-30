@@ -35,8 +35,7 @@ else
  else
   /etc/init.d/dhcpd restart
  fi
- /scripts/buildebtablesrules > /scripts/sh
- /bin/sh /scripts/sh
+ /root/cpaneldirect/run_buildebtables.sh
  /scripts/tclimit $ip
  /usr/bin/virsh start $name;
 fi
