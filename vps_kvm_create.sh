@@ -263,7 +263,9 @@ q
 		  $resizefs -p /dev/mapper/${pname}p${pn}
 		  mkdir -p /vz/mounts/${name}p${pn}
 		  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
-		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
+		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
+          echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd || \
+          /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}p${pn}"
 		  umount /dev/mapper/${pname}p${pn}
 		  kpartx $kpartxopts -d /dev/vz/${name}
 		 fi
