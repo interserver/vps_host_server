@@ -3,11 +3,7 @@ if [ $# -lt 3 ]; then
   echo "Invalid Parameters"
   echo "Correct Syntax: $0 <source vps id> <backup name> <destination #1 vps vzid> [destination #2 vps vzid] ..."
   echo "Example: $0 5732 windows9044 snap9044 windows9055 windows9066 windows9077"
-  exit
-fi
-#set -x
-url="https://myvps2.interserver.net/vps_queue.php"
-if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+  exit fi export TERM=linux; o#set -x url="https://myvps2.interserver.net/vps_queue.php" if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
 	kpartxopts="-s"
@@ -17,6 +13,7 @@ shift
 image="$1"
 shift
 destids="$*"
+export TERM=linux;
 if [ "$(/root/cpaneldirect/qswift isls vps${sourceid} |grep "^${image}/")" = "" ]; then
 	echo "Backup does not exist"
 	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null

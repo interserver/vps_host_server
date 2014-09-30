@@ -5,6 +5,7 @@ if [ $# -lt 2 ]; then
 	echo "or $0 5732 windows5732"
 	exit
 fi
+export TERM=linux;
 url="https://myvps2.interserver.net/vps_queue.php"
 id=$1
 vzid=$2
