@@ -151,7 +151,7 @@ else
    echo "Didnt like gzip pid (had a space?), going with gzip PID $pid";
   fi;
   tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
-  ecoh "Got Total Size $tsize";
+  echo "Got Total Size $tsize";
   if [ -z $tsize ]; then
     tsize=$(stat -c%s "/${template}.img.gz");
     echo "Falling back to filesize check, got size $tsize";
