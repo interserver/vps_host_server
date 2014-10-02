@@ -140,27 +140,33 @@ else
   echo "Copying $template Image"
   gzip -dc "/${template}.img.gz"  | dd of=/dev/vz/${name} 2>&1 &
   pid=$!
-  echo "Got gzip PID $pid";
+  echo "Got DD PID $pid";
+  sleep 2s;
   if [ "$(pidof gzip)" != "" ]; then
-   pid="$(pidof gzip)"
-   echo "Tried again, got gzpi PID $pid"
-  fi
+   pid="$(pidof gzip)";
+   echo "Tried again, got gzip PID $pid";
+  fi;
   if [ "$(echo "$pid" | grep " ")" != "" ]; then
-   pid=$(pgrep -f 'gzip -dc')
-   echo "Didnt like gzip pid (had a space?), going with gzip PID $pid"
-  fi
-  tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
+   pid=$(pgrep -f 'gzip -dc');
+   echo "Didnt like gzip pid (had a space?), going with gzip PID $pid";
+  fi;
+  tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
+  ecoh "Got Total Size $tsize";
+  if [ -z $tsize ]; then
+    tsize=$(stat -c%s "/${template}.img.gz");
+    echo "Falling back to filesize check, got size $tsize";
+  fi;
   while [ -d /proc/$pid ]; do
-	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
-	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3);
+	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)";
+	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null;
 	if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-		softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+		softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
 		for softfile in $softraid; do
-			echo idle > $softfile
-		done
-	fi
-	echo "$completed%"
+			echo idle > $softfile;
+		done;
+	fi;
+	echo "$completed%";
 	sleep 10s
   done
  elif [ -e "/${template}.img" ]; then
