@@ -3,7 +3,12 @@ if [ $# -lt 3 ]; then
   echo "Invalid Parameters"
   echo "Correct Syntax: $0 <source vps id> <backup name> <destination #1 vps vzid> [destination #2 vps vzid] ..."
   echo "Example: $0 5732 windows9044 snap9044 windows9055 windows9066 windows9077"
-  exit fi export TERM=linux; o#set -x url="https://myvps2.interserver.net/vps_queue.php" if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
+  exit 
+fi 
+export TERM=linux; 
+#set -x 
+url="https://myvps2.interserver.net/vps_queue.php" 
+if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
 	kpartxopts="-s"
