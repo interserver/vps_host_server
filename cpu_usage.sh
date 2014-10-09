@@ -1,4 +1,7 @@
 #!/bin/bash
+# CPU Usage Totals Per VPS Per CPU/Core
+# Written by Joe Huss <detain@interserver.net>
+# - This is just way better than anything else out there for gathering this info
 IFS="
 ";
 if [ -e cpu_usage.last.sh ]; then
