@@ -33,14 +33,14 @@ if which virsh >/dev/null 2>&1; then
 	sync
 	mkdir -p /${image}
 	if which guestmount >/dev/null 2>/dev/null; then 
-		guestmount -d $vzid --ro /${image}
+		guestmount -a /dev/vz/snap$id -i --ro /${image} || $INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
 	else
 		$INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
 	fi
 	/root/cpaneldirect/qswift fly vps${id} /${image} delete
 	/root/cpaneldirect/qswift fly vps${id} /${image}
 	if which guestunmount >/dev/null 2>/dev/null; then 
-		guestunmount /${image} || fusermount -u /${image}
+		guestunmount /${image} || fusermount -u /${image} || $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
 	elif which guestmount >/dev/null 2>/dev/null; then 
 		fusermount -u /${image}
 	else
