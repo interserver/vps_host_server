@@ -33,7 +33,7 @@ if which virsh >/dev/null 2>&1; then
 	sync
 	mkdir -p /${image}
 	if which guestmount >/dev/null 2>/dev/null; then 
-		guestmount -d $vzid -i --ro /${image}
+		guestmount -d $vzid --ro /${image}
 	else
 		$INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
 	fi
