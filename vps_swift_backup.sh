@@ -40,12 +40,13 @@ if which virsh >/dev/null 2>&1; then
 	/root/cpaneldirect/qswift fly vps${id} /${image} delete
 	/root/cpaneldirect/qswift fly vps${id} /${image}
 	if which guestunmount >/dev/null 2>/dev/null; then 
-		guestunmount /${image} || fusermount -u /${image} || $INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
+		guestunmount /${image} || fusermount -u /${image}
 	elif which guestmount >/dev/null 2>/dev/null; then 
 		fusermount -u /${image}
 	else
 		$INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
 	fi
+	$INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
 	rmdir /${image}
 	echo y | lvremove /dev/vz/snap${id}
 else
