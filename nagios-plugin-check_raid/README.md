@@ -1,4 +1,4 @@
-# Nagios plugin to check current server's RAID status
+# Nagios/Icinga plugin to check current server's RAID status
 
 This plugin checks all RAID volumes (hardware and software) that can be
 identified.
@@ -9,31 +9,35 @@ It checks for the various RAID systems, and verifies they are working correctly.
 Some checks require root permission, that is acomplished using `sudo`.
 Neccessary `sudo` rules (detected for your system), can be installed when
 `check_raid` is invoked with `-S` argument. You need to be `root` user and it
-will add required lines to the `sudoers` file.
+will add required lines to the sudo config file.
 
 [![Build Status](https://travis-ci.org/glensc/nagios-plugin-check_raid.png?branch=master)](https://travis-ci.org/glensc/nagios-plugin-check_raid)
 
 ## Installing
 
-Download directly from github master (with wget or curl):
+Download latest release from [releases](https://github.com/glensc/nagios-plugin-check_raid/releases) page
+
+To download latest development version from github master (with wget or curl):
 
     wget https://raw.github.com/glensc/nagios-plugin-check_raid/master/check_raid.pl -O check_raid.pl
     curl https://raw.github.com/glensc/nagios-plugin-check_raid/master/check_raid.pl > check_raid.pl
     chmod +x check_raid.pl
 
-or download in tar format master checkout:
+or tar format:
 
-    wget https://github.com/glensc/nagios-plugin-check_raid/tarball/master/check_raid.tgz
-    tar xzf check_raid.tgz
-    cd glensc-nagios-plugin-check_raid-*
+    wget https://github.com/glensc/nagios-plugin-check_raid/archive/master/check_raid.tar.gz
+    tar xzf check_raid.tar.gz
+    cd nagios-plugin-check_raid-*
 
-you can grab older releases under [tags](https://github.com/glensc/nagios-plugin-check_raid/tags) button
 
-next, setup `sudo`
+next step would be to, setup system `sudo` rules:
 
     ./check_raid.pl -S
 
-test run:
+you can preview what the rules are if you run the above command with `-d` option.
+
+
+Plugin should be ready to be run:
 
     ./check_raid.pl
 
@@ -53,10 +57,15 @@ Command line arguments
 	-S  --sudoers           Configure /etc/sudoers file
 	-W  --warnonly          Don't send CRITICAL status
 	-p  --plugin <name(s)>  Force the use of selected plugins, comma separated
-	    --noraid=STATE      Set status as STATE if RAID controller is found. Defaults to `UNKNOWN`, but can be: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
-	    --resync=STATE      Set status as STATE if RAID is in resync state. Defaults to `WARNING`, but can be: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
-	    --check=STATE       Set status as STATE if RAID is in check state. Defaults to `OK`, but can be: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
+	    --noraid=STATE      Set status as STATE if RAID controller is found. Defaults to `UNKNOWN`
+	    --resync=STATE      Set status as STATE if RAID is in resync state. Defaults to `WARNING`
+	    --check=STATE       Set status as STATE if RAID is in check state. Defaults to `OK`
+	    --cache-fail=STATE  Set status as STATE if Write Cache is present but disabled. Defaults to `WARNING`
+	    --bbulearn=STATE    Return STATE if Backup Battery Unit (BBU) learning cycle is in progress. Defaults to `WARNING`
+	    --bbu-monitoring    Enable experimental monitoring of the BBU status
 	-l  --list-plugins      Lists active plugins
+
+`STATE` can be one of: `OK`, `WARNING`, `CRITICAL`, `UNKNOWN`
 
 ## Reporting bugs
 

@@ -14,7 +14,8 @@ my $bindir = TESTDIR . '/data/bin';
 unshift(@utils::paths, $bindir);
 
 my $commands = {
-	proc => ['<', '.']
+	proc => ['<', '.'],
+	'cciss_vol_status version' => ['<', TESTDIR . '/data/cciss/cciss-1.09' ],
 };
 
 my %params = (
@@ -47,7 +48,7 @@ my %sudo = (
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/mpt-status -p",
 	],
 	tw_cli => [
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli info*",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info*",
 	],
 	arcconf => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/arcconf GETSTATUS 1",
@@ -86,6 +87,5 @@ foreach my $pn (@utils::plugins) {
 
 	my $exp = join "\n", @{$sudo{$pn}};
 	my $rules = join "\n", @rules;
-	printf("%s => '%s' ne '%s'\n", $pn, $exp, $rules) if $exp ne $rules;
-	ok($exp eq $rules, "$pn sudo ok");
+	is($rules, $exp, "$pn sudo ok");
 }

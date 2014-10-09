@@ -1,5 +1,21 @@
-## 3.1.1 (not released)
-- sudoers: support #includedir if enabled in config
+## Unreleased
+
+- cciss: fix parsing enclosure with no enclosure name [#84][]
+- megacli: actually report that cache is disabled. [#85][]
+
+## 3.2.1 (2014-10-07)
+
+- cciss: fix parsing enclosure with space and no serial [#83][]
+- megacli: alert if default is WriteBack, but current is WriteThrough. [#65][]
+
+NOTE: megacli now checks cache state, use `--cache-fail=STATE` if default `WARNING` is not for you.
+
+## 3.2.0 (2014-09-21)
+- sudoers: support `#includedir` if enabled in sudoers config
+- tw_cli: rewritten with full data parsing
+- cciss: rewritten with full data parsing, optionally use lsscsi to find controller devices
+
+NOTE: when using `cciss` plugin with `hpsa` kernel driver, install `lsscsi` program and `cciss_vol_status` 1.10+ to get best results. `cciss_vol_status` v1.10 enables check of individual disks and their S.M.A.R.T status.
 
 ## 3.1.0 (2014-09-08)
 - sudoers: disable requiretty (enabled in CentOS 6.5) [#52][]
@@ -109,3 +125,7 @@ NOTES:
 [#70]: https://github.com/glensc/nagios-plugin-check_raid/pull/70
 [#71]: https://github.com/glensc/nagios-plugin-check_raid/pull/71
 [#32]: https://github.com/glensc/nagios-plugin-check_raid/issues/32
+[#83]: https://github.com/glensc/nagios-plugin-check_raid/issues/83
+[#65]: https://github.com/glensc/nagios-plugin-check_raid/issues/65
+[#84]: https://github.com/glensc/nagios-plugin-check_raid/issues/84
+[#85]: https://github.com/glensc/nagios-plugin-check_raid/issues/85
