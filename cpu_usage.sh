@@ -39,8 +39,8 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
 		totalkey="idle_${key}";
 		idlekey="idle_${key}";
-		totalstring="${totalstring}export $${totalkey}=\"${total}\";\n";
-		idlestring="${idlestring}export $${idlekey}=\"${idle}\";\n";
+		totalstring="${totalstring}export ${$totalkey}=\"${total}\";\n";
+		idlestring="${idlestring}export ${$idlekey}=\"${idle}\";\n";
 	else
 		totalkey="cputotals[${key}]";
 		idlekey="cpuidles[${key}]";
@@ -48,8 +48,8 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		idlestring="${idlestring}[${key}]=\"${idle}\" ";
 	fi;
 	if [ ! -z "$${totalkey}" ]; then
-		cputotal=$((${total} - $${totalkey}));
-		cpuidle=$((${idle} - $${idlekey}));
+		cputotal=$((${total} - ${$totalkey}));
+		cpuidle=$((${idle} - ${$idlekey}));
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${usage:0:1}" = "." ]; then
