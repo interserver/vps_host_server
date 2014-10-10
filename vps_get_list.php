@@ -147,10 +147,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			);
 			$servers[$id] = $server;
 		}
-		$cpu_usage = trim(`bash /root/cpaneldirect/cpu_usage.sh --serialized`);
-		if ($cpu_usage != '')
+		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh --serialized`))
 		{
-			$cpu_usage = unserialize($cpu_usage);
 			foreach ($cpu_usage as $id => $cpu_data)
 			{
 				$servers[$id]['cpu_usage'] = serialize($cpu_data);
