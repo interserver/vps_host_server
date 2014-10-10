@@ -24,7 +24,6 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	if [ ! -z "${cputotals[${key}]}" ]; then
 		cputotal=$((${total} - ${cputotals[${key}]}));
 		cpuidle=$((${idle} - ${cpuidles[${key}]}));
-		echo "total ${cputotal} idle ${cpuidle}"
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${prev}" != "${vzid}" ]; then
