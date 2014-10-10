@@ -6,7 +6,7 @@ IFS="
 ";
 if [ -e ~/.cpu_usage.last.sh ]; then
 	source ~/.cpu_usage.last.sh;
-else
+elif [ ${BASH_VERSION:0:1} -ge 4 ]; then
 	declare -A cputotals;
 	declare -A cpuidles;
 fi;
