@@ -39,8 +39,8 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
 		tkey="idle_${key}";
 		ikey="idle_${key}";
-		totalstring="${totalstring}export $${tkey}=\"${total}\";\n";
-		idlestring="${idlestring}export $${ikey}=\"${idle}\";\n";
+		totalstring="${totalstring}export ${tkey}=\"${total}\";\n";
+		idlestring="${idlestring}export ${ikey}=\"${idle}\";\n";
 	else
 		tkey="cputotals[${key}]";
 		ikey="cpuidles[${key}]";
