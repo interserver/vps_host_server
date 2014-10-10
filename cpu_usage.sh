@@ -55,8 +55,8 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		fi;
 	fi;
 	if [ $haslast -eq 1 ]; then
-		cputotal=$((${total} - ${lasttotal}));
-		cpuidle=$((${idle} - ${lastidle}));
+		cputotal=$(echo "${total} - ${lasttotal}" |bc -l);
+		cpuidle=$(echo "${idle} - ${lastidle}" |bc -l);
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${usage:0:1}" = "." ]; then
