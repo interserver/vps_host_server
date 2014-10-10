@@ -24,8 +24,11 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		cputotal=$((${total} - ${cputotals[${key}]}));
 		cpuidle=$((${idle} - ${cpuidles[${key}]}));
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
+		echo "$vzid $cpu Orig ${usage}%";
+		tusage="$(echo "scale=1; ${usage}/1" | bc -l)";
+		echo "$vzid $cpu 1Scale ${tusage}%";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
-		echo "$vzid $cpu ${usage}%";
+		echo "$vzid $cpu 2Scale ${usage}%";
 	fi;
 done
 totalstring="${totalstring});\nexport cputotals;\n";
