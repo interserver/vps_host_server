@@ -6,11 +6,12 @@ IFS="
 ";
 if [ -e ~/.cpu_usage.last.sh ]; then
 	source ~/.cpu_usage.last.sh;
-elif [ ${BASH_VERSION:0:1} -ge 4 ]; then
+elif [ ${BASH_VERSION:0:1} -lt 4 ]; then
+	
+else
 	declare -A cputotals;
 	declare -A cpuidles;
 fi;
-#	{"100":{"cpu":1.22,"cpu0":2,"cpu1":1},"101":{"cpu":1.22,"cpu0":2,"cpu1":1}}
 if [ "${1}" = "-serialize" ]; then
 	out=serialize
 elif [ "${1}" = "-json" ]; then
@@ -38,15 +39,17 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
 		totalkey="idle_${key}";
 		idlekey="idle_${key}";
-		totalstring="${totalstring}export ${totalkey}=\"${total}\";\n";
-		idlestring="${idlestring}export ${idlekey}=\"${idle}\";\n";
+		totalstring="${totalstring}export $${totalkey}=\"${total}\";\n";
+		idlestring="${idlestring}export $${idlekey}=\"${idle}\";\n";
 	else
+		totalkey="cputotals[${key}]";
+		idlekey="cpuidles[${key}]";
 		totalstring="${totalstring}[${key}]=\"${total}\" ";
 		idlestring="${idlestring}[${key}]=\"${idle}\" ";
 	fi;
-	if [ ! -z "${cputotals[${key}]}" ]; then
-		cputotal=$((${total} - ${cputotals[${key}]}));
-		cpuidle=$((${idle} - ${cpuidles[${key}]}));
+	if [ ! -z "$${totalkey}" ]; then
+		cputotal=$((${total} - $${totalkey}));
+		cpuidle=$((${idle} - $${idlekey}));
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${usage:0:1}" = "." ]; then
@@ -91,4 +94,3 @@ else
 	idlestring="${idlestring});\nexport cpuidles;\n";
 fi;
 echo -e "#\!/bin/bash\n${totalstring}${idlestring}" > ~/.cpu_usage.last.sh;
-chmod +x ~/.cpu_usage.last.sh;
