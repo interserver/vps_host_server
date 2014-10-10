@@ -151,7 +151,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		{
 			foreach ($cpu_usage as $id => $cpu_data)
 			{
-				$servers[$id]['cpu_usage'] = serialize($cpu_data);
+				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
+				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 			
 		}
