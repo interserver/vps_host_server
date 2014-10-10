@@ -47,7 +47,7 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		totalstring="${totalstring}[${key}]=\"${total}\" ";
 		idlestring="${idlestring}[${key}]=\"${idle}\" ";
 	fi;
-	if [ ! -z "$${tkey}" ]; then
+	if [ ! -z "$$tkey" ]; then
 		cputotal=$((${total} - $$tkey}));
 		cpuidle=$((${idle} - $$ikey}));
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
