@@ -30,6 +30,9 @@ fi;
 prev="";
 if [ "$out" = "json" ]; then
 	echo -n "{";
+elif [ "$out" = "serialize" ]; then
+	output="";
+	vzcount=0;
 fi;
 for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
 	vzid="$(echo "$i" | awk '{ print $1 }')";
@@ -77,12 +80,20 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 			if [ "${prev}" != "" ]; then
 				if [ "$out" = "json" ]; then
 					echo -n "},";
+				elif [ "$out" = "serialize" ]; then
+					output="${output}${coreidx}:{${coreout}}";				
+					vzcount=$(($vzcount + 1));
+					coreout="";
+					echo -n "},";
 				else
 					echo "";
 				fi;
 			fi;
 			if [ "$out" = "json" ]; then
 				echo -n "\"${vzid}\":{";
+			elif [ "$out" = "serialize" ]; then
+				output="${output}i:${vzid};a:";
+				coreidx=0;
 			else
 				echo -n "$vzid";
 			fi;
@@ -93,6 +104,8 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 				echo -n ",";
 			fi;
 			echo -n "\"${cpu}\":\"${usage}\"";
+		elif [ "$out" = "serialize" ]; then
+			coreout="${coreout}s:${#cpu}:\"${cpu}\";s:${#usage}:\"${usage}\";";
 		else
 			echo -n " $cpu ${usage}";
 		fi;
@@ -101,6 +114,12 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 done
 if [ "$out" = "json" ]; then
 	echo "}}";
+elif [ "$out" = "serialize" ]; then
+# i:0;a:9:{s:3:"cpu";s:4:"7.87";s:4:"cpu0";s:4:"7.69";s:4:"cpu1";s:5:"12.57";s:4:"cpu2";s:5:"15.64";s:4:"cpu3";s:4:"9.17";s:4:"cpu4";s:4:"4.65";s:4:"cpu5";s:5:"10.03";s:4:"cpu6";s:1:"0";s:4:"cpu7";s:4:"3.44";}
+					output="${output}${coreidx}:{${coreout}}";				
+					vzcount=$(($vzcount + 1));
+					output="a:${vzcount}:{${output}}"
+					echo "${output}\n";
 else
 	echo "";
 fi;
