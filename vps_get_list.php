@@ -147,14 +147,6 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			);
 			$servers[$id] = $server;
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
-		{
-			foreach ($cpu_usage as $id => $cpu_data)
-			{
-				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
-				$servers[$id]['cpu_usage'] = $cpu_data;
-			}
-		}
 		foreach ($servers as $id => $server)
 		{
 			if ($servers[$id]['layout'] == 'simfs')
@@ -166,6 +158,14 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 					$servers[$id]['diskused'] = $disk[0];
 					$servers[$id]['diskmax'] = $disk[1];
 				}
+			}
+		}
+		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
+		{
+			foreach ($cpu_usage as $id => $cpu_data)
+			{
+				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
+				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
 		//print_r($servers);
