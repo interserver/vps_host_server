@@ -4,8 +4,8 @@
 # - This is just way better than anything else out there for gathering this info
 IFS="
 ";
-if [ -e cpu_usage.last.sh ]; then
-	. cpu_usage.last.sh;
+if [ -e ~/.cpu_usage.last.sh ]; then
+	source ~/.cpu_usage.last.sh;
 else
 	declare -A cputotals;
 	declare -A cpuidles;
@@ -18,9 +18,14 @@ elif [ "${1}" = "-json" ]; then
 else
 	out=normal
 fi;
-totalstring="declare -A cputotals=(";
-idlestring="declare -A cpuidles=(";
-prev=""
+if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+	totalstring="";
+	idlestring="";
+else
+	totalstring="declare -A cputotals=(";
+	idlestring="declare -A cpuidles=(";
+fi;
+prev="";
 if [ "$out" = "json" ]; then
 	echo -n "{";
 fi;
@@ -30,8 +35,15 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' |bc -l)";
 	idle="$(echo "$i" | awk '{ print $6 }')";
 	key="${vzid}_${cpu}";
-	totalstring="${totalstring}[${key}]=\"${total}\" ";
-	idlestring="${idlestring}[${key}]=\"${idle}\" ";
+	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+		totalkey="idle_${key}";
+		idlekey="idle_${key}";
+		totalstring="${totalstring}export ${totalkey}=\"${total}\";\n";
+		idlestring="${idlestring}export ${idlekey}=\"${idle}\";\n";
+	else
+		totalstring="${totalstring}[${key}]=\"${total}\" ";
+		idlestring="${idlestring}[${key}]=\"${idle}\" ";
+	fi;
 	if [ ! -z "${cputotals[${key}]}" ]; then
 		cputotal=$((${total} - ${cputotals[${key}]}));
 		cpuidle=$((${idle} - ${cpuidles[${key}]}));
@@ -71,8 +83,12 @@ if [ "$out" = "json" ]; then
 else
 	echo "";
 fi;
-totalstring="${totalstring});\nexport cputotals;\n";
-idlestring="${idlestring});\nexport cpuidles;\n";
-echo -e "#\!/bin/bash\n${totalstring}${idlestring}" > cpu_usage.last.sh;
-chmod +x cpu_usage.last.sh;
-#DISP_SYS_RATE=$(echo "scale=${SCALE}; ${SYS_RATE}/1 "| bc);
+if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+	totalstring="${totalstring}\n";
+	idlestring="${idlestring}\n";
+else
+	totalstring="${totalstring});\nexport cputotals;\n";
+	idlestring="${idlestring});\nexport cpuidles;\n";
+fi;
+echo -e "#\!/bin/bash\n${totalstring}${idlestring}" > ~/.cpu_usage.last.sh;
+chmod +x ~/.cpu_usage.last.sh;
