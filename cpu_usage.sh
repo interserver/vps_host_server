@@ -6,18 +6,18 @@ IFS="
 ";
 if [ -e ~/.cpu_usage.last.sh ]; then
 	source ~/.cpu_usage.last.sh;
-elif [ ${BASH_VERSION:0:1} -lt 4 ]; then
-	
-else
-	declare -A cputotals;
-	declare -A cpuidles;
+else                            
+	if [ ${BASH_VERSION:0:1} -ge 4 ]; then
+		declare -A cputotals;
+		declare -A cpuidles;
+	fi;
 fi;
 if [ "${1}" = "-serialize" ]; then
-	out=serialize
+	out=serialize;
 elif [ "${1}" = "-json" ]; then
-	out=json
+	out=json;
 else
-	out=normal
+	out=normal;
 fi;
 if [ ${BASH_VERSION:0:1} -lt 4 ]; then
 	totalstring="";
