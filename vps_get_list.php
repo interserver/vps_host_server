@@ -147,6 +147,16 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			);
 			$servers[$id] = $server;
 		}
+		$cpu_usage = trim(`bash /root/cpaneldirect/cpu_usage.sh --serialized`);
+		if ($cpu_usage != '')
+		{
+			$cpu_usage = unserialize($cpu_usage);
+			foreach ($cpu_usage as $id => $cpu_data)
+			{
+				$servers[$id]['cpu_usage'] = serialize($cpu_data);
+			}
+			
+		}
 		foreach ($servers as $id => $server)
 		{
 			if ($servers[$id]['layout'] == 'simfs')
