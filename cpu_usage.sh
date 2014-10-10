@@ -36,20 +36,27 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' |bc -l)";
 	idle="$(echo "$i" | awk '{ print $6 }')";
 	key="${vzid}_${cpu}";
+	haslast=0;
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
-		tkey="idle_${key}";
-		ikey="idle_${key}";
-		totalstring="${totalstring}export ${tkey}=\"${total}\";\n";
-		idlestring="${idlestring}export ${ikey}=\"${idle}\";\n";
+		totalstring="${totalstring}export idle_${key}=\"${total}\";\n";
+		idlestring="${idlestring}export idle_${key}=\"${idle}\";\n";
+		if [ ! -z "$(eval echo "\${idle_$key}")" ]; then
+			lasttotal=$(eval echo "\${idle_${key}}");
+			lastidle=$(eval echo "\${idle_${key}}");
+			haslast=1;
+		fi;
 	else
-		tkey="cputotals[${key}]";
-		ikey="cpuidles[${key}]";
 		totalstring="${totalstring}[${key}]=\"${total}\" ";
 		idlestring="${idlestring}[${key}]=\"${idle}\" ";
+		if [ ! -z "${cputotals[${key}]}" ]; then
+			lasttotal=${cputotals[${key}]};
+			lastidle=${cpuidles[${key}]};
+			haslast=1;
+		fi;
 	fi;
-	if [ ! -z "$$tkey" ]; then
-		cputotal=$((${total} - $$tkey));
-		cpuidle=$((${idle} - $$ikey));
+	if [ $haslast -eq 1 ]; then
+		cputotal=$((${total} - ${lasttotal}));
+		cpuidle=$((${idle} - ${lastidle}));
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${usage:0:1}" = "." ]; then
