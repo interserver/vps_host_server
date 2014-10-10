@@ -48,8 +48,8 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		idlestring="${idlestring}[${key}]=\"${idle}\" ";
 	fi;
 	if [ ! -z "$${tkey}" ]; then
-		cputotal=$((${total} - $${tkey}}));
-		cpuidle=$((${idle} - $${ikey}}));
+		cputotal=$((${total} - $$tkey}));
+		cpuidle=$((${idle} - $$ikey}));
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${usage:0:1}" = "." ]; then
@@ -93,4 +93,4 @@ else
 	totalstring="${totalstring});\nexport cputotals;\n";
 	idlestring="${idlestring});\nexport cpuidles;\n";
 fi;
-echo -e "#\!/bin/bash\n${totalstring}${idlestring}" > ~/.cpu_usage.last.sh;
+echo -e "#!/bin/bash\n${totalstring}${idlestring}" > ~/.cpu_usage.last.sh;
