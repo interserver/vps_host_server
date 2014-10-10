@@ -12,6 +12,7 @@ else
 fi;
 totalstring="declare -A cputotals=(";
 idlestring="declare -A cpuidles=(";
+prev=""
 for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
 	vzid="$(echo "$i" | awk '{ print $1 }')";
 	cpu="$(echo "$i" | awk '{ print $2 }')";
@@ -26,10 +27,16 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		echo "total ${cputotal} idle ${cpuidle}"
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
-		echo "$vzid $cpu ${usage}";
+		if [ "${prev}" != "${vzid}" ]; then
+			echo "";
+			echo -n "$vzid"
+		fi;
+		prev="${vzid}";
+		echo -n " $cpu ${usage}";
 		#echo "$vzid $cpu ${usage}%";
 	fi;
 done
+echo "";
 totalstring="${totalstring});\nexport cputotals;\n";
 idlestring="${idlestring});\nexport cpuidles;\n";
 echo -e "#\!/bin/bash\n${totalstring}${idlestring}" > cpu_usage.last.sh;
