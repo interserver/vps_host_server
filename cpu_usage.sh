@@ -44,7 +44,7 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
 		totalstring="${totalstring}export total_${key}=\"${total}\";\n";
 		idlestring="${idlestring}export idle_${key}=\"${idle}\";\n";
-		if [ ! -z "$(eval echo "\${total_$key}")" ]; then
+		if [ ! -z "$(eval echo "\${total_${key}}")" ]; then
 			lasttotal=$(eval echo "\${total_${key}}");
 			lastidle=$(eval echo "\${idle_${key}}");
 			haslast=1;
