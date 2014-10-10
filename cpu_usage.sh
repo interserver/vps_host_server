@@ -27,8 +27,10 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${prev}" != "${vzid}" ]; then
-			echo "";
-			echo -n "$vzid"
+			if [ "${prev}" != "" ]; then
+				echo "";
+			fi;
+			echo -n "$vzid";
 		fi;
 		prev="${vzid}";
 		echo -n " $cpu ${usage}";
