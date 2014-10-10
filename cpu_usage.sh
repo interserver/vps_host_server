@@ -105,6 +105,7 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 			echo -n "\"${cpu}\":\"${usage}\"";
 		elif [ "$out" = "serialize" ]; then
 			coreout="${coreout}s:${#cpu}:\"${cpu}\";s:${#usage}:\"${usage}\";";
+			coreidx=$(($coreidx + 1));
 		else
 			echo -n " $cpu ${usage}";
 		fi;
