@@ -92,7 +92,7 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 			if [ "${cpu}" != "cpu" ]; then
 				echo -n ",";
 			fi;
-			echo -n "\"${cpu}\":${usage}";
+			echo -n "\"${cpu}\":\"${usage}\"";
 		else
 			echo -n " $cpu ${usage}";
 		fi;
