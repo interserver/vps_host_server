@@ -147,13 +147,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			);
 			$servers[$id] = $server;
 		}
-		$cpu_data = trim(`bash /root/cpaneldirect/cpu_usage.sh -serialize`);
-/*		if ($cpu_data != '')
-		{
-			$cpu_usage = unserialize($cpu_data);
-		}
-*/
-/*		if (is_array($cpu_usage) && sizeof($cpu_usage) & 0)
+		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
 		{
 			foreach ($cpu_usage as $id => $cpu_data)
 			{
@@ -161,7 +155,6 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-*/	
 		foreach ($servers as $id => $server)
 		{
 			if ($servers[$id]['layout'] == 'simfs')
@@ -196,7 +189,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	}
 	$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  ' 
 	. (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '') 
-	. ($cpu_data != '' ? ' -F cpu_usage="' . base64_encode(gzcompress($cpu_data, 9)) . '" ' : '')
+//	. ($cpu_data != '' ? ' -F cpu_usage="' . base64_encode(gzcompress($cpu_data, 9)) . '" ' : '')
 	. $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
