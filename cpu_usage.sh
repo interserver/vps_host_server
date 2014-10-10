@@ -84,7 +84,6 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 					output="${output}${coreidx}:{${coreout}}";				
 					vzcount=$(($vzcount + 1));
 					coreout="";
-					echo -n "},";
 				else
 					echo "";
 				fi;
@@ -119,7 +118,7 @@ elif [ "$out" = "serialize" ]; then
 					output="${output}${coreidx}:{${coreout}}";				
 					vzcount=$(($vzcount + 1));
 					output="a:${vzcount}:{${output}}"
-					echo "${output}\n";
+					echo "${output}";
 else
 	echo "";
 fi;
