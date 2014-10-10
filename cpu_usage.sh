@@ -10,9 +10,20 @@ else
 	declare -A cputotals;
 	declare -A cpuidles;
 fi;
+#	{"100":{"cpu":1.22,"cpu0":2,"cpu1":1},"101":{"cpu":1.22,"cpu0":2,"cpu1":1}}
+if [ "${1}" = "-serialize" ]; then
+	out=serialize
+elif [ "${1}" = "-json" ]; then
+	out=json
+else
+	out=normal
+fi;
 totalstring="declare -A cputotals=(";
 idlestring="declare -A cpuidles=(";
 prev=""
+if [ "$out" = "json" ]; then
+	echo -n "{";
+fi;
 for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
 	vzid="$(echo "$i" | awk '{ print $1 }')";
 	cpu="$(echo "$i" | awk '{ print $2 }')";
@@ -28,16 +39,35 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${prev}" != "${vzid}" ]; then
 			if [ "${prev}" != "" ]; then
-				echo "";
+				if [ "$out" = "json" ]; then
+					echo -n "},";
+				else
+					echo "";
+				fi;
 			fi;
-			echo -n "$vzid";
+			if [ "$out" = "json" ]; then
+				echo -n "\"${vzid}\":{";
+			else
+				echo -n "$vzid";
+			fi;
 		fi;
 		prev="${vzid}";
-		echo -n " $cpu ${usage}";
+		if [ "$out" = "json" ]; then
+			if [ "${cpu}" != "cpu" ]; then
+				echo -n ",";
+			fi;
+			echo -n "\"${cpu}\":${usage}";
+		else
+			echo -n " $cpu ${usage}";
+		fi;
 		#echo "$vzid $cpu ${usage}%";
 	fi;
 done
-echo "";
+if [ "$out" = "json" ]; then
+	echo "}}";
+else
+	echo "";
+fi;
 totalstring="${totalstring});\nexport cputotals;\n";
 idlestring="${idlestring});\nexport cpuidles;\n";
 echo -e "#\!/bin/bash\n${totalstring}${idlestring}" > cpu_usage.last.sh;
