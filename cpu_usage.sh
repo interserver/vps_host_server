@@ -4,6 +4,7 @@
 # - This is just way better than anything else out there for gathering this info
 IFS="
 ";
+debug=0;
 if [ -e ~/.cpu_usage.last.sh ]; then
 	source ~/.cpu_usage.last.sh;
 else                            
@@ -35,6 +36,9 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	cpu="$(echo "$i" | awk '{ print $2 }')";
 	total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' |bc -l)";
 	idle="$(echo "$i" | awk '{ print $6 }')";
+	if [ "$debug" = "1" ]; then
+		echo "Got VPS $vzid CPU $cpu Total $total Idle $idle";
+	fi;
 	key="${vzid}_${cpu}";
 	haslast=0;
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
@@ -58,6 +62,9 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 		cputotal=$(echo "${total} - ${lasttotal}" |bc -l);
 		cpuidle=$(echo "${idle} - ${lastidle}" |bc -l);
 		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
+		if [ "$debug" = "1" ]; then
+			echo "	Got CPU Total ${cputotal} Idle ${cpuidle}, Current Total ${total} Idle ${idle}, Last Total ${lasttotal} Idle ${lastidle}";
+		fi;
 		usage="$(echo "scale=2; ${usage}/1" | bc -l)";
 		if [ "${usage:0:1}" = "." ]; then
 			usage="0${usage}";
