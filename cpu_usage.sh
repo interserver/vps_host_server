@@ -7,7 +7,7 @@ IFS="
 debug=0;
 if [ -e ~/.cpu_usage.last.sh ]; then
 	source ~/.cpu_usage.last.sh;
-else                            
+else
 	if [ ${BASH_VERSION:0:1} -ge 4 ]; then
 		declare -A cputotals;
 		declare -A cpuidles;
@@ -81,7 +81,7 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 				if [ "$out" = "json" ]; then
 					echo -n "},";
 				elif [ "$out" = "serialize" ]; then
-					output="${output}${coreidx}:{${coreout}}";				
+					output="${output}${coreidx}:{${coreout}}";
 					vzcount=$(($vzcount + 1));
 					coreout="";
 				else
@@ -115,7 +115,6 @@ done
 if [ "$out" = "json" ]; then
 	echo "}}";
 elif [ "$out" = "serialize" ]; then
-# i:0;a:9:{s:3:"cpu";s:4:"7.87";s:4:"cpu0";s:4:"7.69";s:4:"cpu1";s:5:"12.57";s:4:"cpu2";s:5:"15.64";s:4:"cpu3";s:4:"9.17";s:4:"cpu4";s:4:"4.65";s:4:"cpu5";s:5:"10.03";s:4:"cpu6";s:1:"0";s:4:"cpu7";s:4:"3.44";}
 					output="${output}${coreidx}:{${coreout}}";				
 					vzcount=$(($vzcount + 1));
 					output="a:${vzcount}:{${output}}"
