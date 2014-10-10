@@ -42,10 +42,10 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	key="${vzid}_${cpu}";
 	haslast=0;
 	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
-		totalstring="${totalstring}export idle_${key}=\"${total}\";\n";
+		totalstring="${totalstring}export total_${key}=\"${total}\";\n";
 		idlestring="${idlestring}export idle_${key}=\"${idle}\";\n";
-		if [ ! -z "$(eval echo "\${idle_$key}")" ]; then
-			lasttotal=$(eval echo "\${idle_${key}}");
+		if [ ! -z "$(eval echo "\${total_$key}")" ]; then
+			lasttotal=$(eval echo "\${total_${key}}");
 			lastidle=$(eval echo "\${idle_${key}}");
 			haslast=1;
 		fi;
