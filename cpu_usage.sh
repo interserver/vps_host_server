@@ -61,7 +61,11 @@ for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " "
 	if [ $haslast -eq 1 ]; then
 		cputotal=$(echo "${total} - ${lasttotal}" |bc -l);
 		cpuidle=$(echo "${idle} - ${lastidle}" |bc -l);
-		usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
+		if [ $cputotal -eq 0 ]; then
+			usage=0;
+		else
+			usage="$(echo "100 - (${cpuidle} / ${cputotal} * 100)" | bc -l)";
+		fi;
 		if [ "$debug" = "1" ]; then
 			echo "	Got CPU Total ${cputotal} Idle ${cpuidle}, Current Total ${total} Idle ${idle}, Last Total ${lasttotal} Idle ${lastidle}";
 		fi;
