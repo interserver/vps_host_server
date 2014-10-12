@@ -9,7 +9,9 @@
 	{
 		// ensure ethtool is installed
 		`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
-		$speed = trim(`ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
+		//$speed = trim(`ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
+               $cmd = 'ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
+               $speed = trim(`{$cmd}`);
 		$flags = explode(' ', trim(`grep "^flags" /proc/cpuinfo | head -n 1 | cut -d: -f2-;`));
 		sort($flags);
 		$flagsnew = implode(' ', $flags);
