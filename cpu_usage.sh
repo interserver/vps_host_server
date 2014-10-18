@@ -2,6 +2,7 @@
 # CPU Usage Totals Per VPS Per CPU/Core
 # Written by Joe Huss <detain@interserver.net>
 # - This is just way better than anything else out there for gathering this info
+# http://forum.interserver.net/forum/threads/script-get-openvz-cpu-usage-totals-per-vps-per-cpu-core.4859/
 IFS="
 ";
 debug=0;
