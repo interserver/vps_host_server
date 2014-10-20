@@ -54,7 +54,7 @@ else
 		output="";
 		vzcount=0;
 	fi;
-	for i in $(grep "^cpu" ${cpu_files} | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
+	for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
 		vzid="$(echo "$i" | awk '{ print $1 }')";
 		cpu="$(echo "$i" | awk '{ print $2 }')";
 		total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' | bc -l)";
