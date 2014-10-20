@@ -31,7 +31,6 @@ function get_vps_list()
 				$server = array(
 					'veid' => $veid, 
 					'status' => $status,
-					'name' => $name,
 					'hostname' => $name, 
 					'kmemsize' => $xml['domain']['memory'], 
 				);
