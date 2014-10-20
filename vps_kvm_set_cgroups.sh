@@ -17,8 +17,10 @@ else
 		else
 			slices="$(echo $mem / ${sliceram} |bc -l | cut -d\. -f1)";
 		fi
-		cpushares="$(($slices * ${sliceram}))";
-		ioweight="$(echo "200 + (50 * $slices)" | bc -l | cut -d\. -f1)";
+		#cpushares="$(($slices * ${sliceram}))";
+		#ioweight="$(echo "200 + (50 * $slices)" | bc -l | cut -d\. -f1)";
+		cpushares="$(($slices * ${sliceram} + 2000))";
+		ioweight="$(echo "600 + (50 * $slices)" | bc -l | cut -d\. -f1)";
 		echo "$vps$(printf %$((15-${#vps}))s)${memtxt}$(printf %$((11-${#memtxt}))s) = ${slices}$(printf %$((2-${#slices}))s) Slices -----> IO: $ioweight$(printf %$((6-${#ioweight}))s)CPU: $cpushares";
 		virsh schedinfo $vps --set cpu_shares=$cpushares --current >/dev/null;
 		virsh schedinfo $vps --set cpu_shares=$cpushares --config >/dev/null;

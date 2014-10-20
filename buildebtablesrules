@@ -157,6 +157,10 @@ if [ -e /limitpacket ]; then
 	echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
 fi
 echo "1" > /proc/sys/net/ipv4/ip_forward
+beta pps
+echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
+iptables -X LOGGING
+
 /sbin/iptables -P INPUT ACCEPT
 /sbin/iptables -P OUTPUT ACCEPT
 /sbin/iptables -P FORWARD ACCEPT
