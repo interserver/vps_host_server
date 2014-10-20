@@ -65,7 +65,7 @@ else
 				echo "$s" | mail -s "$s" ${me} >/dev/null 2>&1
 				echo "$s" >&2;
 			fi;
-		fi
+		fi;
 		idle="$(echo "$i" | awk '{ print $6 }')";
 		if [ "$debug" = "1" ]; then
 			echo "Got VPS $vzid CPU $cpu Total $total Idle $idle";
@@ -169,7 +169,7 @@ else
 	if [ "$out" = "json" ]; then
 		echo "}}";
 	elif [ "$out" = "serialize" ]; then
-		output="${output}${coreidx}:{${coreout}}";				
+		output="${output}${coreidx}:{${coreout}}";
 		vzcount=$(($vzcount + 1));
 		output="a:${vzcount}:{${output}}"
 		echo "${output}";
