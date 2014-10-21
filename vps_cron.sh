@@ -13,7 +13,9 @@ function age() {
 
 if [ "$(ps aux| grep 'php vps_cron.php' | grep -v "grep php" |wc -l)" = "0" ]; then
 	touch cron.age
-	/root/cpaneldirect/cpu_usage_updater.sh 2>/root/cpaneldirect/cron.cpu_usage >&2 &
+	if [ -e /proc/vz ]; then
+		/root/cpaneldirect/cpu_usage_updater.sh 2>/root/cpaneldirect/cron.cpu_usage >&2 &
+	fi;
 	php vps_cron.php >> cron.output 2>&1
 else
 	# kill a get list older than 2 hours
