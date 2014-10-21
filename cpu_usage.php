@@ -30,14 +30,20 @@ if ($_SERVER['argc'] > 0)
 		$out = 'normal';
 else
 	$out = 'normal';
-$files = trim(`ls /proc/vz/fairsched/*/cpu.proc.stat;`);
+$cpu_proc_mask = '/proc/vz/fairsched/*/cpu.proc.stat';
+$files = trim(`ls $cpu_proc_mask;`);
 if ($filse == '/proc/vz/fairsched/*/cpu.proc.stat')
 	echo "Error, /proc/vz/fairsched/*/cpu.proc.stat entries do not exist!
 	Most likely cause is, this is either not an OpenVZ server, 
 	or not booted into the proper kernel.\n";
 else
 {
-	
+	if (file_exists('~/.cpu_usage.last.ini'))
+	{
+		$ini = parse_ini_file('~/.cpu_usage.last.ini');
+		
+	}
+/*
 	if [ -e ~/.cpu_usage.last.sh ]; then
 		source ~/.cpu_usage.last.sh;
 	elif [ ${BASH_VERSION:0:1} -ge 4 ]; then
@@ -58,7 +64,7 @@ else
 		output="";
 		vzcount=0;
 	fi;
-	for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
+	for i in $(grep "^cpu" $cpu_proc_mask | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
 		vzid="$(echo "$i" | awk '{ print $1 }')";
 		cpu="$(echo "$i" | awk '{ print $2 }')";
 		total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' | bc -l)";
@@ -188,4 +194,5 @@ else
 		idlestring="${idlestring});\nexport cpuidles;\n";
 	fi;
 	echo -e "#!/bin/bash\n${totalstring}${idlestring}" > ~/.cpu_usage.last.sh;
+*/
 }
