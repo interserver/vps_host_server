@@ -38,10 +38,9 @@ if ($filse == '/proc/vz/fairsched/*/cpu.proc.stat')
 	or not booted into the proper kernel.\n";
 else
 {
-	if (file_exists('~/.cpu_usage.last.ini'))
+	if (file_exists('~/.cpu_usage.last.ser'))
 	{
-		$ini = parse_ini_file('~/.cpu_usage.last.ini');
-		
+		$usage = unserialize(trim(file_get_contents('~/.cpu_usage.serial')));
 	}
 /*
 	if [ -e ~/.cpu_usage.last.sh ]; then
