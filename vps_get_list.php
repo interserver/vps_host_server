@@ -17,13 +17,13 @@ function get_vps_list()
 	if (preg_match_all("/^[ ]*([\w]+):([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	{
 		$bw = array(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-		foreach ($matches[1] as $dev)
+		foreach ($matches[1] as $idx => $dev)
 		{
 			if (substr($dev, 0, 3) == 'eth')
 			{
 				for ($x = 0; $x < 16; $x++)
 				{
-					$bw[$x] += $matches[$x+2]; 
+					$bw[$x] += $matches[$x+2][$idx]; 
 				}
 			}
 		}
