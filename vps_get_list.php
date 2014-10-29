@@ -13,21 +13,65 @@ function get_vps_list()
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$curl_cmd = '';
 	$servers = array();
+	
 	//if (preg_match_all("/^[ ]*(?P<dev>[\w]+):(?P<inbytes>[\d]+)[ ]+(?P<inpackets>[\d]+)[ ]+(?P<inerrs>[\d]+)[ ]+(?P<indrop>[\d]+)[ ]+(?P<infifo>[\d]+)[ ]+(?P<inframe>[\d]+)[ ]+(?P<incompressed>[\d]+)[ ]+(?P<inmulticast>[\d]+)[ ]+(?P<outbytes>[\d]+)[ ]+(?P<outpackets>[\d]+)[ ]+(?P<outerrs>[\d]+)[ ]+(?P<outdrop>[\d]+)[ ]+(?P<outfifo>[\d]+)[ ]+(?P<outcolls>[\d]+)[ ]+(?P<outcarrier>[\d]+)[ ]+(?P<outcompressed>[\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	if (preg_match_all("/^[ ]*([\w]+):([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	{
-		$bw = array(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+		$bw = array(time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 		foreach ($matches[1] as $idx => $dev)
 		{
 			if (substr($dev, 0, 3) == 'eth')
 			{
-				for ($x = 0; $x < 16; $x++)
+				for ($x = 1; $x < 16; $x++)
 				{
-					$bw[$x] += $matches[$x+2][$idx]; 
+					$bw[$x] += $matches[$x+1][$idx]; 
 				}
 			}
 		}
-		$servers[0]['bw_usage'] = $bw;
+		$bw_usage = array(
+			'time' => $bw[0],
+			'bytes_in' => $bw[1],
+			'packets_in' => $bw[2],
+			'bytes_sec_in' => 0,
+			'packets_sec_in' => 0,
+			'bytes_out' => $bw[9],
+			'packets_out' => $bw[10],
+			'bytes_sec_out' => 0,
+			'packets_sec_out' => 0,
+			'bytes_total' => $bw[1] + $bw[9],
+			'packets_total' => $bw[2] + $bw[10],
+			'bytes_sec_total' => 0,
+			'packets_sec_total' => 0,
+		);
+		if (file_exists('/root/.bw_usage.last'))
+		{
+			$bw_last = unserialize(file_get_contents('/root/.bw_usage.last'));
+			$bw_usage_last = array(
+				'time' => $bw_last[0],
+				'bytes_in' => $bw_last[1],
+				'packets_in' => $bw_last[2],
+				'bytes_sec_in' => 0,
+				'packets_sec_in' => 0,
+				'bytes_out' => $bw_last[9],
+				'packets_out' => $bw_last[10],
+				'bytes_sec_out' => 0,
+				'packets_sec_out' => 0,
+				'bytes_total' => $bw_last[1] + $bw_last[9],
+				'packets_total' => $bw_last[2] + $bw_last[10],
+				'bytes_sec_total' => 0,
+				'packets_sec_total' => 0,
+			);
+			$time_diff = $bw[0] - $bw_last[0];
+			foreach(array('bytes', 'packets') as $stat)
+			{
+				foreach (array('in','out','total') as $dir)
+				{
+					$bw_usage[$stat . '_sec_' . $dir] = ($bw_usage[$stat . '_' . $dir] - $bw_usage_last[$stat . '_' . $dir]) / $time_diff; 
+				}
+			}
+		}
+		file_put_contents('/root/.bw_usage.last', serialize($bw));
+		$servers[0]['bw_usage'] = $bw_usage;
 	}
 	if (!file_exists('/usr/sbin/vzctl'))
 	{
