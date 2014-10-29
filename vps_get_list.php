@@ -70,8 +70,16 @@ function get_vps_list()
 				}
 			}
 		}
+		if (file_exists('/etc/redhat-release'))
+			preg_match('/^(?P<distro>[\w]+) release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release'), $matches);
+		else
+			preg_match('/DISTRIB_ID=(?P<distro>[^<]+)<br>DISTRIB_RELEASE=(?P<version>[^<]+)<br>/i', nl2br(file_get_contents('/etc/lsb-release')), $matches);
 		file_put_contents('/root/.bw_usage.last', serialize($bw));
 		$servers[0]['bw_usage'] = $bw_usage;
+		$servers[0]['os_info'] = array(
+			'distro' => $matches['distro'],
+			'version' => $matches['version'],
+		);
 	}
 	if (!file_exists('/usr/sbin/vzctl'))
 	{
