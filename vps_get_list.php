@@ -215,6 +215,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		}
 		foreach ($servers as $id => $server)
 		{
+			if ($id == 0)
+				continue;
 			if ($servers[$id]['layout'] == 'simfs')
 			{
 				$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print $2 " " $3 }'`);
