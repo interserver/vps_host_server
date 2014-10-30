@@ -75,13 +75,11 @@ function get_vps_list()
 	}
 	if (file_exists('/etc/redhat-release'))
 	{
-		$netfile = file_get_contents('/etc/redhat-release');
-		preg_match('/^(?P<distro>[\w]+) release (?P<version>[\S]+)( .*)*$/i', $netfile, $matches);
+		preg_match('/^(?P<distro>[\w]+) release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release');, $matches);
 	}
 	else
 	{
-		$netfile = nl2br(file_get_contents('/etc/lsb-release'),false);
-		preg_match('/DISTRIB_ID=(?P<distro>[^<]+)<br>DISTRIB_RELEASE=(?P<version>[^<]+)<br>/i', $netfile, $matches);
+		preg_match('/DISTRIB_ID=(?P<distro>[^<]+)<br>DISTRIB_RELEASE=(?P<version>[^<]+)<br>/i', str_replace("\n", '<br>', file_get_contents('/etc/lsb-release')), $matches);
 	}
 	echo "Netfile:$netfile\n";
 	print_r($matches);
