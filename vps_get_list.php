@@ -75,7 +75,7 @@ function get_vps_list()
 	}
 	if (file_exists('/etc/redhat-release'))
 	{
-		preg_match('/^(?P<distro>[\w]+) release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release');, $matches);
+		preg_match('/^(?P<distro>[\w]+) release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release'), $matches);
 	}
 	else
 	{
