@@ -81,8 +81,6 @@ function get_vps_list()
 	{
 		preg_match('/DISTRIB_ID=(?P<distro>[^<]+)<br>DISTRIB_RELEASE=(?P<version>[^<]+)<br>/i', str_replace("\n", '<br>', file_get_contents('/etc/lsb-release')), $matches);
 	}
-	echo "Netfile:$netfile\n";
-	print_r($matches);
 	$servers[0]['os_info'] = array(
 		'distro' => $matches['distro'],
 		'version' => $matches['version'],
