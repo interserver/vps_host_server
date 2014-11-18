@@ -79,7 +79,7 @@ else
   grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
   echo "Defining Config As VPS"
   if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
-   sed s#"rhel5.5.0"#"pc-1.0"#g -i ${name}.xml
+   sed s#"rhel5.4.0"#"pc-1.0"#g -i ${name}.xml
    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
   fi
   sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
@@ -153,8 +153,8 @@ else
   tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
   echo "Got Total Size $tsize";
   if [ -z $tsize ]; then
-    tsize=$(stat -c%s "/${template}.img.gz");
-    echo "Falling back to filesize check, got size $tsize";
+	tsize=$(stat -c%s "/${template}.img.gz");
+	echo "Falling back to filesize check, got size $tsize";
   fi;
   while [ -d /proc/$pid ]; do
 	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3);
@@ -270,8 +270,8 @@ q
 		  mkdir -p /vz/mounts/${name}p${pn}
 		  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
 		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
-          echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd || \
-          php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}p${pn}"
+		  echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd || \
+		  php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}p${pn}"
 		  umount /dev/mapper/${pname}p${pn}
 		  kpartx $kpartxopts -d /dev/vz/${name}
 		 fi
