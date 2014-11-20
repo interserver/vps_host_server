@@ -78,6 +78,9 @@ else
   fi
   grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
   echo "Defining Config As VPS"
+  if [ "$template" = "windows2012" ]; then
+   sed s#"rhel5.4.0"#"pc-1.0"#g -i ${name}.xml
+  fi;
   if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
    sed s#"rhel5.4.0"#"pc-1.0"#g -i ${name}.xml
    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
