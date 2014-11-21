@@ -66,8 +66,8 @@ fi
 
 if [ "$skip" = "0" ]; then
         # create parent
-        $TC qdisc add dev $IF root handle 1:0 htb default 30 r2q 30
-        $TC qdisc add dev $OF root handle 1:0 htb default 30 r2q 30
+        $TC qdisc add dev $IF root handle 1:0 htb default 30 r2q 50
+        $TC qdisc add dev $OF root handle 1:0 htb default 30 r2q 50
 
         # make rules
         $TC class add dev $IF parent 1:0 classid 1:$START htb rate $DNLD

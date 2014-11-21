@@ -34,7 +34,7 @@ for vm in `cat $DHCPVPS | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`; 
 	else
 		vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;     
 		echo "Limiting $ip";
-        	/scripts/tclimit $ip $vnet $host
+        	/root/cpaneldirect/tclimit $ip $vnet $host
 	fi
         echo
 done
