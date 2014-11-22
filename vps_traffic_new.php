@@ -52,45 +52,27 @@ function vps_iptables_traffic_rules($ips)
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
 	{
-		if ($vzctl == '')
-		{
-			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
-			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
-			// run it twice to be safe
-			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
-			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
-		}
-		else
-		{
 			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
 			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
 			// run it twice to be safe
 			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
 			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-		}
-	}
-	foreach ($ips as $ip => $id)
-	{
-		if ($vzctl == '')
-		{
-			$cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-dst $ip -c 0 0; ";
-			$cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-src $ip -c 0 0; ";
-		}
-		else
-		{
 			$cmd .= "iptables -A FORWARD -d $ip; ";
 			$cmd .= "iptables -A FORWARD -s $ip; ";
-		}
 	}
 	`$cmd`;
 }
 
-function get_vps_iptables_traffic($ips)
+function get_vps_iptables_traffic()
 {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
 	if ($vzctl == '')
 	{
+		if (file_exists(('/root/.traffic.last')))
+		{
+			$last = unserialize(file_get_contents('/root/.traffic.last'));
+		}
 		$vnetcounters = explode("\n", trim(`grep vnet /proc/net/dev | awk '{ print $1 $2 " " $10}' | tr : " "`));
 		$vnets = array();
 		foreach ($vnetcounters as $line)
@@ -111,16 +93,26 @@ function get_vps_iptables_traffic($ips)
 		}
 		$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g';
 		$macvps = explode("\n", trim(`$cmd`));
-		$totals = array();
+		$vpss = array();
 		foreach ($macvps as $line)
 		{
 			list($mac, $vps, $ip) = explode(' ', $line);
 			//echo "Got  Mac:$mac   VPS:$vps   IP:$ip\n";
 			if (isset($macs[$mac]) && isset($vnets[$macs[$mac]]))
 			{
-				$totals[$vps] = $vnets[$macs[$mac]];
-				$totals[$vps]['ip'] = $ip;
+				$vpss[$vps] = $vnets[$macs[$mac]];
+				$vpss[$vps]['ip'] = $ip;
+				$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
+				$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
+				if ($in_new > 0 || $out_new > 0)
+				{
+					$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
+				}
 			}
+		}
+		if (sizeof($totals) > 0)
+		{
+			file_put_contents('/root/.traffic.last', serialize($vpss));
 		}
 /*
 Gives us an array like this:
@@ -131,6 +123,7 @@ Gives us an array like this:
 	}
 	else
 	{
+		$ips = get_vps_ipmap();
 		foreach ($ips as $ip => $id)
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
@@ -145,19 +138,18 @@ Gives us an array like this:
 			}
 		}
 		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
+		vps_iptables_traffic_rules($ips);
 	}
-	vps_iptables_traffic_rules($ips);
 	return $totals;
 }
 
 $url = 'https://myvps2.interserver.net/vps_queue.php';
-//if (file_exists('/usr/sbin/vzctl'))
-//{
-	$ips = get_vps_ipmap();
-	$totals = get_vps_iptables_traffic($ips);
+$totals = get_vps_iptables_traffic($ips);
+if (sizeof($totals) > 0)
+{
 	//print_r($totals);
 	$cmd = 'curl --connect-timeout 60 --max-time 240 -k -d action=bandwidth -d servers="' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '" -d bandwidth="' . urlencode(base64_encode(gzcompress(serialize($totals)))) . '" "' . $url . '" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
-//}
+}
 ?>
