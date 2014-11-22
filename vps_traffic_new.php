@@ -102,11 +102,14 @@ function get_vps_iptables_traffic()
 			{
 				$vpss[$vps] = $vnets[$macs[$mac]];
 				$vpss[$vps]['ip'] = $ip;
-				$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
-				$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
-				if ($in_new > 0 || $out_new > 0)
+				if (isset($last))
 				{
-					$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
+					$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
+					$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
+					if ($in_new > 0 || $out_new > 0)
+					{
+						$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
+					}
 				}
 			}
 		}
@@ -144,7 +147,7 @@ Gives us an array like this:
 }
 
 $url = 'https://myvps2.interserver.net/vps_queue.php';
-$totals = get_vps_iptables_traffic($ips);
+$totals = get_vps_iptables_traffic();
 if (sizeof($totals) > 0)
 {
 	//print_r($totals);
