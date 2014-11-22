@@ -106,10 +106,15 @@ function get_vps_iptables_traffic($ips)
 				{
 					$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
 					$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
-					if ($in_new > 0 || $out_new > 0)
-					{
-						$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
-					}
+				}
+				else
+				{
+					$in_new = $vpss[$vps]['in'];
+					$out_new = $vpss[$vps]['out'];
+				} 
+				if ($in_new > 0 || $out_new > 0)
+				{
+					$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
 				}
 			}
 		}
