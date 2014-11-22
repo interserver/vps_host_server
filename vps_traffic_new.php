@@ -89,38 +89,47 @@ function get_vps_iptables_traffic($ips)
 {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
-	foreach ($ips as $ip => $id)
-	{
-		if ($vzctl == '')
-		{
-$vnetcounters = explode("\n", trim(`grep vnet /proc/net/dev | awk '{ print $1 $2 " " $10}' | tr : " "`));
-$vnetmacs = explode("\n", trim(`grep -i fe /sys/devices/virtual/net/vnet*/address | sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g`));
-$macvps = explode("\n", trim(`if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g`));
-			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; ebtables -L --Lc --Lx | grep " $ip -j CONTINUE -c " |  sed s#"ebtables -t filter -A FORWARD -p IPv4 --ip-... $ip -j CONTINUE -c "#""#g | cut -d" " -f2`));
-		}
-		else
-		{
-			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
-		}
-		if (sizeof($lines) == 2)
-		{
-			list($in,$out) = $lines;
-			//echo "$ip $in $out\n";
-			$total = $in + $out;
-//			$total = intval(trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP | grep " $ip " | tr -s [:blank:] |cut -d' ' -f3| awk '{sum+=$1} END {print sum;}'`));
-			if ($total > 0)
-			{
-				$totals[$ip] = array('in' => $in, 'out' => $out);
-			}
-			//echo "$ip = " . $totals[$ip] . "\n";
-		}
-	}
 	if ($vzctl == '')
 	{
-		`PATH="\$PATH:/sbin:/usr/sbin"  ebtables -Z`;
+		$vnetcounters = explode("\n", trim(`grep vnet /proc/net/dev | awk '{ print $1 $2 " " $10}' | tr : " "`));
+		$vnets = array();
+		foreach ($vnetcounters as $line)
+		{
+			list($vnet, $in, $out) = explode(' ', $line);
+			$vnets[$vnet] = array('in' => $in, 'out' => $out);
+		}
+		$vnetmacs = explode("\n", trim(`grep -i fe /sys/devices/virtual/net/vnet*/address | sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g`));
+		$macs = array();
+		foreach ($vnetmacs as $line)
+		{
+			list($vnet, $mac) = explode(' ', $line);
+			$vnets[$vnet]['mac'] = $mac;
+			$macs[$mac] = $vnet;
+		}
+		$macvps = explode("\n", trim(`if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g`));
+		$totals = array();
+		foreach ($macvps as $line)
+		{
+			list($mac, $vps, $ip) = explode(' ', $line);
+			$totals[$vps] = $vnets[$macs[$mac]];
+			$totals[$vps]['ip'] = $ip;
+		}
 	}
 	else
 	{
+		foreach ($ips as $ip => $id)
+		{
+			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
+			if (sizeof($lines) == 2)
+			{
+				list($in,$out) = $lines;
+				$total = $in + $out;
+				if ($total > 0)
+				{
+					$totals[$ip] = array('in' => $in, 'out' => $out);
+				}
+			}
+		}
 		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
 	}
 	vps_iptables_traffic_rules($ips);
