@@ -96,24 +96,38 @@ function get_vps_iptables_traffic($ips)
 		foreach ($vnetcounters as $line)
 		{
 			list($vnet, $in, $out) = explode(' ', $line);
+			//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
 			$vnets[$vnet] = array('in' => $in, 'out' => $out);
 		}
-		$vnetmacs = explode("\n", trim(`grep -i fe /sys/devices/virtual/net/vnet*/address | sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g`));
+		$cmd = 'grep -i fe /sys/devices/virtual/net/vnet*/address | sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
+		$vnetmacs = explode("\n", trim(`$cmd`));
 		$macs = array();
 		foreach ($vnetmacs as $line)
 		{
 			list($vnet, $mac) = explode(' ', $line);
+			//echo "Got  VNet:$vnet   Mac:$mac\n";
 			$vnets[$vnet]['mac'] = $mac;
 			$macs[$mac] = $vnet;
 		}
-		$macvps = explode("\n", trim(`if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g`));
+		$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g';
+		$macvps = explode("\n", trim(`$cmd`));
 		$totals = array();
 		foreach ($macvps as $line)
 		{
 			list($mac, $vps, $ip) = explode(' ', $line);
-			$totals[$vps] = $vnets[$macs[$mac]];
-			$totals[$vps]['ip'] = $ip;
+			//echo "Got  Mac:$mac   VPS:$vps   IP:$ip\n";
+			if (isset($macs[$mac]) && isset($vnets[$macs[$mac]]))
+			{
+				$totals[$vps] = $vnets[$macs[$mac]];
+				$totals[$vps]['ip'] = $ip;
+			}
 		}
+/*
+Gives us an array like this:
+[windows42488] => Array([in] => 3610790, [out] => 122200856, [mac] => 52:54:00:0a:89:74, [ip] => 162.250.121.126 )
+[windows42498] => Array([in] => 2550889, [out] => 120552888, [mac] => 52:54:00:cc:83:eb, [ip] => 162.250.120.242 )
+[windows42504] => Array([in] => 596300,  [out] => 26122451,  [mac] => 52:54:00:d5:00:7c, [ip] => 162.250.120.243 )
+*/		
 	}
 	else
 	{
