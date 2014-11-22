@@ -63,7 +63,7 @@ function vps_iptables_traffic_rules($ips)
 	`$cmd`;
 }
 
-function get_vps_iptables_traffic()
+function get_vps_iptables_traffic($ips)
 {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
@@ -126,7 +126,6 @@ Gives us an array like this:
 	}
 	else
 	{
-		$ips = get_vps_ipmap();
 		foreach ($ips as $ip => $id)
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
@@ -147,7 +146,8 @@ Gives us an array like this:
 }
 
 $url = 'https://myvps2.interserver.net/vps_queue.php';
-$totals = get_vps_iptables_traffic();
+$ips = get_vps_ipmap();
+$totals = get_vps_iptables_traffic($ips);
 if (sizeof($totals) > 0)
 {
 	//print_r($totals);
