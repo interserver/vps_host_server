@@ -36,7 +36,7 @@ if ($out != '')
 	echo "Running Command: $cmd\n";
 	echo `$cmd`;
 }
-$cmd = dirname(__FILE__) . '/vps_traffic.php;';
+$cmd = dirname(__FILE__) . '/vps_traffic_new.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 $cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getslicemap '$url' 2>/dev/null;";
