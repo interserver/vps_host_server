@@ -56,7 +56,7 @@ use strict;
 {
 package utils;
 
-my @EXPORT = qw(which $sudo);
+my @EXPORT = qw(which find_sudo);
 my @EXPORT_OK = @EXPORT;
 
 # registered plugins
@@ -83,7 +83,21 @@ sub which {
 	return undef;
 }
 
-our $sudo = which('sudo');
+sub find_sudo() {
+	my @sudo;
+	my $sudo = which('sudo') or die "Can't find sudo";
+	push(@sudo, $sudo);
+
+	# detect if sudo supports -A, issue #88
+	open(my $fh , '-|', $sudo, '-h') or die "Can't run 'sudo -h': $!";
+	local $/ = undef;
+	local $_ = <$fh>;
+	close($fh) or die $!;
+	push(@sudo, '-A') if /-A/;
+
+	return \@sudo;
+}
+
 } # package utils
 
 {
@@ -138,7 +152,7 @@ sub new {
 	my $self = {
 		program_names => [ $class->program_names ],
 		commands => $class->commands,
-		sudo => $class->sudo ? $utils::sudo : '',
+		sudo => $class->sudo ? utils::find_sudo() : '',
 		@_,
 		name => $class,
 		status => undef,
@@ -382,7 +396,7 @@ sub cmd {
 	my @CMD = $this->{program};
 
 	# add sudo if program needs
-	unshift(@CMD, $this->{sudo}, '-A') if $> and $this->{sudo};
+	unshift(@CMD, @{$this->{sudo}}) if $> and $this->{sudo};
 
 	my $args = $this->{commands}{$command} or croak "command '$command' not defined";
 
@@ -1179,7 +1193,7 @@ sub check {
 
 	my %dstatus;
 	foreach my $dev (@{$c->{physical}}) {
-		if ($dev->{state} eq 'Online' || $dev->{state} eq 'Hotspare' || $dev->{state} eq 'Unconfigured(good)') {
+		if ($dev->{state} eq 'Online' || $dev->{state} eq 'Hotspare' || $dev->{state} eq 'Unconfigured(good)' || $dev->{state} eq 'JBOD' ) {
 			push(@{$dstatus{$dev->{state}}}, sprintf "%02d", $dev->{dev});
 
 		} else {
@@ -2269,10 +2283,12 @@ sub check {
 	}
 
 	# process each controller
-	while (my($cid, $c) = each %$c) {
+	for my $cid (sort keys %$c) {
+		my $c = $c->{$cid};
 		my @cstatus;
 
-		while (my($uid, $u) = each %{$c->{unitstatus}}) {
+		for my $uid (sort keys %{$c->{unitstatus}}) {
+			my $u = $c->{unitstatus}->{$uid};
 			my $s = $u->{status};
 
 			if ($s =~ /INITIALIZING|MIGRATING/) {
@@ -2280,11 +2296,11 @@ sub check {
 				$s .= " $u->{vim_percent}";
 
 			} elsif ($s eq 'VERIFYING') {
-				$this->resync;
+				$this->check_status;
 				$s .= " $u->{vim_percent}";
 
 			} elsif ($s eq 'REBUILDING') {
-				$this->warning;
+				$this->resync;
 				$s .= " $u->{rebuild_percent}";
 
 			} elsif ($s eq 'DEGRADED') {
@@ -2310,7 +2326,11 @@ sub check {
 		foreach my $p (sort { $a cmp $b } keys %{$c->{drivestatus}}) {
 			my $d = $c->{drivestatus}->{$p};
 			my $ds = $d->{status};
-			$this->critical unless $ds eq 'OK';
+			if ($ds eq 'VERIFYING') {
+				$this->check_status;
+			} elsif ($ds ne 'OK') {
+				$this->critical;
+			}
 
 			if ($d->{unit} eq '-') {
 				$ds = 'SPARE';
@@ -2367,6 +2387,7 @@ sub sudo {
 
 sub parse_error {
 	my ($this, $message) = @_;
+	warn "arcconf: parse error: $message";
 	$this->unknown->message("Parse Error: $message");
 }
 
@@ -2624,16 +2645,16 @@ sub parse_config {
 					$pd[$ch][$pd]{ncq} = $ncq;
 				} elsif (my($pfa) = /PFA\s+:\s+(.+)/) {
 					$pd[$ch][$pd]{pfa} = $pfa;
-				} elsif (my($e) = /Enclosure ID\s+:\s+(.+)/) {
-					$pd[$ch][$pd]{enclosure} = $e;
+				} elsif (my($eid) = /Enclosure ID\s+:\s+(.+)/) {
+					$pd[$ch][$pd]{enclosure} = $eid;
 				} elsif (my($t) = /Type\s+:\s+(.+)/) {
 					$pd[$ch][$pd]{type} = $t;
 				} elsif (my($smart) = /S\.M\.A\.R\.T\.(?:\s+warnings)?\s+:\s+(.+)/) {
 					$pd[$ch][$pd]{smart} = $smart;
 				} elsif (my($speed) = /Transfer Speed\s+:\s+(.+)/) {
 					$pd[$ch][$pd]{speed} = $speed;
-				} elsif (my($l) = /Reported Location\s+:\s+(.+)/) {
-					$pd[$ch][$pd]{location} = $l;
+				} elsif (my($e, $s) = /Reported Location\s+:\s+(?:Enclosure|Connector) (\d+), (?:Slot|Device) (\d+)/) {
+					$pd[$ch][$pd]{location} = "$e:$s";
 				} elsif (my($sps) = /Supported Power States\s+:\s+(.+)/) {
 					$pd[$ch][$pd]{power_states} = $sps;
 				} elsif (my($cd) = /Reported Channel,Device(?:\(.+\))?\s+:\s+(.+)/) {
@@ -2813,7 +2834,7 @@ sub check {
 		for my $pd (@{$ch}) {
 			# skip not disks
 			next if not defined $pd;
-			next if $pd->{devtype} =~ 'Enclosure';
+			next if $pd->{devtype} =~ m/Enclosure/;
 
 			if ($pd->{status} eq 'Rebuilding') {
 				$this->resync;
@@ -2823,11 +2844,11 @@ sub check {
 				$this->spare;
 				$pd->{status} = "$pd->{status} for $pd->{spare}";
 
-			} elsif ($pd->{status} !~ '^Online|Hot[- ]Spare') {
+			} elsif ($pd->{status} !~ /^Online|Hot[- ]Spare|Ready/) {
 				$this->critical;
 			}
 
-			my $id = $pd->{serial} || $pd->{wwn};
+			my $id = $pd->{serial} || $pd->{wwn} || $pd->{location};
 			push(@{$pd{$pd->{status}}}, $id);
 		}
 	}
@@ -4401,7 +4422,7 @@ use Getopt::Long;
 
 my ($opt_V, $opt_d, $opt_h, $opt_W, $opt_S, $opt_p, $opt_l);
 my (%ERRORS) = (OK => 0, WARNING => 1, CRITICAL => 2, UNKNOWN => 3);
-my ($VERSION) = "3.2.1";
+my ($VERSION) = "3.2.2";
 my ($message, $status, $perfdata, $longoutput);
 my ($noraid_state) = $ERRORS{UNKNOWN};
 
