@@ -73,7 +73,7 @@ function get_vps_iptables_traffic($ips)
 		{
 			$last = unserialize(file_get_contents('/root/.traffic.last'));
 		}
-		$vnetcounters = explode("\n", trim(`grep vnet /proc/net/dev | awk '{ print $1 $2 " " $10}' | tr : " "`));
+		$vnetcounters = explode("\n", trim(`grep vnet /proc/net/dev | awk '{ print $1 " " $10}' | tr : " "`));
 		$vnets = array();
 		foreach ($vnetcounters as $line)
 		{
