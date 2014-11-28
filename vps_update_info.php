@@ -88,6 +88,9 @@ done
     if [ "$(which make 2>/dev/null)" = "" ]; then 
       yum install -y make;
     fi;
+	if [ ! -e /usr/include/asm/unistd.h ]; then
+      yum install -y kernel-headers;
+    fi;
     wget http://mirror.trouble-free.net/tf/SRPMS/ioping-0.9-1.el6.src.rpm -O ioping-0.9-1.el6.src.rpm; 
     export spec="/$(rpm --install ioping-0.9-1.el6.src.rpm --nomd5 -vv 2>&1|grep spec | cut -d\; -f1 | cut -d/ -f2-)"; 
     rpm --upgrade $(rpmbuild -ba $spec |grep "Wrote:.*ioping-0.9" | cut -d" " -f2); 
