@@ -99,7 +99,7 @@ done
 fi;';
 		`$cmd`;
 		$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
-  iodev="/$(pvdisplay  |grep "PV Name" | cut -d/ -f2-)"; 
+  iodev="/$(pvdisplay  |grep "PV Name" | cut -d/ -f2- | tail -n 1)"; 
 else 
   iodev=/vz; 
 fi; 
@@ -113,7 +113,7 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f6;';
 		{
 			if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
 			{
-				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c`));
+				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c | tail -n 1`));
 				$pesize = $parts[7];
 				$totalpe = $parts[8];
 				$freepe = $parts[9];
