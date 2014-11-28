@@ -74,6 +74,14 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 				$servers[$veid] = $server;
 			}
 		}
+		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
+		{
+			foreach ($cpu_usage as $id => $cpu_data)
+			{
+				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
+				$servers[$id]['cpu_usage'] = $cpu_data;
+			}
+		}
 		$curl_cmd = '$(for i in shot_*jpg; do p=$(echo $i | cut -c5-9); echo -n " -F shot$p=@$i"; done;)';
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
 		//echo "CMD:$cmd\n";
