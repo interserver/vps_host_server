@@ -29,11 +29,6 @@ fi;
 IFS="
 ";
 cpu_files="$(echo /proc/vz/fairsched/*/cpu.proc.stat)";
-if [ "$cpu_files" = '/proc/vz/fairsched/*/cpu.proc.stat' ]; then
-	echo "Error, /proc/vz/fairsched/*/cpu.proc.stat entries do not exist!";
-	echo "Most likely cause is, this is either not an OpenVZ server, or";
-	echo "not booted into the proper kernel."
-else
 	if [ -e ~/.cpu_usage.last.sh ]; then
 		source ~/.cpu_usage.last.sh;
 	elif [ ${BASH_VERSION:0:1} -ge 4 ]; then
@@ -54,7 +49,11 @@ else
 		output="";
 		vzcount=0;
 	fi;
-	for i in $(grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'); do
+	for i in $(if [ -e /proc/vz ]; then
+			grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'; 
+		else 
+			grep "^cpu" /proc/stat | awk '{ print 0 " " $1 " " $2 " " $3 " " $4 " " $5 " " $6 " " $7 " " $8 " " $9 }'; 
+		fi); do
 		vzid="$(echo "$i" | awk '{ print $1 }')";
 		cpu="$(echo "$i" | awk '{ print $2 }')";
 		total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' | bc -l)";
@@ -184,4 +183,3 @@ else
 		idlestring="${idlestring});\nexport cpuidles;\n";
 	fi;
 	echo -e "#!/bin/bash\n${totalstring}${idlestring}" > ~/.cpu_usage.last.sh;
-fi;
