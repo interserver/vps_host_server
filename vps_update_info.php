@@ -28,6 +28,7 @@
 		$servers['raid_building'] = (trim(`grep -v idle /sys/block/md*/md/sync_action 2>/dev/null`) == '' ? 0 : 1);
 		$servers['kernel'] = trim(`uname -r`);
 		$servers['load'] = trim(`cat /proc/loadavg | cut -d" " -f1`);
+		
 		if (file_exists('/dev/bcache0') && $servers['load'] >= 2.00)
 		{
 			$servers['load'] -= 2.00;
@@ -76,6 +77,25 @@ done
 		{
 			$servers['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 		}
+		$cmd = 'if [ "$(which ioping)" = "" ]; then 
+  if [ -e /usr/bin/apt-get ]; then 
+    apt-get update; 
+    apt-get install -y ioping; 
+  else 
+    wget http://mirror.trouble-free.net/tf/SRPMS/ioping-0.9-1.el6.src.rpm -O ioping-0.9-1.el6.src.rpm; 
+    export spec="/$(rpm --install ioping-0.9-1.el6.src.rpm --nomd5 -vv 2>&1|grep spec | cut -d\; -f1 | cut -d/ -f2-)"; 
+    rpm --upgrade $(rpmbuild -ba $spec |grep "Wrote:.*ioping-0.9" | cut -d" " -f2); 
+    rm -f ioping-0.9-1.el6.src.rpm; 
+  fi; 
+fi;';
+		`$cmd`;
+		$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
+  iodev="/$(pvdisplay  |grep "PV Name" | cut -d/ -f2-)"; 
+else 
+  iodev=/vz; 
+fi; 
+ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f6;';
+		$servers['ioping'] = trim(`$cmd`);
 		if (file_exists('/usr/sbin/vzctl'))
 		{
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
