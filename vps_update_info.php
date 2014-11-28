@@ -77,7 +77,7 @@ done
 		{
 			$servers['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 		}
-		$cmd = 'if [ "$(which ioping)" = "" ]; then 
+		$cmd = 'if [ "$(which ioping 2>/dev/null)" = "" ]; then 
   if [ -e /usr/bin/apt-get ]; then 
     apt-get update; 
     apt-get install -y ioping; 
