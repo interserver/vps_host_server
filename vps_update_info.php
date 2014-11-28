@@ -81,7 +81,13 @@ done
   if [ -e /usr/bin/apt-get ]; then 
     apt-get update; 
     apt-get install -y ioping; 
-  else 
+  else
+    if [ "$(which rpmbuild 2>/dev/null)" = "" ]; then 
+      yum install -y rpm-build; 
+    fi;
+    if [ "$(which make 2>/dev/null)" = "" ]; then 
+      yum install -y make;
+    fi;
     wget http://mirror.trouble-free.net/tf/SRPMS/ioping-0.9-1.el6.src.rpm -O ioping-0.9-1.el6.src.rpm; 
     export spec="/$(rpm --install ioping-0.9-1.el6.src.rpm --nomd5 -vv 2>&1|grep spec | cut -d\; -f1 | cut -d/ -f2-)"; 
     rpm --upgrade $(rpmbuild -ba $spec |grep "Wrote:.*ioping-0.9" | cut -d" " -f2); 
