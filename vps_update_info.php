@@ -103,7 +103,7 @@ fi;';
 else 
   iodev=/vz; 
 fi; 
-ioping -B -R ${iodev} | cut -d" " -f6;';
+ioping -B -R ${iodev} | cut -d" " -f4;';
 //ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f6;';
 		$servers['ioping'] = trim(`$cmd`);
 		if (file_exists('/usr/sbin/vzctl'))
