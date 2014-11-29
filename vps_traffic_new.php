@@ -84,7 +84,7 @@ function get_vps_iptables_traffic($ips)
 				//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
 				$vnets[$vnet] = array('in' => $in, 'out' => $out);
 			}
-			$cmd = 'grep -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
+			$cmd = 'grep -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed -e s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g -e s#"^fe:\(.*\)$"#"52:\1"#g';
 			$vnetmacs = trim(`$cmd`);
 			if ($vnetmacs != '')
 			{
