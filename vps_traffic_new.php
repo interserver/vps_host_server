@@ -73,57 +73,61 @@ function get_vps_iptables_traffic($ips)
 		{
 			$last = unserialize(file_get_contents('/root/.traffic.last'));
 		}
-		$vnetcounters = explode("\n", trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`));
-		$vnets = array();
-		foreach ($vnetcounters as $line)
+		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
+		if ($vnetcounters != '')
 		{
-			list($vnet, $in, $out) = explode(' ', $line);
-			//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
-			$vnets[$vnet] = array('in' => $in, 'out' => $out);
-		}
-		$cmd = 'grep -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
-		$vnetmacs = trim(`$cmd`);
-		if ($vnetmacs != '')
-		{
-			$vnetmacs = explode("\n", $vnetmacs);
-			$macs = array();
-			foreach ($vnetmacs as $line)
+			$vnetcounters = explode("\n", $vnetcounters);
+			$vnets = array();
+			foreach ($vnetcounters as $line)
 			{
-				list($vnet, $mac) = explode(' ', $line);
-				//echo "Got  VNet:$vnet   Mac:$mac\n";
-				$vnets[$vnet]['mac'] = $mac;
-				$macs[$mac] = $vnet;
+				list($vnet, $in, $out) = explode(' ', $line);
+				//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
+				$vnets[$vnet] = array('in' => $in, 'out' => $out);
 			}
-			$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g';
-			$macvps = explode("\n", trim(`$cmd`));
-			$vpss = array();
-			foreach ($macvps as $line)
+			$cmd = 'grep -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
+			$vnetmacs = trim(`$cmd`);
+			if ($vnetmacs != '')
 			{
-				list($mac, $vps, $ip) = explode(' ', $line);
-				//echo "Got  Mac:$mac   VPS:$vps   IP:$ip\n";
-				if (isset($macs[$mac]) && isset($vnets[$macs[$mac]]))
+				$vnetmacs = explode("\n", $vnetmacs);
+				$macs = array();
+				foreach ($vnetmacs as $line)
 				{
-					$vpss[$vps] = $vnets[$macs[$mac]];
-					$vpss[$vps]['ip'] = $ip;
-					if (isset($last))
+					list($vnet, $mac) = explode(' ', $line);
+					//echo "Got  VNet:$vnet   Mac:$mac\n";
+					$vnets[$vnet]['mac'] = $mac;
+					$macs[$mac] = $vnet;
+				}
+				$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g';
+				$macvps = explode("\n", trim(`$cmd`));
+				$vpss = array();
+				foreach ($macvps as $line)
+				{
+					list($mac, $vps, $ip) = explode(' ', $line);
+					//echo "Got  Mac:$mac   VPS:$vps   IP:$ip\n";
+					if (isset($macs[$mac]) && isset($vnets[$macs[$mac]]))
 					{
-						$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
-						$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
-					}
-					else
-					{
-						$in_new = $vpss[$vps]['in'];
-						$out_new = $vpss[$vps]['out'];
-					} 
-					if ($in_new > 0 || $out_new > 0)
-					{
-						$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
+						$vpss[$vps] = $vnets[$macs[$mac]];
+						$vpss[$vps]['ip'] = $ip;
+						if (isset($last))
+						{
+							$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
+							$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
+						}
+						else
+						{
+							$in_new = $vpss[$vps]['in'];
+							$out_new = $vpss[$vps]['out'];
+						} 
+						if ($in_new > 0 || $out_new > 0)
+						{
+							$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
+						}
 					}
 				}
-			}
-			if (sizeof($totals) > 0)
-			{
-				file_put_contents('/root/.traffic.last', serialize($vpss));
+				if (sizeof($totals) > 0)
+				{
+					file_put_contents('/root/.traffic.last', serialize($vpss));
+				}
 			}
 		}
 	}
