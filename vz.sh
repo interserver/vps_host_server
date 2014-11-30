@@ -18,7 +18,7 @@ echo
 
 echo -n 'Raid Status:  '
 if [ -e /root/cpaneldirect/nagios-plugin-check_raid/check_raid.pl ]; then
-        /root/cpaneldirect/nagios-plugin-check_raid/check_raid.pl
+        /root/cpaneldirect/nagios-plugin-check_raid/check_raid.pl --check=WARNING
 else
         cat /proc/mdstat
 fi
