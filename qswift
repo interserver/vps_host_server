@@ -87,14 +87,15 @@ if [ -x /opt/curl/bin/curl ]; then
 	curl="/opt/curl/bin/curl";
 fi
 
-
 if [ -x "/root/cpaneldirect/pigz" ]; then
-	arch=`uname -m`;
-	if [ "$arch" = "x86_64" ]; then
-		#echo "Using new split and pigz";
-		splitprog="/root/cpaneldirect/split";
-		gzip="/root/cpaneldirect/pigz";
-	fi
+        arch=`uname -m`;
+        if [ "$arch" = "x86_64" ]; then
+                #echo "Using new split and pigz";
+                splitprog="/root/cpaneldirect/split";
+  if [ ! -e /admin/.info/nopigz ]; then
+                 gzip="/root/cpaneldirect/pigz";
+  fi
+        fi
 fi
 
 #ignore ssl  (curl -k)
