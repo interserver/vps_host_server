@@ -45,7 +45,11 @@ fi
 #check libvirtd is running
 if [ -e /etc/redhat-release ]; then
 	service='libvirtd';
-	check=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
+	if [ -e /usr/bin/systemctl ]; then
+		check=`ps auxw | grep "libvirtd" | grep -v grep`;
+	else
+		check=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
+	fi
 else
 	check=`ps auxw | grep "libvirtd -d" | grep -v grep`;
 	service='libvirt-bin';
@@ -55,7 +59,11 @@ if [ "$check" = "" ]; then
         echo "#Libvirtd is not running";
 
         sleep 1s;
-	service $service restart
+	if [ -e /usr/bin/systemctl ]; then
+		 systemctl restart libvirtd.service	
+	else
+		service $service restart
+	fi
 
         check2=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
         if [ "$check" = "" ]; then
@@ -130,7 +138,11 @@ if [ "$gateway" = "" ]; then
 	fi
 fi
 
-br=`ifconfig br0 | grep "inet addr" | cut -d: -f2 | awk '{print $1}'`;
+if [ -e /usr/bin/systemctl ]; then
+	br=`ifconfig br0 | grep "inet" | grep -v inet6 | cut -d: -f2 | awk '{print $2}'`;
+else
+	br=`ifconfig br0 | grep "inet addr" | cut -d: -f2 | awk '{print $1}'`;
+fi
 
 if [ "$DEBUG" = "1" ]; then
 	echo "Found br0 on $br and gateway $gateway on eth $eth"
@@ -157,10 +169,6 @@ if [ -e /limitpacket ]; then
 	echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
 fi
 echo "1" > /proc/sys/net/ipv4/ip_forward
-beta pps
-echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
-iptables -X LOGGING
-
 /sbin/iptables -P INPUT ACCEPT
 /sbin/iptables -P OUTPUT ACCEPT
 /sbin/iptables -P FORWARD ACCEPT
@@ -356,15 +364,15 @@ if [ ! "$debug" = "1" ]; then
 	# Block SMTP
 	###
 	# additional for SMTP disable
-	if [ -e /scripts/_tmp/smtp/ ]; then
-		cd /scripts/_tmp/smtp
-		for i in `ls`; do
-			if [ ! "$i" = "" ]; then
-				echo '# smtp blocks';
-				echo "/admin/kvmenable blocksmtp $i"
-			fi
-		done
-	fi
+	#if [ -e /scripts/_tmp/smtp/ ]; then
+	#	cd /scripts/_tmp/smtp
+	#	for i in `ls`; do
+	#		if [ ! "$i" = "" ]; then
+	#			echo '# smtp blocks';
+	#			echo "/admin/kvmenable blocksmtp $i"
+	#		fi
+	#	done
+	#fi
 
 	###
 	# Block IPs
@@ -404,3 +412,6 @@ if [ -e /limitpacket ]; then
         echo "iptables -A LOGGING -j DROP"
 fi
 
+if [ -e /etc/debian_version ]; then
+	echo "/scripts/securexinetd";
+fi
