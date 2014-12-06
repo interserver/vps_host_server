@@ -17,6 +17,10 @@ else
  sed s#"port.*=.*"#"port                    = $port"#g > /etc/xinetd.d/$name
  rm -f /etc/xinetd.d/${name}.backup
  echo "VNC Server $myip Port $port For VPS $name Opened To Previous IP"
- /etc/init.d/xinetd reload >/dev/null 2>&1
+ if [ -e /etc/init.d/xinetd ]; then
+  /etc/init.d/xinetd reload >/dev/null 2>&1
+ else
+  service dhcpd reload >/dev/null 2>&1
+ fi;
 fi
 

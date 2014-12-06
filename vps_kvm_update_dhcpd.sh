@@ -17,6 +17,8 @@ for user in $(/usr/bin/virsh list | grep running | awk '{print $2}'); do
 done
  if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
   /etc/init.d/isc-dhcp-server restart
- else
+ elif [ -e /etc/init.d/dhcpd ]; then
   /etc/init.d/dhcpd restart
+ else
+  service dhcpd restart
  fi

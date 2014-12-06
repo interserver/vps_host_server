@@ -343,8 +343,10 @@ q
 	 rm -f ${DHCPVPS}.backup;
 	 if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
 	  /etc/init.d/isc-dhcp-server restart
-	 else
+	 elif [ -e /etc/init.d/dhcpd ]; then
 	  /etc/init.d/dhcpd restart
+     else
+      service dhcpd restart;
 	 fi
 	 curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
 	 /usr/bin/virsh start ${name};
