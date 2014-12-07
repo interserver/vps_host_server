@@ -20,7 +20,7 @@ else
  if [ -e /etc/init.d/xinetd ]; then
   /etc/init.d/xinetd reload >/dev/null 2>&1
  else
-  service dhcpd reload >/dev/null 2>&1
+  service xinetd reload >/dev/null 2>&1
  fi;
 fi
 

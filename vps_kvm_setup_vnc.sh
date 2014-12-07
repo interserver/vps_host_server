@@ -19,6 +19,10 @@ else
  sed s#"IP"#"$ip"#g | \
  sed s#"PORT"#"$port"#g > /etc/xinetd.d/$name
  echo "VNC Server $myip Port $port For VPS $name Opened To IP $ip"
- /etc/init.d/xinetd reload >/dev/null 2>&1
+ if [ -e /etc/init.d/xinetd ]; then
+  /etc/init.d/xinetd reload >/dev/null 2>&1
+ else
+  service xinetd reload >/dev/null 2>&1
+ fi;
 fi
 
