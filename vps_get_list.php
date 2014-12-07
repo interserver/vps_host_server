@@ -256,7 +256,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	}
 	if (file_exists('/etc/redhat-release'))
 	{
-		preg_match('/^(?P<distro>[\w]+) release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release'), $matches);
+		preg_match('/^(?P<distro>[\w]+)( Linux)? release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release'), $matches);
 	}
 	else
 	{
