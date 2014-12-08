@@ -86,7 +86,8 @@ for i in $destids; do
 	  /bin/rm -rf /${image}/* 2>/dev/null
 	  #if [ $# -gt 1 ]; then
 		#tar xzf /${image}.tar.gz
-		zcat -c /${image}.tar.gz |tar --ignore-failed-read --atime-preserve --preserve-permissions -x -f - 2>/dev/null
+        #zcat -c /${image}.tar.gz |tar --ignore-failed-read --atime-preserve --preserve-permissions -x -f - 2>/dev/null || export error=1
+        tar --ignore-failed-read --atime-preserve --preserve-permissions -x -z -f /${image}.tar.gz 2>/dev/null || export error=1
 	  #else
 		#/root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzf -
 	  #fi
@@ -126,7 +127,7 @@ done
 curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 #set -x
 if which virsh >/dev/null 2>&1; then
-  for i in $(ls /dev/mapper/*p[0-9] | sed s#"/dev/mapper/vz-"#""#g | sed s#"/dev/mapper/"#""#g | sed s#"p[0-9]$"#""#g); do
+  for i in $(ls /dev/mapper/*p[0-9] 2>/dev/null | sed s#"/dev/mapper/vz-"#""#g | sed s#"/dev/mapper/"#""#g | sed s#"p[0-9]$"#""#g); do
    kpartx $kpartxopts -dv /dev/vz/$i
   done
   /bin/rm -rf /${image}
