@@ -53,10 +53,10 @@ for i in $destids; do
 	  echo "Invalid VPS $i"
 	else
 	  echo "working on $i";
-	  virsh destroy $i
-      success=0;
+	  virsh destroy $i 2>/dev/null
+      success=0
 	  if which guestmount >/dev/null 2>/dev/null; then
-	   guestmount -d $i -i --rw /${image} && success=1;
+	   guestmount -d $i -i --rw /${image} 2>/dev/null && success=1;
       fi;
       if [ $success -eq 0 ]; then
 	   kpartx $kpartxopts -av /dev/vz/$i
