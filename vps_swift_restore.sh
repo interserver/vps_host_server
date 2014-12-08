@@ -54,9 +54,11 @@ for i in $destids; do
 	else
 	  echo "working on $i";
 	  virsh destroy $i
+      success=0;
 	  if which guestmount >/dev/null 2>/dev/null; then
-	   guestmount -d $i -i --rw /${image}
-	  else
+	   guestmount -d $i -i --rw /${image} && success=1;
+      fi;
+      if [ $success -eq 0 ]; then
 	   kpartx $kpartxopts -av /dev/vz/$i
 	   if [ -e /dev/mapper/${i}p1 ]; then
 		mapdir=$i
@@ -64,20 +66,20 @@ for i in $destids; do
 		mapdir=vz-$i
 	   fi
 	   if [ -e /dev/mapper/${mapdir}p6 ]; then
-		 fsck -T -p /dev/mapper/${mapdir}p6 || ntfsfix /dev/mapper/${mapdir}p6
+		 fsck -T -p /dev/mapper/${mapdir}p6 2>/dev/null || ntfsfix /dev/mapper/${mapdir}p6
 		 mount -o rw /dev/mapper/${mapdir}p6 /${image} || exit
-		 fsck -T -p /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p1 2>/dev/null || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	   elif [ -e /dev/mapper/${mapdir}p3 ]; then
-		 fsck -T -p /dev/mapper/${mapdir}p3 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p3 2>/dev/null || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p3 /${image} || exit
-		 fsck -T -p /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p1 2>/dev/null || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p1 /${image}/boot || exit
 	   elif [ -e /dev/mapper/${mapdir}p2 ]; then
-		 fsck -T -p /dev/mapper/${mapdir}p2 || ntfsfix /dev/mapper/${mapdir}p2
+		 fsck -T -p /dev/mapper/${mapdir}p2 2>/dev/null || ntfsfix /dev/mapper/${mapdir}p2
 		 mount -o rw /dev/mapper/${mapdir}p2 /${image} || exit
 	   else
-		 fsck -T -p /dev/mapper/${mapdir}p1 || ntfsfix /dev/mapper/${mapdir}p1
+		 fsck -T -p /dev/mapper/${mapdir}p1 2>/dev/null || ntfsfix /dev/mapper/${mapdir}p1
 		 mount -o rw /dev/mapper/${mapdir}p1 /${image} || exit
 	   fi
 	  fi
@@ -91,7 +93,7 @@ for i in $destids; do
 	  sync
 	  sleep 5s;
 	  if which guestunmount >/dev/null 2>/dev/null; then
-	   guestunmount /${image} || fusermount -u /${image}
+	   guestunmount /${image} 2>/dev/null || fusermount -u /${image}
 	  elif which guestmount >/dev/null 2>/dev/null; then 
 	   fusermount -u /${image}
 	  else
