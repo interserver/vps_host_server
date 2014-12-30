@@ -12,6 +12,9 @@ elif ! virsh dominfo $name >/dev/null 2>&1; then
  echo "Invalid VPS $name";
 else
  port="$(virsh dumpxml $name | grep vnc |grep port= | cut -d\' -f4)"
+ if [ "$port" = "" ]; then
+  port="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
+ fi
  mv -f /etc/xinetd.d/${name} /etc/xinetd.d/${name}.backup
  cat /etc/xinetd.d/${name}.backup  | \
  sed s#"port.*=.*"#"port                    = $port"#g > /etc/xinetd.d/$name

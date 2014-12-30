@@ -13,6 +13,9 @@ elif ! virsh dominfo $name >/dev/null 2>&1; then
  echo "Invalid VPS $name";
 else
  port="$(virsh dumpxml $name | grep vnc |grep port= | cut -d\' -f4)"
+ if [ "$port" = "" ]; then
+  port="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
+ fi
  cat /root/cpaneldirect/vps_kvm_xinetd.template | \
  sed s#"NAME"#"$name"#g | \
  sed s#"MYIP"#"$myip"#g | \
