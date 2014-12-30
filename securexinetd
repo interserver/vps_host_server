@@ -40,11 +40,10 @@ for i in *; do
 		#echo $i
 		detainthinks=`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`;
 		virshknows=`virsh dumpxml $i | grep vnc | grep port | cut -d\' -f4`;
-		if [ "$virshknows" = "" ]; then
-			virshknows="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
-		fi
-
+		virshknows2="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
 		if [ "$detainthinks" = "$virshknows" ]; then
+			echo "$i is good"
+		elif [ "$detainthinks" = "$virshknows" ]; then
 			echo "$i is good"
 		else
 			echo "$i is incorrect, fixing"

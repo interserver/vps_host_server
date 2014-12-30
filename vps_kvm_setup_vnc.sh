@@ -13,15 +13,27 @@ elif ! virsh dominfo $name >/dev/null 2>&1; then
  echo "Invalid VPS $name";
 else
  port="$(virsh dumpxml $name | grep vnc |grep port= | cut -d\' -f4)"
- if [ "$port" = "" ]; then
-  port="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
+ if [ "$port" != "" ]; then
+  cat /root/cpaneldirect/vps_kvm_xinetd.template | \
+  sed s#"NAME"#"$name"#g | \
+  sed s#"MYIP"#"$myip"#g | \
+  sed s#"IP"#"$ip"#g | \
+  sed s#"PORT"#"$port"#g > /etc/xinetd.d/$name
+  echo "VNC Server $myip Port $port For VPS $name Opened To IP $ip"
+ else
+  echo "no vnc port found for $myip"
  fi
- cat /root/cpaneldirect/vps_kvm_xinetd.template | \
- sed s#"NAME"#"$name"#g | \
- sed s#"MYIP"#"$myip"#g | \
- sed s#"IP"#"$ip"#g | \
- sed s#"PORT"#"$port"#g > /etc/xinetd.d/$name
- echo "VNC Server $myip Port $port For VPS $name Opened To IP $ip"
+ port="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
+ if [ "$port" != "" ]; then
+  cat /root/cpaneldirect/vps_kvm_xinetd.template | \
+  sed s#"NAME"#"$name"#g | \
+  sed s#"MYIP"#"$myip"#g | \
+  sed s#"IP"#"$ip"#g | \
+  sed s#"PORT"#"$port"#g > /etc/xinetd.d/${name}-spice
+  echo "Spice Server $myip Port $port For VPS $name Opened To IP $ip"
+ else
+  echo "no spice port found for $myip, skipping"
+ fi
  if [ -e /etc/init.d/xinetd ]; then
   /etc/init.d/xinetd reload >/dev/null 2>&1
  else

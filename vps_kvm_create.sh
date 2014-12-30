@@ -372,9 +372,6 @@ q
 		if [ "$vnc" == "" ]; then
 			sleep 2s;
 			vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
-			if [ "$vnc" = "" ]; then
-				vnc="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
-			fi
 		fi;
 	 fi;
 	 /root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
