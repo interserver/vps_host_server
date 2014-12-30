@@ -7,7 +7,7 @@ service NAME
         user                    = nobody
         redirect                = 127.0.0.1 PORT
         bind                    = MYIP
-        only_from               = IP 66.45.228.200 66.45.240.196
+        only_from               = IP 66.45.228.200 66.45.240.196 66.45.235.100
         port                    = PORT
         nice                    = 10
 
