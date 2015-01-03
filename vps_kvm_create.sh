@@ -83,6 +83,10 @@ else
    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
   elif [ "$template" = "windows2012" ]; then
    sed s#"rhel5.4.0"#"pc"#g -i ${name}.xml
+  elif [ "$(/usr/libexec/qemu-kvm -machine ? |grep rhel6.6.0)" != "" ]; then
+   sed s#"rhel5.4.0"#"rhel6.6.0"#g -i ${name}.xml
+  elif [ "$(/usr/libexec/qemu-kvm -machine ? |grep rhel6.0.0)" != "" ]; then
+   sed s#"rhel5.4.0"#"rhel6.0.0"#g -i ${name}.xml
   elif [ "$(/usr/libexec/qemu-kvm -machine ? |grep rhel5.4.0)" = "" ]; then
    sed s#"rhel5.4.0"#"pc"#g -i ${name}.xml
 #  else
