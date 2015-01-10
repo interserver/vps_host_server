@@ -76,7 +76,7 @@ done
 		}
 		else
 		{
-			$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c |grep -v -e centos_corp -e backup`));
+			$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c |grep -v -e centos -e backup`));
 			$pesize = $parts[7];
 			$totalpe = $parts[8];
 			$freepe = $parts[9];

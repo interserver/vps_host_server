@@ -14,7 +14,7 @@ fi
 destdev=/dev/vz/$vps
 virsh destroy $vps
 #first we get the free disk space on the KVM in G
-p="$(pvdisplay -c |grep -v -e centos_corp -e backup)"
+p="$(pvdisplay -c |grep -v -e centos -e backup)"
 pesize=$(($(echo "$p" | cut -d: -f8) * 1000))
 totalpe="$(echo "$p" | cut -d: -f9)"
 freepe="$(echo "$p" | cut -d: -f10)"

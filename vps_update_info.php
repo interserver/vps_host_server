@@ -99,7 +99,7 @@ done
 fi;';
 		`$cmd`;
 		$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
-  iodev="/$(pvdisplay -c |grep -v -e centos_corp -e backup |cut -d/ -f2- |cut -d: -f1)";
+  iodev="/$(pvdisplay -c |grep -v -e centos -e backup |cut -d/ -f2- |cut -d: -f1)";
 else 
   iodev=/vz; 
 fi; 
@@ -117,7 +117,7 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 		{
 			if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
 			{
-				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c |grep -v -e centos_corp -e backup`));
+				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c |grep -v -e centos -e backup`));
 				$pesize = $parts[7];
 				$totalpe = $parts[8];
 				$freepe = $parts[9];
