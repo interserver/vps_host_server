@@ -104,9 +104,7 @@ else
   sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
  fi
  rm -f ${name}.xml.backup
- if [ "$template" != "windows2" ]; then
-	sed s#"<source bridge='br0'\/>"#"<model type='virtio'/>\n          <source bridge='br0'/>"#g -i ${name}.xml
- fi
+ sed s#"<source bridge='br0'\/>"#"<model type='virtio'/>\n          <source bridge='br0'/>"#g -i ${name}.xml
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
   template=windows2
