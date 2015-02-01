@@ -8,7 +8,7 @@ while [ $(runcount) -gt 4 ]; do
   echo "Last VPS $vps $(lastvps)"; \
   if [ ! -z "$vps" ]; then
     echo "Saving VPS $vps"; \
-    savevps "$vps"; \
+    /root/cpaneldirect/savevps.sh "$vps"; \
     echo "Finished Saving $vps";
   fi;
 done; \
