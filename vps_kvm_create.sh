@@ -265,24 +265,20 @@ print
 q
 " | fdisk -u /dev/vz/${name}
 		  kpartx $kpartxopts -av /dev/vz/${name}
-		if [ -e "/dev/mapper/vz-${name}p${pn}" ]; then
-		 pname="vz-${name}"
-		else
-		 pname="$name"
-		fi
-		  fsck -T -p -f /dev/mapper/${pname}p${pn}
+		pname="$(ls /dev/mapper/${vz-,}${name}${p,}${pn} 2>/dev/null | cut -d/ -f4 | sed s#"${pn}$"#""#g)"
+		  fsck -T -p -f /dev/mapper/${pname}${pn}
 		  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
 		   resizefs="resize4fs"
 		  else
 		   resizefs="resize2fs"
 		  fi
-		  $resizefs -p /dev/mapper/${pname}p${pn}
-		  mkdir -p /vz/mounts/${name}p${pn}
-		  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
+		  $resizefs -p /dev/mapper/${pname}${pn}
+		  mkdir -p /vz/mounts/${name}${pn}
+		  mount /dev/mapper/${pname}${pn} /vz/mounts/${name}${pn};
 		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
-		  echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd || \
-		  php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}p${pn}"
-		  umount /dev/mapper/${pname}p${pn}
+		  echo "root:${password}" | chroot /vz/mounts/${name}${pn} chpasswd || \
+		  php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}${pn}"
+		  umount /dev/mapper/${pname}${pn}
 		  kpartx $kpartxopts -d /dev/vz/${name}
 		 fi
 
