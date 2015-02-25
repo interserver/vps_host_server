@@ -243,7 +243,7 @@ else
 		 t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
 		 p="$(echo $t | awk '{ print $1 }')"
 		 fs="$(echo $t | awk '{ print $5 }')"
-		 pn="$(echo "$p" | sed s#"/dev/vz/${name}p"#""#g)"
+		 pn="$(echo "$p" | sed s#"/dev/vz/${name}[p]*"#""#g)"
 		 if [ $pn -gt 4 ]; then
 		  pt=l
 		 else
