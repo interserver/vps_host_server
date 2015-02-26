@@ -31,8 +31,8 @@ else
   sed s#"IP"#"$ip"#g | \
   sed s#"PORT"#"$port"#g > /etc/xinetd.d/${name}-spice
   echo "Spice Server $myip Port $port For VPS $name Opened To IP $ip"
- else
-  echo "no spice port found for $myip, skipping"
+ #else
+  #echo "no spice port found for $myip, skipping"
  fi
  if [ -e /etc/init.d/xinetd ]; then
   /etc/init.d/xinetd reload >/dev/null 2>&1
