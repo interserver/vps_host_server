@@ -22,9 +22,6 @@ echo "[" . date('Y-m-d H:i:s') . "] Crontab Startup\n";
 $cmd = dirname(__FILE__) . '/vps_update_info.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
-$cmd = dirname(__FILE__) . '/vps_get_list.php;';
-//echo "Running Command: $cmd\n";
-echo `$cmd`;
 $cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getnewvps '$url' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
 $out = trim(`$cmd`);
@@ -32,9 +29,6 @@ if ($out != '')
 {
 	echo "Get New VPS Running:	$out\n";
 	echo `$out`;
-	$cmd = dirname(__FILE__) . '/vps_get_list.php;';
-	echo "Running Command: $cmd\n";
-	echo `$cmd`;
 }
 $cmd = dirname(__FILE__) . '/vps_traffic_new.php;';
 //echo "Running Command: $cmd\n";
@@ -73,10 +67,10 @@ if ($out != '')
 {
 	echo "Get Queue Running:$out\n";
 	echo `$out`;
-	$cmd = dirname(__FILE__) . '/vps_get_list.php;';
-	echo "Running Command: $cmd\n";
-	echo `$cmd`;
 }
+$cmd = dirname(__FILE__) . '/vps_get_list.php;';
+//echo "Running Command: $cmd\n";
+echo `$cmd`;
 /*
 ob_start();
 $out = ob_get_contents();
