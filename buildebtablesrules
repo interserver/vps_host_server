@@ -167,6 +167,7 @@ iptables -F FORWARD
 if [ -e /limitpacket ]; then
 	iptables -X LOGGING
 	echo "1" > /proc/sys/net/bridge/bridge-nf-call-iptables
+	ruleid=0;
 fi
 echo "1" > /proc/sys/net/ipv4/ip_forward
 /sbin/iptables -P INPUT ACCEPT
@@ -241,9 +242,11 @@ for user in $list; do
 		echo "ebtables -A VMS -p ip --ip-src $ip -s $mac -j ACCEPT"
 		echo "ebtables -A VMS -p ip --ip-src $ip -s $mac -j ACCEPT"
 		  if [ -e /limitpacket ]; then
-					echo "#beta packet limit"
-                                        echo "iptables -I FORWARD 1 -o $bridge -s $ip -m limit --limit $limit/sec -j ACCEPT"
-                                        echo "iptables -I FORWARD 2 -o $bridge -s $ip -j DROP"
+	          	echo "#beta packet limit"
+                        ruleid=`expr $ruleid + 1`
+                        echo "iptables -I FORWARD $ruleid -m physdev --physdev-in $dev -o $bridge -s $ip -m limit --limit $limit/sec -j ACCEPT"
+                        ruleid=`expr $ruleid + 1`
+                        echo "iptables -I FORWARD $ruleid -m physdev --physdev-in $dev -o $bridge -s $ip -j DROP"
                   fi
 
 		###
@@ -279,8 +282,10 @@ for user in $list; do
                 		echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac -j ACCEPT"
 				if [ -e /limitpacket ]; then
 					echo "#beta packet limit"
-					echo "iptables -I FORWARD 1 -o $eth -s $extraip -m limit --limit $limit/sec -j ACCEPT"
-					echo "iptables -I FORWARD 2 -o $eth -s $extraip -j DROP"
+					ruleid=`expr $ruleid + 1`
+					echo "iptables -I FORWARD $ruleid -o $eth -s $extraip -m limit --limit $limit/sec -j ACCEPT"
+					ruleid=`expr $ruleid + 1`
+					echo "iptables -I FORWARD $ruleid -o $eth -s $extraip -j DROP"
 				fi
 
 			done
