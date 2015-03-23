@@ -202,6 +202,10 @@ for user in $list; do
 	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2`;
 	# improve getting the ip in the future
 	ip=`cat $DHCPVPS  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
+	if [ -z "$ip" ]; then
+		echo "echo \"VPS $user Device $dev MAC $mac Got a Blank IP\";"
+		continue;
+	fi;
 	if [ "$debug" = "1" ]; then
 		echo "found user $user"
 		echo "	found mac $mac"
