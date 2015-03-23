@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export base="$(dirname "$0")";
+
 # added ipv6 support
 # needs to be in /root/cpaneldirect/vps.ip6map
 
@@ -422,5 +424,5 @@ if [ -e /limitpacket ]; then
 fi
 
 if [ -e /etc/debian_version ]; then
-	echo "/scripts/securexinetd";
+	echo "${base}/securexinetd";
 fi
