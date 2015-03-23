@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 function age() {
    local filename=$1
@@ -15,7 +15,7 @@ lockfile="/tmp/_securexinetd"
 
 
 if [ -e $file ]; then
-        if [ $(age "$file") -gt "600" ]; then
+        if [ $(age "$file") -gt "3600" ]; then
                 echo "Lock file is too old"
         else
                 echo "Lock file found, exiting";
@@ -40,10 +40,8 @@ for i in *; do
 		#echo $i
 		detainthinks=`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`;
 		virshknows=`virsh dumpxml $i | grep vnc | grep port | cut -d\' -f4`;
-		virshknows2="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
+
 		if [ "$detainthinks" = "$virshknows" ]; then
-			echo "$i is good"
-		elif [ "$detainthinks" = "$virshknows" ]; then
 			echo "$i is good"
 		else
 			echo "$i is incorrect, fixing"
