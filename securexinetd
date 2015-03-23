@@ -1,13 +1,16 @@
 #!/bin/bash
 
 function age() {
-   local filename=$1
-   local changed=`stat -c %Y "$filename"`
-   local now=`date +%s`
-   local elapsed
-
-   let elapsed=now-changed
-   echo $elapsed
+	local filename=$1
+	if [ ! -e "$filename" ]; then
+		echo 99999
+		return;
+	fi
+	local changed=`stat -c %Y "$filename"`
+	local now=`date +%s`
+	local elapsed
+	let elapsed=now-changed
+	echo $elapsed
 }
 
 
