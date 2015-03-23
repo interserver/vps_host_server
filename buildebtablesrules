@@ -109,7 +109,7 @@ gw_check=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1 | wc -
 if [ "$gw_check" -gt "1" ]; then
 	multi_gw=1;
 	echo "#more than one gw found"
-	gateways=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1`;
+	gateways=`cat $DHCPCONF  | grep	 "^\([^#]*\|\)option routers" | awk '{print $3}' | cut -d\; -f1`;
 fi
 
 # ipv6 addition

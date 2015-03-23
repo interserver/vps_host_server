@@ -1,8 +1,9 @@
 #!/bin/bash
+base="$(dirname "$0")";
 IFS="
 ";
-/scripts/buildebtablesrules 2>>/tmp/buildeb.err | bash 2>>/tmp/buildeb.err| grep -v -e '^$' > /tmp/buildeb.out;
-echo "Running /scripts/buildebtables|bash  $(cat /tmp/buildeb.err | tr "\n" " ")";
+${base}/buildebtablesrules 2>>/tmp/buildeb.err | bash 2>>/tmp/buildeb.err| grep -v -e '^$' > /tmp/buildeb.out;
+echo "Running ${base}/buildebtables|bash  $(cat /tmp/buildeb.err | tr "\n" " ")";
 if [ -z "$(grep Limiting /tmp/buildeb.out|cut -d" " -f2-|tr "\n" ' ')" ]; then
   echo " \- Limiting $(grep Limiting /tmp/buildeb.out|cut -d" " -f2-|tr "\n" ' ')";
 fi;
