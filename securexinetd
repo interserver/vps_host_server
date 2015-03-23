@@ -39,9 +39,10 @@ for i in *; do
 	if [ -f $i ]; then
 		#echo $i
 		detainthinks=`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`;
-		virshknows=`virsh dumpxml $i | grep vnc | grep port | cut -d\' -f4`;
-
-		if [ "$detainthinks" = "$virshknows" ]; then
+		virshknows=`virsh dumpxml $i 2>/dev/null | grep vnc | grep port | cut -d\' -f4`;
+		if [ -z "$virshknows" ]; then
+			echo "$i not a vps, skipping"
+		elif [ "$detainthinks" = "$virshknows" ]; then
 			echo "$i is good"
 		else
 			echo "$i is incorrect, fixing"
