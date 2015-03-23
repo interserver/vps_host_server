@@ -1,5 +1,5 @@
 #!/bin/bash
-base="$(dirname "$0")";
+base="$(readlink -f "$(dirname "$0")")";
 IFS="
 ";
 ${base}/buildebtablesrules 2>>/tmp/buildeb.err | bash 2>>/tmp/buildeb.err| grep -v -e '^$' > /tmp/buildeb.out;

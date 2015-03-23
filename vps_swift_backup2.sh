@@ -14,7 +14,7 @@ if [ "$3" = "" ]; then
 else
  image=$3
 fi
-cd "$(dirname $0)"
+cd "$(readlink -f "$(dirname "$0")")"
 INSTDIR="$(pwd -L)"
 if which virsh >/dev/null 2>&1; then
  if ! virsh dominfo $vzid >/dev/null 2>&1; then

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export base="$(dirname "$0")";
+export base="$(readlink -f "$(dirname "$0")")";
 
 # added ipv6 support
 # needs to be in /root/cpaneldirect/vps.ip6map
