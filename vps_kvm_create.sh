@@ -278,7 +278,7 @@ q
 		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
 		  echo "root:${password}" | chroot /vz/mounts/${name}${pn} chpasswd || \
 		  php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}${pn}"
-		  if [ -e /home/kvm ]; then 
+		  if [ -e /vz/mounts/${name}${pn}/home/kvm ]; then 
                    echo "kvm:${password}" | chroot /vz/mounts/${name}${pn} chpasswd
                   fi;
 		  umount /dev/mapper/${pname}${pn}
