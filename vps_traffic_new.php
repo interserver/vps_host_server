@@ -108,10 +108,15 @@ function get_vps_iptables_traffic($ips)
 					{
 						$vpss[$vps] = $vnets[$macs[$mac]];
 						$vpss[$vps]['ip'] = $ip;
-						if (isset($last))
+						if (isset($last) && isset($vpss[$vps]))
 						{
 							$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
 							$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
+						}
+						elseif (isset($last))
+						{
+							$in_new = $last[$vps]['in'];
+							$out_new = $last[$vps]['out'];
 						}
 						else
 						{
