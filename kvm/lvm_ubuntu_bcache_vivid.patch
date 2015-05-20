@@ -1,0 +1,14 @@
+148c148,149
+<     types = [ "fd", 16 ]
+---
+>     types = [ "bcache", 16 ]
+>     # types = [ "fd", 16 ]
+637c638,639
+<     mirror_segtype_default = "raid1"
+---
+>     mirror_segtype_default = "mirror"
+>     #mirror_segtype_default = "raid1"
+1035c1037
+<     monitoring = 1
+---
+>     monitoring = 0
