@@ -1,5 +1,5 @@
 #!/bin/bash
-suspended="$(ls /var/lib/libvirt/autosuspend/ 2>/dev/null | xargs -n 1 basename | sed s#"\.dump$"#""#g)";
+suspended="$(ls /var/lib/libvirt/autosuspend/ 2>/dev/null | sed s#"\.dump$"#""#g)";
 if [ "$suspended" != "" ]; then
 	for vps in $suspended; do
 		virsh destroy $vps; 
