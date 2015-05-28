@@ -28,7 +28,7 @@ if which virsh >/dev/null 2>&1; then
 	exit;
  fi
  set -x
- /root/cpaneldirect/qswift mkdir_p vps${id} --force
+ /admin/swift/c mkdir_p vps${id} --force
  sizebytes="$(lvdisplay /dev/vz/${vzid} --units B |grep "LV Size" | awk '{ print $3 }')"
  sizebuffer=10000000000
  lvcreate -L$((${sizebytes} + ${sizebuffer}))B -nimage_storage vz
@@ -55,7 +55,7 @@ else
 	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
  fi
- /root/cpaneldirect/qswift mkdir_p vps${id} --force
+ /admin/swift/c mkdir_p vps${id} --force
  mkdir -p /vz/${image}
  if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then 
   UUID="$(uuidgen)"
@@ -68,8 +68,8 @@ else
   vzctl resume $vzid
  fi
  cd /vz
- /root/cpaneldirect/qswift fly vps${id} ${image} delete
- /root/cpaneldirect/qswift fly vps${id} ${image}
+ /admin/swift/c fly vps${id} ${image} delete
+ /admin/swift/c fly vps${id} ${image}
  if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then
   vzctl snapshot-umount $id --id "$UUID"
   vzctl snapshot-delete $id --id "$UUID"

@@ -19,7 +19,7 @@ image="$1"
 shift
 destids="$*"
 export TERM=linux;
-if [ "$(/root/cpaneldirect/qswift isls vps${sourceid} |grep "^${image}/")" = "" ]; then
+if [ "$(/admin/swift/c isls vps${sourceid} |grep "^${image}/")" = "" ]; then
 	echo "Backup does not exist"
 	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 	exit
@@ -32,8 +32,8 @@ if which virsh >/dev/null 2>&1; then
 	exit;
   fi
   #if [ $# -gt 1 ]; then
-	trap "/root/cpaneldirect/qswift isget vps${sourceid} ${image} -c;" SIGHUP
-	/root/cpaneldirect/qswift isget vps${sourceid} ${image}
+	trap "/admin/swift/c isget vps${sourceid} ${image} -c;" SIGHUP
+	/admin/swift/c isget vps${sourceid} ${image}
 	trap - SIGHUP
 	mv ${image} /${image}.tar.gz
   #fi
@@ -45,7 +45,7 @@ else
 	exit;
   fi
   cd /vz
-  /root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzpf - 2>/dev/null
+  /admin/swift/c isget vps${sourceid} ${image} -out | tar xzpf - 2>/dev/null
 fi
 for i in $destids; do
   if which virsh >/dev/null 2>&1; then
@@ -89,7 +89,7 @@ for i in $destids; do
         #zcat -c /${image}.tar.gz |tar --ignore-failed-read --atime-preserve --preserve-permissions -x -p -f - 2>/dev/null || export error=1
         tar --ignore-failed-read --atime-preserve --preserve-permissions -x -z -p -f /${image}.tar.gz 2>/dev/null || export error=1
 	  #else
-		#/root/cpaneldirect/qswift isget vps${sourceid} ${image} -out | tar xzpf -
+		#/admin/swift/c isget vps${sourceid} ${image} -out | tar xzpf -
 	  #fi
 	  sync
 	  sleep 5s;

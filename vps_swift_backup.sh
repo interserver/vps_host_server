@@ -28,7 +28,7 @@ if which virsh >/dev/null 2>&1; then
 		curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 		exit;
 	fi
-	/root/cpaneldirect/qswift mkdir_p vps${id} --force
+	/admin/swift/c mkdir_p vps${id} --force
 	lvcreate --size 10000m --snapshot --name snap$id /dev/vz/$vzid
 	sync
 	mkdir -p /${image}
@@ -37,8 +37,8 @@ if which virsh >/dev/null 2>&1; then
 	else
 		$INSTDIR/vps_kvm_automount.sh snap${id} /${image} readonly
 	fi
-	/root/cpaneldirect/qswift fly vps${id} /${image} delete
-	/root/cpaneldirect/qswift fly vps${id} /${image}
+	/admin/swift/c fly vps${id} /${image} delete
+	/admin/swift/c fly vps${id} /${image}
 	if which guestunmount >/dev/null 2>/dev/null; then 
 		guestunmount /${image} || fusermount -u /${image}
 	elif which guestmount >/dev/null 2>/dev/null; then 
@@ -60,7 +60,7 @@ else
 		curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 		exit;
 	fi
-	/root/cpaneldirect/qswift mkdir_p vps${id} --force
+	/admin/swift/c mkdir_p vps${id} --force
 	mkdir -p /vz/${image}
 	if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then 
 		UUID="$(uuidgen)"
@@ -73,8 +73,8 @@ else
 		vzctl resume $vzid
 	fi
 	cd /vz
-	/root/cpaneldirect/qswift fly vps${id} ${image} delete
-	/root/cpaneldirect/qswift fly vps${id} ${image}
+	/admin/swift/c fly vps${id} ${image} delete
+	/admin/swift/c fly vps${id} ${image}
 	if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then
 		vzctl snapshot-umount $id --id "$UUID"
 		vzctl snapshot-delete $id --id "$UUID"
