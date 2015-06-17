@@ -7,7 +7,7 @@ BEGIN {
 use strict;
 use warnings;
 
-use Test::More tests => 18;
+use Test::More tests => 19;
 use test;
 
 my $bindir = TESTDIR . '/data/bin';
@@ -16,6 +16,7 @@ unshift(@utils::paths, $bindir);
 my $commands = {
 	proc => ['<', '.'],
 	'cciss_vol_status version' => ['<', TESTDIR . '/data/cciss/cciss-1.09' ],
+	'lsscsi list' => [ '<', '/dev/null' ],
 };
 
 my %params = (
@@ -77,6 +78,9 @@ my %sudo = (
 	],
 	dmraid => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/dmraid -r",
+	],
+	metastat => [
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/metastat",
 	],
 );
 

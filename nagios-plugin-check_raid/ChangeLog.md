@@ -1,20 +1,39 @@
 ## Unreleased
 
-- arcconf: dead disks have no id, use physical location instead. [#90][]
+- arcconf: handle unparsed data from Arcconf 1.7. [#99][]
+- cciss: parse spare drive status. [#100][]
+- hide errors from sudo -h when using old sudo. [#88][]
+- don't detect sudo if running as root. fixes [#101][]
+- hpacucli: check for array status. fixes [#98][]
+- hp_msa: allow configuring via plugin-options. [#97][]
+- allow plugin specific options [#58][]
+- make plugins work even if plugin programs not executable for non-root [#104][]
+- arcconf: handle when battery has failed and no status available at all. [#105][]
+- hpacucli: fix for HP H240ar controller. [#106][]
+
+## 3.2.3 (2015-03-25)
+
+- arcconf: dead disks have no id, use physical location instead [#90][]
 - sudo: detect if sudo has `-A` option [#88][]
+- mpt: fix uninitialized value in mpt plugin when tool is installed but no controllers are present [#95][]
+- megacli: handle CacheCade devices (ignore for now). [#91][]
+- sas2ircu: handle when no RAID function is available (LSI 9202 16E) [#93][]
+- metastat: plugin is now usable [#38][], [#96][]
+- hpssacli: adding hpssacli support [#94][]
+
 
 ## 3.2.2 (2014-11-15)
 
 - cciss: fix parsing enclosure with no enclosure name [#84][]
-- megacli: actually report that cache is disabled. [#85][]
-- arcconf: accept 'Ready' as OK drive state. [#87][]
+- megacli: actually report that cache is disabled [#85][]
+- arcconf: accept 'Ready' as OK drive state [#87][]
 - tw_cli: tweak VERIFYING state [#89][]
 - megacli: JBOD state of physical device is OK as well [#82][]
 
 ## 3.2.1 (2014-10-07)
 
 - cciss: fix parsing enclosure with space and no serial [#83][]
-- megacli: alert if default is WriteBack, but current is WriteThrough. [#65][]
+- megacli: alert if default is WriteBack, but current is WriteThrough [#65][]
 
 NOTE: megacli now checks cache state, use `--cache-fail=STATE` if default `WARNING` is not for you.
 
@@ -80,6 +99,7 @@ NOTES:
 - Areca SATA RAID Support
 
 ## 2.1
+- New maintainer Elan Ruusamäe
 - Made script more generic and secure
 - Added `gdth`
 - Added `dpt_i2o`
@@ -142,3 +162,18 @@ NOTES:
 [#82]: https://github.com/glensc/nagios-plugin-check_raid/pull/82
 [#90]: https://github.com/glensc/nagios-plugin-check_raid/issues/90
 [#88]: https://github.com/glensc/nagios-plugin-check_raid/issues/88
+[#95]: https://github.com/glensc/nagios-plugin-check_raid/issues/95
+[#91]: https://github.com/glensc/nagios-plugin-check_raid/issues/91
+[#93]: https://github.com/glensc/nagios-plugin-check_raid/pull/93
+[#38]: https://github.com/glensc/nagios-plugin-check_raid/issues/38
+[#96]: https://github.com/glensc/nagios-plugin-check_raid/pull/96
+[#94]: https://github.com/glensc/nagios-plugin-check_raid/pull/94
+[#99]: https://github.com/glensc/nagios-plugin-check_raid/issues/99
+[#100]: https://github.com/glensc/nagios-plugin-check_raid/issues/100
+[#101]: https://github.com/glensc/nagios-plugin-check_raid/issues/101
+[#98]: https://github.com/glensc/nagios-plugin-check_raid/issues/98
+[#97]: https://github.com/glensc/nagios-plugin-check_raid/issues/97
+[#58]: https://github.com/glensc/nagios-plugin-check_raid/issues/58
+[#104]: https://github.com/glensc/nagios-plugin-check_raid/issues/104
+[#105]: https://github.com/glensc/nagios-plugin-check_raid/issues/105
+[#106]: https://github.com/glensc/nagios-plugin-check_raid/issues/106

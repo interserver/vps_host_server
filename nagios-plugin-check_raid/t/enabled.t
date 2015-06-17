@@ -7,7 +7,7 @@ BEGIN {
 use strict;
 use warnings;
 
-use Test::More tests => 18;
+use Test::More tests => 19;
 use test;
 
 unshift(@utils::paths, TESTDIR . '/data/bin');
@@ -16,6 +16,8 @@ my $commands = {
 	proc => ['<', '.'],
 	mdstat => ['<', TESTDIR . '/data/mdstat/mdstat-failed'],
 	dmraid => ['<', TESTDIR . '/data/dmraid/pr35'],
+	get_controller_no => ['<', TESTDIR . '/data/mpt/pr36/getctrlno1'],
+	metastat => ['<', TESTDIR . '/data/metastat/metastat-snapshot-mirrors'],
 };
 
 my %params = (

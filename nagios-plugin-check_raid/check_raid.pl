@@ -11,7 +11,7 @@
 # 2004-2006 Steve Shipway, university of auckland,
 # http://www.steveshipway.org/forum/viewtopic.php?f=20&t=417&p=3211
 # Steve Shipway Thanks M Carmier for megaraid section.
-# 2009-2014 Elan Ruusamäe <glen@pld-linux.org>
+# 2009-2015 Elan Ruusamäe <glen@pld-linux.org>
 
 # Requires: Perl 5.8 for the open(my $fh , '-|', @CMD) syntax.
 # You can workaround for earlier Perl it as:
@@ -74,22 +74,32 @@ unshift(@paths, qw(/usr/local/nrpe /usr/local/bin /sbin /usr/sbin /bin /usr/sbin
 
 # lookup program from list of possible filenames
 # search is performed from $PATH plus additional hardcoded @paths
+# NOTE: we do not check for execute bit as it may fail for non-root. #104
 sub which {
 	for my $prog (@_) {
 		for my $path (@paths) {
-			return "$path/$prog" if -x "$path/$prog";
+			return "$path/$prog" if -f "$path/$prog";
 		}
 	}
 	return undef;
 }
 
+our @sudo;
 sub find_sudo() {
-	my @sudo;
+	# no sudo needed if already root
+	return [] unless $>;
+
+	# detect once
+	return \@sudo if @sudo;
+
 	my $sudo = which('sudo') or die "Can't find sudo";
 	push(@sudo, $sudo);
 
 	# detect if sudo supports -A, issue #88
-	open(my $fh , '-|', $sudo, '-h') or die "Can't run 'sudo -h': $!";
+	use IPC::Open3;
+	my $fh;
+	my @cmd = ($sudo, '-h');
+	my $pid = open3(undef, $fh, undef, @cmd) or die "Can't run 'sudo -h': $!";
 	local $/ = undef;
 	local $_ = <$fh>;
 	close($fh) or die $!;
@@ -173,11 +183,11 @@ sub new {
 sub active {
 	my $this = shift;
 
-	# program not found
+	# no tool found, return false
 	return 0 unless $this->{program};
 
-	# program not executable
-	-x $this->{program};
+	# program file must exist, don't check for execute bit. #104
+	-f $this->{program};
 }
 
 # set status code for plugin result
@@ -547,8 +557,7 @@ package metastat;
 # Solaris, software RAID
 use base 'plugin';
 
-# Status: BROKEN: no test data
-#push(@utils::plugins, __PACKAGE__);
+push(@utils::plugins, __PACKAGE__);
 
 sub program_names {
 	__PACKAGE__;
@@ -556,13 +565,44 @@ sub program_names {
 
 sub commands {
 	{
-		'status' => ['-|', '@CMD'],
+		'metastat' => ['>&2', '@CMD'],
 	}
 }
 
 sub sudo {
-	my $cmd = shift->{program};
+	my ($this, $deep) = @_;
+	# quick check when running check
+	return 1 unless $deep;
+
+	my $cmd = $this->{program};
 	"CHECK_RAID ALL=(root) NOPASSWD: $cmd"
+}
+
+sub active($) {
+	my ($this) = @_;
+
+	# program not found
+	return 0 unless $this->{program};
+
+	my $output = $this->get_metastat;
+	return !!@$output;
+}
+
+sub get_metastat {
+	my $this = shift;
+
+	# cache inside single run
+	return $this->{output} if defined $this->{output};
+
+	my $fh = $this->cmd('metastat');
+	my @data;
+	while (<$fh>) {
+		chomp;
+		last if /there are no existing databases/;
+		push(@data, $_);
+	}
+
+	return $this->{output} = \@data;
 }
 
 sub check {
@@ -572,13 +612,14 @@ sub check {
 
 	# status messages pushed here
 	my @status;
+	my $output = $this->get_metastat;
 
-	my $fh = $this->cmd('status');
-	while (<$fh>) {
+	foreach (@$output) {
 		if (/^(\S+):/) { $d = $1; $sd = ''; next; }
 		if (/Submirror \d+:\s+(\S+)/) { $sd = $1; next; }
-		if (my($s) = /State: (\S.+)/) {
-			if ($sd and valid($sd) and valid($d)) {
+		if (/Device:\s+(\S+)/) { $sd = $1; next; }
+		if (my($s) = /State: (\S.+\w)/) {
+			if ($sd and $this->valid($sd) and $this->valid($d)) {
 				if ($s =~ /Okay/i) {
 					# no worries...
 				} elsif ($s =~ /Resync/i) {
@@ -589,12 +630,20 @@ sub check {
 				push(@status, "$d:$sd:$s");
 			}
 		}
+
+		if (defined $d && $d =~ /hsp/) {
+			if (/(c[0-9]+t[0-9]+d[0-9]+s[0-9]+)\s+(\w+)/) {
+				$sd = $1;
+				my $s = $2;
+				$this->warning if ($s !~ /Available/);
+				push(@status, "$d:$sd:$s");
+			}
+		}
 	}
-	close $fh;
 
 	return unless @status;
 
-	$this->message(join(' ', @status));
+	$this->ok->message(join(', ', @status));
 }
 
 package megaide;
@@ -793,7 +842,7 @@ sub parse {
 	# We don't want to receive notifications in such case, so we check for this particular case here
 	if ($arr_checking && scalar(@md) >= 2) {
 		foreach my $dev (@md) {
-			if ( $dev->{resync_status} && $dev->{resync_status} eq "resync=DELAYED") {
+			if ($dev->{resync_status} && $dev->{resync_status} eq "resync=DELAYED") {
 				delete $dev->{resync_status};
 				$dev->{check_status} = "check=DELAYED";
 			}
@@ -841,7 +890,7 @@ sub check {
 		} elsif (@fd > 0) {
 			# FIXME: this is same as above?
 			$this->warning;
-			$s .= "hot-spare failure:". (defined($md{failed_disks}) ? join(",", @{$md{failed_disks}}) : '') .":$md{status}";
+			$s .= "hot-spare failure:". join(",", @{$md{failed_disks}}) .":$md{status}";
 
 		} else {
 			$s .= "$md{status}";
@@ -1033,6 +1082,11 @@ sub parse_ld {
 			next;
 		}
 
+		if (my($s) = /Virtual Drive Type\s*:\s*(\S+)/) {
+			$ld{type} = $s;
+			next;
+		}
+
 		if (my($s) = /State\s*:\s*(\S+)/) {
 			$ld{state} = $s;
 			next;
@@ -1176,6 +1230,11 @@ sub check {
 
 	my @vstatus;
 	foreach my $vol (@{$c->{logical}}) {
+		# skip CacheCade for now. #91
+		if ($vol->{type} && $vol->{type} eq 'CacheCade') {
+			next;
+		}
+
 		push(@vstatus, sprintf "%s:%s", $vol->{name}, $vol->{state});
 		if ($vol->{state} ne 'Optimal') {
 			$this->critical;
@@ -1193,7 +1252,7 @@ sub check {
 
 	my %dstatus;
 	foreach my $dev (@{$c->{physical}}) {
-		if ($dev->{state} eq 'Online' || $dev->{state} eq 'Hotspare' || $dev->{state} eq 'Unconfigured(good)' || $dev->{state} eq 'JBOD' ) {
+		if ($dev->{state} eq 'Online' || $dev->{state} eq 'Hotspare' || $dev->{state} eq 'Unconfigured(good)' || $dev->{state} eq 'JBOD') {
 			push(@{$dstatus{$dev->{state}}}, sprintf "%02d", $dev->{dev});
 
 		} else {
@@ -1405,7 +1464,7 @@ sub check {
 		next unless $this->valid($n);
 		next unless (my($s, $c) = /Status .*: (\S+)\s+(\S+)/);
 
-		if ($c =~ /SYN|RBL/i ) { # resynching
+		if ($c =~ /SYN|RBL/i) { # resynching
 			$this->resync;
 		} elsif ($c !~ /OKY/i) { # not OK
 			$this->critical;
@@ -1567,8 +1626,8 @@ sub program_names {
 
 sub commands {
 	{
-		'status' => ['-|', '@CMD', '-i', '$id'],
 		'get_controller_no' => ['-|', '@CMD', '-p'],
+		'status' => ['-|', '@CMD', '-i', '$id'],
 		'sync status' => ['-|', '@CMD', '-n'],
 	}
 }
@@ -1587,22 +1646,43 @@ sub sudo {
 	);
 }
 
-sub parse {
+sub active ($) {
+	my ($this) = @_;
+
+	# return if parent said NO
+	my $res = $this->SUPER::active(@_);
+	return $res unless $res;
+
+	# there should be a controller. #95
+	my $id = $this->get_controller;
+	return defined($id);
+}
+
+# get controller from mpt-status -p
+# FIXME: could there be multiple controllers?
+sub get_controller {
 	my $this = shift;
 
-	my (%ld, %pd);
 	my $fh = $this->cmd('get_controller_no');
 	my $id;
 	while (<$fh>) {
 		chomp;
-		if ( /^Found.*id=(\d{1,2}),.*/ ) {
+		if (/^Found.*id=(\d{1,2}),.*/) {
 			$id = $1;
 			last;
 		}
 	}
 	close $fh;
 
-	$fh = $this->cmd('status',{ '$id' => $id });
+	return $id;
+}
+
+sub parse {
+	my ($this, $id) = @_;
+
+	my (%ld, %pd);
+
+	my $fh = $this->cmd('status', { '$id' => $id });
 
 	my %VolumeTypesHuman = (
 		IS => 'RAID-0',
@@ -1698,7 +1778,8 @@ sub check {
 	# status messages pushed here
 	my @status;
 
-	my $status = $this->parse;
+	my $id = $this->get_controller;
+	my $status = $this->parse($id);
 
 	# process logical units
 	while (my($d, $u) = each %{$status->{logical}}) {
@@ -2131,7 +2212,7 @@ sub parse {
 			(\d+)\s+    # Drives
 			(\d+)\s+    # Units
 			(\d+)\s+    # NotOpt: Not Optional
-			            # Not Optimal refers to any state except OK and VERIFYING.
+						# Not Optimal refers to any state except OK and VERIFYING.
 						# Other states include INITIALIZING, INIT-PAUSED,
 						# REBUILDING, REBUILD-PAUSED, DEGRADED, MIGRATING,
 						# MIGRATE-PAUSED, RECOVERY, INOPERABLE, and UNKNOWN.
@@ -2165,9 +2246,9 @@ sub parse {
 				(\S+)\s+  # UnitType
 				(\S+)\s+  # Status
 				(\S+)\s+  # %RCmpl: The %RCompl reports the percent completion
-				          # of the unit's Rebuild, if this task is in progress.
+						  # of the unit's Rebuild, if this task is in progress.
 				(\S+)\s+  # %V/I/M: The %V/I/M reports the percent completion
-				          # of the unit's Verify, Initialize, or Migrate,
+						  # of the unit's Verify, Initialize, or Migrate,
 						  # if one of these are in progress.
 				(\S+)\s+  # Strip
 				(\S+)\s+  # Size(GB)
@@ -2314,7 +2395,7 @@ sub check {
 			my @ustatus = $s;
 
 			# report cache, no checking
-			if ($u->{cache} && $u->{cache} ne '-')  {
+			if ($u->{cache} && $u->{cache} ne '-') {
 				push(@ustatus, "Cache:$u->{cache}");
 			}
 
@@ -2341,7 +2422,7 @@ sub check {
 		push(@status, "Drives($c->{drives}): ".$this->join_status(\%ds)) if %ds;
 
 		# check BBU
-		if ($c->{bbu} && $c->{bbu} ne '-')  {
+		if ($c->{bbu} && $c->{bbu} ne '-') {
 			$this->critical if $c->{bbu} ne 'OK';
 			push(@status, "BBU: $c->{bbu}");
 		}
@@ -2591,6 +2672,10 @@ sub parse_config {
 				# not parsed yet
 			} elsif ($subsection eq 'Controller Vital Product Data') {
 				# not parsed yet
+			} elsif ($subsection eq 'RAID Properties') {
+				# not parsed yet
+			} elsif ($subsection eq 'Controller BIOS Setting Information') {
+				# not parsed yet
 			} else {
 				warn "SUBSECTION of [$section] NOT PARSED: [$subsection] [$_]";
 			}
@@ -2796,35 +2881,8 @@ sub check {
 		}
 
 		# Battery status
-		if (defined($c->{battery_status}) and $c->{battery_status} ne "Not Installed") {
-			push(@status, "Battery Status: $c->{battery_status}");
-
-			if ($c->{battery_overtemp} ne "No") {
-				$this->critical;
-				push(@status, "Battery Overtemp: $c->{battery_overtemp}");
-			}
-
-			push(@status, "Battery Capacity Remaining: $c->{battery_capacity}%");
-			if ($c->{battery_capacity} < 50) {
-				$this->critical;
-			}
-			if ($c->{battery_capacity} < 25) {
-				$this->warning;
-			}
-
-			if ($c->{battery_time} < 1440) {
-				$this->warning;
-			}
-			if ($c->{battery_time} < 720) {
-				$this->critical;
-			}
-
-			if ($c->{battery_time} < 60) {
-				push(@status, "Battery Time: $c->{battery_time}m");
-			} else {
-				push(@status, "Battery Time: $c->{battery_time_full}");
-			}
-		}
+		my @s = $this->battery_status($c);
+		push(@status, @s) if @s;
 	}
 
 	# check for physical devices
@@ -2880,6 +2938,54 @@ sub check {
 	push(@status, "Drives: ".$this->join_status(\%pd)) if %pd;
 
 	$this->ok->message(join(', ', @status));
+}
+
+# check battery status in $c
+sub battery_status {
+	my ($this, $c) = @_;
+
+	my @status;
+
+	if (!defined($c->{battery_status}) || $c->{battery_status} eq 'Not Installed') {
+		return;
+	}
+
+	push(@status, "Battery Status: $c->{battery_status}");
+
+	# if battery status is 'Failed', none of the details below are available. #105
+	if ($c->{battery_status} eq 'Failed') {
+		$this->critical;
+		return @status;
+	}
+
+	# detailed battery checks
+	if ($c->{battery_overtemp} ne 'No') {
+		$this->critical;
+		push(@status, "Battery Overtemp: $c->{battery_overtemp}");
+	}
+
+	push(@status, "Battery Capacity Remaining: $c->{battery_capacity}%");
+	if ($c->{battery_capacity} < 50) {
+		$this->critical;
+	}
+	if ($c->{battery_capacity} < 25) {
+		$this->warning;
+	}
+
+	if ($c->{battery_time} < 1440) {
+		$this->warning;
+	}
+	if ($c->{battery_time} < 720) {
+		$this->critical;
+	}
+
+	if ($c->{battery_time} < 60) {
+		push(@status, "Battery Time: $c->{battery_time}m");
+	} else {
+		push(@status, "Battery Time: $c->{battery_time_full}");
+	}
+
+	return @status;
 }
 
 package megarc;
@@ -3140,9 +3246,10 @@ sub detect {
 
 	my ($fh, @devs);
 
-	# try lsscsi first
-	my $lsscsi = lsscsi->new();
-	if ($lsscsi->active) {
+	# try lsscsi first if enabled and allowed
+	my $lsscsi = lsscsi->new('commands' => $this->{commands});
+	my $use_lsscsi = defined($this->{use_lsscsi}) ? $this->{use_lsscsi} : $lsscsi->active;
+	if ($use_lsscsi) {
 		# for cciss_vol_status < 1.10 we need /dev/sgX nodes, columns which are type storage
 		@devs = $lsscsi->list_sg;
 
@@ -3254,7 +3361,7 @@ sub trim { my $s = shift; $s =~ s/^\s+|\s+$//g; return $s };
 
 # we process until we find end of sentence (dot at the end of the line)
 sub consume_diagnostic {
-	my ($this, $fh, $s) = @_;
+	my ($this, $fh) = @_;
 
 	my $diagnostic = '';
 	while (1) {
@@ -3265,6 +3372,18 @@ sub consume_diagnostic {
 		last if $s =~ /\.$/;
 	}
 	return trim($diagnostic);
+}
+
+# process to skip lines with physical location:
+# "         connector 1I box 1 bay 4 ..."
+sub consume_disk_map {
+	my ($this, $fh) = @_;
+
+	while (my $s = <$fh>) {
+		chomp $s;
+		# connector 1I box 1 bay 4
+		last unless $s =~ /^\s+connector\s/;
+	}
 }
 
 sub parse {
@@ -3316,13 +3435,15 @@ sub parse {
 		# volume status, print_volume_status()
 		# /dev/cciss/c0d0: (Smart Array P400i) RAID 1 Volume 0 status: OK
 		# /dev/sda: (Smart Array P410i) RAID 1 Volume 0 status: OK.
-		if (my($file, $board_name, $raid_level, $volume_number, $certain, $status) = m{
+		# /dev/sda: (Smart Array P410i) RAID 5 Volume 0 status: OK.   At least one spare drive designated.  At least one spare drive has failed.
+		if (my($file, $board_name, $raid_level, $volume_number, $certain, $status, $spare_drive_status) = m{
 			^(/dev/[^:]+):\s        # File
 			\(([^)]+)\)\s           # Board Name
 			(RAID\s\d+|\([^)]+\))\s # RAID level
 			Volume\s(\d+)           # Volume number
 			(\(\?\))?\s             # certain?
 			status:\s(.*?)\.        # status (without a dot)
+			(.*)?                   # spare drive status messages
 		}x) {
 			$cdev = $file;
 			$c{$file}{volumes}{$volume_number} = {
@@ -3331,6 +3452,7 @@ sub parse {
 				volume_number => $volume_number,
 				certain => int(not defined $certain),
 				status => $status,
+				spare_drive_status => trim($spare_drive_status),
 			};
 
 			$c{$file}{board_name} = $board_name;
@@ -3411,6 +3533,23 @@ sub parse {
 			}
 
 			next if $got;
+		}
+
+		# show_disk_map("  Failed drives:", file, fd, id, controller_lun, ctlrtype,
+		# show_disk_map("  'Replacement' drives:", file, fd, id, controller_lun, ctlrtype,
+		# show_disk_map("  Drives currently substituted for by spares:", file, fd, id, controller_lun, ctlrtype,
+		if (/^  Failed drives:/ ||
+			/^  'Replacement' drives:/ ||
+			/^  Drives currently substituted for by spares:/
+		) {
+			# could store this somewhere, ignore for now
+			$this->consume_disk_map($fh);
+			next;
+		}
+
+		if (my($total_failed) = /Total of (\d+) failed physical drives detected on this logical drive\./) {
+			$c{$cdev}{phys_failed} = $total_failed;
+			next;
 		}
 
 		warn "Unparsed[$_]";
@@ -3547,12 +3686,7 @@ package hp_msa;
 use base 'plugin';
 
 # do not register, better use hpacucli
-#push(@utils::plugins, __PACKAGE__);
-
-sub new {
-	my $self = shift;
-	$self->SUPER::new(tty_device => "/dev/ttyS0", @_);
-}
+push(@utils::plugins, __PACKAGE__);
 
 sub active {
 	my $this = shift;
@@ -3562,6 +3696,9 @@ sub active {
 # check from /sys if there are any MSA VOLUME's present.
 sub detect {
 	my $this = shift;
+
+	# allow --plugin-option=hp_msa-enabled to force this plugin to be enabled
+	return 1 if exists $this->{options}{'hp_msa-enabled'};
 
 	for my $file (</sys/block/*/device/model>) {
 		open my $fh, '<', $file or next;
@@ -3575,7 +3712,8 @@ sub detect {
 sub check {
 	my $this = shift;
 
-	my $ctldevice = $this->{tty_device};
+	#  allow --plugin-option=hp_msa-serial=/dev/ttyS2 to specify serial line
+	my $ctldevice = $this->{options}{'hp_msa-serial'} || '/dev/ttyS0';
 
 	# status messages pushed here
 	my @status;
@@ -3620,7 +3758,7 @@ sub check {
 			$c{$c} = [];
 			next;
 		}
-		# Surface Scan:   Running, LUN 10 (68% Complete)
+		# Surface Scan: Running, LUN 10 (68% Complete)
 		if (my($s, $m) = /Surface Scan:\s+(\S+)[,.]\s*(.*)/) {
 			if ($s eq 'Running') {
 				my ($l, $p) = $m =~ m{(LUN \d+) \((\d+)% Complete\)};
@@ -3644,7 +3782,7 @@ sub check {
 			}
 			next;
 		}
-		# Expansion:      Complete.
+		# Expansion: Complete.
 		if (my($s, $m) = /Expansion:\s+(\S+)[.,]\s*(.*)/) {
 			if ($s eq 'Running') {
 				my ($l, $p) = $m =~ m{(LUN \d+) \((\d+)% Complete\)};
@@ -3751,7 +3889,7 @@ sub detect {
 		# root@i41:/tmp$ echo $?
 		# 1
 
-		if ( /SAS2IRCU: MPTLib2 Error 1/ ) {
+		if (/SAS2IRCU: MPTLib2 Error 1/) {
 			$state = $noctrlstate;
 			$success = 1 ;
 		}
@@ -3760,7 +3898,7 @@ sub detect {
 
 	unless (close $fh) {
 		#sas2ircu exits 1 (but close exits 256) when we close fh if we have no controller, so handle that, too
-		if ( $? != 256 && $state eq $noctrlstate ) {
+		if ($? != 256 && $state eq $noctrlstate) {
 			$this->critical;
 		}
 	}
@@ -3806,10 +3944,11 @@ sub check {
 			#
 			# SAS2IRCU: there are no IR volumes on the controller!
 			# SAS2IRCU: Error executing command STATUS.
-			#
 
-			if ( /SAS2IRCU: there are no IR volumes on the controller!/ ) {
-				#even though this isn't the last line, go ahead and set success.
+			if (/SAS2IRCU: there are no IR volumes on the controller/
+				or /The STATUS command is not supported by the firmware currently loaded on controller/
+			) {
+				# even though this isn't the last line, go ahead and set success.
 				$success = 1;
 				$state = $novolsstate;
 			}
@@ -3818,7 +3957,7 @@ sub check {
 
 		unless (close $fh) {
 			#sas2ircu exits 256 when we close fh if we have no volumes, so handle that, too
-			if ( $? != 256 && $state eq $novolsstate ) {
+			if ($? != 256 && $state eq $novolsstate) {
 				$this->critical;
 				$state = $!;
 			}
@@ -3863,23 +4002,23 @@ sub check {
 		my $finalstate;
 		my $finalerrors="";
 
-		while ( my $line = <$fh> ) {
+		while (my $line = <$fh>) {
 			chomp $line;
 			# Device is a Hard disk
 			# Device is a Hard disk
 			# Device is a Enclosure services device
 			#
 			#lets make sure we're only checking disks.  we dont support other devices right now
-			if ( "$line" eq 'Device is a Hard disk' ) {
+			if ("$line" eq 'Device is a Hard disk') {
 				$device='disk';
-			} elsif ( $line =~ /^Device/ )  {
+			} elsif ($line =~ /^Device/) {
 				$device='other';
 			}
 
-			if ( "$device" eq 'disk' ) {
-				if ( $line =~ /Enclosure #|Slot #|State / ) {
+			if ("$device" eq 'disk') {
+				if ($line =~ /Enclosure #|Slot #|State /) {
 					#find our enclosure #
-					if ( $line =~ /^  Enclosure # / ) {
+					if ($line =~ /^  Enclosure # /) {
 						@data = split /:/, $line;
 						$enc=trim($data[1]);
 						#every time we hit a new enclosure line, reset our state and slot
@@ -3887,13 +4026,13 @@ sub check {
 						undef $slot;
 					}
 					#find our slot #
-					if ( $line =~ /^  Slot # / ) {
+					if ($line =~ /^  Slot # /) {
 						@data = split /:/, $line;
 						$slot=trim($data[1]);
 						$numslots++
 					}
 					#find our state
-					if ( $line =~ /^  State / ) {
+					if ($line =~ /^  State /) {
 						@data = split /:/, $line;
 						$state=ltrim($data[1]);
 
@@ -3901,7 +4040,7 @@ sub check {
 						#if ($numslots == 10 ) { $state='FREDFISH';}
 
 						#when we get a state, test on it and report it..
-						if ( $state =~ /Optimal|Ready/ ) {
+						if ($state =~ /Optimal|Ready/) {
 							#do nothing at the moment.
 						} else {
 							$this->critical;
@@ -3912,7 +4051,7 @@ sub check {
 				}
 			}
 
-			if ( $line =~ /SAS2IRCU: Utility Completed Successfully/) {
+			if ($line =~ /SAS2IRCU: Utility Completed Successfully/) {
 				$success = 1;
 			}
 
@@ -4035,7 +4174,7 @@ use base 'plugin';
 push(@utils::plugins, __PACKAGE__);
 
 sub program_names {
-	__PACKAGE__;
+	qw(hpacucli hpssacli);
 }
 
 sub commands {
@@ -4057,11 +4196,8 @@ sub sudo {
 	);
 }
 
-sub check {
+sub scan_targets {
 	my $this = shift;
-
-	# status messages pushed here
-	my @status;
 
 	# TODO: allow target customize:
 	# hpacucli <target> is of format:
@@ -4078,6 +4214,7 @@ sub check {
 	while (<$fh>) {
 		# Numeric slot
 		if (my($model, $slot) = /^(\S.+) in Slot (.+)/) {
+			$slot =~ s/ \(RAID Mode\)//;
 			$slot =~ s/ \(Embedded\)//;
 			$targets{"slot=$slot"} = $model;
 			$this->unknown if $slot !~ /^\d+$/;
@@ -4091,16 +4228,16 @@ sub check {
 	}
 	close $fh;
 
-	unless (%targets) {
-		$this->warning;
-		$this->message("No Controllers were found on this machine");
-		return;
-	}
+	return \%targets;
+}
 
-	# Scan logical drives
-	for my $target (sort {$a cmp $b} keys %targets) {
-		my $model = $targets{$target};
-		# check each controllers
+# Scan logical drives
+sub scan_luns {
+	my ($this, $targets) = @_;
+
+	my %luns;
+	while (my($target, $model) = each %$targets) {
+		# check each controller
 		my $fh = $this->cmd('logicaldrive status', { '$target' => $target });
 
 		my ($array, %array);
@@ -4133,9 +4270,47 @@ sub check {
 		}
 		$this->unknown unless close $fh;
 
+		$luns{$target} = { %array };
+	}
+
+	return \%luns;
+}
+
+# parse hpacucli output into logical structure
+sub parse {
+	my $this = shift;
+
+	my $targets = $this->scan_targets;
+	if (!$targets) {
+		return $targets;
+	}
+	my $luns = $this->scan_luns($targets);
+	return { 'targets' => $targets, 'luns' => $luns };
+}
+
+sub check {
+	my $this = shift;
+
+	my $ctrl = $this->parse;
+	unless ($ctrl) {
+		$this->warning->message("No Controllers were found on this machine");
+		return;
+	}
+
+	# status messages pushed here
+	my @status;
+
+	for my $target (sort {$a cmp $b} keys %{$ctrl->{targets}}) {
+		my $model = $ctrl->{targets}->{$target};
+
 		my @cstatus;
-		while (my($array, $d) = each %array) {
-			my ($astatus, $ld) = @$d;
+		foreach my $array (sort { $a cmp $b } keys %{$ctrl->{luns}->{$target}}) {
+			my ($astatus, $ld) = @{$ctrl->{luns}->{$target}{$array}};
+
+			# check array status
+			if ($astatus ne 'OK') {
+				$this->critical;
+			}
 
 			my @astatus;
 			# extra details for non-normal arrays
@@ -4152,6 +4327,7 @@ sub check {
 			}
 			push(@cstatus, "Array $array($astatus)[". join(',', @astatus). "]");
 		}
+
 		push(@status, "$model: ".join(', ', @cstatus));
 	}
 
@@ -4422,7 +4598,7 @@ use Getopt::Long;
 
 my ($opt_V, $opt_d, $opt_h, $opt_W, $opt_S, $opt_p, $opt_l);
 my (%ERRORS) = (OK => 0, WARNING => 1, CRITICAL => 2, UNKNOWN => 3);
-my ($VERSION) = "3.2.2";
+my ($VERSION) = "3.2.3";
 my ($message, $status, $perfdata, $longoutput);
 my ($noraid_state) = $ERRORS{UNKNOWN};
 
@@ -4473,7 +4649,7 @@ sub print_usage() {
 sub print_help() {
 	print "check_raid, v$VERSION\n";
 	print "Copyright (c) 2004-2006 Steve Shipway,
-Copyright (c) 2009-2014, Elan Ruusamäe <glen\@pld-linux.org>
+Copyright (c) 2009-2015, Elan Ruusamäe <glen\@pld-linux.org>
 
 This plugin reports the current server's RAID status
 https://github.com/glensc/nagios-plugin-check_raid
@@ -4661,6 +4837,36 @@ sub setstate {
 	$$key = $ERRORS{$value};
 }
 
+# obtain git hash of check_raid.pl
+# http://stackoverflow.com/questions/460297/git-finding-the-sha1-of-an-individual-file-in-the-index#comment26055597_460315
+sub git_hash_object() {
+	my $content = "blob ";
+	$content .= -s $0;
+	$content .= "\0";
+	open my $fh, '<', $0 or die $!;
+	local $/ = undef;
+	$content .= <$fh>;
+	close($fh) or die $!;
+
+	# try Digest::SHA1
+	my $digest;
+	eval {
+		require Digest::SHA1;
+		$digest = Digest::SHA1::sha1_hex($content);
+	};
+
+	return $digest;
+}
+
+# plugin options (key=>value pairs) passed as 'options' key to each plugin constructor.
+# the options are global, not plugin specific, but it's recommended to prefix option with plugin name.
+# the convention is to have PLUGIN_NAME-OPTION_NAME=OPTION_VALUE syntax to namespace each plugin option.
+#
+# so "--plugin-option=hp_msa-serial=/dev/ttyS2" would define option 'serial'
+# for 'hp_msa' plugin with value '/dev/ttyS2'.
+#
+my %plugin_options;
+
 Getopt::Long::Configure('bundling');
 GetOptions(
 	'V' => \$opt_V, 'version' => \$opt_V,
@@ -4673,6 +4879,7 @@ GetOptions(
 	'noraid=s' => sub { setstate(\$noraid_state, @_); },
 	'bbulearn=s' => sub { setstate(\$plugin::bbulearn_status, @_); },
 	'cache-fail=s' => sub { setstate(\$plugin::cache_fail_status, @_); },
+	'plugin-option=s' => sub { my($k, $v) = split(/=/, $_[1], 2); $plugin_options{$k} = $v; },
 	'bbu-monitoring' => \$plugin::bbu_monitoring,
 	'p=s' => \$opt_p, 'plugin=s' => \$opt_p,
 	'l' => \$opt_l, 'list-plugins' => \$opt_l,
@@ -4689,6 +4896,21 @@ if ($opt_V) {
 	print "check_raid Version $VERSION\n";
 	exit $ERRORS{'OK'};
 }
+
+if ($opt_d) {
+	print "check_raid Version $VERSION\n";
+	my $git_ver = `git describe --tags 2>/dev/null`;
+	if ($git_ver) {
+		print "Using git: $git_ver";
+	}
+	my $hash = git_hash_object();
+	if ($hash) {
+		print "git hash object: $hash\n";
+	}
+	print "See CONTRIBUTING.md how to report bugs with debug data:\n";
+	print "https://github.com/glensc/nagios-plugin-check_raid/blob/master/CONTRIBUTING.md\n\n";
+}
+
 if ($opt_h) {
 	print_help();
 	exit $ERRORS{'OK'};
@@ -4710,7 +4932,7 @@ $utils::debug = $opt_d;
 my @plugins = $opt_p ? grep { my $p = $_; grep { /^$p$/ } split(/,/, $opt_p) } @utils::plugins : @utils::plugins;
 
 foreach my $pn (@plugins) {
-	my $plugin = $pn->new;
+	my $plugin = $pn->new(options => \%plugin_options);
 
 	# skip inactive plugins (disabled or no tools available)
 	next unless $plugin->active;

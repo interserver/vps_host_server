@@ -8,13 +8,7 @@ Before opening [new issue](https://github.com/glensc/nagios-plugin-check_raid/is
 
 In addition to problem description and perhaps proposed fix, please provide [debug output](#capture-debug-output-from-commands) from commands (include all command outputs, even if you think it is not neccessary), so that fixes and further development of the plugin will not cause configurations to fail.
 
-To include the output to github ticket, enclose the block between triple backticks:
-
-    ```
-    some output here...
-    ```
-
-Alternatively post outputs to some pastebin service, or [gist](https://gists.github.com)
+It is very important that you **do provide** the command output, I can not support your usecase otherwise.
 
 ## Pull requests
 
@@ -28,7 +22,7 @@ Alternatively post outputs to some pastebin service, or [gist](https://gists.git
 
 Do not update changelog or attempt to change version, the changes may not be merged on codebase you created patch for and it will just create annoying merge conflicts later.
 
-Also do consider adding [debug output](#capture-debug-output-from-commands) as part of the commit, including registering new test to get the changes tested.
+Also you need to add at least [debug output](#capture-debug-output-from-commands) as part of the Pull Request, Optionally add new test for the data (I will update test myself then).
 
 ## Capture debug output from commands
 
@@ -52,6 +46,19 @@ If they do, it means the command produced output to `stderr` stream as well.
 Depending on the output, it may make difference what that is,
 usually those messages are small and can be included into bug report.
 
+After you have capture the output from the commands, you need to provide them to me.
+
+To include the output to github ticket, enclose the block between triple backticks:
+
+    ```
+    some output here...
+    ```
+
+Alternatively post outputs to some pastebin service, or [gist](https://gists.github.com).
+I recommend using [sprunge](http://sprunge.us/) due it's simple command line usage.
+
+When referring to pastebin entries, do not forget to describe which command output the entry is. 
+
 ## Testing ##
 
 When contributing changes back, the existing tests must pass, before and after your changes. Please note that new test data is not detected automatically, it must be registered in test files.
@@ -73,4 +80,4 @@ ok 20 - set unknown
 
 To add new test data, save output of commands to `t/data/PLUGIN_NAME/IDENTIFIER` directory, filenames should be meaningful, like 'pr40' for Pull-Request #40. and add the new test with input files in `t/check_PLUGIN.t`.
 
-(in github ticket and pull-request numbers are interchangeable).
+(in github ticket and pull-request numbers are interchangeable).	
