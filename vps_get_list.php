@@ -36,7 +36,10 @@ function get_vps_list()
 				);
 				if (isset($xml['domain']['devices']['interface']))
 				{
-					$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
+					if (isset($xml['domain']['devices']['interface']['mac_attr']))
+						$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
+					elseif (isset($xml['domain']['devices']['interface'][0]['mac_attr']))
+						$server['mac'] = $xml['domain']['devices']['interface'][0]['mac_attr']['address'];
 				}
 				if (isset($xml['domain']['devices']['graphics_attr']))
 				{
