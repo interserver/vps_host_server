@@ -206,8 +206,8 @@ echo "ebtables -P VMS DROP"
 # this outputs all the protection for each individual server
 for user in $list; do
 
-	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
-	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2`;
+	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2 | head -n 1`;
+	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2 | head -n 1`;
 	# improve getting the ip in the future
 	ip=`cat $DHCPVPS  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
 	if [ -z "$ip" ]; then
