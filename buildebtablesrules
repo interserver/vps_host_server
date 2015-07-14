@@ -1,13 +1,17 @@
 #!/bin/bash
 
-export base="$(readlink -f "$(dirname "$0")")";
+# version 1.7.13.2015
 
 # added ipv6 support
 # needs to be in /root/cpaneldirect/vps.ip6map
+# add another gateway in dhcpd.conf using ###option routers
 
 if [ ! -x /usr/local/sbin/ebtables ] && [ ! -x /sbin/ebtables ]; then
        echo 'neither /usr/local/sbin/ebtables nor /sbin/ebtables exist or is not executable';
 fi
+
+#debug
+#LOG='--log --log-level=7 --log-prefix DEBUG --log-ip --log-ip6 --log-arp';
 
 # don't run on qs
 check=`crontab -l | grep qs_cron`;
@@ -25,7 +29,7 @@ fi
 
 debug=0;
 #beta packet limit
-limit=1000;
+limit=10000;
 
 if [ -e /etc/dhcp/dhcpd.vps ]; then
     DHCPVPS=/etc/dhcp/dhcpd.vps
@@ -111,7 +115,8 @@ gw_check=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1 | wc -
 if [ "$gw_check" -gt "1" ]; then
 	multi_gw=1;
 	echo "#more than one gw found"
-	gateways=`cat $DHCPCONF  | grep	 "^\([^#]*\|\)option routers" | awk '{print $3}' | cut -d\; -f1`;
+	#gateways=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1`;
+	gateways=`cat $DHCPCONF  | grep  "^\([^#]*\|\)option routers\|###option routers" | awk '{print $3}' | cut -d\; -f1`;
 fi
 
 # ipv6 addition
@@ -200,14 +205,15 @@ echo "ebtables -P VMS DROP"
 
 # this outputs all the protection for each individual server
 for user in $list; do
+
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2`;
 	# improve getting the ip in the future
 	ip=`cat $DHCPVPS  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
 	if [ -z "$ip" ]; then
 		echo "echo \"VPS $user Device $dev MAC $mac Got a Blank IP\";"
-		continue;
-	fi;
+        	continue;
+	fi
 	if [ "$debug" = "1" ]; then
 		echo "found user $user"
 		echo "	found mac $mac"
@@ -226,27 +232,32 @@ for user in $list; do
 		# multi gw
 		if [ "$multi_gw" = "1" ]; then
 			for gw in $gateways; do
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $gw --arp-ip-dst $ip -i $eth -o $dev -j ACCEPT"
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gw -i $dev -o $eth -j ACCEPT"			
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $gw --arp-ip-dst $ip -i $eth -o $dev $LOG -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gw -i $dev -o $eth $LOG -j ACCEPT"			
 			done
 		fi
 
 		# we still run this in multi gw form
-		echo "ebtables -A FORWARD -p ARP --arp-ip-src $gateway --arp-ip-dst $ip -i $eth -o $dev -j ACCEPT"
-		echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gateway -i $dev -o $eth -j ACCEPT"
+		echo "ebtables -A FORWARD -p ARP --arp-ip-src $gateway --arp-ip-dst $ip -i $eth -o $dev $LOG -j ACCEPT"
+		echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gateway -i $dev -o $eth $LOG -j ACCEPT"
 
-		echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $ip -i $eth -o $dev -j ACCEPT"
-                echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $br -i $dev -o $eth -j ACCEPT"
+		echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $ip -i $eth -o $dev $LOG -j ACCEPT"
+                echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $br -i $dev -o $eth $LOG -j ACCEPT"
 		# new addition
                 echo "# new addition"
-                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $dev -o $eth -j ACCEPT"
-                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $eth -o $dev -j ACCEPT"
+                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $dev -o $eth $LOG -j ACCEPT"
+                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $eth -o $dev $LOG -j ACCEPT"
                 # end
 
                 echo "#VMS main rules"
                 echo "ebtables -A FORWARD -p ip -i $dev -j VMS"
-		echo "ebtables -A VMS -p ip --ip-src $ip -s $mac -j ACCEPT"
-		echo "ebtables -A VMS -p ip --ip-src $ip -s $mac -j ACCEPT"
+		if [ -e /scripts/_tmp/ebtables/$user ]; then
+			echo "ebtables -A VMS -p ip --ip-src $ip $LOG -j ACCEPT"
+			echo "ebtables -A VMS -p ip --ip-src $ip $LOG -j ACCEPT"
+		else
+			echo "ebtables -A VMS -p ip --ip-src $ip -s $mac $LOG -j ACCEPT"
+                        echo "ebtables -A VMS -p ip --ip-src $ip -s $mac $LOG -j ACCEPT"
+		fi
 		  if [ -e /limitpacket ]; then
 	          	echo "#beta packet limit"
                         ruleid=`expr $ruleid + 1`
@@ -267,25 +278,30 @@ for user in $list; do
 				echo "# $user allow arp, $gateway is gw and $extraip is ip of server. $dev changes as well based on server"
 				if [ "$multi_gw" = "1" ]; then
 					for gw in $gateways; do
-						echo "ebtables -A FORWARD -p ARP --arp-ip-src $gw --arp-ip-dst $extraip -i $eth -o $dev -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gw -i $dev -o $eth -j ACCEPT"
+						echo "ebtables -A FORWARD -p ARP --arp-ip-src $gw --arp-ip-dst $extraip -i $eth -o $dev $LOG -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gw -i $dev -o $eth $LOG -j ACCEPT"
 					done
 
 				fi
 				# still run even in multi_gw
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $gateway --arp-ip-dst $extraip -i $eth -o $dev -j ACCEPT"
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gateway -i $dev -o $eth -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $gateway --arp-ip-dst $extraip -i $eth -o $dev $LOG -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gateway -i $dev -o $eth $LOG -j ACCEPT"
 
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $extraip -i $eth -o $dev -j ACCEPT"
-		                echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $br -i $dev -o $eth -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $extraip -i $eth -o $dev $LOG -j ACCEPT"
+		                echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $br -i $dev -o $eth $LOG -j ACCEPT"
 				# new addition
                                 echo "# new addition"
-                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $dev -o $eth -j ACCEPT"
-                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $eth -o $dev -j ACCEPT"
+                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $dev -o $eth $LOG -j ACCEPT"
+                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $eth -o $dev $LOG -j ACCEPT"
                                 # end
 		                echo "#VMS extra"
-                		echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac -j ACCEPT"
-                		echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac -j ACCEPT"
+				if [ -e /scripts/_tmp/ebtables/$user ]; then
+                			echo "ebtables -A VMS -p ip --ip-src $extraip $LOG -j ACCEPT"
+                			echo "ebtables -A VMS -p ip --ip-src $extraip $LOG -j ACCEPT"
+				else
+					echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac $LOG -j ACCEPT"
+                                        echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac $LOG -j ACCEPT"
+				fi
 				if [ -e /limitpacket ]; then
 					echo "#beta packet limit"
 					ruleid=`expr $ruleid + 1`
@@ -311,7 +327,7 @@ for user in $list; do
 				adev=`/usr/bin/virsh dumpxml $avpsid | grep target | grep dev | grep vnet | cut -d\' -f2`;
 		
 				echo "#allow IP Ping to remote VM"
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $amyip --arp-ip-dst $atheirip -i $dev -o $adev -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $amyip --arp-ip-dst $atheirip -i $dev -o $adev $LOG -j ACCEPT"
 			fi
 		fi
 		#end
@@ -320,35 +336,56 @@ for user in $list; do
 		# Spoof Protect Rules
 		###
 		echo "# $user mac spoof protect"
-		echo "ebtables -A FORWARD -i $dev -s ! $mac -j DROP"
-		echo "# $user IP PROTECT"
-		echo "ebtables -A FORWARD -p IPv4 --ip-src $ip -s ! $mac -j DROP"
-		if [ ! "$ips" = "" ]; then
-			for extraip in $ips; do
-				echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip -s ! $mac -j DROP"
-			done
+		if [ -e /scripts/_tmp/ebtables/$user ]; then
+                	echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
+			echo "ebtables -A FORWARD -i $dev $LOG -j ACCEPT"
+                        echo "# $user IP PROTECT"
+                        echo "ebtables -A FORWARD -p IPv4 --ip-src $ip $LOG -j ACCEPT"
+                        if [ ! "$ips" = "" ]; then
+                                for extraip in $ips; do
+                                        echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip $LOG -j ACCEPT"
+                                done
+                        fi
+		else
+			echo "ebtables -A FORWARD -i $dev -s ! $mac $LOG -j DROP"
+			echo "# $user IP PROTECT"
+			echo "ebtables -A FORWARD -p IPv4 --ip-src $ip -s ! $mac $LOG -j DROP"
+			if [ ! "$ips" = "" ]; then
+				for extraip in $ips; do
+					echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip -s ! $mac $LOG -j DROP"
+				done
+			fi
 		fi
+
 		if [ "$ipv6" = "1" ]; then
 			if [ -e /root/cpaneldirect/vps.ip6map ]; then
 				ip6ips=`cat /root/cpaneldirect/vps.ip6map | grep ^$user | cut -d"|" -f2`;
 				if [ ! "$ip6ips" = "" ]; then
 					for ip6ip in $ip6ips; do
 						echo "#found ipv6 for $user ip is $ip6ip";
-						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $dev -o $eth -j ACCEPT"
-						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $eth -o $dev -j ACCEPT"
-						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $dev -o $eth -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $eth -o $dev -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 					
-						echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $dev -o $eth -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $eth -o $dev -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $dev -o $eth -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $eth -o $dev -j ACCEPT"
+						echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
+                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 
-						echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ip -s ! $mac -j DROP"
-						#echo "ebtables -A FORWARD -p IPv6 --ip6-dst $ip6ip -s ! $mac --log-ip6 -j DROP"
+						if [ -e /scripts/_tmp/ebtables/$user ]; then
+                        				echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
+							echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ip -s $LOG -j ACCEPT"
+						else
+							echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ip -s ! $mac $LOG -j DROP"
+						fi
 					done
 				fi
 			fi
+		fi
+		if [ -e /scripts/_tmp/ebtables/$user ]; then
+			echo 'ebtables -A FORWARD -p ARP -i $eth -o $dev $LOG -j ACCEPT'
+			echo 'ebtables -A FORWARD -p ARP -i $dev -o $eth $LOG -j ACCEPT'
 		fi
 		echo "# end $user"
 		echo
@@ -364,12 +401,12 @@ done
 if [ ! "$debug" = "1" ]; then
 	echo '# DISABLE ARP Rules';
 	echo '# dump arp (seems to solve arping ip stealing, what is the draw back?)'
-	echo 'ebtables -A FORWARD -p ARP -j DROP'
+	echo 'ebtables -A FORWARD -p ARP $LOG -j DROP'
 
 	# does not work
 	#echo '#disable ipv6 for non matches';	
 	#--log-ip6
-	echo 'ebtables -A FORWARD -p IPv6 -j DROP';
+	echo 'ebtables -A FORWARD -p IPv6 $LOG -j DROP';
 
 	###
 	# Block SMTP
@@ -424,5 +461,5 @@ if [ -e /limitpacket ]; then
 fi
 
 if [ -e /etc/debian_version ]; then
-	echo "${base}/securexinetd";
+	echo "/scripts/securexinetd";
 fi
