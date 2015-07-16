@@ -206,6 +206,11 @@ echo "ebtables -P VMS DROP"
 # this outputs all the protection for each individual server
 for user in $list; do
 
+	if [ -e /scripts/_tmp/ebtables/$user ]; then
+		echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
+		continue
+	fi
+
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2 | head -n 1`;
 	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2 | head -n 1`;
 	# improve getting the ip in the future
