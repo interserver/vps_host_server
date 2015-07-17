@@ -80,7 +80,7 @@ function get_vps_iptables_traffic($ips)
 			$vnets = array();
 			foreach ($vnetcounters as $line)
 			{
-				list($vnet, $in, $out) = explode(' ', $line);
+				list($vnet, $out, $in) = explode(' ', $line);
 				//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
 				$vnets[$vnet] = array('in' => $in, 'out' => $out);
 			}
