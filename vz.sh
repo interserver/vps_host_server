@@ -31,3 +31,11 @@ echo
 echo -n 'Disk Usage: '
 df -h
 echo
+
+if [ -x /usr/bin/kcarectl ]; then
+	/usr/bin/kcarectl -u
+elif [ -x /usr/sbin/uptrack-upgrade ]; then
+	/usr/sbin/uptrack-upgrade -y
+else 
+	echo 'No rebootless kernel update installed';
+fi
