@@ -101,7 +101,12 @@ else
    pid=$(pgrep -f 'gzip -dc')
    echo "Didnt like gzip pid (had a space?), going with gzip PID $pid"
   fi
-  tsize=$(stat -L /proc/$pid/fd/3 -c "%s")
+  tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
+  echo "Got Total Size $tsize";
+  if [ -z $tsize ]; then
+        tsize=$(stat -c%s "/${template}.img.gz");
+        echo "Falling back to filesize check, got size $tsize";
+  fi;
   while [ -d /proc/$pid ]; do
 	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
 	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
