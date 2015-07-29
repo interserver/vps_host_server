@@ -79,6 +79,10 @@ else
   fi
 
  rm -f ${name}.xml.backup
+ sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
+ mv -f ${name}.xml ${name}.xml.backup
+ grep -v "address type='drive'" ${name}.xml.backup > ${name}.xml
+ rm -f ${name}.xml.backup
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
   template=windows2
