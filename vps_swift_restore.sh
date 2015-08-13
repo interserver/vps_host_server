@@ -21,14 +21,14 @@ destids="$*"
 export TERM=linux;
 if [ "$(/admin/swift/c isls vps${sourceid} |grep "^${image}/")" = "" ]; then
 	echo "Backup does not exist"
-	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+	curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 	exit
 fi
 if which virsh >/dev/null 2>&1; then
   cd /
   if [ -e /${image} ]; then
 	echo "Invalid Image name - directory exists";
-	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+	curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
   fi
   #if [ $# -gt 1 ]; then
@@ -41,7 +41,7 @@ if which virsh >/dev/null 2>&1; then
 else
   if [ -e /vz/${image} ]; then
 	echo "Invalid Image name - directory exists";
-	curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+	curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
   fi
   cd /vz
@@ -124,7 +124,7 @@ for i in $destids; do
 	fi
   fi
 done
-curl --connect-timeout 60 --max-time 240 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
 #set -x
 if which virsh >/dev/null 2>&1; then
   for i in $(ls /dev/mapper/*p[0-9] 2>/dev/null | sed s#"/dev/mapper/vz-"#""#g | sed s#"/dev/mapper/"#""#g | sed s#"p[0-9]$"#""#g); do

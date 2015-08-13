@@ -19,12 +19,12 @@ INSTDIR="$(pwd -L)"
 if which virsh >/dev/null 2>&1; then
  if ! virsh dominfo $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
-  curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+  curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
   exit;
  fi
  if [ -e /${image} ]; then
 	echo "Invalid Image name - directory exists";
-	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+	curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
  fi
  set -x
@@ -47,12 +47,12 @@ if which virsh >/dev/null 2>&1; then
 else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"
-  curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+  curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
   exit;
  fi
  if [ -e /vz/${image} ]; then
 	echo "Invalid Image name - directory exists";
-	curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+	curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 	exit;
  fi
  /admin/swift/c mkdir_p vps${id} --force
@@ -78,5 +78,5 @@ else
   /bin/rm -rf /vz/${image}
  fi
 fi
-curl --connect-timeout 60 --max-time 240 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
+curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 

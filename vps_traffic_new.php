@@ -163,7 +163,7 @@ $totals = get_vps_iptables_traffic($ips);
 if (sizeof($totals) > 0)
 {
 	//print_r($totals);
-	$cmd = 'curl --connect-timeout 60 --max-time 240 -k -d action=bandwidth -d servers="' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '" -d bandwidth="' . urlencode(base64_encode(gzcompress(serialize($totals)))) . '" "' . $url . '" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '" -d bandwidth="' . urlencode(base64_encode(gzcompress(serialize($totals)))) . '" "' . $url . '" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }

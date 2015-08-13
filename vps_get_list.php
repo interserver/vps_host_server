@@ -269,11 +269,11 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		'distro' => $matches['distro'],
 		'version' => $matches['version'],
 	);
-	$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  ' 
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  ' 
 	. (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '') 
 //	. ($cpu_data != '' ? ' -F cpu_usage="' . base64_encode(gzcompress($cpu_data, 9)) . '" ' : '')
 	. $curl_cmd . ' "' . $url . '" 2>/dev/null;';
-//		$cmd = 'curl --connect-timeout 60 --max-time 240 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
+//		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }

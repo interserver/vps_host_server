@@ -22,7 +22,7 @@ echo "[" . date('Y-m-d H:i:s') . "] Crontab Startup\n";
 $cmd = dirname(__FILE__) . '/vps_update_info.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
-$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getnewvps '$url' 2>/dev/null;";
+$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getnewvps '$url' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
 $out = trim(`$cmd`);
 if ($out != '')
@@ -33,7 +33,7 @@ if ($out != '')
 $cmd = dirname(__FILE__) . '/vps_traffic_new.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
-$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getslicemap '$url' 2>/dev/null;";
+$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getslicemap '$url' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
 $out = trim(`$cmd`);
 //echo "Get IP List Running:	$out\n";
@@ -43,7 +43,7 @@ if ($out != '')
 }
 if (!file_exists('/usr/sbin/vzctl'))
 {
-	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getipmap '$url' 2>/dev/null;";
+	$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getipmap '$url' 2>/dev/null;";
 	//echo "Running Command: $cmd\n";
 	$out = trim(`$cmd`);
 	//echo "Get IP List Running:	$out\n";
@@ -51,7 +51,7 @@ if (!file_exists('/usr/sbin/vzctl'))
 	{
 		echo `$out`;
 	}
-	$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getvncmap '$url' 2>/dev/null;";
+	$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getvncmap '$url' 2>/dev/null;";
 	//echo "Running Command: $cmd\n";
 	$out = trim(`$cmd`);
 	//echo "Get IP List Running:	$out\n";
@@ -60,7 +60,7 @@ if (!file_exists('/usr/sbin/vzctl'))
 		echo `$out`;
 	}
 }
-$cmd = "curl --connect-timeout 60 --max-time 240 -k -d action=getqueue '$url' 2>/dev/null;";
+$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getqueue '$url' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
 $out = trim(`$cmd`);
 if ($out != '')

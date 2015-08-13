@@ -152,7 +152,7 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 		{
 			$servers['hdsize'] = $parts[0];
 			$servers['hdfree'] = $parts[1];
-			$cmd = 'curl --connect-timeout 60 --max-time 240 -k -d action=vpsinfo -d servers="' . urlencode(base64_encode(serialize($servers))) . '" "' . $url . '" 2>/dev/null;';
+			$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vpsinfo -d servers="' . urlencode(base64_encode(serialize($servers))) . '" "' . $url . '" 2>/dev/null;';
 			// echo "CMD: $cmd\n";
 			echo trim(`$cmd`);
 		}

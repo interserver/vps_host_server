@@ -110,7 +110,7 @@ else
   while [ -d /proc/$pid ]; do
 	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
 	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 	if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 		softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 		for softfile in $softraid; do
@@ -132,7 +132,7 @@ else
 	if [ -d /proc/$pid ]; then
 	  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-	  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+	  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 			for softfile in $softraid; do
@@ -157,7 +157,7 @@ else
 	if [ -d /proc/$pid ]; then
 	  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-	  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+	  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 			for softfile in $softraid; do
@@ -174,7 +174,7 @@ else
 		echo check > $softfile
 	done
  fi
- curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
+ curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
  sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
  t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
  p="$(echo $t | awk '{ print $1 }')"
@@ -280,7 +280,7 @@ fi
  else
   /etc/init.d/dhcpd restart
  fi
- curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
+ curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
  /usr/bin/virsh start ${name};
  /root/cpaneldirect/vps_refresh_vnc.sh $name
 

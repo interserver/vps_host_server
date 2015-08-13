@@ -20,7 +20,7 @@ else
   convert shot1_$1.jpg -quality 75 shot_$1.gif;
   rm -f shot1_$1.jpg;
   if [ ! "$url" = "" ] && [ -e "shot_$1.gif" ]; then
-   curl --connect-timeout 60 --max-time 240 -k -F screenshot=@shot_$1.gif "$url" 2>/dev/null;
+   curl --connect-timeout 60 --max-time 600 -k -F screenshot=@shot_$1.gif "$url" 2>/dev/null;
   fi;
   rm -f shot_$1.gif;
  fi
