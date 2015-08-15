@@ -89,7 +89,6 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
 		//echo "CMD:$cmd\n";
 		echo `$cmd`;
-		$cmd = '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
 	}
 	else
 	{
@@ -275,6 +274,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	. $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
+	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
 	echo trim(`$cmd`);
 }
 
