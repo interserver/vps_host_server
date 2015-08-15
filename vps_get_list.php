@@ -85,7 +85,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); echo -n " -F shot$p=@$i"; fi; done;)';
+		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
 		//echo "CMD:$cmd\n";
 		echo `$cmd`;
