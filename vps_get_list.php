@@ -89,7 +89,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'."\n";
 		//echo "CMD:$cmd\n";
 		echo `$cmd`;
-		$cmd = '/bin/rm -f shot_*jpg;';
+		$cmd = '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
 	}
 	else
 	{
