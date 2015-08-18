@@ -28,7 +28,6 @@ else
 fi;
 IFS="
 ";
-cpu_files="$(echo /proc/vz/fairsched/*/cpu.proc.stat)";
 	if [ -e ~/.cpu_usage.last.sh ]; then
 		source ~/.cpu_usage.last.sh;
 	elif [ ${BASH_VERSION:0:1} -ge 4 ]; then

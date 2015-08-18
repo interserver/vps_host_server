@@ -32,7 +32,7 @@ else
 	$out = 'normal';
 $cpu_proc_mask = '/proc/vz/fairsched/*/cpu.proc.stat';
 $files = trim(`ls $cpu_proc_mask;`);
-if ($filse == '/proc/vz/fairsched/*/cpu.proc.stat')
+if ($files == '/proc/vz/fairsched/*/cpu.proc.stat')
 	echo "Error, /proc/vz/fairsched/*/cpu.proc.stat entries do not exist!
 	Most likely cause is, this is either not an OpenVZ server, 
 	or not booted into the proper kernel.\n";
