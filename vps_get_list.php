@@ -15,7 +15,9 @@ function get_vps_list()
 	$servers = array();
 	if (!file_exists('/usr/sbin/vzctl'))
 	{
-		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
+		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
+		//echo "Running $cmd\n";
+		$out = trim(`$cmd`);
 		$lines = explode("\n", $out);
 		$cmd = '';
 		foreach ($lines as $serverline)
@@ -65,12 +67,12 @@ function get_vps_list()
 $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;\n";
 //$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
-							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
-								//$vncdisplay = (integer)abs($port - 5900);
-							//$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot_${port}.jpg >/dev/null 2>&1; convert shot_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.jpg shot_${port}.started; };\n shot_${port} &\n";
+//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
+//$vncdisplay = (integer)abs($port - 5900);
+//$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot_${port}.jpg >/dev/null 2>&1; convert shot_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.jpg shot_${port}.started; };\n shot_${port} &\n";
 //								$cmd .= "/root/cpaneldirect/vps_kvm_screenshot_new.sh ${port} &\n";
 //								$curl_cmd .= " -F shot".$port."=@shot_".$port.".gif";
-							//$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+//$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
 						}
 					}
 				}
@@ -92,7 +94,9 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	}
 	else
 	{
-		$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";if [ "$(vzlist -L |grep vswap)" = "" ]; then vzlist -a -o ctid,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; else vzlist -a -o ctid,numproc,status,ip,hostname,vswap,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; fi;`;
+		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";if [ "$(vzlist -L |grep vswap)" = "" ]; then vzlist -a -o ctid,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; else vzlist -a -o ctid,numproc,status,ip,hostname,vswap,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; fi;';
+		//echo "Running $cmd\n";
+		$out = `$cmd`;
 		preg_match_all('/\s+(?P<ctid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<vswap>[^\s]+)\s+(?P<layout>[^\s]+)\s+(?P<kmemsize>[^\s]+)\s+(?P<kmemsize_f>[^\s]+)\s+(?P<lockedpages>[^\s]+)\s+(?P<lockedpages_f>[^\s]+)\s+(?P<privvmpages>[^\s]+)\s+(?P<privvmpages_f>[^\s]+)\s+(?P<shmpages>[^\s]+)\s+(?P<shmpages_f>[^\s]+)\s+(?P<numproc_f>[^\s]+)\s+(?P<physpages>[^\s]+)\s+(?P<physpages_f>[^\s]+)\s+(?P<vmguarpages>[^\s]+)\s+(?P<vmguarpages_f>[^\s]+)\s+(?P<oomguarpages>[^\s]+)\s+(?P<oomguarpages_f>[^\s]+)\s+(?P<numtcpsock>[^\s]+)\s+(?P<numtcpsock_f>[^\s]+)\s+(?P<numflock>[^\s]+)\s+(?P<numflock_f>[^\s]+)\s+(?P<numpty>[^\s]+)\s+(?P<numpty_f>[^\s]+)\s+(?P<numsiginfo>[^\s]+)\s+(?P<numsiginfo_f>[^\s]+)\s+(?P<tcpsndbuf>[^\s]+)\s+(?P<tcpsndbuf_f>[^\s]+)\s+(?P<tcprcvbuf>[^\s]+)\s+(?P<tcprcvbuf_f>[^\s]+)\s+(?P<othersockbuf>[^\s]+)\s+(?P<othersockbuf_f>[^\s]+)\s+(?P<dgramrcvbuf>[^\s]+)\s+(?P<dgramrcvbuf_f>[^\s]+)\s+(?P<numothersock>[^\s]+)\s+(?P<numothersock_f>[^\s]+)\s+(?P<dcachesize>[^\s]+)\s+(?P<dcachesize_f>[^\s]+)\s+(?P<numfile>[^\s]+)\s+(?P<numfile_f>[^\s]+)\s+(?P<numiptent>[^\s]+)\s+(?P<numiptent_f>[^\s]+)\s+(?P<diskspace>[^\s]+)\s+(?P<diskspace_s>[^\s]+)\s+(?P<diskspace_h>[^\s]+)\s+(?P<diskinodes>[^\s]+)\s+(?P<diskinodes_s>[^\s]+)\s+(?P<diskinodes_h>[^\s]+)\s+(?P<laverage>[^\s]+)/', $out, $matches);
 		//print_r($matches);
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
@@ -161,7 +165,9 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 				continue;
 			if ($servers[$id]['layout'] == 'simfs')
 			{
-				$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print $2 " " $3 }'`);
+				$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'";
+				//echo "Running $cmd\n";
+				$out = trim(`$cmd`);
 				if ($out != '')
 				{
 					$disk = explode(' ', $out);
@@ -260,8 +266,25 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
 	//$speed = trim(`ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
 	$cmd = 'ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
+	//echo "Running {$cmd}\n";
 	$speed = trim(`{$cmd}`);
-	$flags = explode(' ', trim(`grep "^flags" /proc/cpuinfo | head -n 1 | cut -d: -f2-;`));
+	$cpuinfo = explode("\n", file_get_contents('/proc/cpuinfo'));
+	$found = false;
+	$lines = sizeof($cpuinfo);
+	$line = 0;
+	while ($found != true && $line < $lines)
+	{
+		$cpuline = $cpuinfo[$line];
+		if (substr($cpuline, 0, 5) == 'flags')
+		{
+			$flags = explode(' ', trim(substr($cpuline, strpos($cpuline, ':') + 1)));
+			$found = true;
+		}
+		else
+		{
+			$line++;
+		}
+	}
 	sort($flags);
 	$flagsnew = implode(' ', $flags);
 	$flags = $flagsnew;
@@ -288,6 +311,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 //		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
+	//echo "OK now doing something else on " . __LINE__ . "\n";
 	echo trim(`$cmd`);
 }
 
