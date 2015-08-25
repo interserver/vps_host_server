@@ -256,6 +256,17 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		file_put_contents('/root/.bw_usage.last', serialize($bw));
 		$servers[0]['bw_usage'] = $bw_usage;
 	}
+	// ensure ethtool is installed
+	`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
+	//$speed = trim(`ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
+	$cmd = 'ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
+	$speed = trim(`{$cmd}`);
+	$flags = explode(' ', trim(`grep "^flags" /proc/cpuinfo | head -n 1 | cut -d: -f2-;`));
+	sort($flags);
+	$flagsnew = implode(' ', $flags);
+	$flags = $flagsnew;
+	unset($flagsnew);
+
 	if (file_exists('/etc/redhat-release'))
 	{
 		preg_match('/^(?P<distro>[\w]+)( Linux)? release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release'), $matches);
@@ -267,6 +278,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	$servers[0]['os_info'] = array(
 		'distro' => $matches['distro'],
 		'version' => $matches['version'],
+		'speed' => $speed,
+		'cpu_flags' => $flags,
 	);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  ' 
 	. (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '') 
