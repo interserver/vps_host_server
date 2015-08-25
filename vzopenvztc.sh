@@ -44,11 +44,11 @@ modprobe ipt_REJECT
 
 #eth
 /sbin/tc qdisc del dev eth0 root
-/sbin/tc qdisc add dev eth0 root handle 1: cbq avpkt 1000 bandwidth 100mbit
+/sbin/tc qdisc add dev eth0 root handle 1: cbq avpkt 1000 bandwidth 200mbit
 
 #venet
 /sbin/tc qdisc del dev venet0 root
-/sbin/tc qdisc add dev venet0 root handle 1: cbq avpkt 1000 bandwidth 100mbit
+/sbin/tc qdisc add dev venet0 root handle 1: cbq avpkt 1000 bandwidth 200mbit
 
 # vps's / changes here
 
