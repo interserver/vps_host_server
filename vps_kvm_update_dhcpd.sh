@@ -9,6 +9,7 @@ if [ -e /etc/dhcp/dhcpd.vps ]; then
 else
 	DHCPVPS=/etc/dhcpd.vps;
 fi;
+touch ${DHCPVPS};
 for user in $(/usr/bin/virsh list | grep running | awk '{print $2}'); do
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 	cat ${DHCPVPS} | sed s#"host $user { hardware ethernet .*; fix"#"host $user { hardware ethernet $mac; fix"#g > ${DHCPVPS}.new;
