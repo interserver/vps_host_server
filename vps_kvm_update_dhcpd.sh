@@ -17,7 +17,7 @@ curl --connect-timeout 300 --max-time 600 -k -d action=getvpsmainips "$url" 2>/d
 for user in $(/usr/bin/virsh list --all | grep running | awk '{print $2}'); do
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 	id="$(echo "$user" | sed s#"[[:alpha:]]"#""#g)"
-	ip="$(grep "^id:" /root/cpaneldirect/vps.mainips | cut -d: -f2-)";
+	ip="$(grep "^$id:" /root/cpaneldirect/vps.mainips | cut -d: -f2-)";
 	echo "host $user { hardware ethernet $mac; fixed-address $ip;}" >> ${DHCPVPS};
 	#cat ${DHCPVPS} | sed s#"host $user { hardware ethernet .*; fix"#"host $user { hardware ethernet $mac; fix"#g > ${DHCPVPS}.new;
 	#cat ${DHCPVPS}.new > ${DHCPVPS};
