@@ -19,7 +19,21 @@ START=1
 #this in the vnetX
 IF=$2               # Interface (changes)
 
-OF=eth0
+hostname=`hostname`
+if [ "$hostname" = "kvm1.trouble-free.net" -o "$hostname" = "kvm2.interserver.net" -o "$hostname" = "kvm50.interserver.net" ]; then
+        eth=eth1;
+elif [ -e /etc/debian_version ]; then
+       if [ -e /sys/class/net/p2p1 ]; then
+               eth=p2p1;
+       elif  [ -e /sys/class/net/em1 ]; then
+               eth=em1;
+       else
+               eth=eth0;
+       fi
+else
+        eth=eth0;
+fi
+OF=$eth
 
 # Filter options for limiting the intended interface.
 U32IF="$TC filter add dev $IF protocol ip parent 1:0 prio 1 u32"
