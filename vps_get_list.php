@@ -265,7 +265,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	// ensure ethtool is installed
 	`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
 	//$speed = trim(`ethtool eth0 |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
-	if (in_array($_SERVER['HOSTNAME'], array("kvm1.trouble-free.net", "kvm2.interserver.net", "kvm50.interserver.net")))
+	if (in_array(trim(`hostname`), array("kvm1.trouble-free.net", "kvm2.interserver.net", "kvm50.interserver.net")))
 		$eth = 'eth1';
 	elseif (file_exists('/etc/debian_version'))
 	{
