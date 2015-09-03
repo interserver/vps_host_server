@@ -35,14 +35,12 @@ function valid_ip($ip, $display_errors = true, $support_ipv6 = false)
 			return false;
 		}
 		for ($i = 0; $i < 4; $i++)
-		{
 			if ($quads[$i] > 255)
 			{
 				if ($display_errors)
 					error_log('<font class="error">IP ' . $ip . ' number ' . $quads[$i] . ' too high</font>');
 				return false;
 			}
-		}
 	}
 	return true;
 }
@@ -63,7 +61,7 @@ function get_vps_ipmap()
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
-			if (valid_ip($ip, false))
+			if (valid_ip($ip, false) == true)
 			{
 				$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
 				if ($extra != '')
@@ -83,13 +81,13 @@ function vps_iptables_traffic_rules($ips)
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
 	{
-			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
-			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-			// run it twice to be safe
-			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
-			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-			$cmd .= "iptables -A FORWARD -d $ip; ";
-			$cmd .= "iptables -A FORWARD -s $ip; ";
+		$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
+		$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
+		// run it twice to be safe
+		$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
+		$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
+		$cmd .= "iptables -A FORWARD -d $ip; ";
+		$cmd .= "iptables -A FORWARD -s $ip; ";
 	}
 	`$cmd`;
 }
