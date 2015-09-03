@@ -81,13 +81,16 @@ function vps_iptables_traffic_rules($ips)
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
 	{
-		$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
-		$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-		// run it twice to be safe
-		$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
-		$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-		$cmd .= "iptables -A FORWARD -d $ip; ";
-		$cmd .= "iptables -A FORWARD -s $ip; ";
+		if (valid_ip($ip, false) == true)
+		{
+			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
+			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
+			// run it twice to be safe
+			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
+			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
+			$cmd .= "iptables -A FORWARD -d $ip; ";
+			$cmd .= "iptables -A FORWARD -s $ip; ";
+		}
 	}
 	`$cmd`;
 }
