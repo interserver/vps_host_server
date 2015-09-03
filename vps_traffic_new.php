@@ -9,17 +9,51 @@
  * @package MyAdmin
  * @category VPS
  */
+
+function valid_ip($ip, $display_errors = true, $support_ipv6 = false)
+{
+	if (version_compare(PHP_VERSION, '5.2.0') >= 0)
+	{
+		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === FALSE)
+			if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === FALSE)
+				return false;
+	}
+	else
+	{
+		if (!preg_match("/^[0-9\.]{7,15}$/", $ip))
+		{
+			// dont display errors cuz this gets called w/ a blank entry when people didnt even submit anything yet
+			//add_output('<font class="error">IP ' . $ip . ' Too short/long</font>');
+			return false;
+		}
+		$quads = explode('.', $ip);
+		$numquads = count($quads);
+		if ($numquads != 4)
+		{
+			if ($display_errors)
+				error_log('<font class="error">IP ' . $ip . ' Too many quads</font>');
+			return false;
+		}
+		for ($i = 0; $i < 4; $i++)
+		{
+			if ($quads[$i] > 255)
+			{
+				if ($display_errors)
+					error_log('<font class="error">IP ' . $ip . ' number ' . $quads[$i] . ' too high</font>');
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 function get_vps_ipmap()
 {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == '')
-	{
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
-	}
 	else
-	{
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
-	}
 	$lines = explode("\n", $output);
 	$ips = array();
 	foreach ($lines as $line)
@@ -29,17 +63,14 @@ function get_vps_ipmap()
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
-			$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
-			if ($extra != '')
+			if (valid_ip($ip, false))
 			{
-				$parts = array_merge($parts, explode("\n", $extra));
-			}
-			for ($x = 1; $x < sizeof($parts); $x++)
-			{
-				if ($parts[$x] != '-')
-				{
-					$ips[$parts[$x]] = $id;
-				}
+				$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
+				if ($extra != '')
+					$parts = array_merge($parts, explode("\n", $extra));
+				for ($x = 1; $x < sizeof($parts); $x++)
+					if ($parts[$x] != '-')
+						$ips[$parts[$x]] = $id;
 			}
 		}
 	}
@@ -70,9 +101,7 @@ function get_vps_iptables_traffic($ips)
 	if ($vzctl == '')
 	{
 		if (file_exists(('/root/.traffic.last')))
-		{
 			$last = unserialize(file_get_contents('/root/.traffic.last'));
-		}
 		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 		if ($vnetcounters != '')
 		{
@@ -124,15 +153,11 @@ function get_vps_iptables_traffic($ips)
 							$out_new = $vpss[$vps]['out'];
 						} 
 						if ($in_new > 0 || $out_new > 0)
-						{
 							$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
-						}
 					}
 				}
 				if (sizeof($totals) > 0)
-				{
 					file_put_contents('/root/.traffic.last', serialize($vpss));
-				}
 			}
 		}
 	}
@@ -146,9 +171,7 @@ function get_vps_iptables_traffic($ips)
 				list($in,$out) = $lines;
 				$total = $in + $out;
 				if ($total > 0)
-				{
 					$totals[$ip] = array('in' => $in, 'out' => $out);
-				}
 			}
 		}
 		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
