@@ -163,13 +163,16 @@ function get_vps_iptables_traffic($ips)
 	{
 		foreach ($ips as $ip => $id)
 		{
-			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
-			if (sizeof($lines) == 2)
+			if (valid_ip($ip, false) == true)
 			{
-				list($in,$out) = $lines;
-				$total = $in + $out;
-				if ($total > 0)
-					$totals[$ip] = array('in' => $in, 'out' => $out);
+				$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
+				if (sizeof($lines) == 2)
+				{
+					list($in,$out) = $lines;
+					$total = $in + $out;
+					if ($total > 0)
+						$totals[$ip] = array('in' => $in, 'out' => $out);
+				}
 			}
 		}
 		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
