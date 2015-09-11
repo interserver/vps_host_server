@@ -43,7 +43,7 @@ else
  fi;
  echo "Clearing Password";
  #/root/cpaneldirect/vps_kvm_setup_password_clear.expect ${pname}p2
- echo -e "1\nq\ny\n" | /root/cpaneldirect/chntpw -u Administrator /vz/mounts/${pname}p2/Windows/System32/config/SAM /vz/mounts/${pname}p2/Windows/System32/config/SECURITY /vz/mounts/${pname}p2/Windows/System32/config/SYSTEM
+ echo -e "1\n4\nq\ny\n" | /root/cpaneldirect/chntpw -u Administrator /vz/mounts/${pname}p2/Windows/System32/config/SAM /vz/mounts/${pname}p2/Windows/System32/config/SECURITY /vz/mounts/${pname}p2/Windows/System32/config/SYSTEM
  #/root/cpaneldirect/sampasswd -r -u Administrator -v /vz/mounts/${pname}p2/Windows/System32/config/SAM;
  echo "Saving Changes";
  sync;
