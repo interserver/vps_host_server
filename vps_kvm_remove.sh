@@ -21,9 +21,7 @@ if [ $# -ne 1 ]; then
  echo " ie $0 windows1337"
 #check if vps exists
 else
- if [ -e /var/lib/libvirt/qemu/save ]; then
-  rm -f /var/lib/libvirt/qemu/save/${name}.save 
- fi;
+ virsh managedsave-remove $name;
  if ! virsh dominfo $name >/dev/null 2>&1; then
   echo "VPS $name doesnt exist!";
  else
