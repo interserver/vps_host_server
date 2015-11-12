@@ -9,9 +9,9 @@ elif [ -e /etc/apt ]; then
 fi;
 if [ ! -e /usr/bin/cpan ]; then
   if [ "$distro"= "ubuntu" ];then
-    apt-get install -y perl;
+    apt-get install -y perl >&2;
   else
-    yum install -y perl-CPAN;
+    yum install -y perl-CPAN >&2;
   fi;
 fi;
 echo 'H4sICANDRFYCA0NvbmZpZy5wbQB9VD1v2zAQ3f0rNBTIkljJ0CVBCuSjQ4A0KJpuQXCgpbN1MEXS
