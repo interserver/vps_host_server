@@ -11,7 +11,7 @@ if [ ! -e /usr/bin/cpan ]; then
   if [ "$distro"= "ubuntu" ];then
     apt-get install -y perl expect >&2;
   else
-    yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta expect >&2;
+    yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta expect libserf-devel db4-devel gnome-keyring-devel >&2;
   fi;
 fi;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
