@@ -14,6 +14,7 @@ if [ ! -e /usr/bin/cpan ]; then
     yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta >&2;
   fi;
 fi;
+perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
 echo 'H4sICANDRFYCA0NvbmZpZy5wbQB9VD1v2zAQ3f0rNBTIkljJ0CVBCuSjQ4A0KJpuQXCgpbN1MEXS
 d6QTo+h/L0XRTiTbXQz53rvve/xy9/Pm6fLyzpo5LYrr4s+kKE5U8BYq27bkT4rrb8Xq5fz1tANm
 gXQNlaoazMDF+QCqiTNQsrW+nFZOmTJhIxowBsFD4RlXgRgFyIhXWoOzmqpNpipZlhuU3iFVAi16
@@ -25,7 +26,7 @@ VUamoRl5iINnH1wcrYhajLIuER2IDVwhvDXIBwZQ9nBek7aqhtbWQSOskWdWYmnZad1TWrVEULwY
 7DlSRWl8fiaUTxeV0Qa13ibpWpgpabaQfYPg0sFESY8OL4Y41lvUaAskoJUnM7zpBFk2qkXjZYRx
 kKhyjD+MzrKHhsRb3gwTB9Y62pPxZfXSye6yLFtitixTJj/FOpTdU1q+nhY7Qje66ZZF3RMrzdTy
 Yp8U3xdDvrLdR/makwqCrDSNp7BRrYY0ocrWn7G/V5OLqwnA96d7gMk/S+BuINoFAAA=' | \
-base64 -d - |gunzip - > /usr/share/perl5/CPAN/Config.pm;
+base64 -d - |gunzip - > ${perldir}/CPAN/Config.pm;
 for i in Parse::CPAN::Meta Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile ; do 
 	PERL_MM_USE_DEFAULT=1 cpan $i >&2
 done;
