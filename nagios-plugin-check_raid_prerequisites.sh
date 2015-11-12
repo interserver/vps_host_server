@@ -9,9 +9,9 @@ elif [ -e /etc/apt ]; then
 fi;
 if [ ! -e /usr/bin/cpan ]; then
   if [ "$distro"= "ubuntu" ];then
-    apt-get install -y perl >&2;
+    apt-get install -y perl expect >&2;
   else
-    yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta >&2;
+    yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta expect >&2;
   fi;
 fi;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
