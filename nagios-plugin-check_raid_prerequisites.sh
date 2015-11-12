@@ -64,6 +64,6 @@ fi;
 fi;
 modules="Module::Build Test::Fatal Test::Requires Module::Implementation Params::Validate Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile";
 for i in $modules; do 
-  PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "install $i" >&2
-  #PERL_MM_USE_DEFAULT=1 cpan $i >&2
+  #PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "install $i" >&2
+  PERL_MM_USE_DEFAULT=1 cpan $i >&2
 done;
