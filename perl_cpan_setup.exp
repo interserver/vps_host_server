@@ -7,11 +7,12 @@ if {$force_conservative} {
 		exp_send -s -- $arg
 	}
 }
-set timeout -1
-spawn $env(SHELL)
+set timeout 10
+spawn perl -MCPAN -e shell
+# $env(SHELL)
 match_max 100000
-send -- "rm -f /root/.cpan/.lock\r"
-send -- "perl -MCPAN -e shell\r"
+#send -- "rm -f /root/.cpan/.lock\r"
+#send -- "perl -MCPAN -e shell\r"
 #	"\[yes\]" {send "\r" ; exp_continue}
 expect {
 	"Would you like to configure as much as possible automatically" {send "yes\r" ; exp_continue}
