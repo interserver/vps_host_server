@@ -8,6 +8,7 @@ if {$force_conservative} {
 	}
 }
 set timeout 10
+spawn rm -f /root/.cpan/.lock
 spawn perl -MCPAN -e shell
 # $env(SHELL)
 match_max 100000
