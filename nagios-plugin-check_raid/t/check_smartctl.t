@@ -6,7 +6,7 @@ BEGIN {
 
 use strict;
 use warnings;
-use Test::More tests => 5;
+use Test::More tests => 6;
 use test;
 
 my @tests = (
@@ -22,6 +22,9 @@ my @tests = (
 	},
 );
 
+# test that plugin can be created
+ok(smartctl->new, "plugin created");
+
 foreach my $test (@tests) {
 	my $plugin = smartctl->new(
 		commands => {
@@ -30,7 +33,7 @@ foreach my $test (@tests) {
 	);
 	ok($plugin, "plugin created");
 
-	$plugin->check($test->{check_params});
+	$plugin->check_devices($test->{check_params});
 	ok(1, "check ran");
 
 	ok(defined($plugin->status), "status code set");

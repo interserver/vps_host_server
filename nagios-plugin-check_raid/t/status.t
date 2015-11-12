@@ -6,10 +6,16 @@ BEGIN {
 
 use strict;
 use warnings;
-use Test::More tests => 20;
+use Test::More tests => 22;
 use test;
 
-my $plugin = plugin->new();
+my %options = (
+	something => 1,
+);
+my $plugin = App::Monitoring::Plugin::CheckRaid::Plugin->new(options => \%options);
+
+is($plugin->{options}{something}, 1, 'custom option is set');
+ok(exists($plugin->{options}{resync_status}), 'default option is present');
 
 ok(!defined($plugin->status), 'default status undef');
 is($plugin->status(OK), OK, 'set ok');
@@ -41,7 +47,7 @@ is($plugin->critical->status, CRITICAL, 'set critical');
 is($plugin->unknown->status, UNKNOWN, 'set unknown');
 
 # the same, but with -W option emulated
-plugin->set_critical_as_warning;
+$plugin->set_critical_as_warning;
 
 $plugin->{status} = undef;
 is($plugin->ok->status, OK, 'set ok');

@@ -1,0 +1,9 @@
+# vim backups
+*~
+*.sw[op]
+
+# lockfile by SerialLine
+LCK..ttyNOTTY
+
+# generated now
+/check_raid.pl
