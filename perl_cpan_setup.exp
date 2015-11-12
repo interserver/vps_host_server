@@ -116,4 +116,5 @@ expect "cpan>"
 send -- "o conf commit\r"
 expect "cpan>"
 send -- "quit\r"
+send -- "exit\r"
 expect eof
