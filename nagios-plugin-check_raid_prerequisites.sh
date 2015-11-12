@@ -14,8 +14,9 @@ if [ ! -e /usr/bin/cpan ]; then
     yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta >&2;
   fi;
 fi;
-/root/cpaneldirect/perl_cpan_setup.exp;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
+rm -f ~/.cpan/.lock ${perldir}/CPAN/Config.pm;
+/root/cpaneldirect/perl_cpan_setup.exp;
 if [ 1 = 0 ]; then
 if [ ! -e ${perldir}/CPAN/Config.pm ] || [ "$(grep "urllist.*http" ${perldir}/CPAN/Config.pm)" = "" ]; then
 cat >${perldir}/CPAN/Config.pm <<EOF
