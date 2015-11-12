@@ -11,7 +11,7 @@ if [ ! -e /usr/bin/cpan ]; then
   if [ "$distro"= "ubuntu" ];then
     apt-get install -y perl >&2;
   else
-    yum install -y perl-CPAN >&2;
+    yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta >&2;
   fi;
 fi;
 echo 'H4sICANDRFYCA0NvbmZpZy5wbQB9VD1v2zAQ3f0rNBTIkljJ0CVBCuSjQ4A0KJpuQXCgpbN1MEXS
@@ -26,6 +26,6 @@ VUamoRl5iINnH1wcrYhajLIuER2IDVwhvDXIBwZQ9nBek7aqhtbWQSOskWdWYmnZad1TWrVEULwY
 kKhyjD+MzrKHhsRb3gwTB9Y62pPxZfXSye6yLFtitixTJj/FOpTdU1q+nhY7Qje66ZZF3RMrzdTy
 Yp8U3xdDvrLdR/makwqCrDSNp7BRrYY0ocrWn7G/V5OLqwnA96d7gMk/S+BuINoFAAA=' | \
 base64 -d - |gunzip - > /usr/share/perl5/CPAN/Config.pm;
-for i in  Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile ; do 
+for i in Parse::CPAN::Meta Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile ; do 
 	PERL_MM_USE_DEFAULT=1 cpan $i >&2
 done;
