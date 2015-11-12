@@ -7,7 +7,7 @@ elif [ -e /etc/apt ]; then
   . /etc/lsb-release; 
   distro=ubuntu; 
   version=$DISTRIB_RELEASE;
-  apt-get install -y perl expect >&2;
+  apt-get install -y perl expect libyaml-dev libyaml-libyaml-perl libyaml-perl libyaml-cpp-dev >&2;
 fi;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
 rm -f ${perldir}/CPAN/Config.pm;
