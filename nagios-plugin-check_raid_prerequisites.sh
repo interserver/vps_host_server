@@ -14,7 +14,9 @@ if [ ! -e /usr/bin/cpan ]; then
     yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta >&2;
   fi;
 fi;
+/root/cpaneldirect/perl_cpan_setup.exp;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
+if [ 1 = 0 ]; then
 if [ ! -e ${perldir}/CPAN/Config.pm ] || [ "$(grep "urllist.*http" ${perldir}/CPAN/Config.pm)" = "" ]; then
 cat >${perldir}/CPAN/Config.pm <<EOF
 
@@ -57,6 +59,7 @@ $CPAN::Config = {
 1;
 __END__
 EOF
+fi;
 fi;
 modules="Module::Build Test::Fatal Test::Requires Module::Implementation Params::Validate Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile";
 for i in $modules; do 
