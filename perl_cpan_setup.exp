@@ -23,7 +23,7 @@ send -- "rm -f /root/.cpan/.lock\r"
 send -- "perl -MCPAN -e shell\r"
 expect {
 	"Would you like to configure as much as possible automatically" {send "yes\r"}
-	"Would you like me to automatically choose some CPAN mirror\rsites for you" {send "yes\r"}
+	"Would you like me to automatically choose some CPAN mirror\rsites for you" {send "yes\r\r"}
 	"Are you ready for manual configuration?" {send "yes\r"}
 	"CPAN build and cache directory?" {send "\r"}
 	"Cache size for build directory" {send "\r"}
