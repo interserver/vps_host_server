@@ -15,7 +15,7 @@ if [ ! -e /usr/bin/cpan ]; then
   fi;
 fi;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
-rm -f ~/.cpan/.lock ${perldir}/CPAN/Config.pm;
+rm -f ${perldir}/CPAN/Config.pm;
 /root/cpaneldirect/perl_cpan_setup.exp;
 if [ 1 = 0 ]; then
 if [ ! -e ${perldir}/CPAN/Config.pm ] || [ "$(grep "urllist.*http" ${perldir}/CPAN/Config.pm)" = "" ]; then
