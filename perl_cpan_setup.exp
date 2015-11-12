@@ -22,39 +22,39 @@ match_max 100000
 send -- "rm -f /root/.cpan/.lock\r"
 send -- "PERL_MM_USE_DEFAULT=1 perl -MCPAN -e shell\r"
 expect {
-	"Would you like to configure as much as possible automatically" {send "yes\r"}
-	"Would you like me to automatically choose some CPAN mirror\rsites for you" {send "yes\r\r"}
-	"Are you ready for manual configuration?" {send "yes\r"}
-	"CPAN build and cache directory?" {send "\r"}
-	"Cache size for build directory" {send "\r"}
-	"Perform cache scanning" {send "\r"}
-	"Cache metadata" {send "yes\r"}
-	"Your terminal expects ISO-8859-1" {send "yes\r"}
-	"File to save your history" {send "\r"}
-	"Number of lines to save" {send "\r"}
-	"Policy on building prerequisites" {send "\r"}
-	"Where is your gzip program" {send "\r"}
-	"Where is your tar program" {send "\r"}
-	"Where is your unzip program" {send "\r"}
-	"Where is your make program" {send "\r"}
-	"Where is your links program" {send "\r"}
-	"Where is your wget program" {send "\r"}
-	"Where is your ncftpget program" {send "\r"}
-	"Where is your ncftp program" {send "\r"}
-	"Where is your ftp program" {send "\r"}
-	"Where is your gpg program" {send "\r"}
-	"What is your favorite pager program" {send "\r"}
-	"What is your favorite shell" {send "\r"}
-	"Your choice" {send "\r"}
-	"Timeout for inactivity during Makefile.PL" {send "\r"}
-	"Your ftp_proxy" {send "\r"}
-	"Your http_proxy" {send "\r"}
-	"Your no_proxy" {send "\r"}
-	"Shall I use the local database" {send "y\r"}
-	"Select your continent" {send "4\r"}
-	"Select your country" {send "4\r"}
-	"Select as many URLs" {send "1 4 5\r"}
-	"Enter another URL or RETURN to quit" {send "\r"}
-	-re "cpan>|cpan\[.*\]>" {send "o conf commit\rquit\rexit\r"}
+	"Would you like to configure as much as possible automatically" {send "yes\r"; exp_continue}
+	"Would you like me to automatically choose some CPAN mirror\rsites for you" {send "yes\r\r"; exp_continue}
+	"Are you ready for manual configuration?" {send "yes\r"; exp_continue}
+	"CPAN build and cache directory?" {send "\r"; exp_continue}
+	"Cache size for build directory" {send "\r"; exp_continue}
+	"Perform cache scanning" {send "\r"; exp_continue}
+	"Cache metadata" {send "yes\r"; exp_continue}
+	"Your terminal expects ISO-8859-1" {send "yes\r"; exp_continue}
+	"File to save your history" {send "\r"; exp_continue}
+	"Number of lines to save" {send "\r"; exp_continue}
+	"Policy on building prerequisites" {send "\r"; exp_continue}
+	"Where is your gzip program" {send "\r"; exp_continue}
+	"Where is your tar program" {send "\r"; exp_continue}
+	"Where is your unzip program" {send "\r"; exp_continue}
+	"Where is your make program" {send "\r"; exp_continue}
+	"Where is your links program" {send "\r"; exp_continue}
+	"Where is your wget program" {send "\r"; exp_continue}
+	"Where is your ncftpget program" {send "\r"; exp_continue}
+	"Where is your ncftp program" {send "\r"; exp_continue}
+	"Where is your ftp program" {send "\r"; exp_continue}
+	"Where is your gpg program" {send "\r"; exp_continue}
+	"What is your favorite pager program" {send "\r"; exp_continue}
+	"What is your favorite shell" {send "\r"; exp_continue}
+	"Your choice" {send "\r"; exp_continue}
+	"Timeout for inactivity during Makefile.PL" {send "\r"; exp_continue}
+	"Your ftp_proxy" {send "\r"; exp_continue}
+	"Your http_proxy" {send "\r"; exp_continue}
+	"Your no_proxy" {send "\r"; exp_continue}
+	"Shall I use the local database" {send "y\r"; exp_continue}
+	"Select your continent" {send "4\r"; exp_continue}
+	"Select your country" {send "4\r"; exp_continue}
+	"Select as many URLs" {send "1 4 5\r"; exp_continue}
+	"Enter another URL or RETURN to quit" {send "\r"; exp_continue}
+	-re "cpan>|cpan\[.*\]>" {send "o conf commit\rquit\rexit\r"; exp_continue}
 }
 expect eof
