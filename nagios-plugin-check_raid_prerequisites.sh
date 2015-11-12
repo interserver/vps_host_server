@@ -79,6 +79,8 @@ $CPAN::Config = {
 __END__
 EOF
 fi;
-for i in Parse::CPAN::Meta Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile ; do 
-	PERL_MM_USE_DEFAULT=1 cpan $i >&2
+modules="Module::Build Test::Fatal Test::Requires Module::Implementation Params::Validate Monitoring::Plugin Module::Pluggable ExtUtils::MakeMaker ExtUtils::MakeMaker::CPANfile";
+for i in $modules; do 
+  PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "install $i"; done
+  #PERL_MM_USE_DEFAULT=1 cpan $i >&2
 done;
