@@ -17,6 +17,7 @@ match_max 100000
 #	"\[yes\]" {send "\r" ; exp_continue}
 expect {
 	"Would you like to configure as much as possible automatically" {send "yes\r" ; exp_continue}
+	"Would you like me to configure as much as possible automatically" {send "yes\r" ; exp_continue}
 	"Are you ready for manual configuration?" {send "\r" ; exp_continue}
 	"CPAN build and cache directory" {send "\r" ; exp_continue}
 	"Directory where the build process takes place" {send "\r" ; exp_continue}
