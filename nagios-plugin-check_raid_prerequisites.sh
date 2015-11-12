@@ -2,17 +2,12 @@
 if [ -e /etc/redhat-release ]; then 
   distro=centos; 
   version=$(cat /etc/redhat-release  | sed s#"^.* \([0-9]\)\..*$"#"\1"#g); 
+  yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta expect libserf-devel db4-devel gnome-keyring-devel >&2;
 elif [ -e /etc/apt ]; then 
   . /etc/lsb-release; 
   distro=ubuntu; 
   version=$DISTRIB_RELEASE;
-fi;
-if [ ! -e /usr/bin/cpan ]; then
-  if [ "$distro"= "ubuntu" ];then
-    apt-get install -y perl expect >&2;
-  else
-    yum install -y perl-CPAN yaml-cpp yaml-cpp-devel perl-YAML libyaml libyaml-devel perl-Test-CPAN-Meta-YAML perl-Test-YAML-Meta expect libserf-devel db4-devel gnome-keyring-devel >&2;
-  fi;
+  apt-get install -y perl expect >&2;
 fi;
 perldir="$(perl -V |grep -v "\.$" | tail -n 1 | sed s#" "#""#g)";
 rm -f ${perldir}/CPAN/Config.pm;
