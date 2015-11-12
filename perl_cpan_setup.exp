@@ -14,13 +14,13 @@ send -- "rm -f /root/.cpan/.lock\r"
 send -- "perl -MCPAN -e shell\r"
 expect {
 	"Would you like to configure as much as possible automatically" {send "yes\r"; exp_continue}
-	"sites for you" {send "yes\r\r"; exp_continue}
-	"Are you ready for manual configuration?" {send "yes\r"; exp_continue}
+	"\[yes\]" {send "\r\r"; exp_continue}
+	"Are you ready for manual configuration?" {send "\r"; exp_continue}
 	"CPAN build and cache directory?" {send "\r"; exp_continue}
 	"Cache size for build directory" {send "\r"; exp_continue}
 	"Perform cache scanning" {send "\r"; exp_continue}
-	"Cache metadata" {send "yes\r"; exp_continue}
-	"Your terminal expects ISO-8859-1" {send "yes\r"; exp_continue}
+	"Cache metadata" {send "\r"; exp_continue}
+	"Your terminal expects ISO-8859-1" {send "\r"; exp_continue}
 	"File to save your history" {send "\r"; exp_continue}
 	"Number of lines to save" {send "\r"; exp_continue}
 	"Policy on building prerequisites" {send "\r"; exp_continue}
