@@ -55,6 +55,6 @@ expect {
 	"Select your country" {send "4\r"; exp_continue}
 	"Select as many URLs" {send "1 4 5\r"; exp_continue}
 	"Enter another URL or RETURN to quit" {send "\r"; exp_continue}
-	-re "cpan>|cpan\[.*\]>" {send "o conf commit\rquit\rexit\r"; exp_continue}
+	-re "cpan>|cpan\[[0-9]\]>" {send "o conf commit\rquit\rexit\r"; exp_continue}
 }
 expect eof
