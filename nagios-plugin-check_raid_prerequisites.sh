@@ -1,4 +1,18 @@
 #!/bin/bash
+if [ -e /etc/redhat-release ]; then 
+  distro=centos; 
+  version=$(cat /etc/redhat-release  | sed s#"^.* \([0-9]\)\..*$"#"\1"#g); 
+elif [ -e /etc/apt ]; then 
+  . /etc/lsb-release; 
+  distro=ubuntu; 
+  version=$DISTRIB_RELEASE;
+fi;
+if [ ! -e /usr/bin/cpan ]; then
+  if [ "$distro"= "ubuntu" ];then
+    apt-get install -y perl;
+ else
+    yum install -y perl-CPAN;
+fi;
 echo 'H4sICANDRFYCA0NvbmZpZy5wbQB9VD1v2zAQ3f0rNBTIkljJ0CVBCuSjQ4A0KJpuQXCgpbN1MEXS
 d6QTo+h/L0XRTiTbXQz53rvve/xy9/Pm6fLyzpo5LYrr4s+kKE5U8BYq27bkT4rrb8Xq5fz1tANm
 gXQNlaoazMDF+QCqiTNQsrW+nFZOmTJhIxowBsFD4RlXgRgFyIhXWoOzmqpNpipZlhuU3iFVAi16
