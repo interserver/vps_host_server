@@ -19,6 +19,7 @@ if {$force_conservative} {
 set timeout -1
 spawn $env(SHELL)
 match_max 100000
+send -- "rm -f /root/.cpan/.lock\r"
 send -- "perl -MCPAN -e shell\r"
 expect {
 	"Would you like to configure as much as possible automatically" {send "yes\r"}
