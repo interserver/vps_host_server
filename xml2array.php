@@ -72,8 +72,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 				$current = &$current[$tag];
 
 			} else { //There was another element with the same tag name
-
-				if(isset($current[$tag][0])) {//If there is a 0th element it is already an array
+				if (is_array($current[$tag]) && isset($current[$tag][0])) {//If there is a 0th element it is already an array
 					$current[$tag][$repeated_tag_index[$tag.'_'.$level]] = $result;
 					$repeated_tag_index[$tag.'_'.$level]++;
 				} else {//This section will make the value an array if multiple tags with the same name appear together
