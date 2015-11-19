@@ -13,11 +13,12 @@ echo "NETWORKING_IPV6=yes
 IPV6_AUTOCONF=no
 IPV6FORWARDING=yes" >> /etc/sysconfig/network.new;
 /bin/mv -f /etc/sysconfig/network.new /etc/sysconfig/network;
-grep -v -e ipv6.conf.default.forwarding -e ipv6.conf.all.forwarding -e ipv6.conf.all.proxy_ndp /etc/sysctl.conf > /etc/sysctl.conf.new;             
+/etc/init.d/network reload;
+grep -v -e ipv6.conf.default.forwarding -e ipv6.conf.all.forwarding -e ipv6.conf.all.proxy_ndp -e ipv6.bindv6only /etc/sysctl.conf > /etc/sysctl.conf.new;             
 echo "net.ipv6.conf.default.forwarding = 1
 net.ipv6.conf.all.forwarding = 1
-net.ipv6.conf.all.proxy_ndp = 1" >> /etc/sysctl.conf.new;
+net.ipv6.conf.all.proxy_ndp = 1
+net.ipv6.bindv6only = 1" >> /etc/sysctl.conf.new;
 /bin/mv -f /etc/sysctl.conf.new /etc/sysctl.conf;   
-/etc/init.d/network reload;
 sysctl -p;
 ping6 ipv6.google.com ;
