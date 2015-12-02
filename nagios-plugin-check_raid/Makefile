@@ -27,6 +27,19 @@ pack:
 	$(MAKE) $(PLUGIN_SCRIPT)
 
 installdeps:
+	if [ "$(which cpanm)" = "" ]; then
+		if [ -e /etc/lsb-release ]; then
+			sudo apt-get install -y cpanminus
+		elif [ -e /etc/redhat-release ]; then
+			if [ "$(which cpan)" == "" ]; then
+				sudo yum install -y perl-CPAN
+			fi;
+			sudo cpan App::cpanminus;
+		fi;
+	fi;
+	cpanm -f Distribution::Metadata
+	cpanm -f App::FatPacker
+	cpanm -f App::FatPacker::Simple
 	cpanm --installdeps -Llocal -n .
 
 # Params::Validate adds some Module::Build dependency, but Monitoring-Plugin needs just:
