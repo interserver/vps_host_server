@@ -17,8 +17,8 @@ cat /proc/loadavg
 echo
 
 echo -n 'Raid Status:  '
-if [ -e /root/cpaneldirect/nagios-plugin-check_raid/check_raid.pl ]; then
-        /root/cpaneldirect/nagios-plugin-check_raid/check_raid.pl --check=WARNING
+if [ -e /root/cpaneldirect/nagios-plugin-check_raid/check_raid.sh ]; then
+        /root/cpaneldirect/nagios-plugin-check_raid/check_raid.sh --check=WARNING
 else
         cat /proc/mdstat
 fi
