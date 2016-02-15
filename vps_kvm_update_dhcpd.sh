@@ -14,7 +14,7 @@ if [ -e ${DHCPVPS} ]; then
 	/bin/mv -f ${DHCPVPS} ${DHCPVPS}.backup;
 fi;
 curl --connect-timeout 300 --max-time 600 -k -d action=getvpsmainips "$url" 2>/dev/null | sh;
-for user in $(/usr/bin/virsh list --all | grep running | awk '{print $2}'); do
+for user in $(/usr/bin/virsh list --all | grep running | awk '{print $2}' |grep -v "^guestfs-"); do
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 	id="$(echo "$user" | sed s#"[[:alpha:]]"#""#g)"
 	ip="$(grep "^$id:" /root/cpaneldirect/vps.mainips | cut -d: -f2-)";
