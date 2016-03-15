@@ -1,7 +1,7 @@
 #!/bin/bash
 sliceram=1024
-iopslimitbase=60
-iopslimitmodifier=10
+iopslimitbase=200
+iopslimitmodifier=50
 mbpslimitbase=15
 mbpslimitmodifier=5
 cpulimitbase=50
