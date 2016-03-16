@@ -57,7 +57,7 @@ if [ -e /etc/redhat-release ]; then
 		check=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
 	fi
 else
-	check=`ps auxw | grep "libvirtd -d" | grep -v grep`;
+	check=`ps auxw | grep -e "sbin/libvirtd" -e "libvirtd -d" | grep -v grep`;
 	service='libvirt-bin';
 fi
 
@@ -71,7 +71,7 @@ if [ "$check" = "" ]; then
 		service $service restart
 	fi
 
-        check2=`ps auxw | grep "libvirtd --daemon" | grep -v grep`;
+        check2=`ps auxw | grep -e sbin/libvirt -e "libvirtd --daemon" | grep -v grep`;
         if [ "$check" = "" ]; then
                 echo "Libvirtd did not restart, emailing";
                 hostname=`hostname`
