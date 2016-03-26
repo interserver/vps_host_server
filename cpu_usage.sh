@@ -49,7 +49,7 @@ IFS="
 		vzcount=0;
 	fi;
 	for i in $(if [ -e /proc/vz/fairsched/cpu.proc.stat ]; then
-			grep "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'; 
+			grep -H "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'; 
 		else 
 			grep "^cpu" /proc/stat | awk '{ print 0 " " $1 " " $2 " " $3 " " $4 " " $5 " " $6 " " $7 " " $8 " " $9 }'; 
 		fi); do
