@@ -4,8 +4,11 @@ PLUGIN_SCRIPT   := $(PLUGIN).pl
 PLUGIN_VERSION  := $(shell test -e .git && git describe --tags || awk -F"'" '/VERSION/&&/=/{print $$2}' bin/$(PLUGIN_SCRIPT))
 PLUGINDIR       := /usr/lib/nagios/plugins
 PLUGINCONF      := /etc/nagios/plugins
+CACHE_DIR       := $(CURDIR)/cache
+CPANM_CACHE     := $(CACHE_DIR)/cpanm
 
 # rpm version related macros
+RPM_NAME        := nagios-plugin-$(PLUGIN)
 version_parts   := $(subst -, ,$(PLUGIN_VERSION))
 space           := $(nil) $(nil)
 RPM_VERSION     := $(firstword $(version_parts))
@@ -16,6 +19,7 @@ RPM_RELEASE     := 0.$(RPM_RELEASE)
 else
 RPM_RELEASE     := 1
 endif
+RPM_FILENAME    := $(RPM_NAME)-$(RPM_VERSION)-$(RPM_RELEASE).noarch.rpm
 
 all:
 
@@ -27,6 +31,7 @@ pack:
 	$(MAKE) $(PLUGIN_SCRIPT)
 
 installdeps:
+<<<<<<< HEAD
 	if [ "$(which cpanm)" = "" ]; then
 		if [ -e /etc/lsb-release ]; then
 			sudo apt-get install -y cpanminus
@@ -41,19 +46,25 @@ installdeps:
 	cpanm -f App::FatPacker
 	cpanm -f App::FatPacker::Simple
 	cpanm --installdeps -Llocal -n .
+=======
+	cpanm --installdeps -Llocal -n . \
+		--cascade-search \
+		--save-dists=$(CPANM_CACHE) \
+		--mirror=$(CPANM_CACHE) \
+		--mirror=http://search.cpan.org/CPAN
+>>>>>>> e2d43c5d4bdf881c1123803715a40ebfaf75e955
 
 # Params::Validate adds some Module::Build dependency, but Monitoring-Plugin needs just:
 # Configuring Monitoring-Plugin-0.39 ... OK
 # ==> Found dependencies: Params::Validate, Class::Accessor, Config::Tiny, Math::Calc::Units
-exclude_fatpack_modules := Module::Build,CPAN::Meta,Module::CPANfile
+exclude_fatpack_modules := Module::Build,CPAN::Meta,Module::CPANfile,ExtUtils::MakeMaker::CPANfile
 
-fatpack: installdeps perlstrip
-	fatpack-simple --no-perl-strip --exclude $(exclude_fatpack_modules) bin/$(PLUGIN_SCRIPT) $(options)
-
-perlstrip:
-	# make sure we run this in git export, files are modified in-place!
-	test ! -d .git
-	find local/lib -name '*.pm' | xargs perlstrip -s
+fatpack: installdeps
+	fatpack-simple \
+		--exclude-strip='^lib/*' \
+		--exclude-strip='^bin/*' \
+		--exclude=$(exclude_fatpack_modules) \
+		bin/$(PLUGIN_SCRIPT) $(options)
 
 $(PLUGIN_SCRIPT): bin/$(PLUGIN_SCRIPT)
 	# ensure cpanm is present
@@ -61,13 +72,13 @@ $(PLUGIN_SCRIPT): bin/$(PLUGIN_SCRIPT)
 
 	# need 0.10.0 of fatpacker for Module::Pluggable to work
 	perl -e 'use App::FatPacker 0.10.0'
-	perl -e 'use App::FatPacker::Simple'
+	perl -e 'use App::FatPacker::Simple 0.07'
 
 	# ensure we run in clean tree. export git tree and run there.
 	rm -rf fatpack
 	install -d fatpack
 	git archive HEAD | tar -x -C fatpack
-	$(MAKE) -C fatpack fatpack options="--output ../$@"
+	$(MAKE) -f $(CURDIR)/Makefile -C fatpack fatpack CACHE_DIR=$(CACHE_DIR) options="--output ../$@"
 	rm -rf fatpack
 	grep -o 'fatpacked{.*}' $@
 
@@ -106,6 +117,9 @@ dist:
 rpm: $(PLUGIN_SCRIPT)
 	# needs to be ran in git checkout for version setup to work
 	test -d .git
+	# display build system info
+	rpmbuild --version
+	lsb_release -a || cat /etc/os-release || :
 	rpmbuild -ba \
 		--define '_topdir $(CURDIR)' \
 		--define '_specdir %_topdir' \
@@ -115,4 +129,6 @@ rpm: $(PLUGIN_SCRIPT)
 		--define '_builddir %_topdir/BUILD' \
 		--define 'version $(RPM_VERSION)' \
 		--define 'release $(RPM_RELEASE)' \
-		nagios-plugin-$(PLUGIN).spec
+		$(RPM_NAME).spec
+	# display built rpm requires
+	rpm -qp --requires $(CURDIR)/$(RPM_FILENAME)

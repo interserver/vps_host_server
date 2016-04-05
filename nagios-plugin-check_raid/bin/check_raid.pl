@@ -8,17 +8,24 @@ use warnings;
 use strict;
 
 my $PROGNAME = 'check_raid';
-my $VERSION = q/4.0.0/;
+my $VERSION = q/4.0.3/;
+my $URL = 'https://github.com/glensc/nagios-plugin-check_raid';
+my $BUGS_URL = 'https://github.com/glensc/nagios-plugin-check_raid#reporting-bugs';
 
 my $mp = Monitoring::Plugin->new(
-    usage =>
-	"Usage: %s [-h] [-V] [-S] [list of devices to ignore]",
+	usage =>
+		"Usage: %s [-h] [-V] [-S] [list of devices to ignore]",
 
-    version => $VERSION,
-    blurb => 'This plugin checks all RAID volumes (hardware and software) that can be identified.',
+	version => $VERSION,
+	blurb => join($/,
+		"This plugin checks all RAID volumes (hardware and software) that can be identified",
+		"",
+		"Homepage: $URL",
+		"Reporting Bugs: $BUGS_URL",
+	),
 
-    plugin  => $PROGNAME,
-    shortname => $PROGNAME,
+	plugin  => $PROGNAME,
+	shortname => $PROGNAME,
 );
 
 $mp->add_arg(
@@ -95,6 +102,9 @@ my %plugin_options;
 if ($mp->opts->warnonly) {
 	App::Monitoring::Plugin::CheckRaid::Plugin->set_critical_as_warning;
 }
+if ($mp->opts->get('bbu-monitoring')) {
+	$plugin_options{options}{bbu_monitoring} = 1;
+}
 
 # setup state flags
 my %state_flags = (
@@ -130,6 +140,10 @@ if (my $opts = $mp->opts->get('plugin-option')) {
 my $mc = App::Monitoring::Plugin::CheckRaid->new(%plugin_options);
 
 $App::Monitoring::Plugin::CheckRaid::Utils::debug = $mp->opts->debug;
+
+if ($mp->opts->debug) {
+	print "Visit <$BUGS_URL> how to report bugs\n\n",
+}
 
 my @plugins = $mc->active_plugins;
 if (!@plugins) {
