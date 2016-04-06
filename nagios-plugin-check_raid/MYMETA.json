@@ -1,0 +1,45 @@
+{
+   "abstract" : "unknown",
+   "author" : [
+      "Elan Ruusamäe <glen@pld-linux.org>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "ExtUtils::MakeMaker version 7.1, CPAN::Meta::Converter version 2.150005",
+   "license" : [
+      "unknown"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "App-Monitoring-Plugin-CheckRaid",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "inc"
+      ]
+   },
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : "0",
+            "ExtUtils::MakeMaker::CPANfile" : "0"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "ExtUtils::MakeMaker::CPANfile" : "0.07"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "Module::Pluggable" : "5.1",
+            "Monitoring::Plugin" : "0.37",
+            "perl" : "5.008"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "version" : "",
+   "x_serialization_backend" : "JSON::PP version 2.27203"
+}

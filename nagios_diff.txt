@@ -1,0 +1,31 @@
+diff --cc Makefile
+index a6d7572,5f8741d..0000000
+--- a/Makefile
++++ b/Makefile
+@@@ -27,20 -31,11 +31,24 @@@ pack
+  	$(MAKE) $(PLUGIN_SCRIPT)
+  
+  installdeps:
+ +	if [ "$(which cpanm)" = "" ]; then
+ +		if [ -e /etc/lsb-release ]; then
+ +			sudo apt-get install -y cpanminus
+ +		elif [ -e /etc/redhat-release ]; then
+ +			if [ "$(which cpan)" == "" ]; then
+ +				sudo yum install -y perl-CPAN
+ +			fi;
+ +			sudo cpan App::cpanminus;
+ +		fi;
+ +	fi;
+ +	cpanm -f Distribution::Metadata
+ +	cpanm -f App::FatPacker
+ +	cpanm -f App::FatPacker::Simple
+ +  cpanm -f ExtUtils::MakeMaker::CPANfile
+- 	cpanm --installdeps -Llocal -n .
++ 	cpanm --installdeps -Llocal -n . \
++ 		--cascade-search \
++ 		--save-dists=$(CPANM_CACHE) \
++ 		--mirror=$(CPANM_CACHE) \
++ 		--mirror=http://search.cpan.org/CPAN
+  
+  # Params::Validate adds some Module::Build dependency, but Monitoring-Plugin needs just:
+  # Configuring Monitoring-Plugin-0.39 ... OK
