@@ -7,7 +7,7 @@ BEGIN {
 use strict;
 use warnings;
 
-use Test::More tests => 28;
+use Test::More tests => 27;
 use test;
 
 unshift(@App::Monitoring::Plugin::CheckRaid::Utils::paths, TESTDIR . '/data/bin');
@@ -35,6 +35,7 @@ my %blacklist = map { $_ => 1 } qw(
 	megaide
 	megaraid
 	mvcli
+	smartctl
 );
 
 use Monitoring::Plugin ();
@@ -52,12 +53,12 @@ foreach my $plugin (@plugins) {
 
 	if (exists $blacklist{$pn} && !$active) {
 		ok(!$active, "plugin $pn blacklisted:YES active:NO");
-		next;
+	   	next;
 	}
 	if (!exists $blacklist{$pn} && $active) {
 		ok($active, "plugin $pn blacklisted:NO active:YES");
-		next;
+	   	next;
 	}
 
-	ok(1, "$pn should be blacklisted and disabled");
+	ok(0, "impossible");
 }

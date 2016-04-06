@@ -7,7 +7,7 @@ BEGIN {
 use strict;
 use warnings;
 
-use Test::More tests => 22;
+use Test::More tests => 21;
 use test;
 
 my $bindir = TESTDIR . '/data/bin';
@@ -50,10 +50,7 @@ my %sudo = (
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/mpt-status -p",
 	],
 	tw_cli => [
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info",
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info *",
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx show",
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx * show all",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info*",
 	],
 	arcconf => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/arcconf GETSTATUS 1",
@@ -89,10 +86,6 @@ my %sudo = (
 	],
 	metastat => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/metastat",
-	],
-	dm => [
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/dmsetup status --noflush",
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/dmsetup status",
 	],
 );
 

@@ -82,7 +82,6 @@ Supported RAIDs that can be checked:
 - Linux LSI MegaRaid hardware RAID via CmdTool2
 - Linux LSI MegaRaid hardware RAID via megarc
 - Linux LSI MegaRaid hardware RAID via `/proc/megaraid`
-- Linux Device Mapper
 - Linux MegaIDE hardware RAID controllers via `/proc/megaide`
 - Linux MPT hardware RAID via mpt-status
 - Linux software RAID (md) via `/proc/mdstat`
@@ -110,7 +109,7 @@ License: GPL v2
 http://www.steveshipway.org/forum/viewtopic.php?f=20&t=417&p=3211
 Steve Shipway Thanks M Carmier for megaraid section.
 
-(c) 2009-2016 Elan Ruusamäe <glen@pld-linux.org> (maintainer from version 2.1 and upwards)
+(c) 2009-2015 Elan Ruusamäe <glen@pld-linux.org> (maintainer from version 2.1 and upwards)
 
 
 

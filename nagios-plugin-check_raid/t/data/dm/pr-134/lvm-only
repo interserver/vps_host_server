@@ -1,3 +1,0 @@
-sys-rootfs: 0 2097152 linear 
-sys-rootfs: 2097152 4194304 linear 
-sys-var: 0 2097152 linear 
