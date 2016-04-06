@@ -50,37 +50,57 @@ if which virsh >/dev/null 2>&1; then
 	rmdir /${image}
 	echo y | lvremove /dev/vz/snap${id}
 else
+	VZPARTITION=`vzlist -H -o private $vzid | cut -d/ -f2`;
+	if [ "${image}" = "" ]; then
+		echo "Error: image variable is blank";
+		exit;
+	fi
+	if [ "$VZPARTITION" = "" ]; then
+		echo "Got a blank VZPARTITION, vps may not exist";
+		exit;
+	elif [ "$VZPARTITION" = "/" ]; then
+		echo "Error - returned / for $VZPARTITION";
+		exit;
+	fi
+	if [ ! -d /${VZPARTITION} ]; then
+		echo "ERROR: /${VZPARTITION} is not a directory";
+		exit;
+	fi
+	echo "Returned partition /${VZPARTITION}";
 	if ! vzlist $vzid >/dev/null 2>&1; then
 		echo "Invalid VPS $vzid"
 		curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 		exit;
 	fi
-	if [ -e /vz/${image} ]; then
-		echo "Invalid Image name - directory exists";
+	if [ -e /${VZPARTITION}/${image} ]; then
+		echo "ERROR: Invalid Image name - directory exists";
 		curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
 		exit;
 	fi
 	/admin/swift/c mkdir_p vps${id} --force
-	mkdir -p /vz/${image}
-	if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then 
+	mkdir -p /${VZPARTITION}/${image}
+	if [ -e /${VZPARTITION}/private/${id}/root.hdd/root.hdd ]; then 
 		UUID="$(uuidgen)"
 		vzctl snapshot $id --id "$UUID" --skip-suspend --skip-config
-		vzctl snapshot-mount $id --id "$UUID" --target /vz/${image}
+		vzctl snapshot-mount $id --id "$UUID" --target /${VZPARTITION}/${image}
 	else
-		rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/root/${vzid}/ /vz/${image}
+		rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /${VZPARTITION}/root/${vzid}/ /${VZPARTITION}/${image}
 		vzctl suspend $vzid
-		rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /vz/private/${vzid}/ /vz/${image}
+		rsync  -aH --delete -x --no-whole-file --inplace --numeric-ids --exclude=/home/virtfs /${VZPARTITION}/private/${vzid}/ /${VZPARTITION}/${image}
 		vzctl resume $vzid
 	fi
-	cd /vz
+	cd /${VZPARTITION}
 	/admin/swift/c fly vps${id} ${image} delete
 	/admin/swift/c fly vps${id} ${image}
-	if [ -e /vz/private/${id}/root.hdd/root.hdd ]; then
+	if [ -e /${VZPARTITION}/private/${id}/root.hdd/root.hdd ]; then
 		vzctl snapshot-umount $id --id "$UUID"
 		vzctl snapshot-delete $id --id "$UUID"
-		rmdir /vz/${image}
+		rmdir /${VZPARTITION}/${image}
 	else 
-		/bin/rm -rf /vz/${image}
+		cd /${VZPARTITION}
+		if [ -d ${image} ]; then
+			rm -rf ${image}
+		fi
 	fi
 fi
 curl --connect-timeout 60 --max-time 600 -k -d action=backup_status -d vps_id=${id} "$url" 2>/dev/null
