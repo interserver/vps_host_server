@@ -163,17 +163,14 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		{
 			if ($id == 0)
 				continue;
-			if ($servers[$id]['layout'] == 'simfs')
+			$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e /vz/private/{$id}/root.hdd/DiskDescriptor.xml ];then ploop info /vz/private/{$id}/root.hdd/DiskDescriptor.xml 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
+			//echo "Running $cmd\n";
+			$out = trim(`$cmd`);
+			if ($out != '')
 			{
-				$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e /vz/private/$id/root.hdd/DiskDescriptor.xml ];then ploop info /vz/private/$id/root.hdd/DiskDescriptor.xml 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
-				//echo "Running $cmd\n";
-				$out = trim(`$cmd`);
-				if ($out != '')
-				{
-					$disk = explode(' ', $out);
-					$servers[$id]['diskused'] = $disk[0];
-					$servers[$id]['diskmax'] = $disk[1];
-				}
+				$disk = explode(' ', $out);
+				$servers[$id]['diskused'] = $disk[0];
+				$servers[$id]['diskmax'] = $disk[1];
 			}
 		}
 		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
