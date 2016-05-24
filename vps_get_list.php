@@ -5,7 +5,7 @@ require_once(dirname(__FILE__) . '/xml2array.php');
 
 /**
  * get_vps_list()
- * 
+ *
  * @return
  */
 function get_vps_list()
@@ -31,10 +31,10 @@ function get_vps_list()
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);
 				$server = array(
-					'veid' => $veid, 
+					'veid' => $veid,
 					'status' => $status,
-					'hostname' => $name, 
-					'kmemsize' => $xml['domain']['memory'], 
+					'hostname' => $name,
+					'kmemsize' => $xml['domain']['memory'],
 				);
 				if (isset($xml['domain']['devices']['interface']))
 				{
@@ -103,59 +103,59 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		foreach ($matches['ctid'] as $key => $id)
 		{
 			$server = array(
-				'veid' => $id, 
-				'numproc' => $matches['numproc'][$key], 
-				'status' => $matches['status'][$key], 
-				'ip' => $matches['ip'][$key], 
-				'hostname' => $matches['hostname'][$key], 
-				'vswap' => $matches['vswap'][$key], 
-				'layout' => $matches['layout'][$key], 
-				'kmemsize' => $matches['kmemsize'][$key], 
-				'kmemsize_f' => $matches['kmemsize_f'][$key], 
-				'lockedpages' => $matches['lockedpages'][$key], 
-				'lockedpages_f' => $matches['lockedpages_f'][$key], 
-				'privvmpages' => $matches['privvmpages'][$key], 
-				'privvmpages_f' => $matches['privvmpages_f'][$key], 
-				'shmpages' => $matches['shmpages'][$key], 
-				'shmpages_f' => $matches['shmpages_f'][$key], 
-				'numproc_f' => $matches['numproc_f'][$key], 
-				'physpages' => $matches['physpages'][$key], 
-				'physpages_f' => $matches['physpages_f'][$key], 
-				'vmguarpages' => $matches['vmguarpages'][$key], 
-				'vmguarpages_f' => $matches['vmguarpages_f'][$key], 
-				'oomguarpages' => $matches['oomguarpages'][$key], 
-				'oomguarpages_f' => $matches['oomguarpages_f'][$key], 
-				'numtcpsock' => $matches['numtcpsock'][$key], 
-				'numtcpsock_f' => $matches['numtcpsock_f'][$key], 
-				'numflock' => $matches['numflock'][$key], 
-				'numflock_f' => $matches['numflock_f'][$key], 
-				'numpty' => $matches['numpty'][$key], 
-				'numpty_f' => $matches['numpty_f'][$key], 
-				'numsiginfo' => $matches['numsiginfo'][$key], 
-				'numsiginfo_f' => $matches['numsiginfo_f'][$key], 
-				'tcpsndbuf' => $matches['tcpsndbuf'][$key], 
-				'tcpsndbuf_f' => $matches['tcpsndbuf_f'][$key], 
-				'tcprcvbuf' => $matches['tcprcvbuf'][$key], 
-				'tcprcvbuf_f' => $matches['tcprcvbuf_f'][$key], 
-				'othersockbuf' => $matches['othersockbuf'][$key], 
-				'othersockbuf_f' => $matches['othersockbuf_f'][$key], 
-				'dgramrcvbuf' => $matches['dgramrcvbuf'][$key], 
-				'dgramrcvbuf_f' => $matches['dgramrcvbuf_f'][$key], 
-				'numothersock' => $matches['numothersock'][$key], 
-				'numothersock_f' => $matches['numothersock_f'][$key], 
-				'dcachesize' => $matches['dcachesize'][$key], 
-				'dcachesize_f' => $matches['dcachesize_f'][$key], 
-				'numfile' => $matches['numfile'][$key], 
-				'numfile_f' => $matches['numfile_f'][$key], 
-				'numiptent' => $matches['numiptent'][$key], 
-				'numiptent_f' => $matches['numiptent_f'][$key], 
-				'diskspace' => $matches['diskspace'][$key], 
-				'diskspace_s' => $matches['diskspace_s'][$key], 
-				'diskspace_h' => $matches['diskspace_h'][$key], 
-				'diskinodes' => $matches['diskinodes'][$key], 
-				'diskinodes_s' => $matches['diskinodes_s'][$key], 
-				'diskinodes_h' => $matches['diskinodes_h'][$key], 
-				'laverage' => $matches['laverage'][$key], 
+				'veid' => $id,
+				'numproc' => $matches['numproc'][$key],
+				'status' => $matches['status'][$key],
+				'ip' => $matches['ip'][$key],
+				'hostname' => $matches['hostname'][$key],
+				'vswap' => $matches['vswap'][$key],
+				'layout' => $matches['layout'][$key],
+				'kmemsize' => $matches['kmemsize'][$key],
+				'kmemsize_f' => $matches['kmemsize_f'][$key],
+				'lockedpages' => $matches['lockedpages'][$key],
+				'lockedpages_f' => $matches['lockedpages_f'][$key],
+				'privvmpages' => $matches['privvmpages'][$key],
+				'privvmpages_f' => $matches['privvmpages_f'][$key],
+				'shmpages' => $matches['shmpages'][$key],
+				'shmpages_f' => $matches['shmpages_f'][$key],
+				'numproc_f' => $matches['numproc_f'][$key],
+				'physpages' => $matches['physpages'][$key],
+				'physpages_f' => $matches['physpages_f'][$key],
+				'vmguarpages' => $matches['vmguarpages'][$key],
+				'vmguarpages_f' => $matches['vmguarpages_f'][$key],
+				'oomguarpages' => $matches['oomguarpages'][$key],
+				'oomguarpages_f' => $matches['oomguarpages_f'][$key],
+				'numtcpsock' => $matches['numtcpsock'][$key],
+				'numtcpsock_f' => $matches['numtcpsock_f'][$key],
+				'numflock' => $matches['numflock'][$key],
+				'numflock_f' => $matches['numflock_f'][$key],
+				'numpty' => $matches['numpty'][$key],
+				'numpty_f' => $matches['numpty_f'][$key],
+				'numsiginfo' => $matches['numsiginfo'][$key],
+				'numsiginfo_f' => $matches['numsiginfo_f'][$key],
+				'tcpsndbuf' => $matches['tcpsndbuf'][$key],
+				'tcpsndbuf_f' => $matches['tcpsndbuf_f'][$key],
+				'tcprcvbuf' => $matches['tcprcvbuf'][$key],
+				'tcprcvbuf_f' => $matches['tcprcvbuf_f'][$key],
+				'othersockbuf' => $matches['othersockbuf'][$key],
+				'othersockbuf_f' => $matches['othersockbuf_f'][$key],
+				'dgramrcvbuf' => $matches['dgramrcvbuf'][$key],
+				'dgramrcvbuf_f' => $matches['dgramrcvbuf_f'][$key],
+				'numothersock' => $matches['numothersock'][$key],
+				'numothersock_f' => $matches['numothersock_f'][$key],
+				'dcachesize' => $matches['dcachesize'][$key],
+				'dcachesize_f' => $matches['dcachesize_f'][$key],
+				'numfile' => $matches['numfile'][$key],
+				'numfile_f' => $matches['numfile_f'][$key],
+				'numiptent' => $matches['numiptent'][$key],
+				'numiptent_f' => $matches['numiptent_f'][$key],
+				'diskspace' => $matches['diskspace'][$key],
+				'diskspace_s' => $matches['diskspace_s'][$key],
+				'diskspace_h' => $matches['diskspace_h'][$key],
+				'diskinodes' => $matches['diskinodes'][$key],
+				'diskinodes_s' => $matches['diskinodes_s'][$key],
+				'diskinodes_h' => $matches['diskinodes_h'][$key],
+				'laverage' => $matches['laverage'][$key],
 			);
 			$servers[$id] = $server;
 		}
@@ -165,7 +165,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 				continue;
 			if ($servers[$id]['layout'] == 'simfs')
 			{
-				$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'";
+				$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e /vz/private/$id/root.hdd/DiskDescriptor.xml ];then ploop info /vz/private/$id/root.hdd/DiskDescriptor.xml 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
 				//echo "Running $cmd\n";
 				$out = trim(`$cmd`);
 				if ($out != '')
@@ -213,7 +213,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			{
 				for ($x = 1; $x < 16; $x++)
 				{
-					$bw[$x] += $matches[$x+1][$idx]; 
+					$bw[$x] += $matches[$x+1][$idx];
 				}
 			}
 		}
@@ -255,7 +255,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			{
 				foreach (array('in','out','total') as $dir)
 				{
-					$bw_usage[$stat . '_sec_' . $dir] = ($bw_usage[$stat . '_' . $dir] - $bw_usage_last[$stat . '_' . $dir]) / $time_diff; 
+					$bw_usage[$stat . '_sec_' . $dir] = ($bw_usage[$stat . '_' . $dir] - $bw_usage_last[$stat . '_' . $dir]) / $time_diff;
 				}
 			}
 		}
@@ -317,8 +317,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		'speed' => $speed,
 		'cpu_flags' => $flags,
 	);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  ' 
-	. (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '') 
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  '
+	. (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '')
 //	. ($cpu_data != '' ? ' -F cpu_usage="' . base64_encode(gzcompress($cpu_data, 9)) . '" ' : '')
 	. $curl_cmd . ' "' . $url . '" 2>/dev/null;';
 //		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
