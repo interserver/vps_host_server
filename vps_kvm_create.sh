@@ -236,6 +236,7 @@ else
 		echo check > $softfile
 	done
  fi
+ echo "Errors: ${error}  Adjust Partitions: ${adjust_partitions}";
  if [ $error -eq 0 ]; then
 	if [ "$adjust_partitions" = "1" ]; then
 		 curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
@@ -251,7 +252,7 @@ else
 		 fi
 		 start="$(echo $t | awk '{ print $2 }')"
 		 if [ "$fs" = "83" ]; then
-		  echo "Resizing Last Partition To Use All Free Space"
+		  echo "Resizing Last Partition To Use All Free Space (Sect ${sects} P ${p} FS ${fs} PN ${pn} PT ${pt} Start ${start}"
 		  echo -e "d
 $pn
 n
@@ -283,6 +284,8 @@ q
                   fi;
 		  umount /dev/mapper/${pname}${pn}
 		  kpartx $kpartxopts -d /dev/vz/${name}
+		 else
+		  echo "Skipping Resizing Last Partition FS is not 83. Space (Sect ${sects} P ${p} FS ${fs} PN ${pn} PT ${pt} Start ${start}"
 		 fi
 
 		# echo "Coyping MBR"
