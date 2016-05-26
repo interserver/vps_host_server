@@ -240,10 +240,13 @@ else
  if [ $error -eq 0 ]; then
 	if [ "$adjust_partitions" = "1" ]; then
 		 curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
-		 sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
+		 sects="$(fdisk -l -u /dev/vz/${name}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g)"
 		 t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
 		 p="$(echo $t | awk '{ print $1 }')"
 		 fs="$(echo $t | awk '{ print $5 }')"
+		 if [ "$(echo "$fs" | grep "[A-Z]")" != "" ]; then
+			 fs="$(echo $t | awk '{ print $6 }')"
+		 fi;
 		 pn="$(echo "$p" | sed s#"/dev/vz/${name}[p]*"#""#g)"
 		 if [ $pn -gt 4 ]; then
 		  pt=l
@@ -279,9 +282,9 @@ q
 		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
 		  echo "root:${password}" | chroot /vz/mounts/${name}${pn} chpasswd || \
 		  php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}${pn}"
-		  if [ -e /vz/mounts/${name}${pn}/home/kvm ]; then 
-                   echo "kvm:${password}" | chroot /vz/mounts/${name}${pn} chpasswd
-                  fi;
+		  if [ -e /vz/mounts/${name}${pn}/home/kvm ]; then
+				   echo "kvm:${password}" | chroot /vz/mounts/${name}${pn} chpasswd
+				  fi;
 		  umount /dev/mapper/${pname}${pn}
 		  kpartx $kpartxopts -d /dev/vz/${name}
 		 else
@@ -353,8 +356,8 @@ q
 	  /etc/init.d/isc-dhcp-server restart
 	 elif [ -e /etc/init.d/dhcpd ]; then
 	  /etc/init.d/dhcpd restart
-     else
-      service dhcpd restart;
+	 else
+	  service dhcpd restart;
 	 fi
 	 curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
 	 /usr/bin/virsh start ${name};
