@@ -43,6 +43,8 @@ skip=0;
 if [ -e /tools/bandwidth/$id/skip ]; then
         echo "Skipping $id";
         skip=1;
+        DNLD=100mbit
+        UPLD=100mbit
 elif [ -e /tools/bandwidth/$id/80 ]; then
         # Download limit (in mega bits)
         DNLD=80mbit          # DOWNLOAD Limit
@@ -80,8 +82,8 @@ fi
 
 if [ "$skip" = "0" ]; then
         # create parent
-        $TC qdisc add dev $IF root handle 1:0 htb default 30 r2q 50
-        $TC qdisc add dev $OF root handle 1:0 htb default 30 r2q 50
+        $TC qdisc add dev $IF root handle 1:0 htb default 30 r2q 15
+        $TC qdisc add dev $OF root handle 1:0 htb default 30 r2q 15
 
         # make rules
         $TC class add dev $IF parent 1:0 classid 1:$START htb rate $DNLD
