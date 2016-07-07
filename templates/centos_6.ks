@@ -24,3 +24,5 @@ sysstat
 %post
 yum -y update
 echo "ttyS0" >> /etc/securetty
+
+%end
