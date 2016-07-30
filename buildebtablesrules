@@ -145,6 +145,8 @@ if [ "$gateway" = "" ]; then
 	fi
 fi
 
+export PATH=$PATH:/sbin:/usr/local/sbin
+
 if [ -e /usr/bin/systemctl ]; then
 	br=`ifconfig br0 | grep "inet" | grep -v inet6 | cut -d: -f2 | awk '{print $2}'`;
 else
