@@ -39,3 +39,5 @@ elif [ -x /usr/sbin/uptrack-upgrade ]; then
 else 
 	echo 'No rebootless kernel update installed';
 fi
+
+export VISUAL=nano
