@@ -24,7 +24,7 @@
 	                $eth = 'eth0';
 
 		//$speed = trim(`ethtool $eth |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
-		$cmd = 'ethtool $eth |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
+		$cmd = 'ethtool '.$eth.' |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
 		$speed = trim(`{$cmd}`);
 		$flags = explode(' ', trim(`grep "^flags" /proc/cpuinfo | head -n 1 | cut -d: -f2-;`));
 		sort($flags);
