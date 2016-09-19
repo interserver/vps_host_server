@@ -282,7 +282,7 @@ q
 " | fdisk -u /dev/vz/${name}
 				kpartx $kpartxopts -av /dev/vz/${name}
 				pname="$(ls /dev/mapper/{vz-,}${name}{p,}${pn} 2>/dev/null | cut -d/ -f4 | sed s#"${pn}$"#""#g)"
-				fsck -T -p -f /dev/mapper/${pname}${pn}
+				e2fsck -T -p -f /dev/mapper/${pname}${pn}
 				if [ -f "$(which resize4fs 2>/dev/null)" ]; then
 					resizefs="resize4fs"
 				else
