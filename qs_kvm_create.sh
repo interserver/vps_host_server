@@ -44,6 +44,7 @@ fi
 if [ "$7" != "" ]; then
  password=$7
 fi
+export PREPATH="";
 if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1) -le 6 ]; then
 	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then 
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
@@ -52,7 +53,8 @@ if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cu
 			./install e2fsprogs
 			popd;
 		fi;
-		export PATH="/opt/e2fsprogs/sbin:$PATH";
+		export PREPATH="/opt/e2fsprogs/sbin:";
+		export PATH="${PREPATH}${PATH}";
 	fi;
 fi;
 if [ $# -lt 3 ]; then
@@ -221,7 +223,7 @@ fi
   $resizefs -p /dev/mapper/${pname}p${pn}
   mkdir -p /vz/mounts/${name}p${pn}
   mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn}; 
-  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
+  PATH="${PREPATH}/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
   umount /dev/mapper/${pname}p${pn}
   kpartx $kpartxopts -d /dev/vz/${name}
  fi

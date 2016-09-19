@@ -51,6 +51,7 @@ else
 fi
 error=0
 adjust_partitions=1
+export PREPATH="";
 if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1) -le 6 ]; then
 	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then 
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
@@ -59,7 +60,8 @@ if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cu
 			./install e2fsprogs
 			popd;
 		fi;
-		export PATH="/opt/e2fsprogs/sbin:$PATH";
+		export PREPATH="/opt/e2fsprogs/sbin:";
+		export PATH="${PREPATH}${PATH}";
 	fi;
 fi;
 if [ $# -lt 3 ]; then
@@ -290,7 +292,7 @@ q
 		  $resizefs -p /dev/mapper/${pname}${pn}
 		  mkdir -p /vz/mounts/${name}${pn}
 		  mount /dev/mapper/${pname}${pn} /vz/mounts/${name}${pn};
-		  PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
+		  PATH="${PREPATH}/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
 		  echo "root:${password}" | chroot /vz/mounts/${name}${pn} chpasswd || \
 		  php /root/cpaneldirect/vps_kvm_password_manual.php "${password}" "/vz/mounts/${name}${pn}"
 		  if [ -e /vz/mounts/${name}${pn}/home/kvm ]; then
