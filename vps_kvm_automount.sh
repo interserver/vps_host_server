@@ -147,7 +147,7 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e "Linux.* swap file")" != "" ]; then
 		echo "Skipping Swap File";
 	else
-		echo "Dont know how to handle partition ${partdev} Type $parttype - $(file -L -s ${VZDEV}${mapname} | cut -d: -f2-)";
+		echo "Don't know how to handle partition ${partdev} Type $parttype - $(file -L -s ${VZDEV}${mapname} | cut -d: -f2-)";
 	fi;
 done;
 if [ $UNMOUNT == 1 ]; then

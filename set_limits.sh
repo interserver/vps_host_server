@@ -122,5 +122,5 @@ elif [ -e /etc/vz/vz.conf ]; then
 		#echo $output;
     done
 else
-    echo "Dont know how to handle this type"
+    echo "Don't know how to handle this type"
 fi
