@@ -34,7 +34,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 	$opened_tags = array();
 	$arr = array();
 
-	$current = &$xml_array; //Refference
+	$current = &$xml_array; //Reference
 
 	//Go through the tags.
 	$repeated_tag_index = array();//Multiple tags with same name will be turned into an array
