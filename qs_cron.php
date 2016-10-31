@@ -5,7 +5,7 @@
  * Last Changed: $LastChangedDate$
  * @author $Author$
  * @version $Revision$
- * @copyright 2016
+ * @copyright 2017
  * @package MyAdmin
  * @category QuickServer
  */
