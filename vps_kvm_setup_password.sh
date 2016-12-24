@@ -14,7 +14,7 @@ if [ $# -ne 2 ]; then
  echo " ie $0 windows1337 pass123"
 #check if vps exists
 elif ! virsh dominfo ${name} >/dev/null 2>&1; then
- echo "VPS ${name} doesnt exists!";
+ echo "VPS ${name} doesn't exists!";
 else
  virsh destroy ${name}
  echo "Creating Partition Table Links" && \

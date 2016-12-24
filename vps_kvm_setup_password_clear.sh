@@ -13,7 +13,7 @@ if [ $# -ne 1 ]; then
  echo " ie $0 windows1337";
 #check if vps exists
 elif ! virsh dominfo ${name} >/dev/null 2>&1; then
- echo "VPS ${name} doesnt exists!";
+ echo "VPS ${name} doesn't exists!";
 else
  count=0;
  virsh shutdown ${name};

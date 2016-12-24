@@ -98,7 +98,7 @@ if [ -e $GRUBDIR/grub.conf ]; then
   sed s#"xencons=tty0"#""#g -i $GRUBDIR/grub.conf
 fi
 # there was a console= line in the menu.lst i removed 
-# but i didnt see it the 2nd time around
+# but i didn't see it the 2nd time around
 umount /mnt
 mkdir /dev/VolGroup
 lvchange -ay /dev/VolGroup/lv_root

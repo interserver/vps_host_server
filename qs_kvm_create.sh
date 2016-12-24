@@ -112,7 +112,7 @@ else
   fi
   if [ "$(echo "$pid" | grep " ")" != "" ]; then
    pid=$(pgrep -f 'gzip -dc')
-   echo "Didnt like gzip pid (had a space?), going with gzip PID $pid"
+   echo "Didn't like gzip pid (had a space?), going with gzip PID $pid"
   fi
   tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
   echo "Got Total Size $tsize";

@@ -23,7 +23,7 @@ if [ $# -ne 1 ]; then
 else
  virsh managedsave-remove $name;
  if ! virsh dominfo $name >/dev/null 2>&1; then
-  echo "VPS $name doesnt exist!";
+  echo "VPS $name doesn't exist!";
  else
   echo "Removing and Stoping VPS"
   virsh destroy $name
