@@ -1,4 +1,4 @@
-#!/usr/bin/php -q 
+#!/usr/bin/php -q
 <?php
 /**
  * VPS Functionality
@@ -22,7 +22,7 @@ function valid_ip($ip, $display_errors = true, $support_ipv6 = false)
 	{
 		if (!preg_match("/^[0-9\.]{7,15}$/", $ip))
 		{
-			// dont display errors cuz this gets called w/ a blank entry when people didnt even submit anything yet
+			// don't display errors cuz this gets called w/ a blank entry when people didnt even submit anything yet
 			//add_output('<font class="error">IP ' . $ip . ' Too short/long</font>');
 			return false;
 		}
@@ -152,7 +152,7 @@ function get_vps_iptables_traffic($ips)
 						{
 							$in_new = $vpss[$vps]['in'];
 							$out_new = $vpss[$vps]['out'];
-						} 
+						}
 						if ($in_new > 0 || $out_new > 0)
 							$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
 					}
