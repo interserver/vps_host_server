@@ -12,6 +12,7 @@ function age() {
 }
 
 if [ "$(ps aux| grep 'php vps_cron.php' | grep -v "grep.*php" |wc -l)" = "0" ]; then
+        rm -f cron.age
 	touch .cron.age
 	if [ -e /proc/vz ]; then
 		/root/cpaneldirect/cpu_usage_updater.sh 2>/root/cpaneldirect/cron.cpu_usage >&2 &
