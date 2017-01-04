@@ -12,14 +12,18 @@ function age() {
 }
 
 if [ "$(ps aux| grep 'php vps_cron.php' | grep -v "grep.*php" |wc -l)" = "0" ]; then
-	touch cron.age
+	touch .cron.age
 	if [ -e /proc/vz ]; then
 		/root/cpaneldirect/cpu_usage_updater.sh 2>/root/cpaneldirect/cron.cpu_usage >&2 &
 	fi;
 	php vps_cron.php >> cron.output 2>&1
+	if [ ! -e .cron_daily.age ] || [ $(age .cron_daily.age) -ge 86400 ]; then
+		touch .cron_daily.age
+		php vps_cron_daily.php >> cron.output 2>&1
+	fi
 else
 	# kill a get list older than 2 hours
-	if [ $(age cron.age) -gt 7200 ]; then
+	if [ $(age .cron.age) -gt 7200 ]; then
 		if [ "$(ps uax|grep vps_get_list |grep -v grep)" != "" ]; then
 			kill -9 $(ps uax|grep vps_get_list |grep -v grep | awk '{ print $2 }')
 		fi
