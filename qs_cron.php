@@ -75,4 +75,3 @@ $out = ob_get_contents();
 ob_flush();
 echo trim($out);
 */
-?>

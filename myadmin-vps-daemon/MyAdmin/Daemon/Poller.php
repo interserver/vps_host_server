@@ -16,19 +16,18 @@ class Poller extends \Core_Daemon
 	*/
 	protected $loop_interval = 3;
 
-    /**
-     * This will hold the results returned by our vzctl
-     * @var array
-     */
-    protected $results = array();
+	/**
+	 * This will hold the results returned by our vzctl
+	 * @var array
+	 */
+	protected $results = array();
 
-    /**
-     * Create a Lock File plugin to ensure we're not running duplicate processes, and load
-     * the config file with all of our vzctl connection details
-     */
-	  protected function setup_plugins()
-	  {
-        $this->plugin('Lock_File');
+	/**
+	 * Create a Lock File plugin to ensure we're not running duplicate processes, and load
+	 * the config file with all of our vzctl connection details
+	 */
+	  protected function setup_plugins() {
+		$this->plugin('Lock_File');
 
 		    $this->plugin('ini');
 		    $this->ini->filename = BASE_PATH . '/config.ini';
@@ -37,71 +36,68 @@ class Poller extends \Core_Daemon
 		    $this->ini->required_sections = array('queue');
 	  }
 
-    protected function setup_workers()
-    {
-        $this->worker('Vzctl', new vzctl);
-        $this->Vzctl->workers(1);
+	protected function setup_workers() {
+		$this->worker('Vzctl', new vzctl);
+		$this->Vzctl->workers(1);
 
-        $this->Vzctl->timeout(120);
-        $this->Vzctl->onTimeout(function($call, $log) {
-            $log("vzctl Timeout Reached");
-        });
+		$this->Vzctl->timeout(120);
+		$this->Vzctl->onTimeout(function($call, $log) {
+			$log("vzctl Timeout Reached");
+		});
 
-        $that = $this;
-        $this->Vzctl->onReturn(function($call, $log) use($that) {
-            if ($call->method == 'poll') {
-                $that->set_results($call->return);
-                $log("vzctl Results Updated...");
-            }
-        });
+		$that = $this;
+		$this->Vzctl->onReturn(function($call, $log) use($that) {
+			if ($call->method == 'poll') {
+				$that->set_results($call->return);
+				$log("vzctl Results Updated...");
+			}
+		});
 
-        $this->worker('Queue', new Queue);
-        $this->Queue->workers(1);
+		$this->worker('Queue', new Queue);
+		$this->Queue->workers(1);
 
-        $this->Queue->timeout(120);
-        $this->Queue->onTimeout(function($call, $log) {
-            $log("Queue Timeout Reached");
-        });
+		$this->Queue->timeout(120);
+		$this->Queue->onTimeout(function($call, $log) {
+			$log("Queue Timeout Reached");
+		});
 
-        $that = $this;
-        $this->Queue->onReturn(function($call, $log) use($that) {
-            if ($call->method == 'poll') {
-                $that->set_results($call->return);
-                $log("Queue Results Updated...");
-            }
-        });
+		$that = $this;
+		$this->Queue->onReturn(function($call, $log) use($that) {
+			if ($call->method == 'poll') {
+				$that->set_results($call->return);
+				$log("Queue Results Updated...");
+			}
+		});
 
-    }
+	}
 
 	/**
 	 * The setup method is called only in your parent daemon class, after plugin_setup and worker_setup and before execute()
 	 * @return void
 	 * @throws Exception
 	 */
-	protected function setup()
-	{
-        // We don't need any additional setup.
-        // Implement an empty method to satisfy the abstract base class
+	protected function setup() {
+		// We don't need any additional setup.
+		// Implement an empty method to satisfy the abstract base class
 	}
-	
+
 	/**
 	 * This daemon will perform a continuous long-poll request against an vzctl. When the vzctl returns, we'll update
-     * our $results array, then start the next polling request. There will always be a background worker polling for
-     * updated results.
+	 * our $results array, then start the next polling request. There will always be a background worker polling for
+	 * updated results.
 	 * @return void
 	 */
-	protected function execute()
-	{
+	protected function execute() {
 	        if (!$this->Vzctl->is_idle()) {
-        	    $this->log("Event Loop Iteration: vzctl Call running in the background worker process.");
+			    $this->log("Event Loop Iteration: vzctl Call running in the background worker process.");
 	            return;
-        	}
+			}
 		else {
 		        // If the Worker is idle, it means it just returned our stats.
 		        // Log them and start another request
 		        // If there isn't results yet, don't display incorrect (empty) values:
 		        if (!empty($this->results['vps'])) {
-        		    $this->log("Current VPS:   " . $this->results['vps']);
+				    $this->log("Current VPS:   " . $this->results['vps']);
 //		            $this->log("Current Sales Amount: $ " . number_format($this->results['sales'], 2));
 		        }
 		        // You can't store state in the worker processes because they can be killed, restarted, timed-out, etc.
@@ -109,15 +105,15 @@ class Poller extends \Core_Daemon
 		        $this->Vzctl->poll($this->results);
 		}
 	        if (!$this->Queue->is_idle()) {
-        	    $this->log("Event Loop Iteration: Queue Call running in the background worker process.");
+			    $this->log("Event Loop Iteration: Queue Call running in the background worker process.");
 	            return;
-        	}
+			}
 		else {
 		        // If the Worker is idle, it means it just returned our stats.
 		        // Log them and start another request
 		        // If there isn't results yet, don't display incorrect (empty) values:
 		        if (!empty($this->results['vps'])) {
-        		    $this->log("Current Queue:   " . $this->results['queue']);
+				    $this->log("Current Queue:   " . $this->results['queue']);
 		        }
 		        // You can't store state in the worker processes because they can be killed, restarted, timed-out, etc.
 		        // So even though we only have 1 worker process, we pass any state data in each call.
@@ -125,24 +121,24 @@ class Poller extends \Core_Daemon
 		}
 	}
 
-    public function set_results(Array $results) {
-        $this->results = $results;
-    }
-	
+	public function set_results(Array $results) {
+		$this->results = $results;
+	}
+
 	/**
-	 * Dynamically build the file name for the log file. This simple algorithm 
-	 * will rotate the logs once per day and try to keep them in a central /var/log location. 
+	 * Dynamically build the file name for the log file. This simple algorithm
+	 * will rotate the logs once per day and try to keep them in a central /var/log location.
 	 * @return string
 	 */
-	protected function log_file()
-	{	
+	protected function log_file() {
 		$dir = '/home/my/PHP-Daemon/Examples/MyAdmin/poller.log';
 		if (@file_exists($dir) == false)
 			@mkdir($dir, 0777, true);
-		
+
 		if (@is_writable($dir) == false)
 			$dir = BASE_PATH . '/logs';
-		
+
 		return $dir . '/log_' . date('Ymd');
 	}
+
 }

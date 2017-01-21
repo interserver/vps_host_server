@@ -22,20 +22,19 @@ ini_set('display_errors', 1);
 // Then set an __autoload function that uses Zend Framework naming conventions.
 define("BASE_PATH", dirname(__FILE__));
 set_include_path(implode(PATH_SEPARATOR, array(
-    realpath(BASE_PATH),
-    realpath(BASE_PATH . '/src/MyAdmin/Daemon'),
-    realpath(BASE_PATH . '/vendor/shaneharter/php-daemon'),
-    realpath(BASE_PATH . '/vendor/shaneharter/php-daemon/Core'),
-    get_include_path(),
+	realpath(BASE_PATH),
+	realpath(BASE_PATH . '/src/MyAdmin/Daemon'),
+	realpath(BASE_PATH . '/vendor/shaneharter/php-daemon'),
+	realpath(BASE_PATH . '/vendor/shaneharter/php-daemon/Core'),
+	get_include_path(),
 )));
 
-function __autoload($class_name)
-{
-    $class_name = str_replace('\\', '/', $class_name);
-    $class_name = str_replace('_', '/', $class_name);
-    require_once "$class_name.php";
+function __autoload($class_name) {
+	$class_name = str_replace('\\', '/', $class_name);
+	$class_name = str_replace('_', '/', $class_name);
+	require_once "$class_name.php";
 }
 
 function pathify($class_name) {
-    return str_replace("_", "/", $class_name) . ".php";
+	return str_replace("_", "/", $class_name) . ".php";
 }

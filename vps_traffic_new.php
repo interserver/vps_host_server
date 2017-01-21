@@ -10,12 +10,11 @@
  * @category VPS
  */
 
-function valid_ip($ip, $display_errors = true, $support_ipv6 = false)
-{
+function valid_ip($ip, $display_errors = true, $support_ipv6 = false) {
 	if (version_compare(PHP_VERSION, '5.2.0') >= 0)
 	{
-		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === FALSE)
-			if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === FALSE)
+		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false)
+			if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)
 				return false;
 	}
 	else
@@ -45,8 +44,7 @@ function valid_ip($ip, $display_errors = true, $support_ipv6 = false)
 	return true;
 }
 
-function get_vps_ipmap()
-{
+function get_vps_ipmap() {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == '')
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
@@ -75,8 +73,7 @@ function get_vps_ipmap()
 	return $ips;
 }
 
-function vps_iptables_traffic_rules($ips)
-{
+function vps_iptables_traffic_rules($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
@@ -95,8 +92,7 @@ function vps_iptables_traffic_rules($ips)
 	`$cmd`;
 }
 
-function get_vps_iptables_traffic($ips)
-{
+function get_vps_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
 	if ($vzctl == '')
@@ -194,4 +190,3 @@ if (sizeof($totals) > 0)
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }
-?>

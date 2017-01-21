@@ -1,16 +1,16 @@
 <?php
-	function shadow($password)
-	{
+
+	function shadow($password) {
 		$hash = '';
 		for($i=0;$i<8;$i++)
 		{
-			$j = mt_rand(0,53);
-			if($j<26)$hash .= chr(rand(65,90));
-			else if($j<52)$hash .= chr(rand(97,122));
-			else if($j<53)$hash .= '.';
+			$j = mt_rand(0, 53);
+			if($j<26)$hash .= chr(rand(65, 90));
+			elseif($j<52)$hash .= chr(rand(97, 122));
+			elseif($j<53)$hash .= '.';
 			else $hash .= '/';
 		}
-		return crypt($password,'$1$'.$hash.'$');
+		return crypt($password, '$1$'.$hash.'$');
 	}
 
 	$pass = $_SERVER['argv'][1];
@@ -45,5 +45,4 @@
 	}
 	$shadow = implode("\n", $lines);
 	file_put_contents($root . '/etc/shadow', $shadow);
-	echo "Password File Updated Using PHP crypt()\n";	
-?>
+	echo "Password File Updated Using PHP crypt()\n";

@@ -9,8 +9,8 @@
  * @package MyAdmin
  * @category QuickServer
  */
-function get_qs_ipmap()
-{
+
+function get_qs_ipmap() {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == '')
 	{
@@ -46,8 +46,7 @@ function get_qs_ipmap()
 	return $ips;
 }
 
-function qs_iptables_traffic_rules($ips)
-{
+function qs_iptables_traffic_rules($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
@@ -85,8 +84,7 @@ function qs_iptables_traffic_rules($ips)
 	`$cmd`;
 }
 
-function get_qs_iptables_traffic($ips)
-{
+function get_qs_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
 	foreach ($ips as $ip => $id)
@@ -134,4 +132,3 @@ $url = 'https://myquickserver2.interserver.net/qs_queue.php';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 //}
-?>

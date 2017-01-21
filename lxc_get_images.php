@@ -11,7 +11,6 @@ foreach ($matches[0] as $idx => $match)
 		'arch' => $matches['arch'][$idx],
 		'size' => $matches['size'][$idx],
 		'upload_date' => $matches['upload_date'][$idx],
-	);	
+	);
 echo json_encode($images, JSON_PRETTY_PRINT) . "\n";
 //print_r($images);
-?>

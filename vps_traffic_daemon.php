@@ -21,8 +21,7 @@ $GLOBALS['time'] = time();
 $oldips = array();
 $vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 
-function get_vps_ipmap()
-{
+function get_vps_ipmap() {
 	if ($GLOBALS['vzctl'] == '')
 	{
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
@@ -34,7 +33,7 @@ function get_vps_ipmap()
 	$lines = explode("\n", $output);
 	$ips = array();
 	foreach ($lines as $line)
-	{	
+	{
 		$parts = explode(' ', trim($line));
 		$id = $parts[0];
 		$ip = $parts[1];
@@ -54,8 +53,7 @@ function get_vps_ipmap()
 	return $ips;
 }
 
-function vps_iptables_traffic_rules($ips)
-{
+function vps_iptables_traffic_rules($ips) {
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
 	{
@@ -86,8 +84,7 @@ function vps_iptables_traffic_rules($ips)
 	trim(`$cmd`);
 }
 
-function get_vps_iptables_traffic($ips)
-{
+function get_vps_iptables_traffic($ips) {
 	$totals = array();
 		if ($GLOBALS['vzctl'] == '')
 		{
@@ -172,8 +169,8 @@ $fieldstring = "action=bandwidth&servers=" . urlencode(base64_encode(gzcompress(
 curl_setopt($ch, CURLOPT_POSTFIELDS, $fieldstring);
 $retval = curl_exec($ch);
 if (curl_errno($ch)) {
-    $retval = "CURL Error: ".curl_errno($ch)." - ".curl_error($ch);
-       echo "Curl Error $retval\n";
+	$retval = "CURL Error: ".curl_errno($ch)." - ".curl_error($ch);
+	   echo "Curl Error $retval\n";
 }
 echo ".";
 //	echo "sending the data took " . (time() - $GLOBALS['time']) . " seconds\n"; $GLOBALS['time'] = time();
@@ -182,4 +179,3 @@ echo ".";
 //}
 }
 curl_close($ch);
-?>

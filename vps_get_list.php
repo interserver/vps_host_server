@@ -8,8 +8,7 @@ require_once(dirname(__FILE__) . '/xml2array.php');
  *
  * @return
  */
-function get_vps_list()
-{
+function get_vps_list() {
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$curl_cmd = '';
 	$servers = array();
@@ -325,6 +324,4 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	echo trim(`$cmd`);
 }
 
-
 get_vps_list();
-?>

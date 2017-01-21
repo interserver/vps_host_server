@@ -1,13 +1,15 @@
 #!/usr/bin/php
 <?php
+
 function format_size($size) {
 	$mod = 1024;
-	$units = explode(' ','B KB MB GB TB PB');
+	$units = explode(' ', 'B KB MB GB TB PB');
 	for ($i = 0; $size > $mod; $i++) {
 		$size /= $mod;
 	}
 	return round($size, 2) . (strlen($units[$i]) == 1 ? '  ' : ' ') . $units[$i];
 }
+
 if (!file_exists('/usr/bin/iostat'))
 {
 	echo "Installing iostat..";
@@ -17,7 +19,7 @@ if (!file_exists('/usr/bin/iostat'))
 		`yum -y install sysstat;`;
 	}
 	elseif (trim(`which apt-get;`) != '')
-	{	
+	{
 		echo "Ubuntu Detected...";
 		`apt-get -y install sysstat;`;
 //        `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
@@ -113,7 +115,7 @@ for ($x = 1; $x < sizeof($lines); $x++)
 		'ram' => $matches['ram'],
 		'cores' => $matches['cores'],
 	);
-	$info['procs'][$vps] = $data;	
+	$info['procs'][$vps] = $data;
 }
 //print_r($info['procs']);
 
@@ -141,12 +143,12 @@ foreach ($info['disks'] as $device => $data)
 		$name = $device;
 		$type = 'Disk';
 	}
-	echo sprintf(" %20s %7s %15s %15s %15s %15s", 
-		$name, 
-		$type, 
-		format_size($data['blkreadsec']*$block_size).'/sec', 
-		format_size($data['blkwritesec']*$block_size).'/sec', 
-		format_size($data['blkread']*$block_size), 
+	echo sprintf(" %20s %7s %15s %15s %15s %15s",
+		$name,
+		$type,
+		format_size($data['blkreadsec']*$block_size).'/sec',
+		format_size($data['blkwritesec']*$block_size).'/sec',
+		format_size($data['blkread']*$block_size),
 		format_size($data['blkwrite']*$block_size)
 	);
 	if ($type == 'VPS' && isset($info['procs'][$name]))
@@ -155,6 +157,3 @@ foreach ($info['disks'] as $device => $data)
 	}
 	echo "\n";
 }
-
-
-?>

@@ -5,11 +5,10 @@ require_once(dirname(__FILE__) . '/xml2array.php');
 
 /**
  * get_qs_list()
- * 
+ *
  * @return
  */
-function get_qs_list()
-{
+function get_qs_list() {
 	$url = 'https://myquickserver2.interserver.net/qs_queue.php';
 	if (!file_exists('/usr/sbin/vzctl'))
 	{
@@ -28,11 +27,11 @@ function get_qs_list()
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);
 				$server = array(
-					'veid' => $veid, 
+					'veid' => $veid,
 					'status' => $status,
 					'name' => $name,
-					'hostname' => $name, 
-					'kmemsize' => $xml['domain']['memory'], 
+					'hostname' => $name,
+					'kmemsize' => $xml['domain']['memory'],
 				);
 				if (isset($xml['domain']['devices']['interface']))
 				{
@@ -79,58 +78,58 @@ function get_qs_list()
 		foreach ($matches['veid'] as $key => $id)
 		{
 			$server = array(
-				'veid' => $id, 
-				'numproc' => $matches['numproc'][$key], 
-				'status' => $matches['status'][$key], 
-				'ip' => $matches['ip'][$key], 
-				'hostname' => $matches['hostname'][$key], 
-				'kmemsize' => $matches['kmemsize'][$key], 
-				'kmemsize_f' => $matches['kmemsize_f'][$key], 
-				'lockedpages' => $matches['lockedpages'][$key], 
-				'lockedpages_f' => $matches['lockedpages_f'][$key], 
-				'privvmpages' => $matches['privvmpages'][$key], 
-				'privvmpages_f' => $matches['privvmpages_f'][$key], 
-				'shmpages' => $matches['shmpages'][$key], 
-				'shmpages_f' => $matches['shmpages_f'][$key], 
-				'numproc_f' => $matches['numproc_f'][$key], 
-				'physpages' => $matches['physpages'][$key], 
-				'physpages_f' => $matches['physpages_f'][$key], 
-				'vmguarpages' => $matches['vmguarpages'][$key], 
-				'vmguarpages_f' => $matches['vmguarpages_f'][$key], 
-				'oomguarpages' => $matches['oomguarpages'][$key], 
-				'oomguarpages_f' => $matches['oomguarpages_f'][$key], 
-				'numtcpsock' => $matches['numtcpsock'][$key], 
-				'numtcpsock_f' => $matches['numtcpsock_f'][$key], 
-				'numflock' => $matches['numflock'][$key], 
-				'numflock_f' => $matches['numflock_f'][$key], 
-				'numpty' => $matches['numpty'][$key], 
-				'numpty_f' => $matches['numpty_f'][$key], 
-				'numsiginfo' => $matches['numsiginfo'][$key], 
-				'numsiginfo_f' => $matches['numsiginfo_f'][$key], 
-				'tcpsndbuf' => $matches['tcpsndbuf'][$key], 
-				'tcpsndbuf_f' => $matches['tcpsndbuf_f'][$key], 
-				'tcprcvbuf' => $matches['tcprcvbuf'][$key], 
-				'tcprcvbuf_f' => $matches['tcprcvbuf_f'][$key], 
-				'othersockbuf' => $matches['othersockbuf'][$key], 
-				'othersockbuf_f' => $matches['othersockbuf_f'][$key], 
-				'dgramrcvbuf' => $matches['dgramrcvbuf'][$key], 
-				'dgramrcvbuf_f' => $matches['dgramrcvbuf_f'][$key], 
-				'numothersock' => $matches['numothersock'][$key], 
-				'numothersock_f' => $matches['numothersock_f'][$key], 
-				'dcachesize' => $matches['dcachesize'][$key], 
-				'dcachesize_f' => $matches['dcachesize_f'][$key], 
-				'numfile' => $matches['numfile'][$key], 
-				'numfile_f' => $matches['numfile_f'][$key], 
-				'numiptent' => $matches['numiptent'][$key], 
-				'numiptent_f' => $matches['numiptent_f'][$key], 
-				'diskspace' => $matches['diskspace'][$key], 
-				'diskspace_s' => $matches['diskspace_s'][$key], 
-				'diskspace_h' => $matches['diskspace_h'][$key], 
-				'diskinodes' => $matches['diskinodes'][$key], 
-				'diskinodes_s' => $matches['diskinodes_s'][$key], 
-				'diskinodes_h' => $matches['diskinodes_h'][$key], 
-				'laverage' => $matches['laverage'][$key], 
-				'cpulimit' => $matches['cpulimit'][$key], 
+				'veid' => $id,
+				'numproc' => $matches['numproc'][$key],
+				'status' => $matches['status'][$key],
+				'ip' => $matches['ip'][$key],
+				'hostname' => $matches['hostname'][$key],
+				'kmemsize' => $matches['kmemsize'][$key],
+				'kmemsize_f' => $matches['kmemsize_f'][$key],
+				'lockedpages' => $matches['lockedpages'][$key],
+				'lockedpages_f' => $matches['lockedpages_f'][$key],
+				'privvmpages' => $matches['privvmpages'][$key],
+				'privvmpages_f' => $matches['privvmpages_f'][$key],
+				'shmpages' => $matches['shmpages'][$key],
+				'shmpages_f' => $matches['shmpages_f'][$key],
+				'numproc_f' => $matches['numproc_f'][$key],
+				'physpages' => $matches['physpages'][$key],
+				'physpages_f' => $matches['physpages_f'][$key],
+				'vmguarpages' => $matches['vmguarpages'][$key],
+				'vmguarpages_f' => $matches['vmguarpages_f'][$key],
+				'oomguarpages' => $matches['oomguarpages'][$key],
+				'oomguarpages_f' => $matches['oomguarpages_f'][$key],
+				'numtcpsock' => $matches['numtcpsock'][$key],
+				'numtcpsock_f' => $matches['numtcpsock_f'][$key],
+				'numflock' => $matches['numflock'][$key],
+				'numflock_f' => $matches['numflock_f'][$key],
+				'numpty' => $matches['numpty'][$key],
+				'numpty_f' => $matches['numpty_f'][$key],
+				'numsiginfo' => $matches['numsiginfo'][$key],
+				'numsiginfo_f' => $matches['numsiginfo_f'][$key],
+				'tcpsndbuf' => $matches['tcpsndbuf'][$key],
+				'tcpsndbuf_f' => $matches['tcpsndbuf_f'][$key],
+				'tcprcvbuf' => $matches['tcprcvbuf'][$key],
+				'tcprcvbuf_f' => $matches['tcprcvbuf_f'][$key],
+				'othersockbuf' => $matches['othersockbuf'][$key],
+				'othersockbuf_f' => $matches['othersockbuf_f'][$key],
+				'dgramrcvbuf' => $matches['dgramrcvbuf'][$key],
+				'dgramrcvbuf_f' => $matches['dgramrcvbuf_f'][$key],
+				'numothersock' => $matches['numothersock'][$key],
+				'numothersock_f' => $matches['numothersock_f'][$key],
+				'dcachesize' => $matches['dcachesize'][$key],
+				'dcachesize_f' => $matches['dcachesize_f'][$key],
+				'numfile' => $matches['numfile'][$key],
+				'numfile_f' => $matches['numfile_f'][$key],
+				'numiptent' => $matches['numiptent'][$key],
+				'numiptent_f' => $matches['numiptent_f'][$key],
+				'diskspace' => $matches['diskspace'][$key],
+				'diskspace_s' => $matches['diskspace_s'][$key],
+				'diskspace_h' => $matches['diskspace_h'][$key],
+				'diskinodes' => $matches['diskinodes'][$key],
+				'diskinodes_s' => $matches['diskinodes_s'][$key],
+				'diskinodes_h' => $matches['diskinodes_h'][$key],
+				'laverage' => $matches['laverage'][$key],
+				'cpulimit' => $matches['cpulimit'][$key],
 				'cpuunits' => $matches['cpuunits'][$key]
 			);
 			$servers[$id] = $server;
@@ -152,6 +151,4 @@ function get_qs_list()
 	echo trim(`$cmd`);
 }
 
-
 get_qs_list();
-?>

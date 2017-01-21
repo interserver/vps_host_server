@@ -6,8 +6,7 @@
 	 *
 	 * @return
 	 */
-	function update_vps_info()
-	{
+	function update_vps_info() {
 		$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 		if ($root_used > 90)
 		{
@@ -28,7 +27,7 @@
 		$servers['raid_building'] = (trim(`grep -v idle /sys/block/md*/md/sync_action 2>/dev/null`) == '' ? 0 : 1);
 		$servers['kernel'] = trim(`uname -r`);
 		$servers['load'] = trim(`cat /proc/loadavg | cut -d" " -f1`);
-		
+
 		if (file_exists('/dev/bcache0') && $servers['load'] >= 2.00)
 		{
 			$servers['load'] -= 2.00;
@@ -62,7 +61,7 @@ done
 				`yum -y install sysstat;`;
 			}
 			elseif (trim(`which apt-get;`) != '')
-			{	
+			{
 				echo "Ubuntu Detected...";
 				`apt-get -y install sysstat;`;
 //				`echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
@@ -161,7 +160,7 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 			if (!file_exists('/proc/user_beancounters'))
 			{
 	        	$headers = "MIME-Version: 1.0\n";
-    		    $headers .= "Content-type: text/html; charset=iso-8859-1\n";
+			    $headers .= "Content-type: text/html; charset=iso-8859-1\n";
 	    	    $headers .= "From: ".`hostname -s`." <hardware@interserver.net>\n";
 				mail('hardware@interserver.net', 'OpenVZ server does not appear to be booted properly', 'This server does not have /proc/user_beancounters, was it booted into the wrong kernel?', $headers);
 
@@ -170,4 +169,3 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 	}
 
 	update_vps_info();
-?>
