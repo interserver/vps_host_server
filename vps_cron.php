@@ -19,7 +19,7 @@ if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron
 }
 $url = 'https://myvps2.interserver.net/vps_queue.php';
 echo "[" . date('Y-m-d H:i:s') . "] Crontab Startup\n";
-$cmd = dirname(__FILE__) . '/vps_update_info.php;';
+$cmd = __DIR__ . '/vps_update_info.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 $cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getnewvps '$url' 2>/dev/null;";
@@ -30,7 +30,7 @@ if ($out != '')
 	echo "Get New VPS Running:	$out\n";
 	echo `$out`;
 }
-$cmd = dirname(__FILE__) . '/vps_traffic_new.php;';
+$cmd = __DIR__ . '/vps_traffic_new.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 $cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getslicemap '$url' 2>/dev/null;";
@@ -68,7 +68,7 @@ if ($out != '')
 	echo "Get Queue Running:$out\n";
 	echo `$out`;
 }
-$cmd = dirname(__FILE__) . '/vps_get_list.php;';
+$cmd = __DIR__ . '/vps_get_list.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 /*
