@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?php
 
-require_once(__DIR__ . '/xml2array.php');
+require_once(dirname(__FILE__) . '/xml2array.php');
 
 /**
  * get_vps_list()
