@@ -11,7 +11,7 @@ require_once(dirname(__FILE__) . '/xml2array.php');
 function get_vps_list() {
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$curl_cmd = '';
-	$servers = [];
+	$servers = array();
 	if (!file_exists('/usr/sbin/vzctl'))
 	{
 		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
@@ -188,7 +188,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			foreach ($tips as $line)
 			{
 				$parts = explode(' ', $line);
-				$ips[$parts[0]] = [];
+				$ips[$parts[0]] = array();
 				foreach ($parts as $idx => $ip)
 				{
 					if ($idx == 0)

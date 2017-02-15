@@ -32,7 +32,7 @@
 		$flags = $flagsnew;
 		unset($flagsnew);
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
-		$servers = [];
+		$servers = array();
 		$servers['speed'] = $speed;
 		$servers['cpu_flags'] = $flags;
 		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vpsinfo_extra -d servers="' . urlencode(base64_encode(serialize($servers))) . '" "' . $url . '" 2>/dev/null;';
