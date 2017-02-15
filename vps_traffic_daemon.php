@@ -18,7 +18,7 @@ $starttime = time();
 $updateinterval = 5 * 60;
 $lastupdate = 0;
 $GLOBALS['time'] = time();
-$oldips = array();
+$oldips = [];
 $vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 
 function get_vps_ipmap() {
@@ -31,7 +31,7 @@ function get_vps_ipmap() {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip`);
 	}
 	$lines = explode("\n", $output);
-	$ips = array();
+	$ips = [];
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
@@ -85,7 +85,7 @@ function vps_iptables_traffic_rules($ips) {
 }
 
 function get_vps_iptables_traffic($ips) {
-	$totals = array();
+	$totals = [];
 		if ($GLOBALS['vzctl'] == '')
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; ebtables -L -Z --Lc --Lx | grep " -j CONTINUE -c " |  sed s#"ebtables -t filter -A FORWARD -p IPv4 --ip-"#""#g | sed s#"-j CONTINUE -c "#""#g`));

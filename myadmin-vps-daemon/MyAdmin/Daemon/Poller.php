@@ -20,7 +20,7 @@ class Poller extends \Core_Daemon
 	 * This will hold the results returned by our vzctl
 	 * @var array
 	 */
-	protected $results = array();
+	protected $results = [];
 
 	/**
 	 * Create a Lock File plugin to ensure we're not running duplicate processes, and load

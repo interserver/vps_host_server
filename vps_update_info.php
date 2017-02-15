@@ -14,7 +14,7 @@
 			mail('hardware@interserver.net', $root_used . '% Disk Usage on ' . $hostname, $root_used . '% Disk Usage on ' . $hostname);
 		}
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
-		$servers = array();
+		$servers = [];
 		switch (trim(`uname -p`))
 		{
 			case 'i686':

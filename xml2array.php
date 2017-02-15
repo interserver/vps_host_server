@@ -11,11 +11,11 @@
  *              $array =  xml2array(file_get_contents('feed.xml', 1, 'attribute'));
  */
 function xml2array($contents, $get_attributes=1, $priority = 'tag') {
-	if(!$contents) return array();
+	if(!$contents) return [];
 
 	if(!function_exists('xml_parser_create')) {
 		//print "'xml_parser_create()' function not found!";
-		return array();
+		return [];
 	}
 
 	//Get the XML parser of PHP - PHP must have this module for the parser to work
@@ -29,15 +29,15 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 	if(!$xml_values) return false;//Hmm...
 
 	//Initializations
-	$xml_array = array();
-	$parents = array();
-	$opened_tags = array();
-	$arr = array();
+	$xml_array = [];
+	$parents = [];
+	$opened_tags = [];
+	$arr = [];
 
 	$current = &$xml_array; //Reference
 
 	//Go through the tags.
-	$repeated_tag_index = array();//Multiple tags with same name will be turned into an array
+	$repeated_tag_index = [];//Multiple tags with same name will be turned into an array
 	foreach($xml_values as $data) {
 		unset($attributes,$value);//Remove existing values, or there will be trouble
 
@@ -45,8 +45,8 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 		// tag(string), type(string), level(int), attributes(array).
 		extract($data);//We could use the array by itself, but this cooler.
 
-		$result = array();
-		$attributes_data = array();
+		$result = [];
+		$attributes_data = [];
 
 		if(isset($value)) {
 			if($priority == 'tag') $result = $value;

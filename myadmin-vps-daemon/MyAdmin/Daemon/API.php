@@ -37,7 +37,7 @@ class API implements \Core_IWorker
 	 * Array of results
 	 * @var array
 	 */
-	private $results = array();
+	private $results = [];
 
 	/**
 	 * Called on Construct or Init
@@ -66,7 +66,7 @@ class API implements \Core_IWorker
 	 *                  "Cannot open /tmp for Writing") or an empty array
 	 */
 	public function check_environment(Array $errors = array()) {
-		$errors = array();
+		$errors = [];
 		if (!function_exists('curl_init'))
 			$errors[] = 'PHP Curl Extension Required: Recompile PHP using the --with-curl option.';
 
