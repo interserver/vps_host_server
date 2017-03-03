@@ -274,9 +274,14 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 	}
 	else
 		$eth = 'eth0';
-	$cmd = 'ethtool '.$eth.' 2>/dev/null || ethtool $(brctl show $(ip route |grep ^default | sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g)  |grep -v "bridge id" | awk '{ print $4 }') |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
-	//echo "Running {$cmd}\n";
+	$cmd = 'ethtool '.$eth.' 2>/dev/null |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
 	$speed = trim(`{$cmd}`);
+	if ($speed == '') {
+		$cmd = 'ethtool $(brctl show $(ip route |grep ^default | sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g) 2>/dev/null |grep -v "bridge id" | awk \'{ print $4 }\') |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
+		$speed = trim(`{$cmd}`);
+	}
+        //echo "Running {$cmd}\n";
+        //echo "Got Speed {$speed}\n";
 	$cpuinfo = explode("\n", file_get_contents('/proc/cpuinfo'));
 	$found = false;
 	$lines = sizeof($cpuinfo);
