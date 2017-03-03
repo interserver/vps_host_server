@@ -22,3 +22,7 @@ echo "[" . date('Y-m-d H:i:s') . "] Daily Crontab Startup\n";
 $cmd = dirname(__FILE__) . '/vps_update_extra_info.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
+if (file_exists('/usr/bin/prlctl')) {
+	$cmd = dirname(__FILE__) . '/update_virtuozzo.sh;';
+	ecoh `$cmd`;	
+}
