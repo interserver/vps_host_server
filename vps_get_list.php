@@ -167,7 +167,7 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			$servers[$id] = $server;
 		}
 		if (file_exists('/usr/bin/prlctl')) {
-			$json_servers = json_decode(`prlctl list -a -j`);
+			$json_servers = json_decode(`prlctl list -a -j`, true);
 			foreach ($json_servers as $json_server)
 				$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
 		}
