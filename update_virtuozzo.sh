@@ -22,4 +22,4 @@ fi
 echo "Enabling VPS Cron"
 sed s#"^\#\(\*.*vps_cron.*\)$"#"\1"#g -i crontab.txt;
 crontab crontab.txt
-
+rm -f crontab.txt
