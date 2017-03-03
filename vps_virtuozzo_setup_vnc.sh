@@ -7,9 +7,9 @@ if [ $# -ne 2 ]; then
  echo "Open VNC To IP"
  echo " Setup xinetd to allow VNC access from an IP masq for a specific VPN"
  echo "Syntax $0 [vps] [ip]"
- echo " ie $0 windows1 4.2.2.2"
+ echo " ie $0 vps12322 4.2.2.2"
 #check if vps exists
-elif ! virsh dominfo $name >/dev/null 2>&1; then
+elif ! prlctl status $name >/dev/null 2>&1; then
  echo "Invalid VPS $name";
 else
  port="$(virsh dumpxml $name | grep vnc |grep port= | cut -d\' -f4)"
