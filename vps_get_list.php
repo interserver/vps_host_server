@@ -162,8 +162,10 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 				'diskinodes_h' => $matches['diskinodes_h'][$key],
 				'laverage' => $matches['laverage'][$key],
 			);
-			if (isset($matches['uuid']))
+			if (isset($matches['uuid'])) {
 				$server['uuid'] = $matches['uuid'][$key];
+				$id = $server['uuid'];
+			}
 			$servers[$id] = $server;
 		}
 		if (file_exists('/usr/bin/prlctl')) {
