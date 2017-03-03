@@ -172,6 +172,10 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 			$json_servers = json_decode(`prlctl list -a -j`, true);
 			foreach ($json_servers as $json_server)
 				$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
+			$json_servers = json_decode(`prlctl list -a -i -j`, true);
+			foreach ($json_servers as $json_server)
+				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port']))
+					$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
 		}
 		foreach ($servers as $id => $server)
 		{
@@ -295,8 +299,8 @@ $cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpe
 		$cmd = 'ethtool $(brctl show $(ip route |grep ^default | sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g) 2>/dev/null |grep -v "bridge id" | awk \'{ print $4 }\') |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
 		$speed = trim(`{$cmd}`);
 	}
-        //echo "Running {$cmd}\n";
-        //echo "Got Speed {$speed}\n";
+		//echo "Running {$cmd}\n";
+		//echo "Got Speed {$speed}\n";
 	$cpuinfo = explode("\n", file_get_contents('/proc/cpuinfo'));
 	$found = false;
 	$lines = sizeof($cpuinfo);
