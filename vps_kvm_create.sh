@@ -374,6 +374,7 @@ q
 		curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
 		/usr/bin/virsh start ${name};
 		#/usr/bin/virsh resume ${template};
+		bash /root/cpaneldirect/run_buildebtables.sh;
 		if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
 			echo "CGroups Not Detected, Bailing";
 		else

@@ -30,4 +30,5 @@ else
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  virsh start ${name};
  virsh resume windows1
+ bash /root/cpaneldirect/run_buildebtables.sh;
 fi

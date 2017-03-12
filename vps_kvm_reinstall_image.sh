@@ -55,4 +55,5 @@ umount /image_storage
 rmdir /image_storage
 echo y |lvremove /dev/vz/image_storage
 virsh start $vps
+bash /root/cpaneldirect/run_buildebtables.sh;
 /root/cpaneldirect/vps_refresh_vnc.sh $vps

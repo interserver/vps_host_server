@@ -38,4 +38,5 @@ else
  /root/cpaneldirect/run_buildebtables.sh
  /root/cpaneldirect/tclimit $ip
  /usr/bin/virsh start $name;
+ bash /root/cpaneldirect/run_buildebtables.sh;
 fi

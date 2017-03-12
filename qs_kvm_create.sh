@@ -295,10 +295,10 @@ fi
  fi
  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
  /usr/bin/virsh start ${name};
+ bash /root/cpaneldirect/run_buildebtables.sh;
  /root/cpaneldirect/vps_refresh_vnc.sh $name
 
  #/usr/bin/virsh resume ${template}
- /root/cpaneldirect/run_buildebtables.sh
  /root/cpaneldirect/tclimit $ip
  vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
  /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 

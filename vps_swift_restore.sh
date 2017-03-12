@@ -120,6 +120,7 @@ for i in $destids; do
 	  sync
 	  sleep 5s;
 	  virsh start $i
+          bash /root/cpaneldirect/run_buildebtables.sh;
 	  /root/cpaneldirect/vps_refresh_vnc.sh $i
 	fi
   else
