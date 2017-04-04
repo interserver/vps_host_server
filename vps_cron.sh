@@ -11,6 +11,9 @@ function age() {
    echo $elapsed
 }
 
+if [ -f /dev/shm/lock ]; then
+ exit;
+fi
 if [ "$(ps aux| grep 'php vps_cron.php' | grep -v "grep.*php" |wc -l)" = "0" ]; then
         rm -f cron.age
 	touch .cron.age
