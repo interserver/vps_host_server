@@ -2,7 +2,11 @@
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
 IFS="
 ";
-url="https://myvps2.interserver.net/vps_queue.php";
+if [ "$(crontab -l|grep qs_cron)" != "" ]; then 
+	url="https://myquickserver2.interserver.net/qs_queue.php"
+else
+	url="https://myvps2.interserver.net/vps_queue.php";
+fi
 if [ -e /etc/dhcp/dhcpd.vps ]; then
 	DHCPVPS=/etc/dhcp/dhcpd.vps;
 	/bin/rm -f /etc/dhcpd.vps;
