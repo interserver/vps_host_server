@@ -27,7 +27,7 @@ expect {
 	"Cache metadata" {send "\r" ; exp_continue}
 	"Parameters for the" {send "\r" ; exp_continue}
 	"Let the index expire after how many day" {send "\r" ; exp_continue}
-	"Your terminal expects ISO-8859-1" {send "\r" ; exp_continue}
+	"Your terminal expects UTF-8" {send "\r" ; exp_continue}
 	"File to save your history" {send "\r" ; exp_continue}
 	"Number of lines to save" {send "\r" ; exp_continue}
 	"Policy on building prerequisites" {send "\r" ; exp_continue}

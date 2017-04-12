@@ -160,7 +160,7 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 			if (!file_exists('/proc/user_beancounters'))
 			{
 	        	$headers = "MIME-Version: 1.0\n";
-			    $headers .= "Content-type: text/html; charset=iso-8859-1\n";
+			    $headers .= "Content-type: text/html; charset=UTF-8\n";
 	    	    $headers .= "From: ".`hostname -s`." <hardware@interserver.net>\n";
 				mail('hardware@interserver.net', 'OpenVZ server does not appear to be booted properly', 'This server does not have /proc/user_beancounters, was it booted into the wrong kernel?', $headers);
 
