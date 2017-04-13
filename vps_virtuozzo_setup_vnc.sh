@@ -23,10 +23,6 @@ else
  else
   echo "no vnc port found for $myip"
  fi
- if [ -e /etc/init.d/xinetd ]; then
-  /etc/init.d/xinetd reload >/dev/null 2>&1
- else
-  service xinetd reload >/dev/null 2>&1
- fi;
+ systemctl xinetd restart
 fi
 
