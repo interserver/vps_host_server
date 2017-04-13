@@ -23,6 +23,6 @@ else
  else
   echo "no vnc port found for $myip"
  fi
- systemctl xinetd restart
+ systemctl restart xinetd
 fi
 
