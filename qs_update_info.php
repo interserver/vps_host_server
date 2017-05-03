@@ -1,4 +1,4 @@
-#!/usr/bin/php -q 
+#!/usr/bin/php -q
 <?php
 
 /**
@@ -33,7 +33,7 @@
 //		$servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
 		$servers['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
 		$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
-for i in $(pvdisplay -c); do 
+for i in $(pvdisplay -c); do
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
   blocksize="$(echo "$i" | cut -d: -f8)";
   total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
@@ -43,6 +43,7 @@ for i in $(pvdisplay -c); do
   echo "$d:$total:$used:$free:$target";
 done
 ';
+		$servers['drive_type'] = trim(`smartctl -i /dev/sda |grep "Rotation Rate" | sed s#"^.*: *"#""#`);
 		$servers['mounts'] = str_replace("\n", ',', trim(`$cmd`));
 		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
 		if (!file_exists('/usr/bin/iostat'))
