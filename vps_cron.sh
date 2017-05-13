@@ -22,8 +22,10 @@ if [ "$(ps aux| grep 'php vps_cron.php' | grep -v "grep.*php" |wc -l)" = "0" ]; 
 	fi;
 	php vps_cron.php >> cron.output 2>&1
 	if [ ! -e .cron_daily.age ] || [ $(age .cron_daily.age) -ge 86400 ]; then
-		touch .cron_daily.age
-		php vps_cron_daily.php >> cron.output 2>&1
+		if [ "$(ps uax|grep -e update_virtuozzo -e vps_cron_daily|grep -v grep)" = "" ]; then
+			touch .cron_daily.age
+			php vps_cron_daily.php >> cron.output 2>&1
+		fi
 	fi
 else
 	# kill a get list older than 2 hours
