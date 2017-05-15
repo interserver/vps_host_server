@@ -63,7 +63,11 @@ function get_vps_list() {
 						if ($port >= 5900)
 						{
 // vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
-$cmd .= "./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;\n";
+$cmd .= "if [ -e /usr/bin/timeout ]; then
+    timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+else
+    ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+fi;\n";
 //$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
 //echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";

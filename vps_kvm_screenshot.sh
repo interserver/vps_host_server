@@ -8,14 +8,20 @@ if [ $# -lt 1 ]; then
  echo "Syntax $0 [display] [url]"
  echo " ie $0 2 url.com"
 else
+ rm -f shot1_$1.jpg;
  function timer() {
   sleep 40 && kill $$
  }
- timer & timerpid=$!
- rm -f shot1_$1.jpg;
- /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
- -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
- -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
+ if [ -e /usr/bin/timeout ]; then
+  timeout 30s /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
+   -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
+   -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
+ else
+  timer & timerpid=$!
+  /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
+   -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
+   -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
+ fi;
  if [ -e shot1_$1.jpg ]; then
   convert shot1_$1.jpg -quality 75 shot_$1.gif;
   rm -f shot1_$1.jpg;

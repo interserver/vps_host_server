@@ -12,12 +12,18 @@ else
  function timer() {
   sleep 40 && kill $$
  }
- timer & timerpid=$!
  ifile="reset_shot_${vps}_$(date +%Y%m%d).jpg";
  rm -f shot_$1.jpg shot1_$1.jpg;
- /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
- -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
- -quiet 127.0.0.1:$display "$ifile" >/dev/null 2>&1;
+ if [ -e /usr/bin/timeout ]; then
+  timeout 30s/root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
+   -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
+   -quiet 127.0.0.1:$display "$ifile" >/dev/null 2>&1;
+ else
+  timer & timerpid=$!
+  /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
+   -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
+   -quiet 127.0.0.1:$display "$ifile" >/dev/null 2>&1;
+ fi;
  /admin/swift/c ismkdir vps${vps}; 
  /admin/swift/c isput vps${vps} "$ifile"; 
  /bin/rm -f "$ifile";
