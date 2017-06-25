@@ -10,7 +10,7 @@
  * @category VPS
  */
 
-function valid_ip($ip, $display_errors = true, $support_ipv6 = false) {
+function validIp($ip, $display_errors = true, $support_ipv6 = false) {
 	if (version_compare(PHP_VERSION, '5.2.0') >= 0)
 	{
 		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false)
@@ -59,7 +59,7 @@ function get_vps_ipmap() {
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
-			if (valid_ip($ip, false) == true)
+			if (validIp($ip, false) == true)
 			{
 				$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
 				if ($extra != '')
@@ -78,7 +78,7 @@ function vps_iptables_traffic_rules($ips) {
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
 	{
-		if (valid_ip($ip, false) == true)
+		if (validIp($ip, false) == true)
 		{
 			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
 			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
@@ -162,7 +162,7 @@ function get_vps_iptables_traffic($ips) {
 	{
 		foreach ($ips as $ip => $id)
 		{
-			if (valid_ip($ip, false) == true)
+			if (validIp($ip, false) == true)
 			{
 				$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 				if (sizeof($lines) == 2)
