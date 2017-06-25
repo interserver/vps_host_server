@@ -23,9 +23,9 @@ ini_set('display_errors', 1);
 define("BASE_PATH", __DIR__);
 set_include_path(implode(PATH_SEPARATOR, array(
 	realpath(BASE_PATH),
-	realpath(BASE_PATH . '/src/MyAdmin/Daemon'),
-	realpath(BASE_PATH . '/vendor/shaneharter/php-daemon'),
-	realpath(BASE_PATH . '/vendor/shaneharter/php-daemon/Core'),
+	realpath(BASE_PATH.'/src/MyAdmin/Daemon'),
+	realpath(BASE_PATH.'/vendor/shaneharter/php-daemon'),
+	realpath(BASE_PATH.'/vendor/shaneharter/php-daemon/Core'),
 	get_include_path(),
 )));
 

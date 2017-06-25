@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?php
 
-require_once(dirname(__FILE__) . '/xml2array.php');
+require_once(dirname(__FILE__).'/xml2array.php');
 
 /**
  * get_qs_list()
@@ -146,7 +146,7 @@ function get_qs_list() {
 		}
 	}
 	//print_r($servers);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=serverlist -d servers="' . urlencode(base64_encode(gzcompress(serialize($servers), 9))) . '" "' . $url . '" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=serverlist -d servers="'.urlencode(base64_encode(gzcompress(serialize($servers), 9))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }

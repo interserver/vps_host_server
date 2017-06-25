@@ -20,12 +20,12 @@
 		echo "No root path specified\n";
 		exit;
 	}
-	if (!file_exists($root . '/etc/shadow'))
+	if (!file_exists($root.'/etc/shadow'))
 	{
 		echo "Cannot find etc/shadow file in $root\n";
 		exit;
 	}
-	$shadow = file_get_contents($root . '/etc/shadow');
+	$shadow = file_get_contents($root.'/etc/shadow');
 	$lines = explode("\n", $shadow);
 	$found = false;
 	foreach ($lines as $idx => $line)
@@ -44,5 +44,5 @@
 		exit;
 	}
 	$shadow = implode("\n", $lines);
-	file_put_contents($root . '/etc/shadow', $shadow);
+	file_put_contents($root.'/etc/shadow', $shadow);
 	echo "Password File Updated Using PHP crypt()\n";

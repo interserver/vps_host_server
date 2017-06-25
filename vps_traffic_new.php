@@ -22,7 +22,7 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false) {
 		if (!preg_match("/^[0-9\.]{7,15}$/", $ip))
 		{
 			// don't display errors cuz this gets called w/ a blank entry when people didn't even submit anything yet
-			//add_output('<font class="error">IP ' . $ip . ' Too short/long</font>');
+			//add_output('<font class="error">IP '.$ip.' Too short/long</font>');
 			return false;
 		}
 		$quads = explode('.', $ip);
@@ -30,14 +30,14 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false) {
 		if ($numquads != 4)
 		{
 			if ($display_errors)
-				error_log('<font class="error">IP ' . $ip . ' Too many quads</font>');
+				error_log('<font class="error">IP '.$ip.' Too many quads</font>');
 			return false;
 		}
 		for ($i = 0; $i < 4; $i++)
 			if ($quads[$i] > 255)
 			{
 				if ($display_errors)
-					error_log('<font class="error">IP ' . $ip . ' number ' . $quads[$i] . ' too high</font>');
+					error_log('<font class="error">IP '.$ip.' number '.$quads[$i].' too high</font>');
 				return false;
 			}
 	}
@@ -186,7 +186,7 @@ $totals = get_vps_iptables_traffic($ips);
 if (sizeof($totals) > 0)
 {
 	//print_r($totals);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '" -d bandwidth="' . urlencode(base64_encode(gzcompress(serialize($totals)))) . '" "' . $url . '" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(serialize($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(serialize($totals)))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }

@@ -11,7 +11,7 @@
 		if ($root_used > 90)
 		{
 			$hostname = trim(`hostname;`);
-			mail('hardware@interserver.net', $root_used . '% Disk Usage on ' . $hostname, $root_used . '% Disk Usage on ' . $hostname);
+			mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 		}
 		$url = 'https://myquickserver2.interserver.net/qs_queue.php';
 		$servers = array();
@@ -90,7 +90,7 @@ done
 		{
 			$servers['hdsize'] = $parts[0];
 			$servers['hdfree'] = $parts[1];
-			$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=qsinfo -d servers="' . urlencode(base64_encode(serialize($servers))) . '" "' . $url . '" 2>/dev/null;';
+			$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=qsinfo -d servers="'.urlencode(base64_encode(serialize($servers))).'" "'.$url.'" 2>/dev/null;';
 			// echo "CMD: $cmd\n";
 			echo trim(`$cmd`);
 		}

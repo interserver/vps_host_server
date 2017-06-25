@@ -128,7 +128,7 @@ foreach ($info['cpu'] as $idx => $value)
 }
 echo "\n\n";
 echo sprintf(" %36s %18s %36s\n", $info['os'], $info['bits'], $info['hostname']);
-echo sprintf(" %36s %18s %36s\n", $info['version'], $info['cpus'] . ' cores', $info['date']);
+echo sprintf(" %36s %18s %36s\n", $info['version'], $info['cpus'].' cores', $info['date']);
 echo "\n";
 echo sprintf(" %20s %7s %15s %15s %15s %15s %15s %8s %8s %8s\n", "Target", "Type", "Read Speed", "Write Speed", "Total Read", "Total Written", 'CPU % User', '% System', '% Guest', '% All');
 foreach ($info['disks'] as $device => $data)

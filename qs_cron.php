@@ -19,10 +19,10 @@ if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron
 }
 $url = 'https://myquickserver2.interserver.net/qs_queue.php';
 echo "[" . date('Y-m-d H:i:s') . "] Crontab Startup\n";
-$cmd = dirname(__FILE__) . '/qs_update_info.php;';
+$cmd = dirname(__FILE__).'/qs_update_info.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
-$cmd = dirname(__FILE__) . '/qs_get_list.php;';
+$cmd = dirname(__FILE__).'/qs_get_list.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 $cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getnewqs '$url' 2>/dev/null;";
@@ -32,11 +32,11 @@ if ($out != '')
 {
 	echo "Get New VPS Running:	$out\n";
 	echo `$out`;
-	$cmd = dirname(__FILE__) . '/qs_get_list.php;';
+	$cmd = dirname(__FILE__).'/qs_get_list.php;';
 	echo "Running Command: $cmd\n";
 	echo `$cmd`;
 }
-$cmd = dirname(__FILE__) . '/qs_traffic.php;';
+$cmd = dirname(__FILE__).'/qs_traffic.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 if (!file_exists('/usr/sbin/vzctl'))
@@ -65,7 +65,7 @@ if ($out != '')
 {
 	echo "Get Queue Running:$out\n";
 	echo `$out`;
-	$cmd = dirname(__FILE__) . '/qs_get_list.php;';
+	$cmd = dirname(__FILE__).'/qs_get_list.php;';
 	echo "Running Command: $cmd\n";
 	echo `$cmd`;
 }

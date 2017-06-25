@@ -128,7 +128,7 @@ $url = 'https://myvps2.interserver.net/vps_queue.php';
 	$ips = get_vps_ipmap();
 	$totals = get_vps_iptables_traffic($ips);
 	//print_r($totals);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '" -d bandwidth="' . urlencode(base64_encode(gzcompress(serialize($totals)))) . '" "' . $url . '" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(serialize($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(serialize($totals)))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 //}

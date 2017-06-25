@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?php
 
-require_once(dirname(__FILE__) . '/xml2array.php');
+require_once(dirname(__FILE__).'/xml2array.php');
 
 /**
  * get_vps_list()
@@ -274,7 +274,7 @@ fi;\n";
 			{
 				foreach (array('in','out','total') as $dir)
 				{
-					$bw_usage[$stat . '_sec_' . $dir] = ($bw_usage[$stat . '_' . $dir] - $bw_usage_last[$stat . '_' . $dir]) / $time_diff;
+					$bw_usage[$stat.'_sec_'.$dir] = ($bw_usage[$stat.'_'.$dir] - $bw_usage_last[$stat.'_'.$dir]) / $time_diff;
 				}
 			}
 		}
@@ -341,11 +341,11 @@ fi;\n";
 		'speed' => $speed,
 		'cpu_flags' => $flags,
 	);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '"  '
-	. (isset($ips) ? ' -F ips="' . base64_encode(gzcompress(serialize($ips), 9)) . '" ' : '')
-//	. ($cpu_data != '' ? ' -F cpu_usage="' . base64_encode(gzcompress($cpu_data, 9)) . '" ' : '')
-	. $curl_cmd . ' "' . $url . '" 2>/dev/null;';
-//		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="' . base64_encode(gzcompress(serialize($servers), 9)) . '" $curlcmd "' . $url . '" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
+	. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
+//	. ($cpu_data != '' ? ' -F cpu_usage="'.base64_encode(gzcompress($cpu_data, 9)).'" ' : '')
+	. $curl_cmd.' "'.$url.'" 2>/dev/null;';
+//		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'" $curlcmd "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
 	//echo "OK now doing something else on " . __LINE__ . "\n";

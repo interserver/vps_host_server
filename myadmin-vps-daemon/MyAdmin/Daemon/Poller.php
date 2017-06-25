@@ -30,7 +30,7 @@ class Poller extends \Core_Daemon
 		$this->plugin('Lock_File');
 
 		    $this->plugin('ini');
-		    $this->ini->filename = BASE_PATH . '/config.ini';
+		    $this->ini->filename = BASE_PATH.'/config.ini';
 		    //$this->ini->required_sections = array('api');
 		    $this->ini->required_sections = array('vzctl');
 		    $this->ini->required_sections = array('queue');
@@ -136,9 +136,9 @@ class Poller extends \Core_Daemon
 			@mkdir($dir, 0777, true);
 
 		if (@is_writable($dir) == false)
-			$dir = BASE_PATH . '/logs';
+			$dir = BASE_PATH.'/logs';
 
-		return $dir . '/log_' . date('Ymd');
+		return $dir.'/log_'.date('Ymd');
 	}
 
 }

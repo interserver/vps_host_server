@@ -128,7 +128,7 @@ $url = 'https://myquickserver2.interserver.net/qs_queue.php';
 	$ips = get_qs_ipmap();
 	$totals = get_qs_iptables_traffic($ips);
 	//print_r($totals);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '" -d bandwidth="' . urlencode(base64_encode(gzcompress(serialize($totals)))) . '" "' . $url . '" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(serialize($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(serialize($totals)))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 //}
