@@ -103,7 +103,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 					$current[$tag][$repeated_tag_index[$tag.'_'.$level]] = $result;
 
 					if($priority == 'tag' and $get_attributes and $attributes_data) {
-						$current[$tag][$repeated_tag_index[$tag.'_'.$level] . '_attr'] = $attributes_data;
+						$current[$tag][$repeated_tag_index[$tag.'_'.$level].'_attr'] = $attributes_data;
 					}
 					$repeated_tag_index[$tag.'_'.$level]++;
 
@@ -118,7 +118,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 						}
 
 						if($attributes_data) {
-							$current[$tag][$repeated_tag_index[$tag.'_'.$level] . '_attr'] = $attributes_data;
+							$current[$tag][$repeated_tag_index[$tag.'_'.$level].'_attr'] = $attributes_data;
 						}
 					}
 					$repeated_tag_index[$tag.'_'.$level]++; //0 and 1 index is already taken
