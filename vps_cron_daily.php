@@ -4,7 +4,6 @@
  * VPS Functionality
  * Last Changed: $LastChangedDate: 2016-10-31 04:29:46 -0400 (Mon, 31 Oct 2016) $
  * @author $Author: detain $
- * @version $Revision: 21715 $
  * @copyright 2017
  * @package MyAdmin
  * @category VPS
