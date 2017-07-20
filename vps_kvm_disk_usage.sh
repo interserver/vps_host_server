@@ -22,7 +22,7 @@ for i in "$(lvdisplay --all -c | sed s#" "#""#g | grep "/dev/vz/$name"); do
 	free="0"
 	total="0"
 #	echo "vz:$vz"
-	for j in "$(kpartx "$kpartxopts" -av "$vz" | cut -d" " -f3 | tail -n "1")"; do"
+	for j in $(kpartx "$kpartxopts" -av "$vz" | cut -d" " -f3 | tail -n "1"); do"
 #		echo "J:$j"
 		# Sample sfdisk output
 		#windows1p1 7

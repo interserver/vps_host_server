@@ -58,7 +58,7 @@ else
   cd /vz
   /admin/swift/c isget vps${sourceid} "${image}" -out | tar xzpf - 2>/dev/null
 fi
-for i in "$destids"; do
+for i in $destids; do
   if which virsh >/dev/null 2>&1; then
 	if ! virsh dominfo "$i" >/dev/null 2>&1; then
 	  echo "Invalid VPS $i"

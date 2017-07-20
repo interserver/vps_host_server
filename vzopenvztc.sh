@@ -60,7 +60,7 @@ nid="1";
 if [ -e /etc/vz/conf ]; then
         cd /etc/vz/conf
         # ignore ve-vps.basic.conf
-        for i in "`ls *.conf | grep -v ve-vps.basic.conf`"; do
+        for i in `ls *.conf | grep -v ve-vps.basic.conf`; do
                 id="`echo "$i" | cut -d. -f1`";
                 IPs="`cat "$i" | grep ^IP_A | cut -d\" -f2`"
 		BW='10mbit'
@@ -93,7 +93,7 @@ if [ -e /etc/vz/conf ]; then
 			else
 				BW='25mbit'
 			fi
-                        for ip in "$IPs"; do
+                        for ip in $IPs; do
 				if [ ! -e /tools/bandwidth/${id}/skip ]; then
                                 	echo "#VZID $id";
                                 	echo '#eth0 up';

@@ -34,7 +34,7 @@ cylinderbytes="$(fdisk -l /dev/vz/$ID  |grep "^Units = cylinder.*bytes$" | cut -
   #cursect=1
   fdiskcmd=""
   ddcmd=""
-  for image in "$S"; do
+  for image in $S; do
     partsize="$(($(du -b "$image" | awk '{ print $1 }') - 512))"
     partcyl="$(($partsize / $cylinderbytes))"
     if [ "$(($partsize % $cylinderbytes))" != 0 ]; then

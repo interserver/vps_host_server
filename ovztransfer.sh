@@ -58,7 +58,7 @@ function migrate() {
     echo "Container $veid: Shutting down all possible services..."
 
     # Stop all possible processes inside Container
-    for pid in "`vzctl exec "$veid" ps | grep -E -v "^ *(PID|1) " | awk '{print $1}'`"; do
+    for pid in `vzctl exec "$veid" ps | grep -E -v "^ *(PID|1) " | awk '{print $1}'`; do
         vzctl exec "$veid" kill -9 "$pid" > /dev/null 2>&1
     done
 
@@ -201,7 +201,7 @@ function migrate() {
     ssh "$ssh_opts" root@${target} "mknod /vz/root/$target_veid/dev/ptmx c 5 2; chmod 666 /vz/root/$target_veid/dev/ptmx" > /dev/null 2>&1
     ssh "$ssh_opts" root@${target} mknod /vz/root/${target_veid}/etc/udev/devices/ptmx c "5" "2" > /dev/null 2>&1
 
-    for i in "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" "11" "12" "13" "14" "15"; do
+    for i in 0" "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" "11" "12" "13" "14" "15; do
         a="`awk -v num=$i 'BEGIN { printf("%x\n", num) }'`"
         ssh "$ssh_opts" root@${target} mknod /vz/root/${target_veid}/dev/ttyp${a} c "3" "$i" > /dev/null 2>&1
         ssh "$ssh_opts" root@${target} mknod /vz/root/${target_veid}/etc/udev/devices/ttyp${a} c "3" "$i" > /dev/null 2>&1
@@ -273,7 +273,7 @@ PIDS="`jobs -p`"
 RC="0"
 
 while [ ! -z "$PIDS" ]; do
-	for pid in "$PIDS"; do
+	for pid in $PIDS; do
 		sleep "1"
 		kill -0 "$pid" > /dev/null 2>&1
 		[ "$?" -eq 0 ] && continue

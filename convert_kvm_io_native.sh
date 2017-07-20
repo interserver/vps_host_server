@@ -10,13 +10,13 @@ if [ "$1" = "enable" ]; then
   virsh define "$i";
  done
  running="$(virsh list |grep -v -e "^--" -e "Id .*Name .*State" -e "^$" | awk '{ print $2 }')"
- for i in "$running"; do
+ for i in $running; do
    virsh shutdown "$i";
  done
  echo "Sleeping 5minutes to let the systems shutdown cleanly"
  sleep "$sleeptime"
  echo "waking up and finishing the job"
- for i in "$running"; do
+ for i in $running; do
    virsh destroy "$i";
    sleep "$delaytime"
    virsh start "$i";
@@ -32,13 +32,13 @@ elif [ "$1" = "disable" ]; then
   virsh define "$i";
  done
  running="$(virsh list |grep -v -e "^--" -e "Id .*Name .*State" -e "^$" | awk '{ print $2 }')"
- for i in "$running"; do
+ for i in $running; do
    virsh shutdown "$i";
  done
  echo "Sleeping 5minutes to let the systems shutdown cleanly"
  sleep "$sleeptime"
  echo "waking up and finishing the job"
- for i in "$running"; do
+ for i in $running; do
    virsh destroy "$i";
    sleep "$delaytime"
    virsh start "$i";

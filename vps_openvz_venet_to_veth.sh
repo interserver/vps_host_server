@@ -45,7 +45,7 @@ echo "1" > /proc/sys/net/ipv4/conf/${vnet}/forwarding
 echo "1" > /proc/sys/net/ipv4/conf/${vnet}/proxy_arp
 echo "1" > /proc/sys/net/ipv4/conf/${realnet}/forwarding
 echo "1" > /proc/sys/net/ipv4/conf/${realnet}/proxy_arp
-for ip in "$ips"; do
+for ip in $ips; do
 	/usr/sbin/vzctl exec "${vz}" "/sbin/ip addr add ${ip} dev ${realnet}"
 	/sbin/ip route add "${ip}" dev "${vnet}"
 done

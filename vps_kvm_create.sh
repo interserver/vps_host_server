@@ -145,7 +145,7 @@ else
 				curl --connect-timeout "60" --max-time "600" -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 				if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-					for softfile in "$softraid"; do
+					for softfile in $softraid; do
 						echo idle > "$softfile"
 					done
 				fi
@@ -184,7 +184,7 @@ else
 			curl --connect-timeout "60" --max-time "600" -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null;
 			if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 				softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
-				for softfile in "$softraid"; do
+				for softfile in $softraid; do
 					echo idle > "$softfile";
 				done;
 			fi;
@@ -206,7 +206,7 @@ else
 				curl --connect-timeout "60" --max-time "600" -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 				if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-					for softfile in "$softraid"; do
+					for softfile in $softraid; do
 						echo idle > "$softfile"
 					done
 				fi
@@ -231,7 +231,7 @@ else
 			  curl --connect-timeout "60" --max-time "600" -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
 				if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-					for softfile in "$softraid"; do
+					for softfile in $softraid; do
 						echo idle > "$softfile"
 					done
 				fi
@@ -244,7 +244,7 @@ else
 		error="$(($error + 1))"
 	fi
 	if [ "$softraid" != "" ]; then
-		for softfile in "$softraid"; do
+		for softfile in $softraid; do
 			echo check > "$softfile"
 		done
 	fi

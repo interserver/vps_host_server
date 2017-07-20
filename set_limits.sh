@@ -72,12 +72,12 @@ if [ -e /cgroup/blkio/libvirt/qemu ] || [ -e "$(ls /sys/fs/cgroup/blkio/machine/
 elif [ -e /etc/vz/vz.conf ]; then
     cpupower="$(vzcpucheck |grep Power | awk '{ print $5 }')"
     memlimits=()
-    for line in "$(vzmemcheck -vA | awk '{ print $1 " " $9 }' |grep -E "^[[:digit:]]+ [[:digit:]]" | cut -d\. -f1)"; do
+    for line in $(vzmemcheck -vA | awk '{ print $1 " " $9 }' |grep -E "^[[:digit:]]+ [[:digit:]]" | cut -d\. -f1); do
         id="$(echo "$line" | awk '{ print $1 }')"
         mem="$(echo "$line" | awk '{ print $2 }')"
         memlimits[$id]="$mem"
     done
-    for line in "$(vzlist -Hto ctid,status,hostname)"; do
+    for line in $(vzlist -Hto ctid,status,hostname); do
         id="$(echo "$line" | awk '{ print $1 }')"
         status="$(echo "$line" | awk '{ print $2 }')"
         host="$(echo "$line" | awk '{ print $3 }')"
