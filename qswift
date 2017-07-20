@@ -89,13 +89,13 @@ fi
 
 #ignore ssl  (curl -k)
 # $CURLOPTS
-ignoressl=1;
+ignoressl="1";
 
 # enable / disable debugging
-debug=0;
+debug="0";
 
 
-# begin 
+# begin
 # -v is *NOT* needed , -i would be better than for headers anyways, i kept -v on the lines that need it
 if [ "$ignoressl" = "1" ]; then
 	CURLOPTS=" -k --progress-bar --limit-rate ${RATE}";
@@ -129,19 +129,19 @@ fi
 function getauthkey()
 {
 
-	auth_key=`${curl} -v $CURLOPTS -H "X-Storage-User: ${username}" -H "X-Storage-Pass: ${pass}" $AUTH_URL 2>&1 | grep "^< X-" | grep -v "X-Storage-Token:" | cut -d " " -f2- > /$file`;
+	auth_key="`${curl} -v "$CURLOPTS" -H "X-Storage-User: ${username}" -H "X-Storage-Pass: ${pass}" "$AUTH_URL" 2>&1 | grep "^< X-" | grep -v "X-Storage-Token:" | cut -d " " -f2- > /$file`";
 
 }
 
 # check age of auth key
 function age() {
-   local filename=$1
-   local changed=`$stat -c %Y "$filename"`
-   local now=`date +%s`
+   local filename="$1"
+   local changed="`$stat -c %Y "$filename"`"
+   local now="`date +%s`"
    local elapsed
 
    let elapsed=now-changed
-   echo $elapsed
+   echo "$elapsed"
 }
 
 
@@ -152,7 +152,7 @@ function create_config()
 		exit;
 	fi
 	mkdir -p $HOME/.swift
-	chmod 700 $HOME/.swift
+	chmod "700" $HOME/.swift
 
 	echo -n "Enter Username (user:name): "
 	read config_uname
@@ -173,7 +173,7 @@ function create_config()
 
 	if [ ! -e $HOME/.swift/config ]; then
 		touch $HOME/.swift/config
-		chmod 600 $HOME/.swift/config
+		chmod "600" $HOME/.swift/config
 		echo "username=\"$config_uname\"" >> $HOME/.swift/config
 		echo "pass=\"$config_pass\"" >> $HOME/.swift/config
 		echo "AUTH_URL=\"$config_authurl\"" >> $HOME/.swift/config
@@ -193,8 +193,8 @@ function makedir()
                 echo 'Usage ./ismkdir container';
         else
 		CONTAINER="${1}";
-		URL=`urlencode "${CONTAINER}"`;
-		${curl} $CURLOPTS -X PUT -D - -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${URL}"
+		URL="`urlencode "${CONTAINER}"`";
+		${curl} "$CURLOPTS" -X PUT -D - -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${URL}"
 	fi
 
 }
@@ -207,25 +207,25 @@ function delete_after()
                 CONTAINER="${1}";
                 FILE="${2}";
 
-                TIME=`echo "${3} * 86400" | $bc -l`;
+                TIME="`echo "${3} * 86400" | $bc -l`";
                 if [ "$TIME" = "" ]; then
                         echo "Did not get a proper value for time (non integer used) at $LINENO";
                         exit;
                 fi
 
-		listsplits=`${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${FILE}/" | grep "/split-"`
+		listsplits="`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${FILE}/" | grep "/split-"`"
 		if [ "$listsplits" = "" ]; then
-			URL=`urlencode "${CONTAINER}/${FILE}"`;
+			URL="`urlencode "${CONTAINER}/${FILE}"`";
        	        	#${curl} $CURLOPTS -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL" --data-binary ''
-			${curl} $CURLOPTS -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL"
+			${curl} "$CURLOPTS" -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL"
 		else
-			for SPLITNAME in $listsplits; do
-				URL=`urlencode "${CONTAINER}/${SPLITNAME}"`;
-				${curl} $CURLOPTS -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL"
+			for SPLITNAME in "$listsplits"; do
+				URL="`urlencode "${CONTAINER}/${SPLITNAME}"`";
+				${curl} "$CURLOPTS" -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL"
 			done
 			# delete the filemanifest too
-			URL=`urlencode "${CONTAINER}/${FILE}"`
-			${curl} $CURLOPTS -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL"
+			URL="`urlencode "${CONTAINER}/${FILE}"`"
+			${curl} "$CURLOPTS" -X POST -H "X-Delete-After: $TIME" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/$URL"
 		fi
 	fi
 }
@@ -242,38 +242,38 @@ function runabackup()
 		echo 'Notes: container will be the server hostname and the file will be called filename-year-month-day';
 		exit;
 	fi
-	
+
 	#get date
-	year=$(date +%Y)
-	month=$(date +%m)
-	day=$(date +%d)
+	year="$(date +%Y)"
+	month="$(date +%m)"
+	day="$(date +%d)"
 
 
-	hostname=`$hostprog`;
+	hostname="`$hostprog`";
 	if [ "$hostname" = "" ]; then
 		echo "hostname returned a blank value in function runabackup at line $LINENO";
 		exit;
 	else
-		check_container_exists $hostname --force
+		check_container_exists "$hostname" --force
 	fi
-	
-	JUSTFILE=`basename ${1}`;
+
+	JUSTFILE="`basename "${1}"`";
 
 	echo "Backup up file ${1} as ${JUSTFILE}-${year}-${month}-${day} to container ${hostname}";
 
-	if [ -f "$1" ]; then 
-        	upload ${hostname} ${1} ${JUSTFILE}-${year}-${month}-${day}
+	if [ -f "$1" ]; then
+        	upload "${hostname}" "${1}" ${JUSTFILE}-${year}-${month}-${day}
 	elif [ -d "$1" ]; then
-		onthefly ${hostname} ${1} frombackup ${JUSTFILE}-${year}-${month}-${day}
+		onthefly "${hostname}" "${1}" frombackup ${JUSTFILE}-${year}-${month}-${day}
 		# delete the fly files after 30 days
-		onthefly ${hostname} ${JUSTFILE}-${year}-${month}-${day} deleteafter
+		onthefly "${hostname}" ${JUSTFILE}-${year}-${month}-${day} deleteafter
 	else
 		echo "runabackup can only do files or directories";
 		exit;
 	fi
 
-	delete_after ${hostname} ${JUSTFILE}-${year}-${month}-${day} 30
-	
+	delete_after "${hostname}" ${JUSTFILE}-${year}-${month}-${day} "30"
+
 
 
 }
@@ -282,7 +282,7 @@ function runabackup()
 function check_size()
 {
 	# 5368709120 is 5gb in bytes, we are under by 1 byte for swift
-	size=5368709119;
+	size="5368709119";
 	#size=100;
 
 	FILE="${1}";
@@ -291,17 +291,17 @@ function check_size()
 		echo "File name missing in function check_size at $LINENO";
 		exit;
 	fi
-	
-	if [ ! -f $FILE ]; then
+
+	if [ ! -f "$FILE" ]; then
 		echo "File $FILE does not exist in function check_size at $LINENO";
 		exit;
 	fi
 
 	# ls is quicker
 	if [ -x /bin/ls ]; then
-		file_size=`/bin/ls -l $FILE | awk '{print $5}'`;
+		file_size="`/bin/ls -l "$FILE" | awk '{print $5}'`";
 	elif [ -x /usr/bin/du ]; then
-		file_size=`/usr/bin/du $FILE | awk '{print $1}'`;
+		file_size="`/usr/bin/du "$FILE" | awk '{print $1}'`";
 
 	else
 		echo "No programs to check disk space in check_size at $LINENO";
@@ -310,13 +310,13 @@ function check_size()
 
 	if [ "$file_size" -gt "$size" ]; then
 		echo "$FILE size is $file_size which is over 5GB. Must use the split function";
-		split $2 $FILE $3
+		split "$2" "$FILE" "$3"
 	else
 		if [ "$debug" = "1" ]; then
 			echo "Found file size $file_size for file $FILE in function check_size";
 		fi
 	fi
-	
+
 }
 
 function display_storage_url()
@@ -337,16 +337,16 @@ function makepublic()
 
 	CONTAINER="${1}";
 	if [ "$2" = "--remove" ]; then
-		${curl} $CURLOPTS -X PUT -H 'X-Container-Read: \n*' -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${CONTAINER}"
+		${curl} "$CURLOPTS" -X PUT -H 'X-Container-Read: \n*' -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${CONTAINER}"
 		display_storage_url
 		exit;
 	elif [ "$2" = "--dirlist" ]; then
-		${curl} $CURLOPTS -X PUT -H 'X-Container-Read: .r:*,.rlistings' -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${CONTAINER}"
+		${curl} "$CURLOPTS" -X PUT -H 'X-Container-Read: .r:*,.rlistings' -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${CONTAINER}"
 		display_storage_url
 		exit;
 	# default call
 	elif [ "$2" = "" ]; then
-		${curl} $CURLOPTS -X PUT -H 'X-Container-Read: .r:*' -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${CONTAINER}"
+		${curl} "$CURLOPTS" -X PUT -H 'X-Container-Read: .r:*' -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/""${CONTAINER}"
         	display_storage_url
 	else
 		echo 'Invalid call to mkpub';
@@ -359,32 +359,32 @@ function makepublic()
 function getstats()
 {
         if [ "$1" = "" ]; then
-                ${curl} -v $CURLOPTS -X HEAD -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL" 2>&1 | grep X-Account | cut -d" " -f2-
+                ${curl} -v "$CURLOPTS" -X HEAD -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL" 2>&1 | grep X-Account | cut -d" " -f2-
                 # display api key info
-                cat $file
+                cat "$file"
 	elif [ "$1" = "/all" ]; then
 
-		bytes=`${curl} -v $CURLOPTS -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}" 2>&1 | grep X-Account-Bytes-Used: | cut -d: -f2 | tr -d '\r'`;
-                echo "${bytes} / 1000000000" | $bc -l
+		bytes="`${curl} -v "$CURLOPTS" -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}" 2>&1 | grep X-Account-Bytes-Used: | cut -d: -f2 | tr -d '\r'`";
+                echo "${bytes} / 1000000000" | ${bc} -l
 	else
 
-                CONTAINER=$1;
-       	        check_container_exists ${CONTAINER}
+                CONTAINER="$1";
+       	        check_container_exists "${CONTAINER}"
 
 		# next three are code reuse, fix on any updates
                 # in mb
                 if [ "$2" = "mb" ]; then
-                        bytes=`${curl} -v $CURLOPTS -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}" 2>&1 | grep X-Container-Bytes-Used: | cut -d: -f2 | tr -d '\r'`;
+                        bytes="`${curl} -v "$CURLOPTS" -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}" 2>&1 | grep X-Container-Bytes-Used: | cut -d: -f2 | tr -d '\r'`";
                         # in the future awk 'BEGIN{print int(($bytes / 1000000 )+0.5)}'
-                        echo "${bytes} / 1000000" | $bc -l 
+                        echo "${bytes} / 1000000" | ${bc} -l
 		# in gb
 		elif [ "$2" = "gb" ]; then
-			bytes=`${curl} -v $CURLOPTS -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}" 2>&1 | grep X-Container-Bytes-Used: | cut -d: -f2 | tr -d '\r'`;
+			bytes="`${curl} -v "$CURLOPTS" -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}" 2>&1 | grep X-Container-Bytes-Used: | cut -d: -f2 | tr -d '\r'`";
                         # in the future awk 'BEGIN{print int(($bytes / 1000000 )+0.5)}
-			echo "${bytes} / 1000000000" | $bc -l
+			echo "${bytes} / 1000000000" | ${bc} -l
                 else
                         # normal display
-                        ${curl} -v $CURLOPTS -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}" 2>&1 | grep X-Container | cut -d" " -f2-
+                        ${curl} -v "$CURLOPTS" -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}" 2>&1 | grep X-Container | cut -d" " -f2-
                 fi
         fi
 }
@@ -394,10 +394,10 @@ function showfileinfo()
 	if [ "$1" = "" -o "$2" = "" ]; then
                 echo 'Usage ./fileinfo container file';
         else
-		CONTAINER=$1;
-		check_container_exists ${CONTAINER}
-		FILE=$2;
-		${curl} -v $CURLOPTS -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}/${FILE}" || exit 0
+		CONTAINER="$1";
+		check_container_exists "${CONTAINER}"
+		FILE="$2";
+		${curl} -v "$CURLOPTS" -X HEAD -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${CONTAINER}/${FILE}" || exit "0"
 	fi
 }
 
@@ -407,11 +407,11 @@ function rcopy
 	if [ "$1" = "" ]; then
                 echo 'Usage ./iscp container file newfile';
         else
-                CONTAINER=$1;
-		FILE=$2;
-		NEWFILE=$3;
+                CONTAINER="$1";
+		FILE="$2";
+		NEWFILE="$3";
 
-		${curl}  $CURLOPTS -X COPY -H "Destination: ${CONTAINER}/${NEWFILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+		${curl}  "$CURLOPTS" -X COPY -H "Destination: ${CONTAINER}/${NEWFILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
         fi
 }
 
@@ -422,17 +422,17 @@ function rmove
         if [ "$1" = "" ]; then
                 echo 'Usage ./ismv container newcontainer file';
         else
-                CONTAINER=$1;
-                NEWCONTAINER=$2;
-                FILE=$3;
+                CONTAINER="$1";
+                NEWCONTAINER="$2";
+                FILE="$3";
 
-                ${curl}  $CURLOPTS -X COPY -H "Destination: ${NEWCONTAINER}/${FILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+                ${curl}  "$CURLOPTS" -X COPY -H "Destination: ${NEWCONTAINER}/${FILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
 		sleep 1s;
 		echo
 		echo -n 'Delete old file? [y/n]';
 		read check
 		if [ "$check" = "y" ]; then
-			delete ${CONTAINER} ${FILE}
+			delete "${CONTAINER}" "${FILE}"
 		else
 			echo 'Skipping deletion';
 		fi
@@ -442,28 +442,28 @@ function rmove
 
 function download()
 {
-        if [ $# -lt 2 ]; then
+        if [ "$#" -lt 2 ]; then
                 echo 'Usage ./isget <container> <file> [-f] [-out]';
                 echo '  -f Optional, force overwrite existing file'
                 echo '  -out Optional, output to stdout instead of file'
                 return;
         fi
-        force=0
-        out=0
-	continue=0;
-        CONTAINER=$1
+        force="0"
+        out="0"
+	continue="0";
+        CONTAINER="$1"
         shift
-        FILE=$1
+        FILE="$1"
         shift
-        while [ $# -gt 0 ]; do
+        while [ "$#" -gt 0 ]; do
                 if [ "$1" = "-f" ]; then
-                        force=1;
+                        force="1";
                 elif [ "$1" = "-out" ]; then
-                        out=1;
+                        out="1";
                 elif [ "$1" = "-c" ]; then
-			continue=1;
+			continue="1";
 		fi
-		
+
                 shift
         done
         if [ -d "${FILE}" ]; then
@@ -477,27 +477,27 @@ function download()
         #        	echo "Changed storage url to $STORAGE_URL";
 	#	fi
         #fi
-        if [ $out = 0 ]; then
+        if [ "$out" = 0 ]; then
                 if [ -f "${FILE}" ]; then
-                        if [ $force = 1 ]; then
+                        if [ "$force" = 1 ]; then
                                 if [ "$debug" = "1" ]; then
                                                 echo "Downloading file ${FILE} with force";
                                 fi
-				${curl} $CURLOPTS -o ${FILE} -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
-			elif [ $continue = 1 ]; then
+				${curl} "$CURLOPTS" -o "${FILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+			elif [ "$continue" = 1 ]; then
 				if [ "$debug" = "1" ]; then
                                                 echo "Downloading file ${FILE} with continue";
                                 fi
-				${curl} $CURLOPTS -C - -o ${FILE} -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+				${curl} "$CURLOPTS" -C - -o "${FILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
                         else
                                 echo "File with same name exists, can not download with out -f or -c";
                                 return;
                         fi
 		    else
-            		${curl} $CURLOPTS -C - -o ${FILE} -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+            		${curl} "$CURLOPTS" -C - -o "${FILE}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
         	fi
         else
-                ${curl} $CURLOPTS -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+                ${curl} "$CURLOPTS" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
         fi
 }
 
@@ -509,9 +509,9 @@ function delete()
 	if [ "$1" = "" -o "$2" = "" ]; then
                 echo 'Usage ./isrm container file';
         else
-		FILE=$2;
-                CONTAINER=$1;
-		${curl}  $CURLOPTS -o/dev/null -X DELETE -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
+		FILE="$2";
+                CONTAINER="$1";
+		${curl}  "$CURLOPTS" -o/dev/null -X DELETE -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILE}"
 	fi
 }
 
@@ -521,30 +521,30 @@ function rrmdir()
 	if [ "$1" = "" ]; then
 		echo 'Usage ./isdir container [ container must be empty ]';
 	else
-		CONTAINER=$1;
-		${curl} $CURLOPTS  -o/dev/null -X DELETE -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}"
+		CONTAINER="$1";
+		${curl} "$CURLOPTS"  -o/dev/null -X DELETE -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}"
         fi
 
 }
 
 function getcontenttype()
 {
-	FILE=$1;
+	FILE="$1";
 	if [ ! -e "${FILE}" ]; then
 		echo "Failed on getting content type of file ${FILE} at line $LINENO file does not exist";
 		exit;
 	fi
-	${FILECOMMAND} -bi ${FILE}
+	${FILECOMMAND} -bi "${FILE}"
 }
 
 function getmd5()
 {
-	FILE=$1;
+	FILE="$1";
 	if [ ! -f "${FILE}" ]; then
 		echo "Ran into a problem in getmd5 function, file not found or is a directory";
 		exit;
 	fi
-	$md5prog "${FILE}" | awk '{print $1}'
+	${md5prog} "${FILE}" | awk '{print $1}'
 }
 
 function urlencode()
@@ -556,12 +556,12 @@ function urlencode()
 
 function getremotemd5()
 {
-	FILE=$2;
-	CONTAINER=$1;
+	FILE="$2";
+	CONTAINER="$1";
 	# remove final /r
 	#encoded_value=$(python -c "import urllib; print urllib.quote('''$value''')")
-	URL=`urlencode "${CONTAINER}/${FILE}"`; 
-        ${curl} -s $CURLOPTS -I -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${URL}" | grep ^Etag: | awk '{print $2}' | tr -d '\r'
+	URL="`urlencode "${CONTAINER}/${FILE}"`";
+        ${curl} -s "$CURLOPTS" -I -H "X-Auth-Token: ${APIKEY}" "${STORAGE_URL}/${URL}" | grep ^Etag: | awk '{print $2}' | tr -d '\r'
 
 }
 
@@ -574,30 +574,30 @@ function rsyncfile()
 		echo 'optional args: --check (checks md5sum for remote / localfile) add new file name after --check for a renamed file';
 		echo 'optional args: --dirput (switch file to directory, and sync directory to remote system - does not support sub directories yet )';
 		echo 'optional args: --dirget (switch file to directory, and sync directory to local system) - does not support sub directories yet';
-				
+
 		# end help / function here
 		exit;
 	fi
 
 	# check file size
 	# 2 is file, 1 is container 3 is optional
-	check_size $2 $1 $3
+	check_size "$2" "$1" "$3"
 
 	# download
 	if [ "$3" = "--get" ]; then
-		FILE=$2;
-                CONTAINER=$1;
+		FILE="$2";
+                CONTAINER="$1";
 		if [ -d "${FILE}" ]; then
                         echo "File: ${FILE} is a directory, use --dirget";
                         exit;
 		#if file does not exist, download and exit
 		elif [ ! -f "${FILE}" ]; then
 			echo "File: ${FILE} does not exist, downloading";
-			download ${CONTAINER} ${FILE}
+			download "${CONTAINER}" "${FILE}"
 			exit;
                 fi
-		localetag=`getmd5 ${FILE}`;
-                remoteetag=`getremotemd5 ${CONTAINER} ${FILE}`;
+		localetag="`getmd5 "${FILE}"`";
+                remoteetag="`getremotemd5 "${CONTAINER}" "${FILE}"`";
 		if [ "$debug" = "1" ]; then
                         echo "Found etagremote: ${remoteetag} and found etaglocal $localetag";
                 fi
@@ -605,19 +605,19 @@ function rsyncfile()
                 if [ "$localetag" = "$remoteetag" ]; then
                         echo "Checksums match for container: ${CONTAINER} file ${FILE}";
                 else
-                        download ${CONTAINER} ${FILE} -f
+                        download "${CONTAINER}" "${FILE}" -f
                 fi
 	# md5 verify
 	elif [ "$3" = "--check" ]; then
-		FILE=$2;
-                CONTAINER=$1;
+		FILE="$2";
+                CONTAINER="$1";
 		if [ ! "$4" = "" ]; then
-			REMOTEFILE=$4;
+			REMOTEFILE="$4";
 		else
-			REMOTEFILE=$2;
+			REMOTEFILE="$2";
 		fi
-		localetag=`getmd5 ${FILE}`;
-		remoteetag=`getremotemd5 ${CONTAINER} ${REMOTEFILE}`;
+		localetag="`getmd5 "${FILE}"`";
+		remoteetag="`getremotemd5 "${CONTAINER}" "${REMOTEFILE}"`";
 
 		if [ "$localetag" = "$remoteetag" ]; then
 			echo "Checksum $localetag matches for ${REMOTEFILE} ";
@@ -627,48 +627,48 @@ function rsyncfile()
 
 	# fix me add support for directories
 	elif [ "$3" = "--dirput" ]; then
-		CONTAINER=$1;
-		FILE=$2;
+		CONTAINER="$1";
+		FILE="$2";
 
 		if [ ! -d "${FILE}" ]; then
 			echo "Error: ${FILE} is not a directory or does not exist";
 		fi
 
-		check_container_exists ${CONTAINER}
-		
-		cd ${FILE}
+		check_container_exists "${CONTAINER}"
+
+		cd "${FILE}"
 		for filenames in *; do
 			if [ -f "$filenames" ]; then
 				# escaped to allow spaces
-				rsyncfile ${CONTAINER} "$filenames" --put
+				rsyncfile "${CONTAINER}" "$filenames" --put
 			else
 				echo "Skipping $filenames directories are not supported yet";
 			fi
 		done
-		
-	
+
+
 
 	elif [ "$3" = "--dirget" ]; then
 		echo
 	elif [ "$3" = "--put" ]; then
 		# default upload function
-		FILE=$2;
-        	CONTAINER=$1;
+		FILE="$2";
+        	CONTAINER="$1";
 		if [ ! -f "${FILE}" ]; then
 			echo "File: ${FILE} does not exist or is a directory";
 			return;
 		fi
 
 		if [ ! "$4" = "" ]; then
-                        REMOTEFILE=$4;
+                        REMOTEFILE="$4";
                 else
-                        REMOTEFILE=$2;
+                        REMOTEFILE="$2";
                 fi
 
-		localetag=`getmd5 "${FILE}"`;
-		remoteetag=`getremotemd5 ${CONTAINER} "${REMOTEFILE}"`;
+		localetag="`getmd5 "${FILE}"`";
+		remoteetag="`getremotemd5 "${CONTAINER}" "${REMOTEFILE}"`";
 		#eval remoteetag=$(${curl} -s $CURLOPTS -I -H "X-Auth-Token: ${APIKEY}" $STORAGE_URL/${CONTAINER}/${FILE} | grep "^Etag:" | awk '{print $2}');
-		
+
 		if [ "$debug" = "1" ]; then
 			echo "Found etagremote: ${remoteetag} and found etaglocal $localetag";
 		fi
@@ -676,7 +676,7 @@ function rsyncfile()
 		if [ "$localetag" = "$remoteetag" ]; then
 			echo "Checksums match for container: ${CONTAINER} file ${REMOTEFILE}";
 		else
-			upload ${CONTAINER} "${FILE}" $4
+			upload "${CONTAINER}" "${FILE}" "$4"
 		fi
 	else
 		rsyncfile
@@ -690,24 +690,24 @@ function upload()
 		echo 'Usage ./isput container file [newfilename]';
 		echo 'newfilename is optional';
 	else
-		REALFILE=$2;
-		JUSTFILE=`basename ${2}`;
-		CONTAINER=$1;
-		check_size ${REALFILE} ${CONTAINER} 
-		etag=`getmd5 ${REALFILE}`;
-		contenttype=`getcontenttype ${REALFILE}`;
-		check_container_exists ${CONTAINER}
+		REALFILE="$2";
+		JUSTFILE="`basename "${2}"`";
+		CONTAINER="$1";
+		check_size "${REALFILE}" "${CONTAINER}"
+		etag="`getmd5 "${REALFILE}"`";
+		contenttype="`getcontenttype "${REALFILE}"`";
+		check_container_exists "${CONTAINER}"
 		if [ "$debug" = "1" ]; then
 			echo "Returned MD5checksum $etag of ${JUSTFILE}";
 		fi
 
 		if [ ! "$3" = "" ]; then
-                        REMOTEFILE=$3;
+                        REMOTEFILE="$3";
                 else
-                        REMOTEFILE=${JUSTFILE};
+                        REMOTEFILE="${JUSTFILE}";
                 fi
 
-		${curl}  $CURLOPTS -o/dev/null -f -X PUT -T "${REALFILE}" -H "ETag: ${etag}" -H "Content-Type: ${contenttype}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${REMOTEFILE}"
+		${curl}  "$CURLOPTS" -o/dev/null -f -X PUT -T "${REALFILE}" -H "ETag: ${etag}" -H "Content-Type: ${contenttype}" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${REMOTEFILE}"
 	fi
 }
 
@@ -718,36 +718,36 @@ function delete_splits()
                 echo 'Usage ./isrmsplit container filename (must be full path) | OR | container filename nodb (for non sqlit splits) rmdir';
         else
 
-		FILENAME=$2;
-                CONTAINER=$1;
-		check_container_exists ${CONTAINER}
+		FILENAME="$2";
+                CONTAINER="$1";
+		check_container_exists "${CONTAINER}"
 		if [ "$3" = "nodb" ]; then
-			listsplits=`${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${FILENAME}/" | grep "/split-"`
+			listsplits="`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${FILENAME}/" | grep "/split-"`"
 		else
-			listsplits=`get_splits ${FILENAME}`;
+			listsplits="`get_splits "${FILENAME}"`";
 		fi
 		if [ "$listsplits" = "" ]; then
 			echo "No split files found for ${FILENAME}";
 			return;
 		fi
 
-		for SPLITNAME in $listsplits; do
+		for SPLITNAME in "$listsplits"; do
 			echo "Removing ${SPLITNAME} in container ${CONTAINER}":
-			delete ${CONTAINER} ${SPLITNAME}
+			delete "${CONTAINER}" "${SPLITNAME}"
 		done
 
 		# delete from dq
 		if [ ! "$3" = "nodb" ]; then
-			sqdelete ${FILENAME}
+			sqdelete "${FILENAME}"
 		else
 
 			# remove metadata
                         if [ "$3" = "nodb" ]; then
-                                delete ${CONTAINER} ${FILENAME}
+                                delete "${CONTAINER}" "${FILENAME}"
                         fi
 
 			if [ "$4" = "rmdir" ]; then
-				rrmdir ${CONTAINER}
+				rrmdir "${CONTAINER}"
 			fi
 		fi
 
@@ -762,51 +762,51 @@ function split()
                 echo 'Usage ./split container file (optional size in MB, default 1000 (1GB)';
         else
 
-		if [ ! -x ${splitprog} ]; then
+		if [ ! -x "${splitprog}" ]; then
 			echo "Missing split binary at $LINENO";
 			exit;
 		fi
 
-		FILENAME=$2;
-                CONTAINER=$1;
-		check_container_exists ${CONTAINER}
-		
+		FILENAME="$2";
+                CONTAINER="$1";
+		check_container_exists "${CONTAINER}"
+
 		if [ "$3" = "" ]; then
-			bytes=1000;
+			bytes="1000";
 		else
-			bytes=$3;
+			bytes="$3";
 		fi
 
 		# just check feature, don't upload
 		if [ "$3" = "--check" -o "$4" = "--justcheck" ]; then
-			justcheck=1;
+			justcheck="1";
 		fi
 
-		if [ ! -f ${FILENAME} ]; then
+		if [ ! -f "${FILENAME}" ]; then
 			echo "File ${FILENAME} does not exist at $LINENO";
 			exit;
 		fi
 
 		# check db md5sums
-		md5check=`check ${FILENAME}`;
+		md5check="`check "${FILENAME}"`";
 
 		# we conocate all md5's into a new string
 		buildmd5='';
 		# if something returns we have uploaded this in the past
 		if [ ! "$md5check" = "" ]; then
-			for md5 in $md5check; do 
-				addmd5=`echo $md5 | cut -d"|" -f2`;
+			for md5 in "$md5check"; do
+				addmd5="`echo "$md5" | cut -d"|" -f2`";
 				buildmd5="${buildmd5}${addmd5}";
 			done
-			finalmd5=`echo -n $buildmd5 | ${md5prog} | awk '{print $1}'`;
-			STRIPFILE=`basename ${FILENAME}`;
-			rmd5=`getremotemd5 ${CONTAINER} ${STRIPFILE}`;
+			finalmd5="`echo -n "$buildmd5" | ${md5prog} | awk '{print $1}'`";
+			STRIPFILE="`basename "${FILENAME}"`";
+			rmd5="`getremotemd5 "${CONTAINER}" "${STRIPFILE}"`";
 			#remotemd5 returns in " "
 			if [ "\"$finalmd5\"" = "$rmd5" ]; then
 				echo "MD5sum for container $CONTAINER and large object file $FILENAME matches, confirming local checksum";
 
-				localsum=`getmd5 ${FILENAME}`;
-				localdbsum=`checkmain ${FILENAME}`;
+				localsum="`getmd5 "${FILENAME}"`";
+				localdbsum="`checkmain "${FILENAME}"`";
 				if [ "$localsum" = "$localdbsum" ]; then
 					echo "Local md5sum for ${FILENAME} matches record in db";
 					exit;
@@ -822,17 +822,17 @@ function split()
 			else
 				echo "MD5sum for container $CONTAINER and large object file $FILENAME do not match, upload will continue";
 				# delete remotely and from db
-				delete_splits ${CONTAINER} ${FILENAME}
+				delete_splits "${CONTAINER}" "${FILENAME}"
 			fi
 		fi
 
-		cat ${FILENAME} | ${splitprog} -d --bytes=${bytes}M --filter="${curl}  $CURLOPTS -o/dev/null -f -X PUT -T - -H \"X-Auth-Token: ${APIKEY}\" \"$STORAGE_URL/${CONTAINER}/${FILENAME}/split-\${FILE}\""
-		${curl}  $CURLOPTS -o/dev/null -X PUT -H "X-Object-Manifest: ${CONTAINER}/${FILENAME}/" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILENAME}" --data-binary ''
+		cat "${FILENAME}" | ${splitprog} -d --bytes=${bytes}M --filter="${curl}  $CURLOPTS -o/dev/null -f -X PUT -T - -H \"X-Auth-Token: ${APIKEY}\" \"$STORAGE_URL/${CONTAINER}/${FILENAME}/split-\${FILE}\""
+		${curl}  "$CURLOPTS" -o/dev/null -X PUT -H "X-Object-Manifest: ${CONTAINER}/${FILENAME}/" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${FILENAME}" --data-binary ''
 
-		build_split_db ${CONTAINER} ${FILENAME}
+		build_split_db "${CONTAINER}" "${FILENAME}"
 
-		
-		
+
+
 	fi
 
 }
@@ -845,33 +845,33 @@ function onthefly()
                 exit;
         fi
 
-	FILENAME=$2;
-	CONTAINER=$1;
-	SAVENAME=`basename ${FILENAME}`;
+	FILENAME="$2";
+	CONTAINER="$1";
+	SAVENAME="`basename "${FILENAME}"`";
 
-	check_container_exists ${CONTAINER}
+	check_container_exists "${CONTAINER}"
 
 	if [ "$3" = "delete" -o "$3" = "deleteafter" ]; then
 		echo "Entering delete mode";
-		DELETETIME=30;
+		DELETETIME="30";
 		if [ ! "$4" = "" ]; then
-			DELETETIME=${4};
+			DELETETIME="${4}";
 		fi
-		for flyfiles in `${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${SAVENAME}/" | grep "/split-"`; do
+		for flyfiles in "`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${SAVENAME}/" | grep "/split-"`"; do
 			if [ "$flyfiles" = "" ]; then
 				echo "No on the fly files returned";
 			else
 				if [ "$3" = "delete" ]; then
-					delete ${CONTAINER} ${SAVENAME}
-					delete ${CONTAINER} $flyfiles
+					delete "${CONTAINER}" "${SAVENAME}"
+					delete "${CONTAINER}" "$flyfiles"
 				elif [ "$3" = "deleteafter" ]; then
-					delete_after ${CONTAINER} ${SAVENAME} ${DELETETIME}
-					delete_after ${CONTAINER} $flyfiles ${DELETETIME}
+					delete_after "${CONTAINER}" "${SAVENAME}" "${DELETETIME}"
+					delete_after "${CONTAINER}" "$flyfiles" "${DELETETIME}"
 				else
 					echo "Unknown delete command passed in function onthefly at line $LINENO";
 					exit;
 				fi
-				
+
 			fi
 		done
 	else
@@ -879,20 +879,20 @@ function onthefly()
 		# when we call from the backup script we want to append the date so we change the file name
 		if [ "$3" = "frombackup" ]; then
 			if [ ! "$4" = "" ]; then
-				SAVENAME=${4};
+				SAVENAME="${4}";
 				echo "Filename will be called ${SAVENAME}";
 			fi
 		fi
 
-		if [ -d $FILENAME ]; then
+		if [ -d "$FILENAME" ]; then
 			echo "$FILENAME is a directory, we will be tar/gziping this on the fly to swift";
 
 			# if $3 = auto we will remove conflicting files (for cron)
-			checkif_fly__exists ${CONTAINER} ${SAVENAME} $3
+			checkif_fly__exists "${CONTAINER}" "${SAVENAME}" "$3"
 			sleep 4s;
 
-			${tar} -c ${FILENAME} 2>/dev/null | ${gzip} -1c | ${splitprog} -d --bytes=4999M --filter="${curl}  $CURLOPTS -o/dev/null -f -X PUT -T - -H \"X-Auth-Token: ${APIKEY}\" \"$STORAGE_URL/${CONTAINER}/${SAVENAME}/split-\${FILE}\""  
-			${curl}  $CURLOPTS -o/dev/null -X PUT -H "X-Object-Manifest: ${CONTAINER}/${SAVENAME}/" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${SAVENAME}" --data-binary ''
+			${tar} -c "${FILENAME}" 2>/dev/null | ${gzip} -1c | ${splitprog} -d --bytes=4999M --filter="${curl}  $CURLOPTS -o/dev/null -f -X PUT -T - -H \"X-Auth-Token: ${APIKEY}\" \"$STORAGE_URL/${CONTAINER}/${SAVENAME}/split-\${FILE}\""
+			${curl}  "$CURLOPTS" -o/dev/null -X PUT -H "X-Object-Manifest: ${CONTAINER}/${SAVENAME}/" -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL/${CONTAINER}/${SAVENAME}" --data-binary ''
 		else
 			echo "$FILENAME is not a directory";
 		fi
@@ -904,14 +904,14 @@ function onthefly()
 function checkif_fly__exists()
 {
 
-	SAVENAME=$2;
-        CONTAINER=$1;
+	SAVENAME="$2";
+        CONTAINER="$1";
 	#SAVENAME=`basename ${FILENAME}`;
 	#SAVENAME=`echo ${FILENAME} | tr -d '/'`;
-	delete=0;
+	delete="0";
 
 	if [ "$3" = "auto" ]; then
-		delete=1;
+		delete="1";
 	fi
 
 	if [ "$1" = "" -o "$2" = "" ]; then
@@ -919,12 +919,12 @@ function checkif_fly__exists()
 		exit;
         fi
 
-	for files in `${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${SAVENAME}/"`; do
+	for files in "`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${SAVENAME}/"`"; do
 		if [ "$files" = "" ]; then
 			echo "Checked for existing files, none exist";
 		else
 			if [ "$delete" = "1" ]; then
-				delete ${CONTAINER} $files
+				delete "${CONTAINER}" "$files"
 			else
 				echo "Checked for existing $CUT file, found: $files - this may cause a conflict";
 			fi
@@ -940,34 +940,34 @@ function build_split_db()
 		exit;
 	fi
 
-	FILENAME=$2;
-        CONTAINER=$1;
+	FILENAME="$2";
+        CONTAINER="$1";
 
-	localmd5=`getmd5 ${FILENAME}`;
-	for splitfiles in `${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${FILENAME}/" | grep "/split-"`; do
+	localmd5="`getmd5 "${FILENAME}"`";
+	for splitfiles in "`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL"/"${CONTAINER}" 2>&1 | grep "${FILENAME}/" | grep "/split-"`"; do
 		if [ "$splitfiles" = "" ]; then
 			echo "function build_split_db returned blank vlue at $LINENO";
 			exit;
 		else
-			splitsum=`getremotemd5 ${CONTAINER} ${splitfiles}`;
-			insert ${FILENAME} $splitfiles $splitsum
-		fi	
+			splitsum="`getremotemd5 "${CONTAINER}" "${splitfiles}"`";
+			insert "${FILENAME}" "$splitfiles" "$splitsum"
+		fi
 	done
 
 	# main checksum
-	insertmain ${FILENAME} $localmd5
+	insertmain "${FILENAME}" "$localmd5"
 }
 
 #
 function check_container_exists()
 {
 	# quick check to see if we exist
-	check=`${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" $STORAGE_URL/$1 | grep "The resource could not be found."`;
+	check="`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" $STORAGE_URL/$1 | grep "The resource could not be found."`";
 	if [ ! "$check" = "" ]; then
 
 		if [ "$2" = "--force" ]; then
 			echo "Container $1 does not exist, creating";
-			makedir $1
+			makedir "$1"
 		else
 			echo "Container $1 does not exist. Use ismkdir to create or run with --force";
 			exit;
@@ -980,14 +980,14 @@ function check_container_exists()
 function listcontainers()
 {
 	if [ "$1" = "" ]; then
-                for dir in `${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" $STORAGE_URL | sort`; do
+                for dir in "`${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" "$STORAGE_URL" | sort`"; do
 			printf "${green}$dir${normal}\n";
 		done
 	else
 		if [ "$debug" = "1" ]; then
 			echo "Listing container $1"
 		fi
-		${curl} $CURLOPTS -s -H "X-Auth-Token: ${APIKEY}" $STORAGE_URL/$1
+		${curl} "$CURLOPTS" -s -H "X-Auth-Token: ${APIKEY}" ${STORAGE_URL}/$1
 	fi
 }
 
@@ -997,27 +997,27 @@ function listcontainers()
 # begin main
 file="$HOME/.swift/.auth_key";
 
-if [ ! -x $curl ]; then
+if [ ! -x "$curl" ]; then
         echo "$curl does not exist";
         exit;
 fi
 
-if [ ! -x $md5prog ]; then
+if [ ! -x "$md5prog" ]; then
         echo "$md5prog does not exist";
         exit;
 fi
 
-if [ ! -x $FILECOMMAND ]; then
+if [ ! -x "$FILECOMMAND" ]; then
         echo "$FILECOMMAND does not exist";
         exit;
 fi
 
-if [ ! -x $bc ]; then
+if [ ! -x "$bc" ]; then
         echo "$bc does not exist";
         exit;
 fi
 
-if [ ! -x $hostprog ]; then
+if [ ! -x "$hostprog" ]; then
 	echo "$hostprog does not exist";
 	exit;
 fi
@@ -1042,21 +1042,21 @@ elif [ "$AUTH_URL" = "" ]; then
 fi
 
 # used to get incoming commands
-script=`basename $0`
+script="`basename "$0"`"
 
 #colors
-blue=$(tput setaf 4)
-green=$(tput setaf 2)
-cyan=$(tput setaf 6)
-normal=$(tput sgr0)
+blue="$(tput setaf "4")"
+green="$(tput setaf "2")"
+cyan="$(tput setaf "6")"
+normal="$(tput sgr0)"
 
 
-if [ -e $file ]; then
-        if [ $(age "$file") -gt "1000" ]; then
+if [ -e "$file" ]; then
+        if [ "$(age "$file")" -gt "1000" ]; then
 		if [ "$debug" = "1" ]; then
                 	echo 'Auth key found but too old, and removed';
 		fi
-		/bin/rm $file
+		/bin/rm "$file"
 		getauthkey
         else
 		# keep key
@@ -1070,8 +1070,8 @@ fi
 
 
 
-APIKEY=`cat $file | grep ^X-Auth-Token: | cut -d: -f2 | tr -d '\r'`;
-STORAGE_URL=`cat $file | grep ^X-Storage-Url: | cut -d" " -f2 | tr -d '\r'`;
+APIKEY="`cat "$file" | grep ^X-Auth-Token: | cut -d: -f2 | tr -d '\r'`";
+STORAGE_URL="`cat "$file" | grep ^X-Storage-Url: | cut -d" " -f2 | tr -d '\r'`";
 
 if [ "$debug" = "1" ]; then
 	echo "Found storage_url $STORAGE_URL"
@@ -1093,29 +1093,29 @@ fi
 . /admin/swift/include/sqlite
 
 if [ "$script" = "qswift" ]; then
-	script=$1;
+	script="$1";
 	shift;
 fi;
 
 case "$script" in
-	isstat) 	getstats $1 $2 ;;
-	fileinfo)	showfileinfo $1 $2 ;;
-	isls)		listcontainers $1 ;;
-	split)		split $1 $2 $3 ;;
-	isput)		upload $1 $2 ;;
-	isrm)		delete $1 $2 ;;
-	ismkdir)	makedir $1 ;;
-	isget)		download $1 $2 $3 ;;
-	iscp)		rcopy $1 $2 $3 ;;
-	isrmdir)	rrmdir $1 ;;
-	ismv)		rmove $1 $2 $3 ;;
-	rsync)		rsyncfile $1 $2 $3 $4 ;;
-	mkpub)		makepublic $1 $2 ;;
-	mkdir_p)	check_container_exists $1 $2 ;;
-	deleteafter)	delete_after $1 $2 $3 ;;
-	isrmsplit)	delete_splits $1 $2 $3 $4 ;;
-	fly)		onthefly $1 $2 $3 $4 ;;
-	isbackup)	runabackup $1 ;;
+	isstat) 	getstats "$1" "$2" ;;
+	fileinfo)	showfileinfo "$1" "$2" ;;
+	isls)		listcontainers "$1" ;;
+	split)		split "$1" "$2" "$3" ;;
+	isput)		upload "$1" "$2" ;;
+	isrm)		delete "$1" "$2" ;;
+	ismkdir)	makedir "$1" ;;
+	isget)		download "$1" "$2" "$3" ;;
+	iscp)		rcopy "$1" "$2" "$3" ;;
+	isrmdir)	rrmdir "$1" ;;
+	ismv)		rmove "$1" "$2" "$3" ;;
+	rsync)		rsyncfile "$1" "$2" "$3" "$4" ;;
+	mkpub)		makepublic "$1" "$2" ;;
+	mkdir_p)	check_container_exists "$1" "$2" ;;
+	deleteafter)	delete_after "$1" "$2" "$3" ;;
+	isrmsplit)	delete_splits "$1" "$2" "$3" "$4" ;;
+	fly)		onthefly "$1" "$2" "$3" "$4" ;;
+	isbackup)	runabackup "$1" ;;
 	*)		echo 'Unknown call' ;;
 esac
 

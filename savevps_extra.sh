@@ -1,10 +1,10 @@
 #!/bin/bash
 function runningvps() { virsh list | grep running | awk '{ print ($3 == "running") ? $2 : "" }'; }; \
 function runcount() { runningvps | wc -l; }; \
-function lastvps() { runningvps | tail -n 1; }; \
-while [ $(runcount) -ge 3 ]; do
+function lastvps() { runningvps | tail -n "1"; }; \
+while [ "$(runcount)" -ge 3 ]; do
   echo "Running $(runcount)"; \
-  vps=$(lastvps); \
+  vps="$(lastvps)"; \
   echo "Last VPS $vps $(lastvps)"; \
   if [ ! -z "$vps" ]; then
     echo "Saving VPS $vps"; \

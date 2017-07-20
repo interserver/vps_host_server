@@ -5,21 +5,21 @@ if [ "$*" = "" ]; then
 	echo "$0 <vzid> [mount point] [umount] [readonly]";
 	exit;
 fi;
-VZID=$1;
+VZID="$1";
 shift;
-UNMOUNT=0;
-RO=0;
+UNMOUNT="0";
+RO="0";
 TARGET=/mnt;
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts="";
 else
 	kpartxopts="-s";
 fi;
-if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1) -le 6 ]; then
-	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then 
+if [ -e /etc/redhat-release ] && [ "$(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1)" -le 6 ]; then
+	if [ "$(echo "$(e2fsck -V 2>&1 |head -n "1" | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1)" -le 141 ]; then
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
-			pushd $PWD;
-			cd /admin/ports 
+			pushd "$PWD";
+			cd /admin/ports
 			./install e2fsprogs
 			popd;
 		fi;
@@ -34,28 +34,28 @@ function umount_check() {
 		fi;
 	fi;
 }
-while [ $# -gt 0 ]; do
+while [ "$#" -gt 0 ]; do
 	if [ "$1" == "unmount" ] || [ "$1" == "umount" ]; then
-		UNMOUNT=1;
+		UNMOUNT="1";
 		umount_check ${TARGET}/boot;
-		umount_check ${TARGET};
+		umount_check "${TARGET}";
 		for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
 			umount_check /tmp/${part};
 			umount_check /tmp/vz-${part};
 		done;
-		kpartx $kpartxopts -d /dev/vz/$VZID;
+		kpartx "$kpartxopts" -d /dev/vz/${VZID};
 		shift;
 	elif [ "$1" == "ro" ] || [ "$1" == "readonly" ]; then
-		RO=1;
+		RO="1";
 		umount_check ${TARGET}/boot;
-		umount_check ${TARGET};
-		for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
+		umount_check "${TARGET}";
+		for part in "$(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
 			umount_check /tmp/${part};
 			umount_check /tmp/vz-${part};
-		done;
+		done";
 		shift;
 	elif [ "$1" != "" ]; then
-		TARGET=$1;
+		TARGET="$1";
 		shift;
 	else
 		echo "Unknown Argument $1";
@@ -63,16 +63,16 @@ while [ $# -gt 0 ]; do
 		shift;
 	fi;
 done;
-if [ ! -d ${TARGET} ]; then
+if [ ! -d "${TARGET}" ]; then
 	echo "Target Directory ${TARGET} Does Not Exist, please create it";
 	exit;
 fi;
-if [[ $(fdisk -v | sed s#".*fdisk (util-linux \(.*\))"#"\1"#g) > 2.17 ]]; then
+if [[ "$(fdisk -v | sed s#".*fdisk (util-linux \(.*\))"#"\1"#g) > 2.17 ]]; then
 	fdiskopts="-c";
-else
+else"
 	fdiskopts="";
 fi;
-kpartx $kpartxopts -a /dev/vz/$VZID;
+kpartx "$kpartxopts" -a /dev/vz/${VZID};
 sync;
 sleep 1s;
 #ls /dev/mapper |grep "${VZID}"
@@ -87,19 +87,19 @@ OIFS="$IFS";
 IFS="
 ";
 boot_dir="";
-found_boot=0;
-found_root=0;
-for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' | sed s#"\/dev\/vz"#"\/dev\/mapper"#g); do
+found_boot="0";
+found_root="0";
+for part in "$(fdisk "${fdiskopts}" -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#""#g | awk '{ print $1 " " $6 }' | sed s#"\/dev\/vz"#"\/dev\/mapper"#g); do
 	#echo "All: $part"
-	partdev="$(echo $part | awk '{ print $1 }' | sed s#"/dev/vz/"#"/dev/mapper/"#g)";
+	partdev="$(echo "$part" | awk '{ print $1 }' | sed s#"/dev/vz/"#"/dev/mapper/"#g)";
 	partname="${partdev#$VZDEV}";
 	partname="${partname#$mapprefix}";
 	mapname="${mapprefix}${partname}";
 	partdev="${VZDEV}${mapname}";
-	parttype="$(echo $part | awk '{ print $2 }')";
+	parttype="$(echo "$part" | awk '{ print $2 }')";
 	#echo "VZID $VZID  PATH $VZDEV Prefix: $mapprefix  PartName: $partname  Combined: $mapname    Type: $parttype ";
 	# check if linux partition
-	if [ $UNMOUNT == 1 ]; then
+	if [ "$UNMOUNT" == 1 ]; then"
 		umount_check /tmp/${mapname};
 		rmdir /tmp/${mapname} 2>/dev/null
 	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e ": Linux rev [0-9\.]* \(.*\) filesystem")" != "" ]; then
@@ -109,20 +109,20 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 			#mount -t $mounttype ${partdev} /tmp/${mapname};
 			fsck -T -p /dev/mapper/${mapname};
 			if [ "$RO" = "1" ]; then
-				mount -t $mounttype -o ro /dev/mapper/${mapname} /tmp/${mapname};
+				mount -t "$mounttype" -o ro /dev/mapper/${mapname} /tmp/${mapname};
 			else
-				mount -t $mounttype /dev/mapper/${mapname} /tmp/${mapname};
+				mount -t "$mounttype" /dev/mapper/${mapname} /tmp/${mapname};
 			fi;
 			if [ -e /tmp/${mapname}/etc/fstab ]; then
-				mount --bind /tmp/${mapname} ${TARGET};
-				found_root=1;
+				mount --bind /tmp/${mapname} "${TARGET}";
+				found_root="1";
 				#echo "FSTAB:";
 				#grep -v -e "^$" -e "^#" /tmp/${mapname}/etc/fstab;
-			elif [ -d /tmp/${mapname}/grub ] && [ $found_boot == 0 ]; then
+			elif [ -d /tmp/${mapname}/grub ] && [ "$found_boot" == 0 ]; then
 				#set boot_dir to mount it later instead of right away
 				#mount --bind /tmp/${mapname} ${TARGET}/boot;
 				boot_dir=/tmp/${mapname};
-				found_boot=1;
+				found_boot="1";
 			else
 				echo "not sure where to mount ${mapname} yet";
 			fi;
@@ -130,16 +130,16 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	#elif [ "$(file -L -s ${partdev} |grep -e ":\(.*\)x86 boot sector, code ")" != "" ];then
 	elif [ "$(file -L -s /dev/mapper/${mapname} |grep -e ":\(.*\)x86 boot sector")" != "" ];then
 		mkdir -p /tmp/${mapname};
-		fsck -T -p ${partdev} || ntfsfix ${partdev};
+		fsck -T -p "${partdev}" || ntfsfix "${partdev}";
 		if [ "$RO" = "1" ]; then
-			mount ${partdev} -o ro /tmp/${mapname};
+			mount "${partdev}" -o ro /tmp/${mapname};
 		else
-			mount ${partdev} /tmp/${mapname};
+			mount "${partdev}" /tmp/${mapname};
 		fi;
 		if [ -e /tmp/${mapname}/pagefile.sys ] || [ -d /tmp/${mapname}/Windows ]; then
-			mount --bind /tmp/${mapname} ${TARGET};
-			found_boot=1;
-			found_root=1;
+			mount --bind /tmp/${mapname} "${TARGET}";
+			found_boot="1";
+			found_root="1";
 		else
 			echo "${mapname} is not part of main windows drive";
 			umount_check /tmp/${mapname};
@@ -147,26 +147,26 @@ for part in $(fdisk ${fdiskopts} -u -l /dev/vz/${VZID} |grep ^/dev | sed s#"\*"#
 	elif [ "$(file -L -s /dev/mapper/${mapname} | grep -e "Linux.* swap file")" != "" ]; then
 		echo "Skipping Swap File";
 	else
-		echo "Don't know how to handle partition ${partdev} Type $parttype - $(file -L -s ${VZDEV}${mapname} | cut -d: -f2-)";
+		echo "Don't know how to handle partition ${partdev} Type $parttype - $(file -L -s "${VZDEV}${mapname}" | cut -d: -f2-)";
 	fi;
 done;
-if [ $UNMOUNT == 1 ]; then
+if [ "$UNMOUNT" == 1 ]; then
 	umount_check ${TARGET}/boot;
-	umount_check ${TARGET};
+	umount_check "${TARGET}";
 	for part in $(fdisk -l /dev/vz/${VZID} | grep "^/dev/vz/${VZID}" | awk '{ print $1 }' |sed s#"/dev/vz/"#""#g); do
 		umount_check /tmp/${part};
 		umount_check /tmp/vz-${part};
 	done;
-	kpartx $kpartxopts -d /dev/vz/$VZID;
+	kpartx "$kpartxopts" -d /dev/vz/${VZID};
 	echo "Finished Unmounting";
-elif [ $found_root == 1 ] && [ $found_boot == 1 ]; then
+elif [ "$found_root" == 1 ] && [ "$found_boot" == 1 ]; then
 	if [ "$boot_dir" != "" ]; then
-		mount --bind ${boot_dir} ${TARGET}/boot;
+		mount --bind "${boot_dir}" ${TARGET}/boot;
 	fi;
 	echo "Mounted Successfully";
-elif [ $found_root == 1 ]; then
+elif [ "$found_root" == 1 ]; then
 	echo "Root but no Boot found";
-elif [ $found_boot == 1 ]; then
+elif [ "$found_boot" == 1 ]; then
 	echo "Boot but no Root Found";
 else
 	echo "Cannot figure out any of the partitions";

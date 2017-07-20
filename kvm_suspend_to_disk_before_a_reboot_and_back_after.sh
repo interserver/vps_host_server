@@ -3,13 +3,13 @@
 mkdir -p /var/lib/libvirt/autosuspend/; \
 cp /usr/share/doc/libvirt-bin/examples/libvirt-suspendonreboot /etc/init.d/; \
 chmod +x /etc/init.d/libvirt-*; \
-update-rc.d libvirt-suspendonreboot defaults 29 71; \
+update-rc.d libvirt-suspendonreboot defaults "29" "71"; \
 cd /etc/init.d; \
-update-rc.d libvirt-suspendonreboot defaults 29 71; \
+update-rc.d libvirt-suspendonreboot defaults "29" "71"; \
 update-rc.d libvirt-suspendonreboot enable ; \
 chmod +x libvirt-suspendonreboot ; \
 # actual fix using upstart
-#built using: gzip -9 /etc/init/libvirt-bin.conf -c  | base64 -                                                                                                                                             
+#built using: gzip -9 /etc/init/libvirt-bin.conf -c  | base64 -
 echo "\
 H4sICA9dzVQAA2xpYnZpcnQtYmluLmNvbmYA3Vhtb9s2EP5s/oqrYtR2VllxshZYMwcdgmLrkPZD
 t3Yf0iygpZMtRBI1kbKdpvnvuyMl2U7iBFkLDFvQ1JbIO9499/YwEeqwTAqTqBy8NJnMk9JAJDFT
@@ -46,14 +46,14 @@ service libvirt-bin restart; \
 {
 cat > /etc/profile.d/savevps.sh <<EOF
 #!/bin/bash
-function savevps() { 
-  if [ "\$1" = "" ]; then 
+function savevps() {
+  if [ "\$1" = "" ]; then
     guess="\$(top -c -b -n 1 | grep "[[:digit:]] qemu" | sed "s/^.* -name \([^ ]*\) .*\$/\1/g" | head -n 1)";
     read -e -i "\$guess" -p "VPS Name: " vps;
-  else 
-    vps="\$1"; 
-  fi; 
-  if [ "\$(echo "\$vps" |grep "^[a-z]")" = "" ]; then   
+  else
+    vps="\$1";
+  fi;
+  if [ "\$(echo "\$vps" |grep "^[a-z]")" = "" ]; then
     if [ -e /win ]; then
       vps="windows\$vps";
     else
@@ -61,7 +61,7 @@ function savevps() {
     fi;
   fi;
   virsh save \$vps /var/lib/libvirt/autosuspend/\$vps.dump;
-} 
+}
 
 EOF
 }; \

@@ -11,123 +11,123 @@ if [ ! -e /usr/sbin/vzctl ]; then
 	exit;
 fi
 
-VZID=$2;
+VZID="$2";
 
-if [ ! -f /etc/vz/conf/$VZID.conf ]; then
-	echo $VZID . 'does not exist';
+if [ ! -f /etc/vz/conf/${VZID}.conf ]; then
+	echo "$VZID" . 'does not exist';
 	exit;
 fi
 
 function modp {
-	mod=$1;
+	mod="$1";
 	if [ "$mod" = "" ]; then
 		echo 'No module passed';
 		return;
 	fi
-	check=`lsmod | grep $mod`;
+	check="`lsmod | grep "$mod"`";
         if [ "$check" = "" ]; then
                	echo "Loading $mod. It will not reload on boot unless added to rc.local";
-               	modprobe $mod
+               	modprobe "$mod"
 	else
-		echo "$mod already loaded"	
+		echo "$mod already loaded"
         fi
 }
 
 function smtp {
 	# DROP OR ACCEPT
-	action=$1;
+	action="$1";
 
-        CIPS=`cat /etc/vz/conf/$VZID.conf | grep ^IP_ADDRESS= | cut -d\" -f2`;
-        for CIP in $CIPS; do
+        CIPS="`cat /etc/vz/conf/$VZID.conf | grep ^IP_ADDRESS= | cut -d\" -f2`";
+        for CIP in "$CIPS"; do
                         echo "Running iptables $action on port 25 for IP $CIP on $VZID";
-                        iptables $1 FORWARD --source $CIP --protocol tcp --destination-port 25 -j DROP
+                        iptables "$1" FORWARD --source "$CIP" --protocol tcp --destination-port "25" -j DROP
         done
 }
 
 case "$1" in
  tun)
 	if [ ! "$3" = "nocheck" ]; then
-		if [ -e /vz/root/$VZID/dev/net/tun ]; then
-			echo $VZID . 'already has /dev/net/tun';
+		if [ -e /vz/root/${VZID}/dev/net/tun ]; then
+			echo "$VZID" . 'already has /dev/net/tun';
 			echo 'Run with nocheck if you want to skip this';
 			exit;
 		fi
 	fi
 
 	modp tun
-	vzctl set $VZID --devices c:10:200:rw --save
-	vzctl set $VZID --capability net_admin:on --save
-	vzctl exec $VZID mkdir -p /dev/net
-	vzctl exec $VZID mknod /dev/net/tun c 10 200
-	vzctl exec $VZID chmod 600 /dev/net/tun
-	vzctl set $VZID --devnodes net/tun:rw --save
-	vzctl restart $VZID
+	vzctl set "$VZID" --devices c:10:200:rw --save
+	vzctl set "$VZID" --capability net_admin:on --save
+	vzctl exec "$VZID" mkdir -p /dev/net
+	vzctl exec "$VZID" mknod /dev/net/tun c "10" "200"
+	vzctl exec "$VZID" chmod "600" /dev/net/tun
+	vzctl set "$VZID" --devnodes net/tun:rw --save
+	vzctl restart "$VZID"
 
  ;;
- 
+
 
  loop)
 	echo "Loop may be compiled in";
 	modp loop
-	vzctl set $VZID --devnodes loop0:rw
+	vzctl set "$VZID" --devnodes loop0:rw
  ;;
 
  fuse)
 	modp fuse
-	vzctl set $VZID --devices c:10:229:rw --save
-        vzctl exec $VZID mknod /dev/fuse c 10 229
+	vzctl set "$VZID" --devices c:10:229:rw --save
+        vzctl exec "$VZID" mknod /dev/fuse c "10" "229"
 	echo "You may want loo as well";
  ;;
  ppp)
-	vzctl stop $VZID
+	vzctl stop "$VZID"
 	modp ppp_async
 	modp ppp_deflate
 	modp ppp_mppe
-	vzctl set $VZID --features ppp:on --save
-	vzctl set $VZID --devices c:108:0:rw --save
-	vzctl exec $VZID mknod /dev/ppp c 108 0
-	vzctl exec $VZID chmod 600 /dev/ppp
-	vzctl start $VZID
+	vzctl set "$VZID" --features ppp:on --save
+	vzctl set "$VZID" --devices c:108:0:rw --save
+	vzctl exec "$VZID" mknod /dev/ppp c "108" "0"
+	vzctl exec "$VZID" chmod "600" /dev/ppp
+	vzctl start "$VZID"
  ;;
  disable)
-	vzctl stop $VZID
-	vzctl set $VZID --disabled yes --save
+	vzctl stop "$VZID"
+	vzctl set "$VZID" --disabled yes --save
  ;;
  enable)
-	vzctl start $VZID
-	vzctl set $VZID --disabled no --save
+	vzctl start "$VZID"
+	vzctl set "$VZID" --disabled no --save
  ;;
  quota)
-	vzctl stop $VZID
-	vzctl set $VZID --quotaugidlimit 2000 --save
-	vzctl start $VZID
+	vzctl stop "$VZID"
+	vzctl set "$VZID" --quotaugidlimit "2000" --save
+	vzctl start "$VZID"
  ;;
  fixyum)
-	if [ ! -e /vz/private/$VZID/etc/redhat-release ]; then
+	if [ ! -e /vz/private/${VZID}/etc/redhat-release ]; then
 		echo "$VZID is not centos";
 	else
-		vzctl stop $VZID
-		/bin/rm /vz/private/$VZID/dev/urandom
-		mknod -m 644 /vz/private/$VZID/dev/urandom c 1 9
-		/bin/rm /vz/private/$VZID/lib/udev/devices/urandom
-		mknod --mode 644 /vz/private/$VZID/lib/udev/devices/urandom c 1 9
-		vzctl start $VZID
+		vzctl stop "$VZID"
+		/bin/rm /vz/private/${VZID}/dev/urandom
+		mknod -m "644" /vz/private/${VZID}/dev/urandom c "1" "9"
+		/bin/rm /vz/private/${VZID}/lib/udev/devices/urandom
+		mknod --mode "644" /vz/private/${VZID}/lib/udev/devices/urandom c "1" "9"
+		vzctl start "$VZID"
 	fi
   ;;
 
  fixubuntu1104)
-	if [ ! -e /vz/private/$VZID/etc/debian_version ]; then
+	if [ ! -e /vz/private/${VZID}/etc/debian_version ]; then
 
 		echo "$VZID is not ubuntu"
 	else
-		vzctl stop $VZID
-		/sbin/MAKEDEV -d /vz/private/$VZID/dev -x {p,t}ty{a,p}{0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f} console core full kmem kmsg mem null port ptmx random urandom zero ram0
-		/sbin/MAKEDEV -d /vz/private/$VZID/etc/devices -x {p,t}ty{a,p}{0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f} console core full kmem kmsg mem null port ptmx random urandom zero ram0
-		vzctl start $VZID
+		vzctl stop "$VZID"
+		/sbin/MAKEDEV -d /vz/private/${VZID}/dev -x "{p,t}ty{a,p}{0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f}" console core full kmem kmsg mem null port ptmx random urandom zero ram0
+		/sbin/MAKEDEV -d /vz/private/${VZID}/etc/devices -x "{p,t}ty{a,p}{0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f}" console core full kmem kmsg mem null port ptmx random urandom zero ram0
+		vzctl start "$VZID"
 	fi
  ;;
  listips)
-	cat /etc/vz/conf/$VZID.conf | grep ^IP_ADDRESS= | cut -d\" -f2
+	cat /etc/vz/conf/${VZID}.conf | grep ^IP_ADDRESS= | cut -d\" -f2
  ;;
 
  blocksmtp)
@@ -139,55 +139,55 @@ case "$1" in
  ;;
 
  inccpanel)
-	vzctl set $VZID --privvmpages="116256:117256" --save
-	vzctl set $VZID --numothersock="800" --save
-	vzctl set $VZID --numtcpsock="400" --save
+	vzctl set "$VZID" --privvmpages="116256:117256" --save
+	vzctl set "$VZID" --numothersock="800" --save
+	vzctl set "$VZID" --numtcpsock="400" --save
 
-	
+
  ;;
- 
+
  lowio)
-	vzctl set $VZID --ioprio 0 --save
+	vzctl set "$VZID" --ioprio "0" --save
  ;;
- 
+
  normalio)
- 	vzctl set $VZID --ioprio 4 --save
+ 	vzctl set "$VZID" --ioprio "4" --save
  ;;
- 
+
  convert2vswap)
 
         if [ -e /usr/share/doc/centos-release-5 ]; then
-		kcheck=`uname -r | grep 2.6.32`;
+		kcheck="`uname -r | grep 2.6.32`";
 		if [ "$kcheck" = "" ]; then
                 	echo 'CentOS 5 does not support vswap';
                 	exit;
 		fi
         fi
 
-        PRIVVMPAGES=`cat /etc/vz/conf/$VZID.conf | grep ^PRIVVMPAGES= | cut -d\" -f2 | cut -d: -f1`;
+        PRIVVMPAGES="`cat /etc/vz/conf/$VZID.conf | grep ^PRIVVMPAGES= | cut -d\" -f2 | cut -d: -f1`";
 	if [ "${PRIVVMPAGES}" = "unlimited" ]; then
 		echo 'VSWAP is likely enabled already';
-		exit;	
+		exit;
 	fi
 
         if [ "${PRIVVMPAGES//[0-9]*}" = "" ]; then
-                RAM=`expr $PRIVVMPAGES / 256`;
+                RAM="`expr "$PRIVVMPAGES" / "256"`";
 		if [ "$RAM" = "" ]; then
 			echo 'Could not determine ram value';
 			exit;
 		fi
                 echo "Setting $VZID to vswap with RAM amount $RAM";
-                vzctl set $VZID --kmemsize="unlimited" --save
-                vzctl set $VZID --privvmpages="unlimited" --save
-                vzctl set $VZID --tcpsndbuf="unlimited" --save
-                vzctl set $VZID --tcprcvbuf="unlimited" --save
-                vzctl set $VZID --othersockbuf="unlimited" --save
-                vzctl set $VZID --swappages="${RAM}M" --save
-                vzctl set $VZID --physpages="${RAM}M" --save
+                vzctl set "$VZID" --kmemsize="unlimited" --save
+                vzctl set "$VZID" --privvmpages="unlimited" --save
+                vzctl set "$VZID" --tcpsndbuf="unlimited" --save
+                vzctl set "$VZID" --tcprcvbuf="unlimited" --save
+                vzctl set "$VZID" --othersockbuf="unlimited" --save
+                vzctl set "$VZID" --swappages="${RAM}M" --save
+                vzctl set "$VZID" --physpages="${RAM}M" --save
         else
                 echo 'Did not get a numeric value for privvmpages';
         fi
-	
+
 
  ;;
 

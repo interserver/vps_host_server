@@ -1,11 +1,8 @@
 #!/usr/bin/php -q
 <?php
-
-	/**
-	 * update_vps_info()
-	 *
-	 * @return
-	 */
+/**
+ * update_vps_info()
+ */
 	function update_vps_info() {
 		$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 		if ($root_used > 90)
@@ -14,7 +11,7 @@
 			mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 		}
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
-		$servers = array();
+		$servers = [];
 		switch (trim(`uname -p`))
 		{
 			case 'i686':
@@ -54,15 +51,15 @@ done
 		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
 		if (!file_exists('/usr/bin/iostat'))
 		{
-			echo "Installing iostat..";
+			echo 'Installing iostat..';
 			if (trim(`which yum;`) != '')
 			{
-				echo "CentOS Detected...";
+				echo 'CentOS Detected...';
 				`yum -y install sysstat;`;
 			}
 			elseif (trim(`which apt-get;`) != '')
 			{
-				echo "Ubuntu Detected...";
+				echo 'Ubuntu Detected...';
 				`apt-get -y install sysstat;`;
 //				`echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
 			}
@@ -147,7 +144,7 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 			}
 		}
 		$parts = explode(' ', $out);
-		if (sizeof($parts) == 2)
+		if (count($parts) == 2)
 		{
 			$servers['hdsize'] = $parts[0];
 			$servers['hdfree'] = $parts[1];
@@ -161,7 +158,7 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 			{
 	        	$headers = "MIME-Version: 1.0\n";
 			    $headers .= "Content-type: text/html; charset=UTF-8\n";
-	    	    $headers .= "From: ".`hostname -s`." <hardware@interserver.net>\n";
+	    	    $headers .= 'From: ' .`hostname -s`." <hardware@interserver.net>\n";
 				mail('hardware@interserver.net', 'OpenVZ server does not appear to be booted properly', 'This server does not have /proc/user_beancounters, was it booted into the wrong kernel?', $headers);
 
 			}

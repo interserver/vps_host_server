@@ -1,4 +1,4 @@
-#!/usr/bin/php -q 
+#!/usr/bin/php -q
 <?php
 /**
  * VPS Functionality
@@ -20,11 +20,11 @@ function get_vps_ipmap() {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
 	}
 	$lines = explode("\n", $output);
-	$ips = array();
+	$ips = [];
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
-		if (sizeof($parts) > 1)
+		if (count($parts) > 1)
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
@@ -33,7 +33,7 @@ function get_vps_ipmap() {
 			{
 				$parts = array_merge($parts, explode("\n", $extra));
 			}
-			for ($x = 1; $x < sizeof($parts); $x++)
+			for ($x = 1, $xMax = count($parts); $x < $xMax; $x++)
 			{
 				if ($parts[$x] != '-')
 				{
@@ -45,6 +45,9 @@ function get_vps_ipmap() {
 	return $ips;
 }
 
+/**
+ * @param $ips
+ */
 function vps_iptables_traffic_rules($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
@@ -83,9 +86,13 @@ function vps_iptables_traffic_rules($ips) {
 	`$cmd`;
 }
 
+/**
+ * @param $ips
+ * @return array
+ */
 function get_vps_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
-	$totals = array();
+	$totals = [];
 	foreach ($ips as $ip => $id)
 	{
 		if ($vzctl == '')
@@ -96,7 +103,7 @@ function get_vps_iptables_traffic($ips) {
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 		}
-		if (sizeof($lines) == 2)
+		if (count($lines) == 2)
 		{
 			list($in,$out) = $lines;
 			//echo "$ip $in $out\n";
@@ -104,7 +111,7 @@ function get_vps_iptables_traffic($ips) {
 //			$total = intval(trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP | grep " $ip " | tr -s [:blank:] |cut -d' ' -f3| awk '{sum+=$1} END {print sum;}'`));
 			if ($total > 0)
 			{
-				$totals[$ip] = array('in' => $in, 'out' => $out);
+				$totals[$ip] = ['in' => $in, 'out' => $out];
 			}
 			//echo "$ip = " . $totals[$ip] . "\n";
 		}

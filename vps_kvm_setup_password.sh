@@ -6,19 +6,19 @@ if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 else
 	kpartxopts="-s"
 fi
-name=$1
-pass=$2
-if [ $# -ne 2 ]; then
+name="$1"
+pass="$2"
+if [ "$#" -ne 2 ]; then
  echo "Set VPS Password"
  echo "Syntax $0 [name] [pass]"
  echo " ie $0 windows1337 pass123"
 #check if vps exists
-elif ! virsh dominfo ${name} >/dev/null 2>&1; then
+elif ! virsh dominfo "${name}" >/dev/null 2>&1; then
  echo "VPS ${name} doesn't exists!";
 else
- virsh destroy ${name}
+ virsh destroy "${name}"
  echo "Creating Partition Table Links" && \
- /sbin/kpartx $kpartxopts -av /dev/vz/${name} && \
+ /sbin/kpartx "$kpartxopts" -av /dev/vz/${name} && \
  if [ -e "/dev/mapper/vz-${name}p1" ]; then
   pname="vz-${name}"
  else
@@ -32,12 +32,12 @@ else
   mount /dev/mapper/${pname}p1 /vz/mounts/${pname}p2
  fi
  echo "Setting Password"
- /root/cpaneldirect/vps_kvm_setup_password.expect $pname $pass
+ /root/cpaneldirect/vps_kvm_setup_password.expect "$pname" "$pass"
  echo "Saving Changes"
  umount /vz/mounts/${pname}p2 2>/dev/null
- /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
+ /sbin/kpartx "$kpartxopts" -dv /dev/vz/${name}
  echo "Starting VPS"
- virsh start ${name};
+ virsh start "${name}";
  bash /root/cpaneldirect/run_buildebtables.sh;
- /root/cpaneldirect/vps_refresh_vnc.sh $name
+ /root/cpaneldirect/vps_refresh_vnc.sh "$name"
 fi

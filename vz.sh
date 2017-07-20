@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # If not running interactively, don't do anything
 [ -z "$PS1" ] && return
 
@@ -36,7 +37,7 @@ if [ -x /usr/bin/kcarectl ]; then
 	/usr/bin/kcarectl -u
 elif [ -x /usr/sbin/uptrack-upgrade ]; then
 	/usr/sbin/uptrack-upgrade -y
-else 
+else
 	echo 'No rebootless kernel update installed';
 fi
 

@@ -32,8 +32,8 @@ class Poller extends \Core_Daemon
 		    $this->plugin('ini');
 		    $this->ini->filename = BASE_PATH.'/config.ini';
 		    //$this->ini->required_sections = array('api');
-		    $this->ini->required_sections = array('vzctl');
-		    $this->ini->required_sections = array('queue');
+		    $this->ini->required_sections = ['vzctl'];
+		    $this->ini->required_sections = ['queue'];
 	  }
 
 	protected function setup_workers() {
@@ -42,14 +42,14 @@ class Poller extends \Core_Daemon
 
 		$this->Vzctl->timeout(120);
 		$this->Vzctl->onTimeout(function($call, $log) {
-			$log("vzctl Timeout Reached");
+			$log('vzctl Timeout Reached');
 		});
 
 		$that = $this;
 		$this->Vzctl->onReturn(function($call, $log) use($that) {
 			if ($call->method == 'poll') {
 				$that->set_results($call->return);
-				$log("vzctl Results Updated...");
+				$log('vzctl Results Updated...');
 			}
 		});
 
@@ -58,14 +58,14 @@ class Poller extends \Core_Daemon
 
 		$this->Queue->timeout(120);
 		$this->Queue->onTimeout(function($call, $log) {
-			$log("Queue Timeout Reached");
+			$log('Queue Timeout Reached');
 		});
 
 		$that = $this;
 		$this->Queue->onReturn(function($call, $log) use($that) {
 			if ($call->method == 'poll') {
 				$that->set_results($call->return);
-				$log("Queue Results Updated...");
+				$log('Queue Results Updated...');
 			}
 		});
 
@@ -89,38 +89,37 @@ class Poller extends \Core_Daemon
 	 */
 	protected function execute() {
 	        if (!$this->Vzctl->is_idle()) {
-			    $this->log("Event Loop Iteration: vzctl Call running in the background worker process.");
+			    $this->log('Event Loop Iteration: vzctl Call running in the background worker process.');
 	            return;
 			}
-		else {
-		        // If the Worker is idle, it means it just returned our stats.
-		        // Log them and start another request
-		        // If there isn't results yet, don't display incorrect (empty) values:
-		        if (!empty($this->results['vps'])) {
-				    $this->log("Current VPS:   " . $this->results['vps']);
+// If the Worker is idle, it means it just returned our stats.
+		// Log them and start another request
+		// If there isn't results yet, don't display incorrect (empty) values:
+		if (!empty($this->results['vps'])) {
+				$this->log('Current VPS:   ' . $this->results['vps']);
 //		            $this->log("Current Sales Amount: $ " . number_format($this->results['sales'], 2));
-		        }
-		        // You can't store state in the worker processes because they can be killed, restarted, timed-out, etc.
-		        // So even though we only have 1 worker process, we pass any state data in each call.
-		        $this->Vzctl->poll($this->results);
 		}
-	        if (!$this->Queue->is_idle()) {
-			    $this->log("Event Loop Iteration: Queue Call running in the background worker process.");
+		// You can't store state in the worker processes because they can be killed, restarted, timed-out, etc.
+		// So even though we only have 1 worker process, we pass any state data in each call.
+		$this->Vzctl->poll($this->results);
+		if (!$this->Queue->is_idle()) {
+			    $this->log('Event Loop Iteration: Queue Call running in the background worker process.');
 	            return;
 			}
-		else {
-		        // If the Worker is idle, it means it just returned our stats.
-		        // Log them and start another request
-		        // If there isn't results yet, don't display incorrect (empty) values:
-		        if (!empty($this->results['vps'])) {
-				    $this->log("Current Queue:   " . $this->results['queue']);
-		        }
-		        // You can't store state in the worker processes because they can be killed, restarted, timed-out, etc.
-		        // So even though we only have 1 worker process, we pass any state data in each call.
-		        $this->Queue->poll($this->results);
+// If the Worker is idle, it means it just returned our stats.
+		// Log them and start another request
+		// If there isn't results yet, don't display incorrect (empty) values:
+		if (!empty($this->results['vps'])) {
+				$this->log('Current Queue:   ' . $this->results['queue']);
 		}
+		// You can't store state in the worker processes because they can be killed, restarted, timed-out, etc.
+		// So even though we only have 1 worker process, we pass any state data in each call.
+		$this->Queue->poll($this->results);
 	}
 
+	/**
+	 * @param array $results
+	 */
 	public function set_results(Array $results) {
 		$this->results = $results;
 	}

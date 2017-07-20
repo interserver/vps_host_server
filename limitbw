@@ -18,23 +18,23 @@ IFS="
 "
 
 # don't run on qs
-check=`crontab -l | grep qs_cron`;
+check="`crontab -l | grep qs_cron`";
 if [ ! "$check" = "" ]; then
         echo "#skipping for qs";
         exit;
 fi
 
 
-for vm in `cat $DHCPVPS | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`; do
-        ip=`echo $vm | cut -d" " -f2`;
-        host=`echo $vm | cut -d" " -f1`;
-	check=`virsh list | grep $host | grep run`;
+for vm in "`cat "$DHCPVPS" | grep fixed | awk '{print $2 " " $8}' | cut -d\; -f1`"; do
+        ip="`echo "$vm" | cut -d" " -f2`";
+        host="`echo "$vm" | cut -d" " -f1`";
+	check="`virsh list | grep "$host" | grep run`";
 	if [ "$check" = "" ]; then
         	echo "$host not running";
 	else
-		vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;     
+		vnet="`virsh dumpxml "$host" | grep "vnet" | cut -d\' -f2`";
 		echo "Limiting $ip";
-        	/root/cpaneldirect/tclimit $ip $vnet $host
+        	/root/cpaneldirect/tclimit "$ip" "$vnet" "$host"
 	fi
         echo
 done

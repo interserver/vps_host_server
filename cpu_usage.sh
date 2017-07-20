@@ -15,8 +15,8 @@
 # 	me 		email address to notify of a problem
 #
 # -=[ Begin Configuration ]--------
-debug=0;
-bashtest=0;
+debug="0";
+bashtest="0";
 me=detain@interserver.net;
 # -=[ End Configuration ]----------
 if [ "${1}" = "-serialize" ]; then
@@ -30,11 +30,11 @@ IFS="
 ";
 	if [ -e ~/.cpu_usage.last.sh ]; then
 		source ~/.cpu_usage.last.sh;
-	elif [ ${BASH_VERSION:0:1} -ge 4 ]; then
+	elif [ "${BASH_VERSION:0:1}" -ge 4 ]; then
 		declare -A cputotals;
 		declare -A cpuidles;
 	fi;
-	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+	if [ "${BASH_VERSION:0:1}" -lt 4 ]; then
 		totalstring="";
 		idlestring="";
 	else
@@ -46,21 +46,21 @@ IFS="
 		echo -n "{";
 	elif [ "$out" = "serialize" ]; then
 		output="";
-		vzcount=0;
+		vzcount="0";
 	fi;
-	for i in $(if [ -e /proc/vz/fairsched/cpu.proc.stat ]; then
-			grep -H "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }'; 
-		else 
-			grep "^cpu" /proc/stat | awk '{ print 0 " " $1 " " $2 " " $3 " " $4 " " $5 " " $6 " " $7 " " $8 " " $9 }'; 
-		fi); do
+	for i in "$(if [ -e /proc/vz/fairsched/cpu.proc.stat ]; then
+			grep -H "^cpu" /proc/vz/fairsched/*/cpu.proc.stat | tr / " "  | tr : " " | awk '{ print $4 " " $6 " " $7 " " $8 " " $9 " " $10 " " $11 " " $12 " " $13 " " $14 }';
+		else
+			grep "^cpu" /proc/stat | awk '{ print 0 " " $1 " " $2 " " $3 " " $4 " " $5 " " $6 " " $7 " " $8 " " $9 }';
+		fi)"; do
 		vzid="$(echo "$i" | awk '{ print $1 }')";
 		cpu="$(echo "$i" | awk '{ print $2 }')";
 		total="$(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}' | bc -l)";
-		if [ ${bashtest} -eq 1 ]; then
+		if [ "${bashtest}" -eq 1 ]; then
 			total_bash="$(($(echo "$i" | awk '{ print $3 "+" $4 "+" $5 "+" $6 "+" $7 "+" $8 "+" $9}')))";
 			if [ "${total_bash}" != "${total}" ]; then
 				s="Difference between Bash Math and BC Math found (Bash ${total_bash} != BC ${total})";
-				echo "$s" | mail -s "$s" ${me} >/dev/null 2>&1
+				echo "$s" | mail -s "$s" "${me}" >/dev/null 2>&1
 				echo "$s" >&2;
 			fi;
 		fi;
@@ -69,52 +69,52 @@ IFS="
 			echo "Got VPS $vzid CPU $cpu Total $total Idle $idle";
 		fi;
 		key="${vzid}_${cpu}";
-		haslast=0;
-		if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+		haslast="0";
+		if [ "${BASH_VERSION:0:1}" -lt 4 ]; then
 			totalstring="${totalstring}export total_${key}=\"${total}\";\n";
 			idlestring="${idlestring}export idle_${key}=\"${idle}\";\n";
 			if [ ! -z "$(eval echo "\${total_${key}}")" ]; then
-				lasttotal=$(eval echo "\${total_${key}}");
-				lastidle=$(eval echo "\${idle_${key}}");
-				haslast=1;
+				lasttotal="$(eval echo "\${total_${key}}")";
+				lastidle="$(eval echo "\${idle_${key}}")";
+				haslast="1";
 			fi;
 		else
 			totalstring="${totalstring}[${key}]=\"${total}\" ";
 			idlestring="${idlestring}[${key}]=\"${idle}\" ";
 			if [ ! -z "${cputotals[${key}]}" ]; then
-				lasttotal=${cputotals[${key}]};
-				lastidle=${cpuidles[${key}]};
-				haslast=1;
+				lasttotal="${cputotals[${key}]}";
+				lastidle="${cpuidles[${key}]}";
+				haslast="1";
 			fi;
 		fi;
-		if [ $haslast -eq 1 ]; then
-			cputotal=$(echo "${total} - ${lasttotal}" | bc -l);
-			if [ ${bashtest} -eq 1 ]; then
-				cputotal_bash=$((${total} - ${lasttotal}));
+		if [ "$haslast" -eq 1 ]; then
+			cputotal="$(echo "${total} - ${lasttotal}" | bc -l)";
+			if [ "${bashtest}" -eq 1 ]; then
+				cputotal_bash="$((${total} - ${lasttotal}))";
 				if [ "${cputotal_bash}" != "${cputotal}" ]; then
 					s="Difference between Bash Math and BC Math found (Bash ${cputotal_bash} != BC ${cputotal})";
-					echo "$s" | mail -s "$s" ${me} >/dev/null 2>&1
+					echo "$s" | mail -s "$s" "${me}" >/dev/null 2>&1
 					echo "$s" >&2;
 				fi;
 			fi;
-			cpuidle=$(echo "${idle} - ${lastidle}" | bc -l);
-			if [ ${bashtest} -eq 1 ]; then
-				cpuidle_bash=$((${idle} - ${lastidle}));
+			cpuidle="$(echo "${idle} - ${lastidle}" | bc -l)";
+			if [ "${bashtest}" -eq 1 ]; then
+				cpuidle_bash="$((${idle} - ${lastidle}))";
 				if [ "${cpuidle_bash}" != "${cpuidle}" ]; then
 					s="Difference between Bash Math and BC Math found (Bash ${cpuidle_bash} != BC ${cpuidle})";
-					echo "$s" | mail -s "$s" ${me} >/dev/null 2>&1
+					echo "$s" | mail -s "$s" "${me}" >/dev/null 2>&1
 					echo "$s" >&2;
 				fi;
 			fi;
-			if [ $cputotal -eq 0 ]; then
-				usage=0;
+			if [ "$cputotal" -eq 0 ]; then
+				usage="0";
 			else
 				usage="$(echo "100 - (100 * ${cpuidle} / ${cputotal})" | bc -l)";
-				if [ ${bashtest} -eq 1 ]; then
-					usage_bash=$((100 - (100 * ${cpuidle} / ${cputotal})));
+				if [ "${bashtest}" -eq 1 ]; then
+					usage_bash="$((100 - (100 * ${cpuidle} / ${cputotal})))";
 					if [ "${usage_bash}" != "${usage}" ]; then
 						s="Difference between Bash Math and BC Math found (Bash ${usage_bash} != BC ${usage})";
-						echo "$s" | mail -s "$s" ${me} >/dev/null 2>&1
+						echo "$s" | mail -s "$s" "${me}" >/dev/null 2>&1
 						echo "$s" >&2;
 					fi;
 				fi;
@@ -134,7 +134,7 @@ IFS="
 						echo -n "},";
 					elif [ "$out" = "serialize" ]; then
 						output="${output}${coreidx}:{${coreout}}";
-						vzcount=$(($vzcount + 1));
+						vzcount="$(($vzcount + 1))";
 						coreout="";
 					else
 						echo "";
@@ -144,7 +144,7 @@ IFS="
 					echo -n "\"${vzid}\":{";
 				elif [ "$out" = "serialize" ]; then
 					output="${output}i:${vzid};a:";
-					coreidx=0;
+					coreidx="0";
 				else
 					echo -n "$vzid";
 				fi;
@@ -157,7 +157,7 @@ IFS="
 				echo -n "\"${cpu}\":\"${usage}\"";
 			elif [ "$out" = "serialize" ]; then
 				coreout="${coreout}s:${#cpu}:\"${cpu}\";s:${#usage}:\"${usage}\";";
-				coreidx=$(($coreidx + 1));
+				coreidx="$(($coreidx + 1))";
 			else
 				echo -n " $cpu ${usage}";
 			fi;
@@ -168,13 +168,13 @@ IFS="
 		echo "}}";
 	elif [ "$out" = "serialize" ]; then
 		output="${output}${coreidx}:{${coreout}}";
-		vzcount=$(($vzcount + 1));
+		vzcount="$(($vzcount + 1))";
 		output="a:${vzcount}:{${output}}"
 		echo "${output}";
 	else
 		echo "";
 	fi;
-	if [ ${BASH_VERSION:0:1} -lt 4 ]; then
+	if [ "${BASH_VERSION:0:1}" -lt 4 ]; then
 		totalstring="${totalstring}\n";
 		idlestring="${idlestring}\n";
 	else

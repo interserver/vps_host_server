@@ -55,58 +55,58 @@ modprobe ipt_REJECT
 
 EOF
 
-nid=1;
+nid="1";
 
 if [ -e /etc/vz/conf ]; then
         cd /etc/vz/conf
         # ignore ve-vps.basic.conf
-        for i in `ls *.conf | grep -v ve-vps.basic.conf`; do
-                id=`echo $i | cut -d. -f1`;
-                IPs=`cat $i | grep ^IP_A | cut -d\" -f2`
+        for i in "`ls *.conf | grep -v ve-vps.basic.conf`"; do
+                id="`echo "$i" | cut -d. -f1`";
+                IPs="`cat "$i" | grep ^IP_A | cut -d\" -f2`"
 		BW='10mbit'
                 # ignore files with no ips
                 if [ ! "$IPs" = "" ]; then
 			# look for BW upgrade
-			if [ -e /tools/bandwidth/$id/80 ]; then
+			if [ -e /tools/bandwidth/${id}/80 ]; then
                                 BW='80mbit'
-			elif [ -e /tools/bandwidth/$id/30 ]; then
+			elif [ -e /tools/bandwidth/${id}/30 ]; then
                                 BW='30mbit'
-			elif [ -e /tools/bandwidth/$id/40 ]; then
+			elif [ -e /tools/bandwidth/${id}/40 ]; then
                                 BW='40mbit'
-			elif [ -e /tools/bandwidth/$id/50 ]; then
+			elif [ -e /tools/bandwidth/${id}/50 ]; then
                                 BW='50mbit'
-			elif [ -e /tools/bandwidth/$id/60 ]; then
+			elif [ -e /tools/bandwidth/${id}/60 ]; then
                                 BW='60mbit'
-			elif [ -e /tools/bandwidth/$id/70 ]; then
+			elif [ -e /tools/bandwidth/${id}/70 ]; then
                                 BW='70mbit'
-			elif [ -e /tools/bandwidth/$id/20 ]; then
+			elif [ -e /tools/bandwidth/${id}/20 ]; then
 				BW='20mbit'
-			elif [ -e /tools/bandwidth/$id/5 ]; then
+			elif [ -e /tools/bandwidth/${id}/5 ]; then
 				BW='5mbit'
-			elif [ -e /tools/bandwidth/$id/10 ]; then
+			elif [ -e /tools/bandwidth/${id}/10 ]; then
 				BW='10mbit'
-			elif [ -e /tools/bandwidth/$id/15 ]; then
+			elif [ -e /tools/bandwidth/${id}/15 ]; then
 				BW='15mbit'
-			elif [ -e /tools/bandwidth/$id/25 ]; then
+			elif [ -e /tools/bandwidth/${id}/25 ]; then
 				BW='25mbit'
 			# just in case nothing passed
 			else
 				BW='25mbit'
 			fi
-                        for ip in $IPs; do
-				if [ ! -e /tools/bandwidth/$id/skip ]; then
+                        for ip in "$IPs"; do
+				if [ ! -e /tools/bandwidth/${id}/skip ]; then
                                 	echo "#VZID $id";
                                 	echo '#eth0 up';
                                 	echo "/sbin/tc class add dev eth0 parent 1: classid 1:$nid cbq rate $BW allot 1500 prio 5 bounded isolated";
                                 	echo "/sbin/tc filter add dev eth0 parent 1: protocol ip prio 16 u32 match ip src $ip flowid 1:$nid";
                                 	echo "/sbin/tc qdisc add dev eth0 parent 1:$nid sfq perturb 1";
-                                	nid=`expr $nid + 1`;
+                                	nid="`expr "$nid" + "1"`";
                                 	echo '#eth0 down';
 					echo "/sbin/tc class add dev venet0 parent 1: classid 1:$nid cbq rate $BW allot 1500 prio 5 bounded isolated"
                                 	#echo "/sbin/tc filter add dev venet0 parent 1: protocol ip prio 16 u32 match ip src $ip flowid 1:$nid";
                                 	echo "/sbin/tc filter add dev venet0 parent 1: protocol ip prio 16 u32 match ip dst $ip flowid 1:$nid";
                                 	echo "/sbin/tc qdisc add dev venet0 parent 1:$nid sfq perturb 10";
-					nid=`expr $nid + 1`;
+					nid="`expr "$nid" + "1"`";
 				fi
                         done
                                 echo

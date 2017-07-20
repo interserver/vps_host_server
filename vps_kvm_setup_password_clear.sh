@@ -6,25 +6,25 @@ if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 else
 	kpartxopts="-s";
 fi;
-name=$1;
-if [ $# -ne 1 ]; then
+name="$1";
+if [ "$#" -ne 1 ]; then
  echo "Clear VPS Password";
  echo "Syntax $0 [name] [pass]";
  echo " ie $0 windows1337";
 #check if vps exists
-elif ! virsh dominfo ${name} >/dev/null 2>&1; then
+elif ! virsh dominfo "${name}" >/dev/null 2>&1; then
  echo "VPS ${name} doesn't exists!";
 else
- count=0;
- virsh shutdown ${name};
- while [ $count -le 1000 ] && [ "$(virsh list --all |grep ${name}  | awk '{ print $3 }')" = "running" ]; do
+ count="0";
+ virsh shutdown "${name}";
+ while [ "$count" -le 1000 ] && [ "$(virsh list --all |grep "${name}"  | awk '{ print $3 }')" = "running" ]; do
   sleep 1s;
-  count=$(($count + 1));
+  count="$(($count + 1))";
  done;
- echo "$count intervals till ${name} was down, now ($(virsh list --all |grep ${name}  | awk '{ print $3 }'))";
- virsh destroy ${name};
+ echo "$count intervals till ${name} was down, now ($(virsh list --all |grep "${name}"  | awk '{ print $3 }'))";
+ virsh destroy "${name}";
  echo "Creating Partition Table Links"; \
- /sbin/kpartx $kpartxopts -av /dev/vz/${name} && \
+ /sbin/kpartx "$kpartxopts" -av /dev/vz/${name} && \
  if [ -e "/dev/mapper/vz-${name}p1" ]; then
   pname="vz-${name}";
  else
@@ -51,9 +51,9 @@ else
  umount /vz/mounts/${pname}p2 2>/dev/null;
  sync;
  sleep 1s;
- /sbin/kpartx $kpartxopts -dv /dev/vz/${name};
+ /sbin/kpartx "$kpartxopts" -dv /dev/vz/${name};
  echo "Starting VPS";
- virsh start ${name};
+ virsh start "${name}";
  bash /root/cpaneldirect/run_buildebtables.sh;
- /root/cpaneldirect/vps_refresh_vnc.sh $name;
+ /root/cpaneldirect/vps_refresh_vnc.sh "$name";
 fi

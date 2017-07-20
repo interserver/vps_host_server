@@ -62,10 +62,12 @@ class Queue implements \Core_IWorker
 
 	/**
 	 * This is called during object construction 2to validate any dependencies
-	 * @return Array    Return array of error messages (Think stuff like "GD Library Extension Required" or
+	 *
+	 * @param array $errors
+	 * @return \MyAdmin\Daemon\Array Return array of error messages (Think stuff like "GD Library Extension Required" or
 	 *                  "Cannot open /tmp for Writing") or an empty array
 	 */
-	public function check_environment(Array $errors = array()) {
+	public function check_environment(Array $errors = []) {
 		$errors = [];
 		if (!function_exists('curl_init'))
 			$errors[] = 'PHP Curl Extension Required: Recompile PHP using the --with-curl option.';
@@ -79,7 +81,9 @@ class Queue implements \Core_IWorker
 
 	/**
 	 * Poll the Queue for updated information -- Simulate an Queue call of varying duration.
-	 * @return Array    Return associative array of results
+	 *
+	 * @param array $existing_results
+	 * @return \MyAdmin\Daemon\Array Return associative array of results
 	 */
 	public function poll(Array $existing_results) {
 		static $calls = 0;

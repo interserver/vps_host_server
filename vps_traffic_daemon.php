@@ -1,4 +1,4 @@
-#!/usr/bin/php -q 
+#!/usr/bin/php -q
 <?php
 
 $pid = getmypid();
@@ -18,9 +18,11 @@ $starttime = time();
 $updateinterval = 5 * 60;
 $lastupdate = 0;
 $GLOBALS['time'] = time();
-$oldips = array();
+$oldips = [];
 $vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
-
+/**
+ * @return array
+ */
 function get_vps_ipmap() {
 	if ($GLOBALS['vzctl'] == '')
 	{
@@ -31,7 +33,7 @@ function get_vps_ipmap() {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip`);
 	}
 	$lines = explode("\n", $output);
-	$ips = array();
+	$ips = [];
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
@@ -42,7 +44,7 @@ function get_vps_ipmap() {
 		{
 			$parts = array_merge($parts, explode("\n", $extra));
 		}
-		for ($x = 1; $x < sizeof($parts); $x++)
+		for ($x = 1, $xMax = count($parts); $x < $xMax; $x++)
 		{
 			if ($parts[$x] != '-')
 			{
@@ -53,6 +55,9 @@ function get_vps_ipmap() {
 	return $ips;
 }
 
+/**
+ * @param $ips
+ */
 function vps_iptables_traffic_rules($ips) {
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id)
@@ -84,8 +89,12 @@ function vps_iptables_traffic_rules($ips) {
 	trim(`$cmd`);
 }
 
+/**
+ * @param $ips
+ * @return array
+ */
 function get_vps_iptables_traffic($ips) {
-	$totals = array();
+	$totals = [];
 		if ($GLOBALS['vzctl'] == '')
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; ebtables -L -Z --Lc --Lx | grep " -j CONTINUE -c " |  sed s#"ebtables -t filter -A FORWARD -p IPv4 --ip-"#""#g | sed s#"-j CONTINUE -c "#""#g`));
@@ -152,8 +161,8 @@ curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
 $exit = false;
 while (!$exit)
 {
-	$fd = fopen('/root/cpaneldirect/vps_traffic.pid', 'w');
-	fputs($fd, time());
+	$fd = fopen('/root/cpaneldirect/vps_traffic.pid', 'wb');
+	fwrite($fd, time());
 	fclose($fd);
 	if (time() - $lastupdate > $updateinterval)
 	{
@@ -165,14 +174,14 @@ while (!$exit)
 	$totals = get_vps_iptables_traffic($ips);
 //	echo "get_vps_iptables_traffic() took " . (time() - $GLOBALS['time']) . " seconds\n"; $GLOBALS['time'] = time();
 	//print_r($totals);
-$fieldstring = "action=bandwidth&servers=" . urlencode(base64_encode(gzcompress(serialize($ips)))) . "&bandwidth=" . urlencode(base64_encode(gzcompress(serialize($totals))));
+$fieldstring = 'action=bandwidth&servers=' . urlencode(base64_encode(gzcompress(serialize($ips)))) . '&bandwidth=' . urlencode(base64_encode(gzcompress(serialize($totals))));
 curl_setopt($ch, CURLOPT_POSTFIELDS, $fieldstring);
 $retval = curl_exec($ch);
 if (curl_errno($ch)) {
-	$retval = "CURL Error: ".curl_errno($ch)." - ".curl_error($ch);
+	$retval = 'CURL Error: ' .curl_errno($ch). ' - ' .curl_error($ch);
 	   echo "Curl Error $retval\n";
 }
-echo ".";
+echo '.';
 //	echo "sending the data took " . (time() - $GLOBALS['time']) . " seconds\n"; $GLOBALS['time'] = time();
 	sleep(1);
 //	echo "finished sleeping\n";

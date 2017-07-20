@@ -1,33 +1,33 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
 img="$1"
-showhelp=0
+showhelp="0"
 outformat="uncompressed"
-uselvm=1
-if [ $# -gt 1 ]; then
-    idx=1;
-	while [ $idx -lt $# ]; do
-		idx=$(($idx + 1))
-		arg="$(eval echo '$'$idx)"
+uselvm="1"
+if [ "$#" -gt 1 ]; then
+    idx="1";
+	while [ "$idx" -lt "$#" ]; do
+		idx="$(($idx + 1))"
+		arg="$(eval echo '$'${idx})"
 		echo "Arg: $arg"
 		if [ "$arg" = "lvm" ]; then
-			uselvm=1
+			uselvm="1"
 		elif [ "$arg" = "nolvm" ]; then
-			uselvm=0
+			uselvm="0"
 		elif [ "$arg" = "gzip" ]; then
 			outformat="$arg"
 		elif [ "$arg" = "uncompressed" ]; then
 			outformat="$arg"
 		else
 			echo "Invalid Syntax $*"
-			showhelp=1;
+			showhelp="1";
 		fi
 	done
 fi
-if [ $# -lt 1 ] || [ $# -gt 3 ]; then
-	showhelp=1;
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+	showhelp="1";
 fi
-if [ $showhelp -eq 1 ]; then
+if [ "$showhelp" -eq 1 ]; then
 	echo "Downloads a custom image to a temp LVM directory"
 	echo ""
 	echo "Syntax $0 <url> [outformat] [lvm|nolvm]"
@@ -44,38 +44,38 @@ if [ $showhelp -eq 1 ]; then
 	exit;
 fi
 #first we get the free disk space on the KVM in G
-if [ $uselvm -eq 1 ]; then
+if [ "$uselvm" -eq 1 ]; then
 	p="$(pvdisplay -c |grep -v -e centos -e backup)"
-	pesize=$(($(echo "$p" | cut -d: -f8) * 1000))
+	pesize="$(($(echo "$p" | cut -d: -f8) * 1000))"
 	totalpe="$(echo "$p" | cut -d: -f9)"
 	freepe="$(echo "$p" | cut -d: -f10)"
-	totalb=$(($pesize*$totalpe))
-	totalg=$((${totalb}/1000000000))
-	freeb=$(($pesize*$freepe))
-	freeg=$((${freeb}/1000000000))
+	totalb="$(($pesize*$totalpe))"
+	totalg="$((${totalb}/1000000000))"
+	freeb="$(($pesize*$freepe))"
+	freeg="$((${freeb}/1000000000))"
 	#next we get the size of the image in G
 	echo "LVM  $freeb / $totalb Free"
 else
-	freeb=$(df -B 1 / |grep / | awk '{ print $4 }')
-	freeg=$(df -B 1G / |grep / | awk '{ print $4 }')
+	freeb="$(df -B "1" / |grep / | awk '{ print $4 }')"
+	freeg="$(df -B 1G / |grep / | awk '{ print $4 }')"
 fi
-imgsize=$(curl -L -s -I "$img" | grep "^Content-Length:" | sed -e s#"\n"#""#g | cut -d" " -f2 | sed s#"\r"#""#g)
+imgsize="$(curl -L -s -I "$img" | grep "^Content-Length:" | sed -e s#"\n"#""#g | cut -d" " -f2 | sed s#"\r"#""#g)
 #imgbuff=$(echo "(4 * $imgsize)" | bc -l)
-imgbuff=$(($imgsize*10))
+imgbuff="$(($imgsize*10))"
 if [ "$imgsize" == "" ]; then
 	echo "Error with $img"
 	echo "headers are"
 	cat curl_headers.txt
 	exit
 fi
-if [ $imgbuff -ge $freeb ]; then
+if [ "$imgbuff" -ge "$freeb" ]; then
 	echo "Not Enough Free Space"
 	echo "Image Size $imgsize"
 	echo "Free Space $freeb ($freeg G / $totalg G)"
 	exit
 fi
-if [ $uselvm -eq 1 ]; then
-	lvsize=$(($(($(($imgbuff/512))+1))*512))
+if [ "$uselvm" -eq 1 ]; then
+	lvsize="$(($(($(($imgbuff/512))+1))*512))"
 	lvcreate -L${lvsize}B -nimage_storage vz
 	mke2fs -q /dev/vz/image_storage
 	mkdir -p /image_storage
@@ -84,31 +84,32 @@ if [ $uselvm -eq 1 ]; then
 else
 	image_name="/image.img"
 fi
-curl -L -o ${image_name} "$img"
-if [ "$(file ${image_name}|grep ":.*bzip2")" != "" ]; then
+curl -L -o "${image_name}" "$img"
+if [ "$(file "${image_name}"|grep ":.*bzip2")" != "" ]; then
  echo "BZIP2 Image detected, uncompressing"
- mv -f ${image_name} ${image_name}.bz2
- bunzip2 ${image_name}.bz2 
-elif [ "$(file ${image_name}|grep ":.*gzip")" != "" ]; then
+ mv -f "${image_name}" ${image_name}.bz2
+ bunzip2 ${image_name}.bz2
+elif [ "$(file "${image_name}"|grep ":.*gzip")" != "" ]; then
  echo "GZIP Image detected, uncompressing"
- mv -f ${image_name} ${image_name}.gz
+ mv -f "${image_name}" ${image_name}.gz
  if [ "$outformat" != "gzip" ]; then
-  gunzip ${image_name}.gz 
+  gunzip ${image_name}.gz
  fi
-elif [ "$(file ${image_name}|grep ":.*XZ")" != "" ]; then
+elif [ "$(file "${image_name}"|grep ":.*XZ")" != "" ]; then
  echo "XZ Image detected, uncompressing"
- mv -f ${image_name} ${image_name}.xz
- xz -d ${image_name}.xz 
-fi 
+ mv -f "${image_name}" ${image_name}.xz
+ xz -d ${image_name}.xz
+fi
 if [ "$outformat" != "gzip" ]; then
-	format="$(qemu-img info ${image_name} |grep "file format:" | awk '{ print $3 }')"
+	format="$(qemu-img info "${image_name}" |grep "file format:" | awk '{ print $3 }')"
 	echo "Image Format Is $format"
 	if [ "$format" != "raw" ] ; then
 		echo "Converting to Raw"
-		qemu-img convert -p ${image_name} -O raw /image_storage/image.raw.img
-		rm -f ${image_name}
+		qemu-img convert -p "${image_name}" -O raw /image_storage/image.raw.img
+		rm -f "${image_name}"
 	else
-		mv -f ${image_name} /image_storage/image.raw.img
+		mv -f "${image_name}" /image_storage/image.raw.img
 	fi
 fi
 rm -f curl_headers.txt
+"

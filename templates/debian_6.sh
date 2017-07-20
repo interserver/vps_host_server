@@ -1,9 +1,9 @@
 #!/bin/bash
 virt-install \
 --name debian6 \
---ram 1024 \
+--ram "1024" \
 --disk path=./debian6.qcow2,size=8 \
---vcpus 1 \
+--vcpus "1" \
 --os-type linux \
 --os-variant debian6 \
 --network bridge=virbr0 \

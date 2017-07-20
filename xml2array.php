@@ -1,5 +1,4 @@
 <?php
-
 /**
  * xml2array() will convert the given XML text to an array in the XML structure.
  * Link: http://www.bin-co.com/php/scripts/xml2array/
@@ -9,18 +8,23 @@
  * Return: The parsed XML in an array form. Use print_r() to see the resulting array structure.
  * Examples: $array =  xml2array(file_get_contents('feed.xml'));
  *              $array =  xml2array(file_get_contents('feed.xml', 1, 'attribute'));
+ *
+ * @param        $contents
+ * @param int    $get_attributes
+ * @param string $priority
+ * @return array
  */
 function xml2array($contents, $get_attributes=1, $priority = 'tag') {
-	if(!$contents) return array();
+	if(!$contents) return [];
 
 	if(!function_exists('xml_parser_create')) {
 		//print "'xml_parser_create()' function not found!";
-		return array();
+		return [];
 	}
 
 	//Get the XML parser of PHP - PHP must have this module for the parser to work
 	$parser = xml_parser_create('');
-	xml_parser_set_option($parser, XML_OPTION_TARGET_ENCODING, "UTF-8"); // http://minutillo.com/steve/weblog/2004/6/17/php-xml-and-character-encodings-a-tale-of-sadness-rage-and-data-loss
+	xml_parser_set_option($parser, XML_OPTION_TARGET_ENCODING, 'UTF-8'); // http://minutillo.com/steve/weblog/2004/6/17/php-xml-and-character-encodings-a-tale-of-sadness-rage-and-data-loss
 	xml_parser_set_option($parser, XML_OPTION_CASE_FOLDING, 0);
 	xml_parser_set_option($parser, XML_OPTION_SKIP_WHITE, 1);
 	xml_parse_into_struct($parser, trim($contents), $xml_values);
@@ -29,15 +33,15 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 	if(!$xml_values) return false;//Hmm...
 
 	//Initializations
-	$xml_array = array();
-	$parents = array();
-	$opened_tags = array();
-	$arr = array();
+	$xml_array = [];
+	$parents = [];
+	$opened_tags = [];
+	$arr = [];
 
 	$current = &$xml_array; //Reference
 
 	//Go through the tags.
-	$repeated_tag_index = array();//Multiple tags with same name will be turned into an array
+	$repeated_tag_index = [];//Multiple tags with same name will be turned into an array
 	foreach($xml_values as $data) {
 		unset($attributes,$value);//Remove existing values, or there will be trouble
 
@@ -45,8 +49,8 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 		// tag(string), type(string), level(int), attributes(array).
 		extract($data);//We could use the array by itself, but this cooler.
 
-		$result = array();
-		$attributes_data = array();
+		$result = [];
+		$attributes_data = [];
 
 		if(isset($value)) {
 			if($priority == 'tag') $result = $value;
@@ -62,7 +66,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 		}
 
 		//See tag status and do the needed.
-		if($type == "open") {//The starting of the tag '<tag>'
+		if($type == 'open') {//The starting of the tag '<tag>'
 			$parent[$level-1] = &$current;
 			if(!is_array($current) or (!in_array($tag, array_keys($current)))) { //Insert New tag
 				$current[$tag] = $result;
@@ -76,7 +80,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 					$current[$tag][$repeated_tag_index[$tag.'_'.$level]] = $result;
 					$repeated_tag_index[$tag.'_'.$level]++;
 				} else {//This section will make the value an array if multiple tags with the same name appear together
-					$current[$tag] = array($current[$tag],$result);//This will combine the existing item and the new item together to make an array
+					$current[$tag] = [$current[$tag], $result];//This will combine the existing item and the new item together to make an array
 					$repeated_tag_index[$tag.'_'.$level] = 2;
 
 					if(isset($current[$tag.'_attr'])) { //The attribute of the last(0th) tag must be moved as well
@@ -89,7 +93,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 				$current = &$current[$tag][$last_item_index];
 			}
 
-		} elseif($type == "complete") { //Tags that ends in 1 line '<tag />'
+		} elseif($type == 'complete') { //Tags that ends in 1 line '<tag />'
 			//See if the key is already taken.
 			if(!isset($current[$tag])) { //New Key
 				$current[$tag] = $result;
@@ -108,7 +112,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 					$repeated_tag_index[$tag.'_'.$level]++;
 
 				} else { //If it is not an array...
-					$current[$tag] = array($current[$tag],$result); //...Make it an array using using the existing value and the new value
+					$current[$tag] = [$current[$tag], $result]; //...Make it an array using using the existing value and the new value
 					$repeated_tag_index[$tag.'_'.$level] = 1;
 					if($priority == 'tag' and $get_attributes) {
 						if(isset($current[$tag.'_attr'])) { //The attribute of the last(0th) tag must be moved as well
@@ -130,5 +134,5 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 		}
 	}
 
-	return($xml_array);
+	return $xml_array;
 }
