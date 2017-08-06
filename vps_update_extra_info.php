@@ -6,7 +6,7 @@
 	function update_vps_extra_info() {
 		// ensure ethtool is installed
 		`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
-			if (in_array(trim(`hostname`), ['kvm1.trouble-free.net', 'kvm2.interserver.net', 'kvm50.interserver.net']))
+			if (in_array(trim(`hostname`), array('kvm1.trouble-free.net', 'kvm2.interserver.net', 'kvm50.interserver.net')))
 					$eth = 'eth1';
 			elseif (file_exists('/etc/debian_version'))
 			{
