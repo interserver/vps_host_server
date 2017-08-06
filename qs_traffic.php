@@ -20,7 +20,7 @@ function get_qs_ipmap() {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
 	}
 	$lines = explode("\n", $output);
-	$ips = [];
+	$ips = array();
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
@@ -92,7 +92,7 @@ function qs_iptables_traffic_rules($ips) {
  */
 function get_qs_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
-	$totals = [];
+	$totals = array();
 	foreach ($ips as $ip => $id)
 	{
 		if ($vzctl == '')

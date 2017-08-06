@@ -8,7 +8,7 @@ require_once dirname(__FILE__).'/xml2array.php';
 function get_vps_list() {
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$curl_cmd = '';
-	$servers = [];
+	$servers = array();
 	if (!file_exists('/usr/sbin/vzctl'))
 	{
 		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
@@ -61,9 +61,9 @@ function get_vps_list() {
 						{
 // vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
 $cmd .= "if [ -e /usr/bin/timeout ]; then
-    timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+	timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 else
-    ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+	./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 fi;\n";
 //$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
@@ -208,7 +208,7 @@ fi;\n";
 			foreach ($tips as $line)
 			{
 				$parts = explode(' ', $line);
-				$ips[$parts[0]] = [];
+				$ips[$parts[0]] = array();
 				foreach ($parts as $idx => $ip)
 				{
 					if ($idx == 0)

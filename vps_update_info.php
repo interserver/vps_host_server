@@ -11,7 +11,7 @@
 			mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 		}
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
-		$servers = [];
+		$servers = array();
 		switch (trim(`uname -p`))
 		{
 			case 'i686':
@@ -37,7 +37,7 @@
 //		$servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
 		$servers['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
 		$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
-for i in $(pvdisplay -c); do 
+for i in $(pvdisplay -c); do
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
   blocksize="$(echo "$i" | cut -d: -f8)";
   total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
@@ -73,32 +73,32 @@ done
 		{
 			$servers['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 		}
-		$cmd = 'if [ "$(which ioping 2>/dev/null)" = "" ]; then 
-  if [ -e /usr/bin/apt-get ]; then 
-    apt-get update; 
-    apt-get install -y ioping; 
+		$cmd = 'if [ "$(which ioping 2>/dev/null)" = "" ]; then
+  if [ -e /usr/bin/apt-get ]; then
+	apt-get update;
+	apt-get install -y ioping;
   else
-    if [ "$(which rpmbuild 2>/dev/null)" = "" ]; then 
-      yum install -y rpm-build; 
-    fi;
-    if [ "$(which make 2>/dev/null)" = "" ]; then 
-      yum install -y make;
-    fi;
+	if [ "$(which rpmbuild 2>/dev/null)" = "" ]; then
+	  yum install -y rpm-build;
+	fi;
+	if [ "$(which make 2>/dev/null)" = "" ]; then
+	  yum install -y make;
+	fi;
 	if [ ! -e /usr/include/asm/unistd.h ]; then
-      yum install -y kernel-headers;
-    fi;
-    wget http://mirror.trouble-free.net/tf/SRPMS/ioping-0.9-1.el6.src.rpm -O ioping-0.9-1.el6.src.rpm; 
-    export spec="/$(rpm --install ioping-0.9-1.el6.src.rpm --nomd5 -vv 2>&1|grep spec | cut -d\; -f1 | cut -d/ -f2-)"; 
-    rpm --upgrade $(rpmbuild -ba $spec |grep "Wrote:.*ioping-0.9" | cut -d" " -f2); 
-    rm -f ioping-0.9-1.el6.src.rpm; 
-  fi; 
+	  yum install -y kernel-headers;
+	fi;
+	wget http://mirror.trouble-free.net/tf/SRPMS/ioping-0.9-1.el6.src.rpm -O ioping-0.9-1.el6.src.rpm;
+	export spec="/$(rpm --install ioping-0.9-1.el6.src.rpm --nomd5 -vv 2>&1|grep spec | cut -d\; -f1 | cut -d/ -f2-)";
+	rpm --upgrade $(rpmbuild -ba $spec |grep "Wrote:.*ioping-0.9" | cut -d" " -f2);
+	rm -f ioping-0.9-1.el6.src.rpm;
+  fi;
 fi;';
 		`$cmd`;
-		$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
+		$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then
   iodev="/$(pvdisplay -c |grep -v -e centos -e backup -e vz-snap |cut -d/ -f2- |cut -d: -f1)";
-else 
-  iodev=/vz; 
-fi; 
+else
+  iodev=/vz;
+fi;
 ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 //ioping -q -i 0 -w 3 -s 100m -S 100m -B ${iodev} | cut -d" " -f4;';
 //ioping -q -i 0 -w 3 -s 10m -S 100m -B ${iodev} | cut -d" " -f4;';
@@ -156,9 +156,9 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 		{
 			if (!file_exists('/proc/user_beancounters'))
 			{
-	        	$headers = "MIME-Version: 1.0\n";
-			    $headers .= "Content-type: text/html; charset=UTF-8\n";
-	    	    $headers .= 'From: ' .`hostname -s`." <hardware@interserver.net>\n";
+				$headers = "MIME-Version: 1.0\n";
+				$headers .= "Content-type: text/html; charset=UTF-8\n";
+				$headers .= 'From: ' .`hostname -s`." <hardware@interserver.net>\n";
 				mail('hardware@interserver.net', 'OpenVZ server does not appear to be booted properly', 'This server does not have /proc/user_beancounters, was it booted into the wrong kernel?', $headers);
 
 			}

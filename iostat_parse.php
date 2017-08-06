@@ -75,7 +75,7 @@ for ($x = 6, $xMax = count($lines); $x < $xMax; $x++)
 	];
 }
 
-$info['procs'] = [];
+$info['procs'] = array();
 if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm'))
 {
 	$out = `pidstat -l -C kvm;`;

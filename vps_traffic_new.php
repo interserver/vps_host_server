@@ -58,7 +58,7 @@ function get_vps_ipmap() {
 	else
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
 	$lines = explode("\n", $output);
-	$ips = [];
+	$ips = array();
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
@@ -108,7 +108,7 @@ function vps_iptables_traffic_rules($ips) {
  */
 function get_vps_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
-	$totals = [];
+	$totals = array();
 	if ($vzctl == '')
 	{
 		if (file_exists('/root/.traffic.last'))
@@ -117,7 +117,7 @@ function get_vps_iptables_traffic($ips) {
 		if ($vnetcounters != '')
 		{
 			$vnetcounters = explode("\n", $vnetcounters);
-			$vnets = [];
+			$vnets = array();
 			foreach ($vnetcounters as $line)
 			{
 				list($vnet, $out, $in) = explode(' ', $line);
@@ -129,7 +129,7 @@ function get_vps_iptables_traffic($ips) {
 			if ($vnetmacs != '')
 			{
 				$vnetmacs = explode("\n", $vnetmacs);
-				$macs = [];
+				$macs = array();
 				foreach ($vnetmacs as $line)
 				{
 					list($vnet, $mac) = explode(' ', $line);
@@ -139,7 +139,7 @@ function get_vps_iptables_traffic($ips) {
 				}
 				$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g';
 				$macvps = explode("\n", trim(`$cmd`));
-				$vpss = [];
+				$vpss = array();
 				foreach ($macvps as $line)
 				{
 					list($mac, $vps, $ip) = explode(' ', $line);

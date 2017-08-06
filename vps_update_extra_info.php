@@ -6,19 +6,19 @@
 	function update_vps_extra_info() {
 		// ensure ethtool is installed
 		`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
-	        if (in_array(trim(`hostname`), ['kvm1.trouble-free.net', 'kvm2.interserver.net', 'kvm50.interserver.net']))
-	                $eth = 'eth1';
-	        elseif (file_exists('/etc/debian_version'))
-	        {
-	                if (file_exists('/sys/class/net/p2p1'))
-	                        $eth = 'p2p1';
-	                elseif (file_exists('/sys/class/net/em1'))
-	                        $eth = 'em1';
-	                else
-	                        $eth = 'eth0';
-	        }
-	        else
-	                $eth = 'eth0';
+			if (in_array(trim(`hostname`), ['kvm1.trouble-free.net', 'kvm2.interserver.net', 'kvm50.interserver.net']))
+					$eth = 'eth1';
+			elseif (file_exists('/etc/debian_version'))
+			{
+					if (file_exists('/sys/class/net/p2p1'))
+							$eth = 'p2p1';
+					elseif (file_exists('/sys/class/net/em1'))
+							$eth = 'em1';
+					else
+							$eth = 'eth0';
+			}
+			else
+					$eth = 'eth0';
 
 		//$speed = trim(`ethtool $eth |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
 		$cmd = 'ethtool '.$eth.' |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
@@ -29,7 +29,7 @@
 		$flags = $flagsnew;
 		unset($flagsnew);
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
-		$servers = [];
+		$servers = array();
 		$servers['speed'] = $speed;
 		$servers['cpu_flags'] = $flags;
 		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vpsinfo_extra -d servers="'.urlencode(base64_encode(serialize($servers))).'" "'.$url.'" 2>/dev/null;';

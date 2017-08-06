@@ -33,15 +33,15 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 	if(!$xml_values) return false;//Hmm...
 
 	//Initializations
-	$xml_array = [];
-	$parents = [];
-	$opened_tags = [];
-	$arr = [];
+	$xml_array = array();
+	$parents = array();
+	$opened_tags = array();
+	$arr = array();
 
 	$current = &$xml_array; //Reference
 
 	//Go through the tags.
-	$repeated_tag_index = [];//Multiple tags with same name will be turned into an array
+	$repeated_tag_index = array();//Multiple tags with same name will be turned into an array
 	foreach($xml_values as $data) {
 		unset($attributes,$value);//Remove existing values, or there will be trouble
 
@@ -49,8 +49,8 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 		// tag(string), type(string), level(int), attributes(array).
 		extract($data);//We could use the array by itself, but this cooler.
 
-		$result = [];
-		$attributes_data = [];
+		$result = array();
+		$attributes_data = array();
 
 		if(isset($value)) {
 			if($priority == 'tag') $result = $value;
