@@ -267,9 +267,9 @@ fi;\n";
 				'packets_sec_total' => 0
 			);
 			$time_diff = $bw[0] - $bw_last[0];
-			foreach(['bytes', 'packets'] as $stat)
+			foreach(array('bytes', 'packets') as $stat)
 			{
-				foreach (['in', 'out', 'total'] as $dir)
+				foreach (array('in', 'out', 'total') as $dir)
 				{
 					$bw_usage[$stat.'_sec_'.$dir] = ($bw_usage[$stat.'_'.$dir] - $bw_usage_last[$stat.'_'.$dir]) / $time_diff;
 				}
