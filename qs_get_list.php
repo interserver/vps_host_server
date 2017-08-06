@@ -19,7 +19,7 @@ function get_qs_list() {
 			{
 				$parts = explode(' ', $serverline);
 				$name = $parts[0];
-				$veid = str_replace(['windows', 'linux', 'qs'], ['', ''], $name);
+				$veid = str_replace(array('windows', 'linux', 'qs'), array('', ''), $name);
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);
