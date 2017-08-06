@@ -3,15 +3,10 @@
 /**
  * VPS Functionality
  * Last Changed: $LastChangedDate$
- *
- * @author    $Author$
+ * @author $Author$
  * @copyright 2017
- * @package   MyAdmin
- * @category  VPS
- * @param      $ip
- * @param bool $display_errors
- * @param bool $support_ipv6
- * @return bool
+ * @package MyAdmin
+ * @category VPS
  */
 
 function validIp($ip, $display_errors = true, $support_ipv6 = false) {
@@ -48,9 +43,6 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false) {
 	return true;
 }
 
-/**
- * @return array
- */
 function get_vps_ipmap() {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == '')
@@ -62,7 +54,7 @@ function get_vps_ipmap() {
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
-		if (count($parts) > 1)
+		if (sizeof($parts) > 1)
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
@@ -71,7 +63,7 @@ function get_vps_ipmap() {
 				$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
 				if ($extra != '')
 					$parts = array_merge($parts, explode("\n", $extra));
-				for ($x = 1, $xMax = count($parts); $x < $xMax; $x++)
+				for ($x = 1; $x < sizeof($parts); $x++)
 					if ($parts[$x] != '-')
 						$ips[$parts[$x]] = $id;
 			}
@@ -80,9 +72,6 @@ function get_vps_ipmap() {
 	return $ips;
 }
 
-/**
- * @param $ips
- */
 function vps_iptables_traffic_rules($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
@@ -102,16 +91,12 @@ function vps_iptables_traffic_rules($ips) {
 	`$cmd`;
 }
 
-/**
- * @param $ips
- * @return array
- */
 function get_vps_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
 	if ($vzctl == '')
 	{
-		if (file_exists('/root/.traffic.last'))
+		if (file_exists(('/root/.traffic.last')))
 			$last = unserialize(file_get_contents('/root/.traffic.last'));
 		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 		if ($vnetcounters != '')
@@ -167,7 +152,7 @@ function get_vps_iptables_traffic($ips) {
 							$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
 					}
 				}
-				if (count($totals) > 0)
+				if (sizeof($totals) > 0)
 					file_put_contents('/root/.traffic.last', serialize($vpss));
 			}
 		}
@@ -179,7 +164,7 @@ function get_vps_iptables_traffic($ips) {
 			if (validIp($ip, false) == true)
 			{
 				$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
-				if (count($lines) == 2)
+				if (sizeof($lines) == 2)
 				{
 					list($in,$out) = $lines;
 					$total = $in + $out;
@@ -197,7 +182,7 @@ function get_vps_iptables_traffic($ips) {
 $url = 'https://myvps2.interserver.net/vps_queue.php';
 $ips = get_vps_ipmap();
 $totals = get_vps_iptables_traffic($ips);
-if (count($totals) > 0)
+if (sizeof($totals) > 0)
 {
 	//print_r($totals);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(serialize($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(serialize($totals)))).'" "'.$url.'" 2>/dev/null;';

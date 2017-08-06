@@ -1,9 +1,6 @@
 #!/usr/bin/php
 <?php
-/**
- * @param $size
- * @return string
- */
+
 function format_size($size) {
 	$mod = 1024;
 	$units = explode(' ', 'B KB MB GB TB PB');
@@ -15,15 +12,15 @@ function format_size($size) {
 
 if (!file_exists('/usr/bin/iostat'))
 {
-	echo 'Installing iostat..';
+	echo "Installing iostat..";
 	if (trim(`which yum;`) != '')
 	{
-		echo 'CentOS Detected...';
+		echo "CentOS Detected...";
 		`yum -y install sysstat;`;
 	}
 	elseif (trim(`which apt-get;`) != '')
 	{
-		echo 'Ubuntu Detected...';
+		echo "Ubuntu Detected...";
 		`apt-get -y install sysstat;`;
 //        `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
 	}
@@ -47,7 +44,7 @@ $info = array(
 	'cpus' => $matches['cpus'],
 	'cpu' => array(),
 	'disks' => array(),
-	'mappings' => array()
+	'mappings' => array(),
 );
 $out = explode("\n", trim(`ls -l /dev/vz | grep -- '->' | awk '{ print $11 " " $9 }' | sed s#"../"#""#g;`));
 foreach ($out as $line)
@@ -63,7 +60,7 @@ foreach  ($fields as $idx => $field)
 {
 	$info['cpu'][$field] = $values[$idx];
 }
-for ($x = 6, $xMax = count($lines); $x < $xMax; $x++)
+for ($x = 6; $x < sizeof($lines); $x++)
 {
 	preg_match('/^(?P<device>[^\s]+)\s+(?P<tps>[^\s]+)\s+(?P<blkreadsec>[^\s]+)\s+(?P<blkwritesec>[^\s]+)\s+(?P<blkread>\d+)\s+(?P<blkwrite>\d+)$/', $lines[$x], $matches);
 	$info['disks'][$matches['device']] = array(
@@ -71,7 +68,7 @@ for ($x = 6, $xMax = count($lines); $x < $xMax; $x++)
 		'blkreadsec' => $matches['blkreadsec'],
 		'blkwritesec' => $matches['blkwritesec'],
 		'blkread' => $matches['blkread'],
-		'blkwrite' => $matches['blkwrite']
+		'blkwrite' => $matches['blkwrite'],
 	);
 }
 
@@ -100,7 +97,7 @@ $out = `pidstat -l -C qemu-kvm |\
 */
 //echo "$out\n";
 $lines = explode("\n", $out);
-for ($x = 1, $xMax = count($lines); $x < $xMax; $x++)
+for ($x = 1; $x < sizeof($lines); $x++)
 {
 	if (!preg_match($regex, $lines[$x], $matches))
 		continue;
@@ -116,7 +113,7 @@ for ($x = 1, $xMax = count($lines); $x < $xMax; $x++)
 		'cpu_all' => $matches['cpu_all'],
 		'which_cpu' => $matches['cpu_num'],
 		'ram' => $matches['ram'],
-		'cores' => $matches['cores']
+		'cores' => $matches['cores'],
 	);
 	$info['procs'][$vps] = $data;
 }
@@ -124,16 +121,16 @@ for ($x = 1, $xMax = count($lines); $x < $xMax; $x++)
 
 
 
-echo sprintf('CPU Usage');
+echo sprintf("CPU Usage");
 foreach ($info['cpu'] as $idx => $value)
 {
-	echo sprintf(' %13s', $value.'% '.$idx);
+	echo sprintf(" %13s", $value.'% '.$idx);
 }
 echo "\n\n";
 echo sprintf(" %36s %18s %36s\n", $info['os'], $info['bits'], $info['hostname']);
 echo sprintf(" %36s %18s %36s\n", $info['version'], $info['cpus'].' cores', $info['date']);
 echo "\n";
-echo sprintf(" %20s %7s %15s %15s %15s %15s %15s %8s %8s %8s\n", 'Target', 'Type', 'Read Speed', 'Write Speed', 'Total Read', 'Total Written', 'CPU % User', '% System', '% Guest', '% All');
+echo sprintf(" %20s %7s %15s %15s %15s %15s %15s %8s %8s %8s\n", "Target", "Type", "Read Speed", "Write Speed", "Total Read", "Total Written", 'CPU % User', '% System', '% Guest', '% All');
 foreach ($info['disks'] as $device => $data)
 {
 	if (isset($info['mappings'][$device]))
@@ -146,8 +143,7 @@ foreach ($info['disks'] as $device => $data)
 		$name = $device;
 		$type = 'Disk';
 	}
-	echo sprintf(
-		' %20s %7s %15s %15s %15s %15s',
+	echo sprintf(" %20s %7s %15s %15s %15s %15s",
 		$name,
 		$type,
 		format_size($data['blkreadsec']*$block_size).'/sec',
@@ -157,7 +153,7 @@ foreach ($info['disks'] as $device => $data)
 	);
 	if ($type == 'VPS' && isset($info['procs'][$name]))
 	{
-		echo sprintf(' %15s %8s %8s %8s', $info['procs'][$name]['cpu_user'], $info['procs'][$name]['cpu_system'], $info['procs'][$name]['cpu_guest'], $info['procs'][$name]['cpu_all']);
+		echo sprintf(" %15s %8s %8s %8s", $info['procs'][$name]['cpu_user'], $info['procs'][$name]['cpu_system'], $info['procs'][$name]['cpu_guest'], $info['procs'][$name]['cpu_all']);
 	}
 	echo "\n";
 }

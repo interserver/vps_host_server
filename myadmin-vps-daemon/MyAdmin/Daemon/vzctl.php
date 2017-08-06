@@ -62,12 +62,10 @@ class vzctl implements \Core_IWorker
 
 	/**
 	 * This is called during object construction 2to validate any dependencies
-	 *
-	 * @param array $errors
-	 * @return array|\MyAdmin\Daemon\Array
+	 * @return Array    Return array of error messages (Think stuff like "GD Library Extension Required" or
 	 *                  "Cannot open /tmp for Writing") or an empty array
 	 */
-	public function check_environment(Array $errors = []) {
+	public function check_environment(Array $errors = array()) {
 		$errors = [];
 		if (!function_exists('curl_init'))
 			$errors[] = 'PHP Curl Extension Required: Recompile PHP using the --with-curl option.';
@@ -81,9 +79,7 @@ class vzctl implements \Core_IWorker
 
 	/**
 	 * Poll the vzctl for updated information -- Simulate an vzctl call of varying duration.
-	 *
-	 * @param array $existing_results
-	 * @return array|\MyAdmin\Daemon\Array
+	 * @return Array    Return associative array of results
 	 */
 	public function poll(Array $existing_results) {
 		static $calls = 0;

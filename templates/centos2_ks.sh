@@ -1,7 +1,7 @@
 #!/bin/bash
 virt-install \
 -n centos \
--r "2048" \
+-r 2048 \
 --vcpus=1 \
 --os-variant=rhel5.4 \
 --accelerate \

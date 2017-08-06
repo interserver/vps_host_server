@@ -56,14 +56,14 @@
 #	Version 1.3:
 #		Changed the way XenSource MAC addresses are created.
 
-#
+# 
 # Version
 #
 
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
 
 EMVersion=1.r3
-ReleaseYear="2009"
+ReleaseYear=2009
 ReleaseDate=2009-04-08
 
 
@@ -73,28 +73,28 @@ ReleaseDate=2009-04-08
 
 # Random VMware MAC Address
 vmrandom() {
-	vmrandmac="$(dd if=/dev/urandom bs=1 count=3 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print "00:0c:29:"$1":"$2":"$3 }')"
-	echo "$vmrandmac"
+	vmrandmac=$(dd if=/dev/urandom bs=1 count=3 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print "00:0c:29:"$1":"$2":"$3 }')
+	echo $vmrandmac
 }
 
 # Static VMware MAC Address
 vmstatic() {
-	max3f="$(printf "%02X" "$(expr "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -tu1 | head -1 | cut -d' ' -f2-)" / "4")" | tr A-Z a-z)"
-	vmstatmac="$(echo -n "00:50:56:$max3f:" "$(dd if=/dev/urandom bs=1 count=2 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print $1":"$2 }')" | sed 's/\ //')"
-	echo "$vmstatmac"
+	max3f=$(printf "%02X" $(expr $(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -tu1 | head -1 | cut -d' ' -f2-) / 4) | tr A-Z a-z)
+	vmstatmac=$(echo -n "00:50:56:$max3f:" $(dd if=/dev/urandom bs=1 count=2 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print $1":"$2 }') | sed 's/\ //')
+	echo $vmstatmac
 }
 
 # Global MAC Address (any valid MAC address, from the full range)
 global() {
-        globalmac="$(dd if=/dev/urandom bs=1 count=6 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print $1":"$2":"$3":"$4":"$5":"$6 }')"
-        echo "$globalmac"
+        globalmac=$(dd if=/dev/urandom bs=1 count=6 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print $1":"$2":"$3":"$4":"$5":"$6 }')
+        echo $globalmac
 }
 
 # XenSource MAC Address
 xensource() {
-	max3f="$(printf "%02X" "$(expr "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -tu1 | head -1 | cut -d' ' -f2-)" / "4")" | tr A-Z a-z)"
-	xensource="$(echo -n "00:50:56:$max3f:" "$(dd if=/dev/urandom bs=1 count=2 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print $1":"$2 }')" | sed 's/\ //')"
-	echo "$xensource"
+	max3f=$(printf "%02X" $(expr $(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -tu1 | head -1 | cut -d' ' -f2-) / 4) | tr A-Z a-z)
+	xensource=$(echo -n "00:50:56:$max3f:" $(dd if=/dev/urandom bs=1 count=2 2>/dev/null | od -tx1 | head -1 | cut -d' ' -f2- | awk '{ print $1":"$2 }') | sed 's/\ //')
+	echo $xensource
 }
 
 
@@ -177,12 +177,12 @@ case "$1" in
 		echo "Usage: $0 {-r|-R|-s|-S|-x|-X|-g|-G} {-m}"
 		echo ""
 		echo "Options:"
-		echo "   -r:	Random VMware MAC address, lower case"
-		echo "   -R:	Random VMware MAC address, UPPER CASE"
-		echo "   -s:	Static VMware MAC address, lower case"
-		echo "   -S:	Static VMware MAC address, UPPER CASE"
-		echo "   -x:	XenSource MAC address, lower case"
-		echo "   -X:	XenSource MAC address, UPPER CASE"
+		echo "   -r:	Random VMware MAC address, lower case"	
+		echo "   -R:	Random VMware MAC address, UPPER CASE"	
+		echo "   -s:	Static VMware MAC address, lower case"	
+		echo "   -S:	Static VMware MAC address, UPPER CASE"	
+		echo "   -x:	XenSource MAC address, lower case"	
+		echo "   -X:	XenSource MAC address, UPPER CASE"	
 		echo "   -g:	Global MAC address, lower case"
 		echo "   -G:	Global MAC address, UPPER CASE"
 		echo ""
@@ -201,8 +201,8 @@ case "$1" in
 		echo "Freely distributable under the BSD license"
 		echo "Visit http://www.easyvmx.com for the best online virtual machine creator!"
 		echo ""
-		exit "1"
+		exit 1
 
 esac
 
-exit "$?"
+exit $?

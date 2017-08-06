@@ -1,24 +1,24 @@
 #!/bin/bash
 
 function age() {
-	local filename="$1"
+	local filename=$1
 	if [ ! -e "$filename" ]; then
-		echo "99999"
+		echo 99999
 		return;
 	fi
-	local changed="`stat -c %Y "$filename"`"
-	local now="`date +%s`"
+	local changed=`stat -c %Y "$filename"`
+	local now=`date +%s`
 	local elapsed
 	let elapsed=now-changed
-	echo "$elapsed"
+	echo $elapsed
 }
 
 
 lockfile="/tmp/_securexinetd"
 
 
-if [ -e "$file" ]; then
-        if [ "$(age "$file")" -gt "3600" ]; then
+if [ -e $file ]; then
+        if [ $(age "$file") -gt "3600" ]; then
                 echo "Lock file is too old"
         else
                 echo "Lock file found, exiting";
@@ -26,12 +26,12 @@ if [ -e "$file" ]; then
         fi
 fi
 
-touch "$lockfile"
+touch $lockfile
 
 for file in klogin eklogin ekrb5-telnet gssftp krb5-telnet kshell rsync; do
-	if [ -e /etc/xinetd.d/${file} ]; then
+	if [ -e /etc/xinetd.d/$file ]; then
 		echo "  Cleaning $file"
-        	/bin/rm /etc/xinetd.d/${file}
+        	/bin/rm /etc/xinetd.d/$file
 	fi
 done
 
@@ -39,20 +39,20 @@ done
 
 cd /etc/xinetd.d/
 for i in *; do
-	if [ -f "$i" ]; then
+	if [ -f $i ]; then
 		#echo $i
-		detainthinks="`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`";
-		virshknows="`virsh dumpxml "$i" 2>/dev/null | grep vnc | grep port | cut -d\' -f4`";
+		detainthinks=`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`;
+		virshknows=`virsh dumpxml $i 2>/dev/null | grep vnc | grep port | cut -d\' -f4`;
 		if [ -z "$virshknows" ]; then
 			echo "$i not a vps, skipping"
 		elif [ "$detainthinks" = "$virshknows" ]; then
 			echo "$i is good"
 		else
 			echo "$i is incorrect, fixing"
-			/bin/rm /etc/xinetd.d/${i}
+			/bin/rm /etc/xinetd.d/$i
 		fi
 
 	 fi
 done
 
-/bin/rm -v "$lockfile"
+/bin/rm -v $lockfile

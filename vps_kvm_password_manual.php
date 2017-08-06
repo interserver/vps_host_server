@@ -1,15 +1,12 @@
 <?php
-/**
- * @param $password
- * @return string
- */
-function shadow($password) {
+
+	function shadow($password) {
 		$hash = '';
 		for($i=0;$i<8;$i++)
 		{
 			$j = mt_rand(0, 53);
-			if($j<26)$hash .= chr(mt_rand(65, 90));
-			elseif($j<52)$hash .= chr(mt_rand(97, 122));
+			if($j<26)$hash .= chr(rand(65, 90));
+			elseif($j<52)$hash .= chr(rand(97, 122));
 			elseif($j<53)$hash .= '.';
 			else $hash .= '/';
 		}

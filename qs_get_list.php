@@ -1,9 +1,12 @@
 #!/usr/bin/php -q
 <?php
 
-require_once dirname(__FILE__).'/xml2array.php';
+require_once(dirname(__FILE__).'/xml2array.php');
+
 /**
  * get_qs_list()
+ *
+ * @return
  */
 function get_qs_list() {
 	$url = 'https://myquickserver2.interserver.net/qs_queue.php';
@@ -28,7 +31,7 @@ function get_qs_list() {
 					'status' => $status,
 					'name' => $name,
 					'hostname' => $name,
-					'kmemsize' => $xml['domain']['memory']
+					'kmemsize' => $xml['domain']['memory'],
 				);
 				if (isset($xml['domain']['devices']['interface']))
 				{

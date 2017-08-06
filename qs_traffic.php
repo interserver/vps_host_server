@@ -1,4 +1,4 @@
-#!/usr/bin/php -q
+#!/usr/bin/php -q 
 <?php
 /**
  * QuickServer Functionality
@@ -24,7 +24,7 @@ function get_qs_ipmap() {
 	foreach ($lines as $line)
 	{
 		$parts = explode(' ', trim($line));
-		if (count($parts) > 1)
+		if (sizeof($parts) > 1)
 		{
 			$id = $parts[0];
 			$ip = $parts[1];
@@ -33,7 +33,7 @@ function get_qs_ipmap() {
 			{
 				$parts = array_merge($parts, explode("\n", $extra));
 			}
-			for ($x = 1, $xMax = count($parts); $x < $xMax; $x++)
+			for ($x = 1; $x < sizeof($parts); $x++)
 			{
 				if ($parts[$x] != '-')
 				{
@@ -45,9 +45,6 @@ function get_qs_ipmap() {
 	return $ips;
 }
 
-/**
- * @param $ips
- */
 function qs_iptables_traffic_rules($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
@@ -86,10 +83,6 @@ function qs_iptables_traffic_rules($ips) {
 	`$cmd`;
 }
 
-/**
- * @param $ips
- * @return array
- */
 function get_qs_iptables_traffic($ips) {
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	$totals = array();
@@ -103,7 +96,7 @@ function get_qs_iptables_traffic($ips) {
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 		}
-		if (count($lines) == 2)
+		if (sizeof($lines) == 2)
 		{
 			list($in,$out) = $lines;
 			//echo "$ip $in $out\n";

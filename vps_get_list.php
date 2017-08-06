@@ -1,9 +1,12 @@
 #!/usr/bin/php -q
 <?php
 
-require_once dirname(__FILE__).'/xml2array.php';
+require_once(dirname(__FILE__).'/xml2array.php');
+
 /**
  * get_vps_list()
+ *
+ * @return
  */
 function get_vps_list() {
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
@@ -30,7 +33,7 @@ function get_vps_list() {
 					'veid' => $veid,
 					'status' => $status,
 					'hostname' => $name,
-					'kmemsize' => $xml['domain']['memory']
+					'kmemsize' => $xml['domain']['memory'],
 				);
 				if (isset($xml['domain']['devices']['interface']))
 				{
@@ -61,9 +64,9 @@ function get_vps_list() {
 						{
 // vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
 $cmd .= "if [ -e /usr/bin/timeout ]; then
-	timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+    timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 else
-	./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+    ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 fi;\n";
 //$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
@@ -161,7 +164,7 @@ fi;\n";
 				'diskinodes' => $matches['diskinodes'][$key],
 				'diskinodes_s' => $matches['diskinodes_s'][$key],
 				'diskinodes_h' => $matches['diskinodes_h'][$key],
-				'laverage' => $matches['laverage'][$key]
+				'laverage' => $matches['laverage'][$key],
 			);
 			if (isset($matches['uuid'])) {
 				$server['uuid'] = $matches['uuid'][$key];
@@ -222,7 +225,7 @@ fi;\n";
 	//if (preg_match_all("/^[ ]*(?P<dev>[\w]+):(?P<inbytes>[\d]+)[ ]+(?P<inpackets>[\d]+)[ ]+(?P<inerrs>[\d]+)[ ]+(?P<indrop>[\d]+)[ ]+(?P<infifo>[\d]+)[ ]+(?P<inframe>[\d]+)[ ]+(?P<incompressed>[\d]+)[ ]+(?P<inmulticast>[\d]+)[ ]+(?P<outbytes>[\d]+)[ ]+(?P<outpackets>[\d]+)[ ]+(?P<outerrs>[\d]+)[ ]+(?P<outdrop>[\d]+)[ ]+(?P<outfifo>[\d]+)[ ]+(?P<outcolls>[\d]+)[ ]+(?P<outcarrier>[\d]+)[ ]+(?P<outcompressed>[\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	if (preg_match_all("/^[ ]*([\w]+):\s*([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	{
-		$bw = array(time(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+		$bw = array(time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 		foreach ($matches[1] as $idx => $dev)
 		{
 			if (substr($dev, 0, 3) == 'eth')
@@ -246,7 +249,7 @@ fi;\n";
 			'bytes_total' => $bw[1] + $bw[9],
 			'packets_total' => $bw[2] + $bw[10],
 			'bytes_sec_total' => 0,
-			'packets_sec_total' => 0
+			'packets_sec_total' => 0,
 		);
 		if (file_exists('/root/.bw_usage.last'))
 		{
@@ -264,12 +267,12 @@ fi;\n";
 				'bytes_total' => $bw_last[1] + $bw_last[9],
 				'packets_total' => $bw_last[2] + $bw_last[10],
 				'bytes_sec_total' => 0,
-				'packets_sec_total' => 0
+				'packets_sec_total' => 0,
 			);
 			$time_diff = $bw[0] - $bw_last[0];
 			foreach(array('bytes', 'packets') as $stat)
 			{
-				foreach (array('in', 'out', 'total') as $dir)
+				foreach (array('in','out','total') as $dir)
 				{
 					$bw_usage[$stat.'_sec_'.$dir] = ($bw_usage[$stat.'_'.$dir] - $bw_usage_last[$stat.'_'.$dir]) / $time_diff;
 				}
@@ -281,7 +284,7 @@ fi;\n";
 	// ensure ethtool is installed
 	`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
 	//$speed = trim(`ethtool $(brctl show $(ip route |grep ^default | sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g)  |grep -v "bridge id" | awk '{ print $4 }') |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
-	if (in_array(trim(`hostname`), array('kvm1.trouble-free.net', 'kvm2.interserver.net', 'kvm50.interserver.net')))
+	if (in_array(trim(`hostname`), array("kvm1.trouble-free.net", "kvm2.interserver.net", "kvm50.interserver.net")))
 		$eth = 'eth1';
 	elseif (file_exists('/etc/debian_version'))
 	{
@@ -304,7 +307,7 @@ fi;\n";
 		//echo "Got Speed {$speed}\n";
 	$cpuinfo = explode("\n", file_get_contents('/proc/cpuinfo'));
 	$found = false;
-	$lines = count($cpuinfo);
+	$lines = sizeof($cpuinfo);
 	$line = 0;
 	while ($found != true && $line < $lines)
 	{
@@ -336,7 +339,7 @@ fi;\n";
 		'distro' => $matches['distro'],
 		'version' => $matches['version'],
 		'speed' => $speed,
-		'cpu_flags' => $flags
+		'cpu_flags' => $flags,
 	);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 	. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')

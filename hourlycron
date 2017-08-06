@@ -4,51 +4,51 @@ function ksmcheck()
 {
         if [ -f /etc/init.d/ksmtuned ]; then
                 echo 'Checking ksm';
-                ksm="`/etc/init.d/ksmtuned status | grep pid`";
+                ksm=`/etc/init.d/ksmtuned status | grep pid`;
 		if [ "$ksm" = "" ]; then
 			/etc/init.d/ksmtuned restart
 			/etc/init.d/ksm restart
 		fi
         elif [ -e /sys/kernel/mm/ksm/run ]; then
-		echo "1" > /sys/kernel/mm/ksm/run
+		echo 1 > /sys/kernel/mm/ksm/run
 	fi
 
 	if [ -e /sys/kernel/mm/ksm/pages_to_scan ]; then
-		echo "100" > /sys/kernel/mm/ksm/pages_to_scan
+		echo 100 > /sys/kernel/mm/ksm/pages_to_scan
 	fi
 
 }
 
-pwd="`pwd`";
-load="`cat /proc/loadavg  | awk '{print $1}' | cut -d. -f1`"
+pwd=`pwd`;
+load=`cat /proc/loadavg  | awk '{print $1}' | cut -d. -f1`
 if [ -e /dev/bcache0 ]; then
-        max="7";
+        max=7;
 elif [ -e /usr/sbin/vzctl ]; then
-        max="15";
+        max=15;
 elif [ -f /win ]; then
-	max="3";
+	max=3;
 elif [ -f /lowerprio ]; then
-	max="1";
+	max=1;
 else
-        max="4";
+        max=4;
 fi
 
 echo -n "Load approx $load with max $max ";
-if [ "$load" -gt "$max" ]; then
+if [ "$load" -gt $max ]; then
         # load above max
         echo ' which is too high';
         if [ -e /sys/devices/virtual/block ]; then
                 cd /sys/devices/virtual/block
-                for device in "`ls | grep md`"; do
+                for device in `ls | grep md`; do
                         echo "found $device"
-                        check="`cat ./$device/md/sync_action`";
+                        check=`cat ./$device/md/sync_action`;
                         if [ "$check" = "recover" ]; then
                                 echo "rebuilding and not a check, lowering raid sync speed temporarily"
-                                echo "1" > /proc/sys/dev/raid/speed_limit_min
-                                echo "2" > /proc/sys/dev/raid/speed_limit_max
+                                echo 1 > /proc/sys/dev/raid/speed_limit_min
+                                echo 2 > /proc/sys/dev/raid/speed_limit_max
                         elif [ "$check" = "check" ]; then
                                 echo "Idling raid check";
-                                echo idle > ./${device}/md/sync_action
+                                echo idle > ./$device/md/sync_action
                         else
                                 echo "Raid not rebuilding";
                         fi
@@ -63,12 +63,12 @@ else
 echo 'which is ok';
 # normal raid rebuild
         echo "Normalizing raid";
-        echo "100000" > /proc/sys/dev/raid/speed_limit_min
-        echo "200000" > /proc/sys/dev/raid/speed_limit_max
+        echo 100000 > /proc/sys/dev/raid/speed_limit_min
+        echo 200000 > /proc/sys/dev/raid/speed_limit_max
 
 fi
 
-cd "$pwd";
+cd $pwd;
 
 
 #bcache
