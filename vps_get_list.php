@@ -26,12 +26,12 @@ function get_vps_list() {
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);
-				$server = [
+				$server = array(
 					'veid' => $veid,
 					'status' => $status,
 					'hostname' => $name,
 					'kmemsize' => $xml['domain']['memory']
-				];
+				);
 				if (isset($xml['domain']['devices']['interface']))
 				{
 					if (isset($xml['domain']['devices']['interface']['mac_attr']))
@@ -108,7 +108,7 @@ fi;\n";
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
 		foreach ($matches['ctid'] as $key => $id)
 		{
-			$server = [
+			$server = array(
 				'veid' => $id,
 				'numproc' => $matches['numproc'][$key],
 				'status' => $matches['status'][$key],
@@ -162,7 +162,7 @@ fi;\n";
 				'diskinodes_s' => $matches['diskinodes_s'][$key],
 				'diskinodes_h' => $matches['diskinodes_h'][$key],
 				'laverage' => $matches['laverage'][$key]
-			];
+			);
 			if (isset($matches['uuid'])) {
 				$server['uuid'] = $matches['uuid'][$key];
 				$id = $server['uuid'];
@@ -222,7 +222,7 @@ fi;\n";
 	//if (preg_match_all("/^[ ]*(?P<dev>[\w]+):(?P<inbytes>[\d]+)[ ]+(?P<inpackets>[\d]+)[ ]+(?P<inerrs>[\d]+)[ ]+(?P<indrop>[\d]+)[ ]+(?P<infifo>[\d]+)[ ]+(?P<inframe>[\d]+)[ ]+(?P<incompressed>[\d]+)[ ]+(?P<inmulticast>[\d]+)[ ]+(?P<outbytes>[\d]+)[ ]+(?P<outpackets>[\d]+)[ ]+(?P<outerrs>[\d]+)[ ]+(?P<outdrop>[\d]+)[ ]+(?P<outfifo>[\d]+)[ ]+(?P<outcolls>[\d]+)[ ]+(?P<outcarrier>[\d]+)[ ]+(?P<outcompressed>[\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	if (preg_match_all("/^[ ]*([\w]+):\s*([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	{
-		$bw = [time(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+		$bw = array(time(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 		foreach ($matches[1] as $idx => $dev)
 		{
 			if (substr($dev, 0, 3) == 'eth')
@@ -233,7 +233,7 @@ fi;\n";
 				}
 			}
 		}
-		$bw_usage = [
+		$bw_usage = array(
 			'time' => $bw[0],
 			'bytes_in' => $bw[1],
 			'packets_in' => $bw[2],
@@ -247,11 +247,11 @@ fi;\n";
 			'packets_total' => $bw[2] + $bw[10],
 			'bytes_sec_total' => 0,
 			'packets_sec_total' => 0
-		];
+		);
 		if (file_exists('/root/.bw_usage.last'))
 		{
 			$bw_last = unserialize(file_get_contents('/root/.bw_usage.last'));
-			$bw_usage_last = [
+			$bw_usage_last = array(
 				'time' => $bw_last[0],
 				'bytes_in' => $bw_last[1],
 				'packets_in' => $bw_last[2],
@@ -265,7 +265,7 @@ fi;\n";
 				'packets_total' => $bw_last[2] + $bw_last[10],
 				'bytes_sec_total' => 0,
 				'packets_sec_total' => 0
-			];
+			);
 			$time_diff = $bw[0] - $bw_last[0];
 			foreach(['bytes', 'packets'] as $stat)
 			{
@@ -332,12 +332,12 @@ fi;\n";
 	{
 		preg_match('/DISTRIB_ID=(?P<distro>[^<]+)<br>DISTRIB_RELEASE=(?P<version>[^<]+)<br>/i', str_replace("\n", '<br>', file_get_contents('/etc/lsb-release')), $matches);
 	}
-	$servers[0]['os_info'] = [
+	$servers[0]['os_info'] = array(
 		'distro' => $matches['distro'],
 		'version' => $matches['version'],
 		'speed' => $speed,
 		'cpu_flags' => $flags
-	];
+	);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 	. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
 //	. ($cpu_data != '' ? ' -F cpu_usage="'.base64_encode(gzcompress($cpu_data, 9)).'" ' : '')

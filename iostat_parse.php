@@ -38,7 +38,7 @@ $block_size = 512;
 $out = trim(`iostat`);
 $lines = explode("\n", $out);
 preg_match('/^(?P<os>[^\s]+)\s+(?P<version>[^\s]+)\s+\((?P<hostname>[^\)]+)\)\s+(?P<date>[^\s]+)\s+(?P<bits>[^\s]+)\s+\((?P<cpus>[^\s]+)\s+CPU\).*$/', $lines[0], $matches);
-$info = [
+$info = array(
 	'os' => $matches['os'],
 	'version' => $matches['version'],
 	'hostname' => $matches['hostname'],
@@ -48,7 +48,7 @@ $info = [
 	'cpu' => [],
 	'disks' => [],
 	'mappings' => []
-];
+);
 $out = explode("\n", trim(`ls -l /dev/vz | grep -- '->' | awk '{ print $11 " " $9 }' | sed s#"../"#""#g;`));
 foreach ($out as $line)
 {
@@ -66,13 +66,13 @@ foreach  ($fields as $idx => $field)
 for ($x = 6, $xMax = count($lines); $x < $xMax; $x++)
 {
 	preg_match('/^(?P<device>[^\s]+)\s+(?P<tps>[^\s]+)\s+(?P<blkreadsec>[^\s]+)\s+(?P<blkwritesec>[^\s]+)\s+(?P<blkread>\d+)\s+(?P<blkwrite>\d+)$/', $lines[$x], $matches);
-	$info['disks'][$matches['device']] = [
+	$info['disks'][$matches['device']] = array(
 		'tps' => $matches['tps'],
 		'blkreadsec' => $matches['blkreadsec'],
 		'blkwritesec' => $matches['blkwritesec'],
 		'blkread' => $matches['blkread'],
 		'blkwrite' => $matches['blkwrite']
-	];
+	);
 }
 
 $info['procs'] = array();
@@ -108,7 +108,7 @@ for ($x = 1, $xMax = count($lines); $x < $xMax; $x++)
 	//print_r($matches);
 	//echo "$lines[$x]\n";
 	$vps = $matches['vps'];
-	$data = [
+	$data = array(
 		'pid' => $matches['pid'],
 		'cpu_user' => $matches['cpu_user'],
 		'cpu_system' => $matches['cpu_system'],
@@ -117,7 +117,7 @@ for ($x = 1, $xMax = count($lines); $x < $xMax; $x++)
 		'which_cpu' => $matches['cpu_num'],
 		'ram' => $matches['ram'],
 		'cores' => $matches['cores']
-	];
+	);
 	$info['procs'][$vps] = $data;
 }
 //print_r($info['procs']);

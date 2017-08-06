@@ -80,7 +80,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 					$current[$tag][$repeated_tag_index[$tag.'_'.$level]] = $result;
 					$repeated_tag_index[$tag.'_'.$level]++;
 				} else {//This section will make the value an array if multiple tags with the same name appear together
-					$current[$tag] = [$current[$tag], $result];//This will combine the existing item and the new item together to make an array
+					$current[$tag] = array($current[$tag], $result);//This will combine the existing item and the new item together to make an array
 					$repeated_tag_index[$tag.'_'.$level] = 2;
 
 					if(isset($current[$tag.'_attr'])) { //The attribute of the last(0th) tag must be moved as well
@@ -112,7 +112,7 @@ function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 					$repeated_tag_index[$tag.'_'.$level]++;
 
 				} else { //If it is not an array...
-					$current[$tag] = [$current[$tag], $result]; //...Make it an array using using the existing value and the new value
+					$current[$tag] = array($current[$tag], $result); //...Make it an array using using the existing value and the new value
 					$repeated_tag_index[$tag.'_'.$level] = 1;
 					if($priority == 'tag' and $get_attributes) {
 						if(isset($current[$tag.'_attr'])) { //The attribute of the last(0th) tag must be moved as well

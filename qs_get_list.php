@@ -23,13 +23,13 @@ function get_qs_list() {
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);
-				$server = [
+				$server = array(
 					'veid' => $veid,
 					'status' => $status,
 					'name' => $name,
 					'hostname' => $name,
 					'kmemsize' => $xml['domain']['memory']
-				];
+				);
 				if (isset($xml['domain']['devices']['interface']))
 				{
 					$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
@@ -74,7 +74,7 @@ function get_qs_list() {
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
 		foreach ($matches['veid'] as $key => $id)
 		{
-			$server = [
+			$server = array(
 				'veid' => $id,
 				'numproc' => $matches['numproc'][$key],
 				'status' => $matches['status'][$key],
@@ -128,7 +128,7 @@ function get_qs_list() {
 				'laverage' => $matches['laverage'][$key],
 				'cpulimit' => $matches['cpulimit'][$key],
 				'cpuunits' => $matches['cpuunits'][$key]
-			];
+			);
 			$servers[$id] = $server;
 		}
 		foreach ($servers as $id => $server)

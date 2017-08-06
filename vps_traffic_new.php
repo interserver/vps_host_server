@@ -122,7 +122,7 @@ function get_vps_iptables_traffic($ips) {
 			{
 				list($vnet, $out, $in) = explode(' ', $line);
 				//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
-				$vnets[$vnet] = ['in' => $in, 'out' => $out];
+				$vnets[$vnet] = array('in' => $in, 'out' => $out);
 			}
 			$cmd = 'grep -H -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
 			$vnetmacs = trim(`$cmd`);
@@ -164,7 +164,7 @@ function get_vps_iptables_traffic($ips) {
 							$out_new = $vpss[$vps]['out'];
 						}
 						if ($in_new > 0 || $out_new > 0)
-							$totals[$ip] = ['in' => $in_new, 'out' => $out_new];
+							$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
 					}
 				}
 				if (count($totals) > 0)
@@ -184,7 +184,7 @@ function get_vps_iptables_traffic($ips) {
 					list($in,$out) = $lines;
 					$total = $in + $out;
 					if ($total > 0)
-						$totals[$ip] = ['in' => $in, 'out' => $out];
+						$totals[$ip] = array('in' => $in, 'out' => $out);
 				}
 			}
 		}
