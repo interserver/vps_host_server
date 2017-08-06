@@ -15,11 +15,11 @@
  * @return array|bool
  */
 function xml2array($contents, $get_attributes=1, $priority = 'tag') {
-	if(!$contents) return [];
+	if(!$contents) return array();
 
 	if(!function_exists('xml_parser_create')) {
 		//print "'xml_parser_create()' function not found!";
-		return [];
+		return array();
 	}
 
 	//Get the XML parser of PHP - PHP must have this module for the parser to work
