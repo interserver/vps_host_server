@@ -45,9 +45,9 @@ $info = array(
 	'date' => $matches['date'],
 	'bits' => $matches['bits'],
 	'cpus' => $matches['cpus'],
-	'cpu' => [],
-	'disks' => [],
-	'mappings' => []
+	'cpu' => array(),
+	'disks' => array(),
+	'mappings' => array()
 );
 $out = explode("\n", trim(`ls -l /dev/vz | grep -- '->' | awk '{ print $11 " " $9 }' | sed s#"../"#""#g;`));
 foreach ($out as $line)
