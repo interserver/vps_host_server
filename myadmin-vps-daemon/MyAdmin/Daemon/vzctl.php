@@ -64,7 +64,7 @@ class vzctl implements \Core_IWorker
 	 * This is called during object construction 2to validate any dependencies
 	 *
 	 * @param array $errors
-	 * @return \MyAdmin\Daemon\Array Return array of error messages (Think stuff like "GD Library Extension Required" or
+	 * @return array|\MyAdmin\Daemon\Array
 	 *                  "Cannot open /tmp for Writing") or an empty array
 	 */
 	public function check_environment(Array $errors = []) {
@@ -83,7 +83,7 @@ class vzctl implements \Core_IWorker
 	 * Poll the vzctl for updated information -- Simulate an vzctl call of varying duration.
 	 *
 	 * @param array $existing_results
-	 * @return \MyAdmin\Daemon\Array Return associative array of results
+	 * @return array|\MyAdmin\Daemon\Array
 	 */
 	public function poll(Array $existing_results) {
 		static $calls = 0;

@@ -12,7 +12,7 @@
  * @param        $contents
  * @param int    $get_attributes
  * @param string $priority
- * @return array
+ * @return array|bool
  */
 function xml2array($contents, $get_attributes=1, $priority = 'tag') {
 	if(!$contents) return [];
