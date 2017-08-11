@@ -2,8 +2,7 @@
 <?php
 /**
  * VPS Functionality
- * Last Changed: $LastChangedDate$
- * @author $Author$
+ * @author Joe Huss <detain@interserver.net>
  * @copyright 2017
  * @package MyAdmin
  * @category VPS
