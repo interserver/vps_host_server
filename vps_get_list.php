@@ -155,17 +155,16 @@ fi;\n";
 				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port']) && isset($servers[$json_server['ID']]))
 					$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
 		}
-		foreach ($servers as $id => $server)
-		{
+		foreach ($servers as $id => $server) {
 			if ($id == 0)
 				continue;
 			$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e /vz/private/{$id}/root.hdd/DiskDescriptor.xml ];then ploop info /vz/private/{$id}/root.hdd/DiskDescriptor.xml 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
 			//echo "Running $cmd\n";
 			$out = trim(`$cmd`);
 			if ($out != '') {
-				if (isset($uuids))
+				if ($id > 0 && isset($uuids))
 					$id = $uuids[$id];
-				if (isset($servers[$id])) {
+				if ($id == 0 || isset($servers[$id])) {
 					$disk = explode(' ', $out);
 					$servers[$id]['diskused'] = $disk[0];
 					$servers[$id]['diskmax'] = $disk[1];
@@ -174,9 +173,9 @@ fi;\n";
 		}
 		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
 			foreach ($cpu_usage as $id => $cpu_data) {
-				if (isset($uuids))
+				if ($id > 0 && isset($uuids))
 					$id = $uuids[$id];
-				if (isset($servers[$id]))
+				if ($id == 0 || isset($servers[$id]))
 					$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		//print_r($servers);
