@@ -74,7 +74,7 @@ fi;\n";
 		foreach ($matches['ctid'] as $key => $id) {
 			if (isset($matches['uuid'])) {
 				if (isset($matches['uuid']))
-					$id = $server['uuid'];
+					$id = $matches['uuid'][$key];
 				$server = array(
 					'uuid' => $matches['uuid'][$key],
 					'veid' => $id,
