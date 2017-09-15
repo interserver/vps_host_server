@@ -168,13 +168,9 @@ fi;\n";
 				$servers[$id]['diskmax'] = $disk[1];
 			}
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`)) {
+		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
 			foreach ($cpu_usage as $id => $cpu_data)
-			{
-				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
 				$servers[$id]['cpu_usage'] = $cpu_data;
-			}
-		}
 		//print_r($servers);
 		$tips = trim(`/root/cpaneldirect/vps_get_ip_assignments.sh`);
 		if ($tips != '') {
