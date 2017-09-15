@@ -19,6 +19,7 @@ if [ -e /root/cpaneldirect/vps.mainips ]; then
 	if [ -e ${DHCPVPS} ]; then
 		/bin/mv -f ${DHCPVPS} ${DHCPVPS}.backup;
 	fi;
+	touch ${DHCPVPS};
 	for user in $(virsh list | grep running | awk '{print $2}' |grep -v "^guestfs-"); do
 		mac=`virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 		id="$(echo "$user" | sed s#"[[:alpha:]]"#""#g)"
