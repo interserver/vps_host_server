@@ -152,8 +152,8 @@ fi;\n";
 					$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
 			$json_servers = json_decode(`prlctl list -a -i -j`, true);
 			foreach ($json_servers as $json_server)
-				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port']) && isset($servers[$json_server['uuid']]))
-					$servers[$json_server['uuid']]['vnc'] = $json_server['Remote display']['port'];
+				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port']) && isset($servers[$json_server['ID']]))
+					$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
 		}
 		foreach ($servers as $id => $server)
 		{
