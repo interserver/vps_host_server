@@ -64,72 +64,82 @@ fi;\n";
 		if (file_exists('/usr/bin/prlctl')) {
 			$out = trim(`/usr/bin/prlctl list -a -o uuid,name,numproc,status,ip,hostname,type -H;`);
 			preg_match_all('/^\s*\{(?P<uuid>[^\s\}]+)\}\s+(?P<ctid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<type>[^\s]+)/m', $out, $matches);
-			$valid_ctids = array_values($matches['uuid']);
-			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -a -o uuid,name,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H;`);
-			preg_match_all('/^\s*(?P<uuid>[^\s]+)\s+(?P<ctid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<vswap>[^\s]+)\s+(?P<layout>[^\s]+)\s+(?P<kmemsize>[^\s]+)\s+(?P<kmemsize_f>[^\s]+)\s+(?P<lockedpages>[^\s]+)\s+(?P<lockedpages_f>[^\s]+)\s+(?P<privvmpages>[^\s]+)\s+(?P<privvmpages_f>[^\s]+)\s+(?P<shmpages>[^\s]+)\s+(?P<shmpages_f>[^\s]+)\s+(?P<numproc_f>[^\s]+)\s+(?P<physpages>[^\s]+)\s+(?P<physpages_f>[^\s]+)\s+(?P<vmguarpages>[^\s]+)\s+(?P<vmguarpages_f>[^\s]+)\s+(?P<oomguarpages>[^\s]+)\s+(?P<oomguarpages_f>[^\s]+)\s+(?P<numtcpsock>[^\s]+)\s+(?P<numtcpsock_f>[^\s]+)\s+(?P<numflock>[^\s]+)\s+(?P<numflock_f>[^\s]+)\s+(?P<numpty>[^\s]+)\s+(?P<numpty_f>[^\s]+)\s+(?P<numsiginfo>[^\s]+)\s+(?P<numsiginfo_f>[^\s]+)\s+(?P<tcpsndbuf>[^\s]+)\s+(?P<tcpsndbuf_f>[^\s]+)\s+(?P<tcprcvbuf>[^\s]+)\s+(?P<tcprcvbuf_f>[^\s]+)\s+(?P<othersockbuf>[^\s]+)\s+(?P<othersockbuf_f>[^\s]+)\s+(?P<dgramrcvbuf>[^\s]+)\s+(?P<dgramrcvbuf_f>[^\s]+)\s+(?P<numothersock>[^\s]+)\s+(?P<numothersock_f>[^\s]+)\s+(?P<dcachesize>[^\s]+)\s+(?P<dcachesize_f>[^\s]+)\s+(?P<numfile>[^\s]+)\s+(?P<numfile_f>[^\s]+)\s+(?P<numiptent>[^\s]+)\s+(?P<numiptent_f>[^\s]+)\s+(?P<diskspace>[^\s]+)\s+(?P<diskspace_s>[^\s]+)\s+(?P<diskspace_h>[^\s]+)\s+(?P<diskinodes>[^\s]+)\s+(?P<diskinodes_s>[^\s]+)\s+(?P<diskinodes_h>[^\s]+)\s+(?P<laverage>[^\s]+)/m', $out, $matches);
+			//$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -a -o uuid,name,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H;`);
+			//preg_match_all('/^\s*(?P<uuid>[^\s]+)\s+(?P<ctid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<vswap>[^\s]+)\s+(?P<layout>[^\s]+)\s+(?P<kmemsize>[^\s]+)\s+(?P<kmemsize_f>[^\s]+)\s+(?P<lockedpages>[^\s]+)\s+(?P<lockedpages_f>[^\s]+)\s+(?P<privvmpages>[^\s]+)\s+(?P<privvmpages_f>[^\s]+)\s+(?P<shmpages>[^\s]+)\s+(?P<shmpages_f>[^\s]+)\s+(?P<numproc_f>[^\s]+)\s+(?P<physpages>[^\s]+)\s+(?P<physpages_f>[^\s]+)\s+(?P<vmguarpages>[^\s]+)\s+(?P<vmguarpages_f>[^\s]+)\s+(?P<oomguarpages>[^\s]+)\s+(?P<oomguarpages_f>[^\s]+)\s+(?P<numtcpsock>[^\s]+)\s+(?P<numtcpsock_f>[^\s]+)\s+(?P<numflock>[^\s]+)\s+(?P<numflock_f>[^\s]+)\s+(?P<numpty>[^\s]+)\s+(?P<numpty_f>[^\s]+)\s+(?P<numsiginfo>[^\s]+)\s+(?P<numsiginfo_f>[^\s]+)\s+(?P<tcpsndbuf>[^\s]+)\s+(?P<tcpsndbuf_f>[^\s]+)\s+(?P<tcprcvbuf>[^\s]+)\s+(?P<tcprcvbuf_f>[^\s]+)\s+(?P<othersockbuf>[^\s]+)\s+(?P<othersockbuf_f>[^\s]+)\s+(?P<dgramrcvbuf>[^\s]+)\s+(?P<dgramrcvbuf_f>[^\s]+)\s+(?P<numothersock>[^\s]+)\s+(?P<numothersock_f>[^\s]+)\s+(?P<dcachesize>[^\s]+)\s+(?P<dcachesize_f>[^\s]+)\s+(?P<numfile>[^\s]+)\s+(?P<numfile_f>[^\s]+)\s+(?P<numiptent>[^\s]+)\s+(?P<numiptent_f>[^\s]+)\s+(?P<diskspace>[^\s]+)\s+(?P<diskspace_s>[^\s]+)\s+(?P<diskspace_h>[^\s]+)\s+(?P<diskinodes>[^\s]+)\s+(?P<diskinodes_s>[^\s]+)\s+(?P<diskinodes_h>[^\s]+)\s+(?P<laverage>[^\s]+)/m', $out, $matches);
 		} else {
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";if [ "\$(vzlist -L |grep vswap)" = "" ]; then prlctl list -a -o ctid,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; else vzlist -a -o ctid,numproc,status,ip,hostname,vswap,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; fi;`);
 			preg_match_all('/\s+(?P<ctid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<vswap>[^\s]+)\s+(?P<layout>[^\s]+)\s+(?P<kmemsize>[^\s]+)\s+(?P<kmemsize_f>[^\s]+)\s+(?P<lockedpages>[^\s]+)\s+(?P<lockedpages_f>[^\s]+)\s+(?P<privvmpages>[^\s]+)\s+(?P<privvmpages_f>[^\s]+)\s+(?P<shmpages>[^\s]+)\s+(?P<shmpages_f>[^\s]+)\s+(?P<numproc_f>[^\s]+)\s+(?P<physpages>[^\s]+)\s+(?P<physpages_f>[^\s]+)\s+(?P<vmguarpages>[^\s]+)\s+(?P<vmguarpages_f>[^\s]+)\s+(?P<oomguarpages>[^\s]+)\s+(?P<oomguarpages_f>[^\s]+)\s+(?P<numtcpsock>[^\s]+)\s+(?P<numtcpsock_f>[^\s]+)\s+(?P<numflock>[^\s]+)\s+(?P<numflock_f>[^\s]+)\s+(?P<numpty>[^\s]+)\s+(?P<numpty_f>[^\s]+)\s+(?P<numsiginfo>[^\s]+)\s+(?P<numsiginfo_f>[^\s]+)\s+(?P<tcpsndbuf>[^\s]+)\s+(?P<tcpsndbuf_f>[^\s]+)\s+(?P<tcprcvbuf>[^\s]+)\s+(?P<tcprcvbuf_f>[^\s]+)\s+(?P<othersockbuf>[^\s]+)\s+(?P<othersockbuf_f>[^\s]+)\s+(?P<dgramrcvbuf>[^\s]+)\s+(?P<dgramrcvbuf_f>[^\s]+)\s+(?P<numothersock>[^\s]+)\s+(?P<numothersock_f>[^\s]+)\s+(?P<dcachesize>[^\s]+)\s+(?P<dcachesize_f>[^\s]+)\s+(?P<numfile>[^\s]+)\s+(?P<numfile_f>[^\s]+)\s+(?P<numiptent>[^\s]+)\s+(?P<numiptent_f>[^\s]+)\s+(?P<diskspace>[^\s]+)\s+(?P<diskspace_s>[^\s]+)\s+(?P<diskspace_h>[^\s]+)\s+(?P<diskinodes>[^\s]+)\s+(?P<diskinodes_s>[^\s]+)\s+(?P<diskinodes_h>[^\s]+)\s+(?P<laverage>[^\s]+)/m', $out, $matches);
 		}
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
 		foreach ($matches['ctid'] as $key => $id) {
-			if (isset($valid_ctids) && !in_array($matches['uuid'][$key], $valid_ctids))
-				continue;
-			$server = array(
-				'veid' => $id,
-				'numproc' => $matches['numproc'][$key],
-				'status' => $matches['status'][$key],
-				'ip' => $matches['ip'][$key],
-				'hostname' => $matches['hostname'][$key],
-				'vswap' => $matches['vswap'][$key],
-				'layout' => $matches['layout'][$key],
-				'kmemsize' => $matches['kmemsize'][$key],
-				'kmemsize_f' => $matches['kmemsize_f'][$key],
-				'lockedpages' => $matches['lockedpages'][$key],
-				'lockedpages_f' => $matches['lockedpages_f'][$key],
-				'privvmpages' => $matches['privvmpages'][$key],
-				'privvmpages_f' => $matches['privvmpages_f'][$key],
-				'shmpages' => $matches['shmpages'][$key],
-				'shmpages_f' => $matches['shmpages_f'][$key],
-				'numproc_f' => $matches['numproc_f'][$key],
-				'physpages' => $matches['physpages'][$key],
-				'physpages_f' => $matches['physpages_f'][$key],
-				'vmguarpages' => $matches['vmguarpages'][$key],
-				'vmguarpages_f' => $matches['vmguarpages_f'][$key],
-				'oomguarpages' => $matches['oomguarpages'][$key],
-				'oomguarpages_f' => $matches['oomguarpages_f'][$key],
-				'numtcpsock' => $matches['numtcpsock'][$key],
-				'numtcpsock_f' => $matches['numtcpsock_f'][$key],
-				'numflock' => $matches['numflock'][$key],
-				'numflock_f' => $matches['numflock_f'][$key],
-				'numpty' => $matches['numpty'][$key],
-				'numpty_f' => $matches['numpty_f'][$key],
-				'numsiginfo' => $matches['numsiginfo'][$key],
-				'numsiginfo_f' => $matches['numsiginfo_f'][$key],
-				'tcpsndbuf' => $matches['tcpsndbuf'][$key],
-				'tcpsndbuf_f' => $matches['tcpsndbuf_f'][$key],
-				'tcprcvbuf' => $matches['tcprcvbuf'][$key],
-				'tcprcvbuf_f' => $matches['tcprcvbuf_f'][$key],
-				'othersockbuf' => $matches['othersockbuf'][$key],
-				'othersockbuf_f' => $matches['othersockbuf_f'][$key],
-				'dgramrcvbuf' => $matches['dgramrcvbuf'][$key],
-				'dgramrcvbuf_f' => $matches['dgramrcvbuf_f'][$key],
-				'numothersock' => $matches['numothersock'][$key],
-				'numothersock_f' => $matches['numothersock_f'][$key],
-				'dcachesize' => $matches['dcachesize'][$key],
-				'dcachesize_f' => $matches['dcachesize_f'][$key],
-				'numfile' => $matches['numfile'][$key],
-				'numfile_f' => $matches['numfile_f'][$key],
-				'numiptent' => $matches['numiptent'][$key],
-				'numiptent_f' => $matches['numiptent_f'][$key],
-				'diskspace' => $matches['diskspace'][$key],
-				'diskspace_s' => $matches['diskspace_s'][$key],
-				'diskspace_h' => $matches['diskspace_h'][$key],
-				'diskinodes' => $matches['diskinodes'][$key],
-				'diskinodes_s' => $matches['diskinodes_s'][$key],
-				'diskinodes_h' => $matches['diskinodes_h'][$key],
-				'laverage' => $matches['laverage'][$key],
-			);
+			if (isset($matches['uuid'])) {
+				if (isset($matches['uuid']))
+					$id = $server['uuid'];
+				$server = array(
+					'uuid' => $matches['uuid'][$key],
+					'veid' => $id,
+					'numproc' => $matches['numproc'][$key],
+					'status' => $matches['status'][$key],
+					'ip' => $matches['ip'][$key],
+					'hostname' => $matches['hostname'][$key],
+				);
+			} else {
+				$server = array(
+					'veid' => $id,
+					'numproc' => $matches['numproc'][$key],
+					'status' => $matches['status'][$key],
+					'ip' => $matches['ip'][$key],
+					'hostname' => $matches['hostname'][$key],
+					'vswap' => $matches['vswap'][$key],
+					'layout' => $matches['layout'][$key],
+					'kmemsize' => $matches['kmemsize'][$key],
+					'kmemsize_f' => $matches['kmemsize_f'][$key],
+					'lockedpages' => $matches['lockedpages'][$key],
+					'lockedpages_f' => $matches['lockedpages_f'][$key],
+					'privvmpages' => $matches['privvmpages'][$key],
+					'privvmpages_f' => $matches['privvmpages_f'][$key],
+					'shmpages' => $matches['shmpages'][$key],
+					'shmpages_f' => $matches['shmpages_f'][$key],
+					'numproc_f' => $matches['numproc_f'][$key],
+					'physpages' => $matches['physpages'][$key],
+					'physpages_f' => $matches['physpages_f'][$key],
+					'vmguarpages' => $matches['vmguarpages'][$key],
+					'vmguarpages_f' => $matches['vmguarpages_f'][$key],
+					'oomguarpages' => $matches['oomguarpages'][$key],
+					'oomguarpages_f' => $matches['oomguarpages_f'][$key],
+					'numtcpsock' => $matches['numtcpsock'][$key],
+					'numtcpsock_f' => $matches['numtcpsock_f'][$key],
+					'numflock' => $matches['numflock'][$key],
+					'numflock_f' => $matches['numflock_f'][$key],
+					'numpty' => $matches['numpty'][$key],
+					'numpty_f' => $matches['numpty_f'][$key],
+					'numsiginfo' => $matches['numsiginfo'][$key],
+					'numsiginfo_f' => $matches['numsiginfo_f'][$key],
+					'tcpsndbuf' => $matches['tcpsndbuf'][$key],
+					'tcpsndbuf_f' => $matches['tcpsndbuf_f'][$key],
+					'tcprcvbuf' => $matches['tcprcvbuf'][$key],
+					'tcprcvbuf_f' => $matches['tcprcvbuf_f'][$key],
+					'othersockbuf' => $matches['othersockbuf'][$key],
+					'othersockbuf_f' => $matches['othersockbuf_f'][$key],
+					'dgramrcvbuf' => $matches['dgramrcvbuf'][$key],
+					'dgramrcvbuf_f' => $matches['dgramrcvbuf_f'][$key],
+					'numothersock' => $matches['numothersock'][$key],
+					'numothersock_f' => $matches['numothersock_f'][$key],
+					'dcachesize' => $matches['dcachesize'][$key],
+					'dcachesize_f' => $matches['dcachesize_f'][$key],
+					'numfile' => $matches['numfile'][$key],
+					'numfile_f' => $matches['numfile_f'][$key],
+					'numiptent' => $matches['numiptent'][$key],
+					'numiptent_f' => $matches['numiptent_f'][$key],
+					'diskspace' => $matches['diskspace'][$key],
+					'diskspace_s' => $matches['diskspace_s'][$key],
+					'diskspace_h' => $matches['diskspace_h'][$key],
+					'diskinodes' => $matches['diskinodes'][$key],
+					'diskinodes_s' => $matches['diskinodes_s'][$key],
+					'diskinodes_h' => $matches['diskinodes_h'][$key],
+					'laverage' => $matches['laverage'][$key],
+				);
+			}
 			if (isset($matches['uuid'])) {
 				$server['uuid'] = $matches['uuid'][$key];
 				$id = $server['uuid'];
