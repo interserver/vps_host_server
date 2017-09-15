@@ -61,8 +61,8 @@ fi;\n";
 		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
 		echo `$cmd`;
 	} else {
-		$veids = [];
-		$uuids = [];
+		$veids = array();
+		$uuids = array();
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
 		if (file_exists('/usr/bin/prlctl')) {
 			$out = trim(`/usr/bin/prlctl list -a -o uuid,name,numproc,status,ip,hostname,type -H;`);
