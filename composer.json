@@ -9,6 +9,11 @@
             "email": "detain@interserver.net"
         }
     ],
+    "autoload": {
+        "psr-4": {
+            "MyVPS\\": "src"
+        }
+    },
     "require": {
         "cboden/ratchet": "^0.4.0"
     }
