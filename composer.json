@@ -1,0 +1,15 @@
+{
+    "name": "detain/myadmin-vps-host",
+    "description": "Host Server Sof\b\b\bSoftware",
+    "type": "project",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net"
+        }
+    ],
+    "require": {
+        "cboden/ratchet": "^0.4.0"
+    }
+}
