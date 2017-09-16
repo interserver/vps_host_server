@@ -6,3 +6,6 @@ conn.onopen = function(e) {
 conn.onmessage = function(e) {
     console.log(e.data);
 };
+
+// once you see connection establshed, you can send messages like this: 
+// conn.send('Hello World!');
