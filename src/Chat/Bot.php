@@ -1,5 +1,5 @@
 <?php
-namespace Ratchet\Website\Chat;
+namespace MyVPS\Chat;
 use Ratchet\ConnectionInterface;
 use Ratchet\Wamp\WampServerInterface;
 use Ratchet\Wamp\WampConnection;

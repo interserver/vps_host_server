@@ -1,5 +1,5 @@
 <?php
-namespace Ratchet\Website;
+namespace MyVPS;
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
 use Ratchet\WebSocket\WsServerInterface;

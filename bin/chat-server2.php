@@ -13,7 +13,7 @@ use Monolog\Handler\StreamHandler;
 // Composer: The greatest thing since sliced bread
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-$host = 'socketo.me';
+$host = 'my.interserver.net';
 if (file_exists(__DIR__ . '/config.php')) {
     require __DIR__ . '/config.php';
 }
