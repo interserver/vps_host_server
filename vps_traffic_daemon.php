@@ -8,9 +8,7 @@ if ($oldpid != '')
 	if (time() - trim(file_get_contents('/root/cpaneldirect/vps_traffic.pid')) > (5 * 60))
 	{
 		`kill -9 "$oldpid";`;
-	}
-	else
-	{
+	} else {
 		exit;
 	}
 }
@@ -25,9 +23,7 @@ function get_vps_ipmap() {
 	if ($GLOBALS['vzctl'] == '')
 	{
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
-	}
-	else
-	{
+	} else {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip`);
 	}
 	$lines = explode("\n", $output);
@@ -61,9 +57,7 @@ function vps_iptables_traffic_rules($ips) {
 		{
 			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
 			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
-		}
-		else
-		{
+		} else {
 			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
 			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
 		}
@@ -74,9 +68,7 @@ function vps_iptables_traffic_rules($ips) {
 		{
 			$cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-dst $ip -c 0 0; ";
 			$cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-src $ip -c 0 0; ";
-		}
-		else
-		{
+		} else {
 			$cmd .= "iptables -A FORWARD -d $ip; ";
 			$cmd .= "iptables -A FORWARD -s $ip; ";
 		}
@@ -97,9 +89,7 @@ function get_vps_iptables_traffic($ips) {
 				if ($parts[0] == 'src')
 				{
 					$field = 'out';
-				}
-				else
-				{
+				} else {
 					$field = 'in';
 				}
 				if (isset($ips[$ip]))
@@ -107,9 +97,7 @@ function get_vps_iptables_traffic($ips) {
 					$totals[$ip][$field] = $parts[3];
 				}
 			}
-		}
-		else
-		{
+		} else {
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L -Z FORWARD 2>/dev/null | grep -v DROP | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]"`));
 			foreach ($lines as $line)
 			{
@@ -118,9 +106,7 @@ function get_vps_iptables_traffic($ips) {
 				{
 					$ip = $parts[1];
 					$field = 'in';
-				}
-				else
-				{
+				} else {
 					$ip = $parts[0];
 					$field = 'out';
 				}

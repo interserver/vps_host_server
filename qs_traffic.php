@@ -13,9 +13,7 @@ function get_qs_ipmap() {
 	if ($vzctl == '')
 	{
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi; grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
-	}
-	else
-	{
+	} else {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
 	}
 	$lines = explode("\n", $output);
@@ -56,9 +54,7 @@ function qs_iptables_traffic_rules($ips) {
 			// run it twice to be safe
 			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
 			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
-		}
-		else
-		{
+		} else {
 			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
 			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
 			// run it twice to be safe
@@ -72,9 +68,7 @@ function qs_iptables_traffic_rules($ips) {
 		{
 			$cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-dst $ip -c 0 0; ";
 			$cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-src $ip -c 0 0; ";
-		}
-		else
-		{
+		} else {
 			$cmd .= "iptables -A FORWARD -d $ip; ";
 			$cmd .= "iptables -A FORWARD -s $ip; ";
 		}
@@ -90,9 +84,7 @@ function get_qs_iptables_traffic($ips) {
 		if ($vzctl == '')
 		{
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; ebtables -L --Lc --Lx | grep " $ip -j CONTINUE -c " |  sed s#"ebtables -t filter -A FORWARD -p IPv4 --ip-... $ip -j CONTINUE -c "#""#g | cut -d" " -f2`));
-		}
-		else
-		{
+		} else {
 			$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 		}
 		if (sizeof($lines) == 2)
@@ -111,9 +103,7 @@ function get_qs_iptables_traffic($ips) {
 	if ($vzctl == '')
 	{
 		`PATH="\$PATH:/sbin:/usr/sbin"  ebtables -Z`;
-	}
-	else
-	{
+	} else {
 		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
 	}
 	qs_iptables_traffic_rules($ips);

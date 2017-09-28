@@ -14,9 +14,7 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false) {
 		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false)
 			if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)
 				return false;
-	}
-	else
-	{
+	} else {
 		if (!preg_match("/^[0-9\.]{7,15}$/", $ip))
 		{
 			// don't display errors cuz this gets called w/ a blank entry when people didn't even submit anything yet
@@ -141,9 +139,7 @@ function get_vps_iptables_traffic($ips) {
 						{
 							$in_new = $last[$vps]['in'];
 							$out_new = $last[$vps]['out'];
-						}
-						else
-						{
+						} else {
 							$in_new = $vpss[$vps]['in'];
 							$out_new = $vpss[$vps]['out'];
 						}
@@ -155,9 +151,7 @@ function get_vps_iptables_traffic($ips) {
 					file_put_contents('/root/.traffic.last', serialize($vpss));
 			}
 		}
-	}
-	else
-	{
+	} else {
 		foreach ($ips as $ip => $id)
 		{
 			if (validIp($ip, false) == true)

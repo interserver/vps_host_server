@@ -94,9 +94,7 @@ fi;\n";
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
 		//echo "CMD:$cmd\n";
 		echo `$cmd`;
-	}
-	else
-	{
+	} else {
 		if (file_exists('/usr/bin/prlctl')) {
 			$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -a -o uuid,name,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H;';
 			//echo "Running $cmd\n";
@@ -316,9 +314,7 @@ fi;\n";
 		{
 			$flags = explode(' ', trim(substr($cpuline, strpos($cpuline, ':') + 1)));
 			$found = true;
-		}
-		else
-		{
+		} else {
 			$line++;
 		}
 	}
@@ -330,9 +326,7 @@ fi;\n";
 	if (file_exists('/etc/redhat-release'))
 	{
 		preg_match('/^(?P<distro>[\w]+)( Linux)? release (?P<version>[\S]+)( .*)*$/i', file_get_contents('/etc/redhat-release'), $matches);
-	}
-	else
-	{
+	} else {
 		preg_match('/DISTRIB_ID=(?P<distro>[^<]+)<br>DISTRIB_RELEASE=(?P<version>[^<]+)<br>/i', str_replace("\n", '<br>', file_get_contents('/etc/lsb-release')), $matches);
 	}
 	$servers[0]['os_info'] = array(

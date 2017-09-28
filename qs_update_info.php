@@ -74,9 +74,7 @@ done
 		if (file_exists('/usr/sbin/vzctl'))
 		{
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
-		}
-		else
-		{
+		} else {
 			$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c |grep -v -e centos -e backup`));
 			$pesize = $parts[7];
 			$totalpe = $parts[8];

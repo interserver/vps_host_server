@@ -76,9 +76,7 @@ if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm'))
 {
 	$out = `pidstat -l -C kvm;`;
 	$regex = '/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+\/usr\/bin\/kvm.* \-m (?<ram>[\d]*)\s.*sockets=(?P<cores>\d+),.*\-name (?<vps>[^\s]+)\s+.*$/';
-}
-else
-{
+} else {
 	$out = `pidstat -l -C qemu-kvm;`;
 	$regex = '/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+\/usr\/libexec\/qemu-kvm \-name (?<vps>[^\s]+)\s+.* \-m (?<ram>[\d]*)\s.*sockets=(?P<cores>\d+),.*$/';
 }
@@ -136,9 +134,7 @@ foreach ($info['disks'] as $device => $data)
 	{
 		$name = $info['mappings'][$device];
 		$type = 'VPS';
-	}
-	else
-	{
+	} else {
 		$name = $device;
 		$type = 'Disk';
 	}
