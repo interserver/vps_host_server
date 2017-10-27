@@ -15,6 +15,7 @@
         }
     },
     "require": {
+        "ext-swoole": "*",
         "cboden/ratchet": "^0.4.0",
         "monolog/monolog": "^1.23",
         "guzzle/http": "^3.9"
