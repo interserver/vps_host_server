@@ -97,7 +97,7 @@ function get_vps_iptables_traffic($ips) {
 			{
 				$totals[$ip] = array('in' => $in, 'out' => $out);
 			}
-			//echo "$ip = " . $totals[$ip] . "\n";
+			//echo "$ip = " . $totals[$ip].PHP_EOL;
 		}
 	}
 	if ($vzctl == '')

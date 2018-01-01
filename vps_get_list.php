@@ -70,7 +70,7 @@ else
 fi;\n";
 //$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
-//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
+//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'].PHP_EOL;
 //$vncdisplay = (integer)abs($port - 5900);
 //$cmd .= "function shot_${port} { touch shot_${port}.started;/root/cpaneldirect/vncsnapshot -compresslevel 9 -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 -quiet 127.0.0.1:${vncdisplay} shot_${port}.jpg >/dev/null 2>&1; convert shot_${port}.jpg -quality 75 shot_${port}.gif; rm -f shot_${port}.jpg shot_${port}.started; };\n shot_${port} &\n";
 //								$cmd .= "/root/cpaneldirect/vps_kvm_screenshot_new.sh ${port} &\n";
@@ -342,7 +342,7 @@ fi;\n";
 //		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'" $curlcmd "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
-	//echo "OK now doing something else on " . __LINE__ . "\n";
+	//echo "OK now doing something else on " . __LINE__.PHP_EOL;
 	echo trim(`$cmd`);
 }
 

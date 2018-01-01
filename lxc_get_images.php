@@ -12,5 +12,5 @@ foreach ($matches[0] as $idx => $match)
 		'size' => $matches['size'][$idx],
 		'upload_date' => $matches['upload_date'][$idx],
 	);
-echo json_encode($images, JSON_PRETTY_PRINT) . "\n";
+echo json_encode($images, JSON_PRETTY_PRINT).PHP_EOL;
 //print_r($images);

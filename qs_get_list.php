@@ -56,7 +56,7 @@ function get_qs_list() {
 					{
 						if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900)
 						{
-							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'] . "\n";
+							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'].PHP_EOL;
 							$vncdisplay = (integer)abs($xml['domain']['devices']['graphics_attr']['port'] - 5900);
 							$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
 						}
