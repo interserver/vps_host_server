@@ -1,12 +1,12 @@
 #!/bin/bash
-export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
-display=$1
-url="$2&vnc=$1"
+export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
+display=$1;
+url="$2&vnc=$1";
 if [ $# -lt 1 ]; then
- echo "Take Screenshot Of VNC Session"
- echo " Grabs screenshot, saves as shot.jpg"
- echo "Syntax $0 [display] [url]"
- echo " ie $0 2 url.com"
+ echo "Take Screenshot Of VNC Session";
+ echo " Grabs screenshot, saves as shot.jpg";
+ echo "Syntax $0 [display] [url]";
+ echo " ie $0 2 url.com";
 else
  rm -f shot1_$1.jpg;
  function timer() {
@@ -29,7 +29,8 @@ else
    curl --connect-timeout 60 --max-time 600 -k -F screenshot=@shot_$1.gif "$url" 2>/dev/null;
   fi;
   rm -f shot_$1.gif;
- fi
- kill "$timerpid"
-fi
-
+ fi;
+ if [ ! -z "$timerpid" ]; then
+  kill "$timerpid";
+ fi;
+fi;

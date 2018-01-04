@@ -1,8 +1,8 @@
 #!/bin/bash
-export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
 export TERM=linux;
-display=$1
-vps=$2
+display=$1;
+vps=$2;
 if [ $# -lt 1 ]; then
  echo "Take Screenshot Of VNC Session"
  echo " Grabs screenshot, saves as shot.jpg"
@@ -27,5 +27,7 @@ else
  /admin/swift/c ismkdir vps${vps}; 
  /admin/swift/c isput vps${vps} "$ifile"; 
  /bin/rm -f "$ifile";
- kill "$timerpid"
+ if [ ! -z "$timerpid" ]; then
+  kill "$timerpid";
+ fi;
 fi;
