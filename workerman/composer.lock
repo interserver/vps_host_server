@@ -4,8 +4,38 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "7381cc6635e23d3c8f23f41145390f13",
+    "content-hash": "fd4ca42bc227287fff48d14700187622",
     "packages": [
+        {
+            "name": "workerman/globaldata",
+            "version": "v1.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/walkor/GlobalData.git",
+                "reference": "ea3eca7b351693b4fb8580e7b351f12dd28c78fe"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/walkor/GlobalData/zipball/ea3eca7b351693b4fb8580e7b351f12dd28c78fe",
+                "reference": "ea3eca7b351693b4fb8580e7b351f12dd28c78fe",
+                "shasum": ""
+            },
+            "require": {
+                "workerman/workerman": ">=3.3.0"
+            },
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "GlobalData\\": "./src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "homepage": "http://www.workerman.net",
+            "time": "2016-06-02T06:35:44+00:00"
+        },
         {
             "name": "workerman/workerman",
             "version": "v3.5.4",

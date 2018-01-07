@@ -1,15 +1,16 @@
 {
-    "name": "detain/vps-host-service",
-    "description": "Service providing Asynchronous communication and updates to the host servers vps related stuff.",
-    "type": "project",
-    "license": "proprietary",
-    "authors": [
-        {
-            "name": "Joe Huss",
-            "email": "detain@interserver.net"
-        }
-    ],
-    "require": {
-        "workerman/workerman": "*"
-    }
+	"name": "detain/vps-host-service",
+	"description": "Service providing Asynchronous communication and updates to the host servers vps related stuff.",
+	"type": "project",
+	"license": "proprietary",
+	"authors": [
+		{
+			"name": "Joe Huss",
+			"email": "detain@interserver.net"
+		}
+	],
+	"require": {
+		"workerman/workerman": "*",
+		"workerman/globaldata": "*"
+	}
 }

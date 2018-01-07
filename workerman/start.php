@@ -2,21 +2,68 @@
 use \Workerman\Worker;
 use \Workerman\WebServer;
 use \Workerman\Connection\TcpConnection;
+use \Workerman\Connection\AsyncTcpConnection;
 use \Workerman\Lib\Timer;
 
-// Command. For example 'tail -f /var/log/nginx/access.log'.
-define('CMD', 'htop');
+require_once __DIR__.'/vendor/autoload.php';
+
+define('CMD', 'htop'); // Command. For example 'tail -f /var/log/nginx/access.log'.
 define('HEARTBEAT_TIME', 600);
-// Whether to allow client input.
-define('ALLOW_CLIENT_INPUT', true);
+define('ALLOW_CLIENT_INPUT', true); // Whether to allow client input.
 
-require_once __DIR__ . '/vendor/autoload.php';
 
-$worker = new Worker("Websocket://0.0.0.0:55554");
+function update_vps_list_timer() {
+	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:2208');								// Asynchronous link with the remote task service
+	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));		// send data
+	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
+		 //var_dump($task_result);
+		 $task_connection->close();																	// remember to turn off the asynchronous link after getting the result
+	};
+	$task_connection->connect();																	// execute async link
+}
+
+function vps_queue_timer() {
+	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:2208');								// Asynchronous link with the remote task service
+	$task_connection->send(json_encode(['function' => 'sync_hyperv_queue', 'args' => []]));			// send data
+	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
+		 //var_dump($task_result);
+		 $task_connection->close();																	// remember to turn off the asynchronous link after getting the result
+	};
+	$task_connection->connect();																	// execute async link
+}
+
+$globaldata_server = new \GlobalData\Server('127.0.0.1', 55553);
+$task_worker = new Worker('Text://127.0.0.1:55552');		// task worker, using the Text protocol
+$task_worker->count = 5; 								// number of task processes can be opened more than needed
+$task_worker->name = 'TaskWorker';
+$task_worker->onWorkerStart = function($worker) {
+	global $global;
+	$global = new \GlobalData\Client('127.0.0.1:2207');	 // initialize the GlobalData client
+};
+$task_worker->onMessage = function($connection, $task_data) {
+	$task_data = json_decode($task_data, true);			// Suppose you send json data
+	//echo "Starting Task {$task_data['function']}\n";
+	if (isset($task_data['function'])) {				// According to task_data to deal with the corresponding task logic
+		if (in_array($task_data['function'], ['sync_hyperv_queue', 'async_hyperv_get_list', 'hyperv_cleanupresources', 'hyperv_getvmlist'])) {
+			require_once __DIR__.'/../../Tasks/'.$task_data['function'].'.php';
+			$return = isset($task_data['args']) ? call_user_func($task_data['function'], $task_data['args']) : call_user_func($task_data['function']);
+		}
+	}
+	//echo "Ending Task {$task_data['function']}\n";
+	$connection->send(json_encode($return));			// send the result
+};
+$worker = new Worker('Websocket://0.0.0.0:55554');
 $worker->name = 'WebsocketServer';
 
 // start the process, open a vmstat process, and broadcast vmstat process output to all browser clients
 $worker->onWorkerStart = function($worker) {
+	global $global;
+	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
+	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
+		Timer::add(600, 'update_vps_list_timer');
+		Timer::add(60, 'vps_queue_timer');
+	}
+
 	/*
 	Timer::add(60, function() use ($worker){
 		$time_now = time();
