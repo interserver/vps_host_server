@@ -4,6 +4,7 @@ $settings = [
 		'task' => [
 			'ip' => '127.0.0.1',
 			'port' => 55552,
+			'count' => 5,
 		],
 		'globaldata' => [
 			'ip' => '127.0.0.1',
@@ -14,8 +15,10 @@ $settings = [
 			'port' => 55554,
 		],
 		'http' => [
+			'enable' => TRUE,
 			'ip' => '0.0.0.0',
 			'port' => 55555,
+			'count' => 2,
 		],
 	],
 	'auth' => [

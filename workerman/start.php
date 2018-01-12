@@ -23,12 +23,12 @@ function vps_update_info_timer() {
 function vps_queue_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
-	$task_connection->send(json_encode(['function' => 'sync_hyperv_queue', 'args' => []]));			// send data
+	$task_connection->send(json_encode(['function' => 'sync_hyperv_queue', 'args' => []])); // send data
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
 		 //var_dump($task_result);
-		 $task_connection->close();																	// remember to turn off the asynchronous link after getting the result
+		 $task_connection->close(); // remember to turn off the asynchronous link after getting the result
 	};
-	$task_connection->connect();																	// execute async link
+	$task_connection->connect(); // execute async link
 }
 
 if (ini_get('date.timezone') == '')
@@ -37,7 +37,7 @@ if (ini_get('date.timezone') == '')
 $globaldata_server = new \GlobalData\Server($settings['servers']['globaldata']['ip'], $settings['servers']['globaldata']['port']);
 
 $task_worker = new Worker('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // task worker, using the Text protocol
-$task_worker->count = 5; 								// number of task processes can be opened more than needed
+$task_worker->count = $settings['servers']['task']['count']; // number of task processes can be opened more than needed
 $task_worker->name = 'TaskWorker';
 $task_worker->onWorkerStart = function($worker) {
 	global $global, $settings;
@@ -209,10 +209,12 @@ $worker->onWorkerStop = function($worker) {
 	}
 };
 
-$web = new WebServer('http://'.$settings['servers']['http']['ip'].':'.$settings['servers']['http']['port']); // WebServer, used to split html js css browser
-$web->count = 2; // WebServer number
-$web->addRoot(isset($_SERVER['HOSTNAME']) ? $_SERVER['HOSTNAME'] : trim(`hostname -f`), __DIR__.'/Web'); // Set the site root
-$web->addRoot('localhost', __DIR__ . '/Web');
+if ($settings['servers']['http']['enable'] === TRUE) {
+	$web = new WebServer('http://'.$settings['servers']['http']['ip'].':'.$settings['servers']['http']['port']); // WebServer, used to split html js css browser
+	$web->count = $settings['servers']['http']['count']; // WebServer number
+	$web->addRoot(isset($_SERVER['HOSTNAME']) ? $_SERVER['HOSTNAME'] : trim(`hostname -f`), __DIR__.'/Web'); // Set the site root
+	//$web->addRoot('localhost', __DIR__ . '/Web');
+}
 
 // If not in the root directory, run runAll method
 if(!defined('GLOBAL_START'))
