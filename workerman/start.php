@@ -249,7 +249,7 @@ $worker->onWorkerStop = function($worker) {
 
 $web = new WebServer('http://'.$settings['servers']['http']['ip'].':'.$settings['servers']['http']['port']); // WebServer, used to split html js css browser
 $web->count = 2; // WebServer number
-$web->addRoot($_SERVER['HOSTNAME'], __DIR__.'/Web'); // Set the site root
+$web->addRoot(isset($_SERVER['HOSTNAME']) ? $_SERVER['HOSTNAME'] : trim(`hostname -f`), __DIR__.'/Web'); // Set the site root
 $web->addRoot('localhost', __DIR__ . '/Web');
 
 // If not in the root directory, run runAll method
