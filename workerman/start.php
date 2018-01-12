@@ -139,18 +139,18 @@ $worker->onConnect = function($connection) {
 	if ($global->settings['phptty']['enable'] === TRUE) {
 		//To do this, PHP_CAN_DO_PTS must be enabled. See ext/standard/proc_open.c in PHP directory.
 		/*$descriptorspec = [
-			0 => array('pty'),
-			1 => array('pty'),
-			2 => array('pty')
+			0 => ['pty'],
+			1 => ['pty'],
+			2 => ['pty']
 		];*/
 		//Pipe can not do PTY. Thus, many features of PTY can not be used. e.g. sudo, w3m, luit, all C programs using termios.h, etc.
 		$descriptorspec = [
-			0=>array("pipe", "r"),
-			1=>array("pipe", "w"),
-			2=>array("pipe", "w")
+			0 => ['pipe','r'],
+			1 => ['pipe','w'],
+			2 => ['pipe','w']
 		];
 		unset($_SERVER['argv']);
-		$env = array_merge(array('COLUMNS'=>130, 'LINES'=> 50), $_SERVER);
+		$env = array_merge(['COLUMNS' => 130, 'LINES' => 50], $_SERVER);
 		$connection->process = proc_open($global->settings['phptty']['cmd'], $descriptorspec, $pipes, null, $env);
 		$connection->pipes = $pipes;
 		stream_set_blocking($pipes[0], 0);
