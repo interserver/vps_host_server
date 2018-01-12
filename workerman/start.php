@@ -236,12 +236,12 @@ $worker->onClose = function($connection) {
 };
 
 $worker->onWorkerStop = function($worker) {
-	global $global;
-	if ($global->settings['phptty']['enable'] === TRUE) {
+	global $global, $settings;
+	if ($settings['phptty']['enable'] === TRUE) {
 		foreach($worker->connections as $connection)
 			$connection->close();
 	}
-	if ($global->settings['vmstat']['enable'] === TRUE) {
+	if ($settings['vmstat']['enable'] === TRUE) {
 		@shell_exec('killall vmstat');
 		@pclose($worker->process_handle);
 	}
