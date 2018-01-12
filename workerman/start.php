@@ -20,10 +20,38 @@ function vps_update_info_timer() {
 	$task_connection->connect();
 }
 
+function vps_queue($cmds) {
+	foreach ($cmds as $cmd) {
+		if (preg_match('/\.php$', $cmd) && file_exists(__DIR__.'/../'.$cmd))
+			include __DIR__.'/../'.$cmd;
+		elseif (preg_match('/(\/[^ ]+).*$/m', $cmd, $matches))
+			echo `$cmd`;
+		else {
+			if (!isset($react_client)) {
+				$loop = Worker::getEventLoop();
+				$react_factory = new React\Dns\Resolver\Factory();
+				$react_dns = $react_factory->createCached('8.8.8.8', $loop);
+				$react_factory = new React\HttpClient\Factory();
+				$react_client = $react_factory->create($loop, $react_dns);
+			}
+			$request = $client->request('GET', trim($host));
+			$request->on('error', function(Exception $e) use ($cmd) {
+				echo "CMD {$cmd} Exception Error {$e->getMessage()}\n";
+			});
+			$request->on('response', function ($response) {
+				$response->on('data', function ($data, $response) {
+					echo `$data`;
+				});
+			});
+			$request->end();
+		}
+	}
+}
+
 function vps_queue_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
-	$task_connection->send(json_encode(['function' => 'sync_hyperv_queue', 'args' => []])); // send data
+	$task_connection->send(json_encode(['function' => 'vps_queue', 'args' => $global->settings['vps_queue']['cmds']])); // send data
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
 		 //var_dump($task_result);
 		 $task_connection->close(); // remember to turn off the asynchronous link after getting the result
@@ -33,6 +61,8 @@ function vps_queue_timer() {
 
 if (ini_get('date.timezone') == '')
 	ini_set('date.timezone', 'America/New_York');
+if (ini_get('default_socket_timeout') < 1200 && ini_get('default_socket_timeout') > 1)
+	ini_set('default_socket_timeout', 1200);
 
 $globaldata_server = new \GlobalData\Server($settings['servers']['globaldata']['ip'], $settings['servers']['globaldata']['port']);
 
@@ -47,8 +77,8 @@ $task_worker->onMessage = function($connection, $task_data) {
 	$task_data = json_decode($task_data, true);			// Suppose you send json data
 	//echo "Starting Task {$task_data['function']}\n";
 	if (isset($task_data['function'])) {				// According to task_data to deal with the corresponding task logic
-		if (in_array($task_data['function'], ['sync_hyperv_queue', 'async_hyperv_get_list', 'hyperv_cleanupresources', 'hyperv_getvmlist'])) {
-			require_once __DIR__.'/../../Tasks/'.$task_data['function'].'.php';
+		if (in_array($task_data['function'], ['vps_queue'])) {
+			//require_once __DIR__.'/../'.$task_data['function'].'.php';
 			$return = isset($task_data['args']) ? call_user_func($task_data['function'], $task_data['args']) : call_user_func($task_data['function']);
 		}
 	}
