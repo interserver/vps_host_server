@@ -7,7 +7,26 @@ use \Workerman\Lib\Timer;
 
 require_once __DIR__.'/vendor/autoload.php';
 
+global $settings;
 $settings = [
+	'servers' => [
+		'task' => [
+			'ip' => '127.0.0.1',
+			'port' => 55552,
+		],
+		'globaldata' => [
+			'ip' => '127.0.0.1',
+			'port' => 55553,
+		],
+		'ws' => [
+			'ip' => '0.0.0.0',
+			'port' => 55554,
+		],
+		'http' => [
+			'ip' => '0.0.0.0',
+			'port' => 55555,
+		],
+	],
 	'auth' => [
 		'enable' => FALSE,
 		'timeout' => 30,
@@ -32,7 +51,8 @@ $settings = [
 ];
 
 function update_vps_list_timer() {
-	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');								// Asynchronous link with the remote task service
+	global $global, $settings;
+	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
 	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));		// send data
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
 		 //var_dump($task_result);
@@ -42,7 +62,8 @@ function update_vps_list_timer() {
 }
 
 function vps_queue_timer() {
-	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');								// Asynchronous link with the remote task service
+	global $global, $settings;
+	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
 	$task_connection->send(json_encode(['function' => 'sync_hyperv_queue', 'args' => []]));			// send data
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
 		 //var_dump($task_result);
@@ -51,13 +72,14 @@ function vps_queue_timer() {
 	$task_connection->connect();																	// execute async link
 }
 
-$globaldata_server = new \GlobalData\Server('127.0.0.1', 55553);
-$task_worker = new Worker('Text://127.0.0.1:55552');		// task worker, using the Text protocol
+$globaldata_server = new \GlobalData\Server($settings['servers']['globaldata']['ip'], $settings['servers']['globaldata']['port']);
+
+$task_worker = new Worker('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // task worker, using the Text protocol
 $task_worker->count = 5; 								// number of task processes can be opened more than needed
 $task_worker->name = 'TaskWorker';
 $task_worker->onWorkerStart = function($worker) {
-	global $global;
-	$global = new \GlobalData\Client('127.0.0.1:2207');	 // initialize the GlobalData client
+	global $global, $settings;
+	$global = new \GlobalData\Client($settings['servers']['globaldata']['ip'].':'.$settings['servers']['globaldata']['port']); // initialize the GlobalData client
 };
 $task_worker->onMessage = function($connection, $task_data) {
 	$task_data = json_decode($task_data, true);			// Suppose you send json data
@@ -71,13 +93,13 @@ $task_worker->onMessage = function($connection, $task_data) {
 	//echo "Ending Task {$task_data['function']}\n";
 	$connection->send(json_encode($return));			// send the result
 };
-$worker = new Worker('Websocket://0.0.0.0:55554');
-$worker->name = 'WebsocketServer';
 
+$worker = new Worker('Websocket://'.$settings['servers']['ws']['ip'].':'.$settings['servers']['ws']['port']);
+$worker->name = 'WebsocketServer';
 // start the process, open a vmstat process, and broadcast vmstat process output to all browser clients
-$worker->onWorkerStart = function($worker) use ($settings) {
-	global $global;
-	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
+$worker->onWorkerStart = function($worker) {
+	global $global, $settings;
+	$global = new \GlobalData\Client($settings['servers']['globaldata']['ip'].':'.$settings['servers']['globaldata']['port']);	 // initialize the GlobalData client
 	if (!isset($global->settings))
 		$global->settings = $settings;
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
@@ -225,7 +247,7 @@ $worker->onWorkerStop = function($worker) {
 	}
 };
 
-$web = new WebServer("http://0.0.0.0:55555"); // WebServer, used to split html js css browser
+$web = new WebServer('http://'.$settings['servers']['http']['ip'].':'.$settings['servers']['http']['port']); // WebServer, used to split html js css browser
 $web->count = 2; // WebServer number
 $web->addRoot($_SERVER['HOSTNAME'], __DIR__.'/Web'); // Set the site root
 $web->addRoot('localhost', __DIR__ . '/Web');
