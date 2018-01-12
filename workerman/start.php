@@ -45,12 +45,21 @@ $settings = [
 		'timeout' => 600,
 	],
 	'timers' => [
-		'update_vps_list' => 600,
+		'vps_update_info' => 600,
 		'vps_queue' => 60,
+		'getnewvps' => 60,
+		'vps_traffic_new' => 60,
+		'getslicemap' => 60,
+		'getipmap' => 60,
+		'getvncmap' => 60,
+		'getqueue' => 60,
+		'vps_get_list' => 60,
+		'vps_update_extra_info' => 86400,
+		'update_virtuozzo' => 86400,
 	],
 ];
 
-function update_vps_list_timer() {
+function vps_update_info_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
 	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));		// send data
@@ -71,6 +80,9 @@ function vps_queue_timer() {
 	};
 	$task_connection->connect();																	// execute async link
 }
+
+if (ini_get('date.timezone') == '')
+	ini_set('date.timezone', 'America/New_York');
 
 $globaldata_server = new \GlobalData\Server($settings['servers']['globaldata']['ip'], $settings['servers']['globaldata']['port']);
 
@@ -103,7 +115,7 @@ $worker->onWorkerStart = function($worker) {
 	if (!isset($global->settings))
 		$global->settings = $settings;
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
-		Timer::add($global->settings['timers']['update_vps_list'], 'update_vps_list_timer');
+		Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
 		Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
 	}
 	if ($global->settings['heartbeat']['enable'] === TRUE) {
