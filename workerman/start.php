@@ -11,13 +11,13 @@ $settings = include __DIR__.'/settings.php';
 
 function vps_update_info_timer() {
 	global $global, $settings;
-	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
-	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));		// send data
-	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
+	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);
+	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));
+	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {
 		 //var_dump($task_result);
-		 $task_connection->close();																	// remember to turn off the asynchronous link after getting the result
+		 $task_connection->close();
 	};
-	$task_connection->connect();																	// execute async link
+	$task_connection->connect();
 }
 
 function vps_queue_timer() {
