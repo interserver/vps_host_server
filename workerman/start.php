@@ -34,7 +34,7 @@ function vps_queue($cmds) {
 				$react_factory = new React\HttpClient\Factory();
 				$react_client = $react_factory->create($loop, $react_dns);
 			}
-			$request = $client->request('GET', trim($host));
+			$request = $client->request('GET', 'https://myvps2.interserver.net/vps_queue.php?action='.$cmd);
 			$request->on('error', function(Exception $e) use ($cmd) {
 				echo "CMD {$cmd} Exception Error {$e->getMessage()}\n";
 			});
@@ -95,7 +95,7 @@ $worker->onWorkerStart = function($worker) {
 	if (!isset($global->settings))
 		$global->settings = $settings;
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
-		Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
+		//Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
 		Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
 	}
 	if ($global->settings['heartbeat']['enable'] === TRUE) {
