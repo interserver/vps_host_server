@@ -1,9 +1,9 @@
 <?php
-use \Workerman\Worker;
-use \Workerman\WebServer;
-use \Workerman\Connection\TcpConnection;
-use \Workerman\Connection\AsyncTcpConnection;
-use \Workerman\Lib\Timer;
+use Workerman\Worker;
+use Workerman\WebServer;
+use Workerman\Connection\TcpConnection;
+use Workerman\Connection\AsyncTcpConnection;
+use Workerman\Lib\Timer;
 
 $composer = include __DIR__.'/vendor/autoload.php';
 global $settings;
