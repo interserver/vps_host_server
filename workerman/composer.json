@@ -10,6 +10,7 @@
 		}
 	],
 	"require": {
+		"workerman/gateway-worker" : ">=3.0.0",
 		"react/http-client": "*",
 		"workerman/workerman": "*",
 		"workerman/globaldata": "*"
