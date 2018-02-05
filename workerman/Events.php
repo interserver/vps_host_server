@@ -16,7 +16,7 @@ class Events {
 	public $type;
 
 	public function __construct() {
-		$this->type = file_exists('/usr/sin/vzctl') ? 'vzctl' : 'kvm';
+		$this->type = file_exists('/usr/sbin/vzctl') ? 'vzctl' : 'kvm';
 		//Events::update_network_dev();
 		$this->get_vps_ipmap();
 		if (isset($_SERVER['HOSTNAME']))
