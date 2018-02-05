@@ -172,4 +172,39 @@ class NetworkStats {
 		$ipiparr = json_decode($ipipjson,true);
 		return $ipiparr['ip'];
 	}
+
+
+	/* this parts from tupa */
+
+	/**
+	 * Gets network interface informations
+	 *
+	 * @return array	network information
+	 */
+	function network2() {
+		$results = array();
+		if ($output = lib_div::getFileRtrim('/proc/net/dev')) {
+			while (list(,$buf) = each($output)) {
+				if (preg_match('/:/', $buf)) {
+					list($dev_name, $stats_list) = preg_split('/:/', $buf, 2);
+					$stats = preg_split('/\s+/', trim($stats_list));
+					$results[$dev_name] = array();
+
+					$results[$dev_name]['rx_bytes'] = $stats[0];
+					$results[$dev_name]['rx_packets'] = $stats[1];
+					$results[$dev_name]['rx_errs'] = $stats[2];
+					$results[$dev_name]['rx_drop'] = $stats[3];
+
+					$results[$dev_name]['tx_bytes'] = $stats[8];
+					$results[$dev_name]['tx_packets'] = $stats[9];
+					$results[$dev_name]['tx_errs'] = $stats[10];
+					$results[$dev_name]['tx_drop'] = $stats[11];
+
+					$results[$dev_name]['errs'] = $stats[2] + $stats[10];
+					$results[$dev_name]['drop'] = $stats[3] + $stats[11];
+				}
+			}
+		}
+		return $results;
+	}
 }

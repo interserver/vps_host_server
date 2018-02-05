@@ -98,7 +98,7 @@ class StorageStats {
 	 *
 	 * @return array	FS info
 	 */
-	function static filesystems() {
+	public static function filesystems() {
 		exec('df -kP', $output);
 		while (list(,$mount) = each($output))
 			$mounts[] = $mount;

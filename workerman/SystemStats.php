@@ -64,6 +64,32 @@ class SystemStats {
 		preg_match('/(\d{1,2}:\d{1,2}), /', $info, $m);
 		return trim($m[1]);
 	}
+
+	/**
+	 * Gets system uptime
+	 *
+	 * @return string	uptime
+	 */
+	public static function uptime_from_proc() {
+		if ($result = rtrim(file_get_contents('/proc/uptime'))) {
+			$ar_buf = split(' ', $result[0]);
+
+			$sys_ticks = trim($ar_buf[0]);
+
+			$min = $sys_ticks / 60;
+			$hours = $min / 60;
+			$days = floor($hours / 24);
+			$hours = floor($hours - ($days * 24));
+			$min = floor($min - ($days * 60 * 24) - ($hours * 60));
+
+			$result = array($days, $hours, $min);
+		} else {
+			$result = 'N.A.';
+		}
+		return $result;
+	}
+
+
 	public static function all_processes() {
 		return trim(shell_exec('ps auxh | wc -l'));
 	}
@@ -173,6 +199,21 @@ class SystemStats {
 		return implode(' ', current(array_chunk($loadavg, 4)));
 	}
 
+	/**
+	 * Gets processor load
+	 *
+	 * @return array	1/5/15 min load
+	 */
+	public static function loadavg_from_proc() {
+		if ($results = rtrim(file_get_contents('/proc/loadavg'))) {
+			$results = split(' ', $results[0]);
+		} else {
+			$results = 'N.A.';
+		}
+
+		return $results;
+	}
+
 	public static function getcores() {
 		if(!is_readable('/proc/cpuinfo')) return str_replace("\n",'',`nproc`);
 		$cpuinfo = file('/proc/cpuinfo');
@@ -219,7 +260,7 @@ class SystemStats {
 	 *
 	 * @return array	distro info
 	 */
-	function distro() {
+	public static function distrofile() {
 		$result = 'N.A.';
 		$distroFileArr = array('debian_version','SuSE-release','mandrake-release','fedora-release','redhat-release','gentoo-release','slackware-version','eos-version','trustix-release','arch-release');
 
@@ -233,7 +274,7 @@ class SystemStats {
 	}
 
 
-	function distroicon() {
+	public static function distroicon() {
 		if (file_exists('/etc/debian_version')) {
 			$result = 'Debian.gif';
 		} elseif (file_exists('/etc/SuSE-release')) {
@@ -264,7 +305,7 @@ class SystemStats {
 	 *
 	 * @return string	hostname
 	 */
-	function chostname() {
+	public static function chostname() {
 		if ($result = rtrim(file_get_contents('/proc/sys/kernel/hostname'))) {
 			$result = gethostbyaddr(gethostbyname($result[0]));
 		} else {
@@ -278,7 +319,7 @@ class SystemStats {
 	 *
 	 * @return string	kernel version
 	 */
-	function kernel() {
+	public static function kernel_from_proc() {
 		if ($result = rtrim(file_get_contents('/proc/version'))) {
 			$buf = $result[0];
 			if (preg_match('/version (.*?) /', $buf, $ar_buf)) {
@@ -292,45 +333,6 @@ class SystemStats {
 		return $result;
 	}
 
-	/**
-	 * Gets system uptime
-	 *
-	 * @return string	uptime
-	 */
-	function uptime() {
-		if ($result = rtrim(file_get_contents('/proc/uptime'))) {
-			$ar_buf = split(' ', $result[0]);
-
-			$sys_ticks = trim($ar_buf[0]);
-
-			$min = $sys_ticks / 60;
-			$hours = $min / 60;
-			$days = floor($hours / 24);
-			$hours = floor($hours - ($days * 24));
-			$min = floor($min - ($days * 60 * 24) - ($hours * 60));
-
-			$result = array($days, $hours, $min);
-		} else {
-			$result = 'N.A.';
-		}
-		return $result;
-	}
-
-	/**
-	 * Gets processor load
-	 *
-	 * @return array	1/5/15 min load
-	 */
-	function loadavg() {
-		if ($results = rtrim(file_get_contents('/proc/loadavg'))) {
-			$results = split(' ', $results[0]);
-		} else {
-			$results = 'N.A.';
-		}
-
-		return $results;
-	}
-
 
 	/* tupa */
 
@@ -339,41 +341,33 @@ class SystemStats {
 	 *
 	 * @return array	mem/swap informations
 	 */
-	function memory() {
-		if ($output = lib_div::getFileRtrim('/proc/meminfo')) {
+	public static function memory() {
+		if ($output = rtrim(file_get_contents('/proc/meminfo'))) {
 			$results['ram'] = array();
 			$results['swap'] = array();
 			$results['devswap'] = array();
-
-			while (list(,$buf) = each($output)) {
-				if (preg_match('/^MemTotal:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
+			while (list(,$buf) = each($output))
+				if (preg_match('/^MemTotal:\s+(.*)\s*kB/i', $buf, $ar_buf))
 					$results['ram']['total'] = $ar_buf[1];
-				} else if (preg_match('/^MemFree:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
+				else if (preg_match('/^MemFree:\s+(.*)\s*kB/i', $buf, $ar_buf))
 					$results['ram']['free'] = $ar_buf[1];
-				} else if (preg_match('/^Cached:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
+				else if (preg_match('/^Cached:\s+(.*)\s*kB/i', $buf, $ar_buf))
 					$results['ram']['cached'] = $ar_buf[1];
-				} else if (preg_match('/^Buffers:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
+				else if (preg_match('/^Buffers:\s+(.*)\s*kB/i', $buf, $ar_buf))
 					$results['ram']['buffers'] = $ar_buf[1];
-				} else if (preg_match('/^SwapTotal:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
+				else if (preg_match('/^SwapTotal:\s+(.*)\s*kB/i', $buf, $ar_buf))
 					$results['swap']['total'] = $ar_buf[1];
-				} else if (preg_match('/^SwapFree:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
+				else if (preg_match('/^SwapFree:\s+(.*)\s*kB/i', $buf, $ar_buf))
 					$results['swap']['free'] = $ar_buf[1];
-				}
-			}
 			$results['ram']['shared'] = 0;
 			$results['ram']['used'] = $results['ram']['total'] - $results['ram']['free'];
 			$results['swap']['used'] = $results['swap']['total'] - $results['swap']['free'];
-
 			if (file_exists('/proc/swaps') && count(file('/proc/swaps')) > 1) {
-				$swaps = lib_div::getFileRtrim('/proc/swaps');
-
-				while (list(,$swap) = each($swaps)) {
+				$swaps = rtrim(file_get_contents('/proc/swaps'));
+				while (list(,$swap) = each($swaps))
 					$swapdevs[] = $swap;
-				}
-
 				for ($i = 1; $i < (count($swapdevs) - 1); $i++) {
 					$ar_buf = preg_split('/\s+/', $swapdevs[$i], 6);
-
 					$results['devswap'][$i - 1] = array();
 					$results['devswap'][$i - 1]['dev'] = $ar_buf[0];
 					$results['devswap'][$i - 1]['total'] = $ar_buf[2];
@@ -381,10 +375,8 @@ class SystemStats {
 					$results['devswap'][$i - 1]['free'] = ($results['devswap'][$i - 1]['total'] - $results['devswap'][$i - 1]['used']);
 					$results['devswap'][$i - 1]['percent'] = round(($ar_buf[3] * 100) / $ar_buf[2]);
 				}
-			} else {
+			} else
 				$results['devswap'] = array();
-			}
-
 			// I don't like this since buffers and cache really aren't
 			// 'used' per say, but I get too many emails about it.
 			$results['ram']['t_used'] = $results['ram']['used'];
