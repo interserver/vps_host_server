@@ -9,6 +9,17 @@ $composer = include __DIR__.'/vendor/autoload.php';
 global $settings;
 $settings = include __DIR__.'/settings.php';
 
+class Events {
+	public $var;
+	public $vps_list;
+	public $bandwidth;
+	public $timers = [];
+
+	public function __construct() {
+
+	}
+}
+
 function vps_update_info_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);
@@ -86,31 +97,20 @@ $task_worker->onMessage = function($connection, $task_data) {
 	$connection->send(json_encode($return));			// send the result
 };
 
-$worker = new Worker('Websocket://'.$settings['servers']['ws']['ip'].':'.$settings['servers']['ws']['port']);
-$worker->name = 'WebsocketServer';
+//$worker = new Worker('Websocket://'.$settings['servers']['ws']['ip'].':'.$settings['servers']['ws']['port']);
+$worker = new Worker();
+$worker->name = 'VpsServer';
+//$worker->name = 'WebsocketServer';
 // start the process, open a vmstat process, and broadcast vmstat process output to all browser clients
 $worker->onWorkerStart = function($worker) {
-	global $global, $settings;
+	global $global, $settings, $events;
+	$events = new Events();
 	$global = new \GlobalData\Client($settings['servers']['globaldata']['ip'].':'.$settings['servers']['globaldata']['port']);	 // initialize the GlobalData client
 	if (!isset($global->settings))
 		$global->settings = $settings;
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
-		//Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
-		Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
-	}
-	if ($global->settings['heartbeat']['enable'] === TRUE) {
-		Timer::add($global->settings['heartbeat']['check_interval'], function() use ($worker, $global) {
-			$time_now = time();
-			foreach ($worker->connections as $connection) {
-				// It is possible that the connection has not received the message, then lastMessageTime set to the current time
-				if (empty($connection->lastMessageTime)) {
-					$connection->lastMessageTime = $time_now;
-					continue;
-				}
-				if ($time_now - $connection->lastMessageTime > $global->settings['heartbeat']['timeout'])
-					$connection->close();
-			}
-		});
+		$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
+		$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
 	}
 	if ($global->settings['vmstat']['enable'] === TRUE) {
 		// Save the process handle, close the handle when the process is closed
@@ -126,33 +126,34 @@ $worker->onWorkerStart = function($worker) {
 		   echo "vmstat 1 fail\n";
 		}
 	}
-	/*
-	// async wss connection to my
-	$context_option = [
-		// http://php.net/manual/en/context.ssl.php
-		'ssl' => [
-			'local_cert'        => '/your/path/to/pemfile',
-			'passphrase'        => 'your_pem_passphrase',
-			'allow_self_signed' => true,
-			'verify_peer'       => false
+	$context = [																						// Certificate is best to apply for a certificate
+		'ssl' => [																						// use the absolute/full paths
+			'local_cert' => '/home/my/files/apache_setup/interserver.net.crt',							// can also be a crt file
+			'local_pk' => '/home/my/files/apache_setup/interserver.net.key',
+			'cafile' => '/home/my/files/apache_setup/AlphaSSL.root.crt',
+			'verify_peer' => false,
+			'verify_peer_name' => false,
 		]
 	];
-	$ws_connection = new AsyncTcpConnection('ws://my.interserver.net:443', $context_option);
+	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $context);
 	$ws_connection->transport = 'ssl';
-	$ws_connection->onConnect = function($connection){
-		$connection->send('hello');
+
+	$ws_connection->onConnect = function($conn) {
+		$conn->send('{"type":"login","client_name":"server","room_id":"1"}');
 	};
-	$ws_connection->onMessage = function($connection, $data){
-		echo "recv: {$data}\n";
+	$ws_connection->onMessage = function($conn, $data) {
+		echo $data.PHP_EOL;
 	};
+
 	$ws_connection->onError = function($connection, $code, $msg){
 		echo "error: {$msg}\n";
 	};
-	$ws_connection->onClose = function($connection){
-		echo "connection closed\n";
+	$ws_connection->onClose = function($conn) use (&$worker) {
+		echo 'Connection Closed, Shutting Down'.PHP_EOL;
+		//$conn->close();
+		Worker::stopAll();
 	};
 	$ws_connection->connect();
-	*/
 };
 
 $worker->onConnect = function($connection) {
