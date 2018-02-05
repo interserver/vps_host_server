@@ -50,12 +50,11 @@ $settings = [
 	],
 ];
 
-if (file_exits('/proc/vz')) {
+if (file_exists('/proc/vz')) {
 	$settings['vps_queue']['cmds'][] = '/root/cpaneldirect/cpu_usage_updater.sh 2>/root/cpaneldirect/cron.cpu_usage >&2 &';
 }
 $settings['vps_queue']['cmds'][] = 'vps_update_info.php';
 $settings['vps_queue']['cmds'][] = 'getnewvps';
-$settings['vps_queue']['cmds'][] = 'vps_traffic_new.php';
 $settings['vps_queue']['cmds'][] = 'getslicemap';
 if (!file_exists('/usr/sbin/vzctl')) {
 	$settings['vps_queue']['cmds'][] = 'getipmap';

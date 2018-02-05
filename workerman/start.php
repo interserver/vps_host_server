@@ -1,6 +1,6 @@
 <?php
 use Workerman\Worker;
-use Workerman\WebServer;
+//use Workerman\WebServer;
 use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 use Workerman\Lib\Timer;
@@ -52,8 +52,10 @@ $worker->onWorkerStart = function($worker) {
 	if (!isset($global->settings))
 		$global->settings = $settings;
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
-		$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
-		$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
+		//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
+		//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
+		$events->timers['vps_get_traffic'] = Timer::add(60, [$events, 'vps_get_traffic']);
+
 	}
 	if ($global->settings['vmstat']['enable'] === TRUE) {
 		// Save the process handle, close the handle when the process is closed
@@ -81,34 +83,10 @@ $worker->onWorkerStart = function($worker) {
 	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $context);
 	$ws_connection->transport = 'ssl';
 
-	$ws_connection->onConnect = function($conn) {
-		$conn->send('{"type":"login","client_name":"server","room_id":"1"}');
-	};
-	$ws_connection->onMessage = function($conn, $data) {
-		echo $data.PHP_EOL;
-		global $global;
-		$connection->lastMessageTime = time();
-		$data = json_decode($data, true);
-		switch ($data['type']) {
-				case 'login':
-				// delete timer if successfull
-				Timer::del($connection->auth_timer_id);
-				break;
-			case 'phptty':
-				if ($global->settings['phptty']['client_input'] === TRUE)
-					fwrite($connection->pipes[0], $data);
-				break;
-		}
-	};
-
-	$ws_connection->onError = function($connection, $code, $msg){
-		echo "error: {$msg}\n";
-	};
-	$ws_connection->onClose = function($conn) use (&$worker) {
-		echo 'Connection Closed, Shutting Down'.PHP_EOL;
-		//$conn->close();
-		Worker::stopAll();
-	};
+	$ws_connection->onConnect = [$events, 'onConnect'];
+	$ws_connection->onMessage = [$events, 'onMessage'];
+	$ws_connection->onError = [$events, 'onError'];
+	$ws_connection->onClose = [$events, 'onClose'];
 	$ws_connection->connect();
 };
 /*
@@ -125,11 +103,11 @@ $worker->onConnect = function($connection) {
 	}
 	if ($global->settings['phptty']['enable'] === TRUE) {
 		//To do this, PHP_CAN_DO_PTS must be enabled. See ext/standard/proc_open.c in PHP directory.
-		/*$descriptorspec = [
-			0 => ['pty'],
-			1 => ['pty'],
-			2 => ['pty']
-		];*/
+		//$descriptorspec = [
+		//	0 => ['pty'],
+		//	1 => ['pty'],
+		//	2 => ['pty']
+		//];
 		//Pipe can not do PTY. Thus, many features of PTY can not be used. e.g. sudo, w3m, luit, all C programs using termios.h, etc.
 		$descriptorspec = [
 			0 => ['pipe','r'],

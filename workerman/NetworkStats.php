@@ -183,7 +183,7 @@ class NetworkStats {
 	 */
 	function network2() {
 		$results = array();
-		if ($output = lib_div::getFileRtrim('/proc/net/dev')) {
+		if ($output = explode("\n", rtrim(file_get_contents('/proc/net/dev')))) {
 			while (list(,$buf) = each($output)) {
 				if (preg_match('/:/', $buf)) {
 					list($dev_name, $stats_list) = preg_split('/:/', $buf, 2);
