@@ -87,7 +87,7 @@ class Events {
 		else
 			$output = rtrim(`/usr/sbin/vzlist -H -o veid,ip 2>/dev/null`);
 		$lines = explode("\n", $output);
-		$ips = array();
+		$ipmap = array();
 		foreach ($lines as $line) {
 			$parts = explode(' ', trim($line));
 			if (sizeof($parts) > 1) {
@@ -99,12 +99,12 @@ class Events {
 						$parts = array_merge($parts, explode("\n", $extra));
 					for ($x = 1; $x < sizeof($parts); $x++)
 						if ($parts[$x] != '-')
-							$ips[$parts[$x]] = $id;
+							$ipmap[$parts[$x]] = $id;
 				}
 			}
 		}
-		$this->ipmap = $ips;
-		return $ips;
+		$this->ipmap = $ipmap;
+		return $ipmap;
 	}
 
 	public function vps_iptables_traffic_rules() {
@@ -178,7 +178,7 @@ class Events {
 				}
 			}
 		} else {
-			foreach ($this->ips as $ip => $id) {
+			foreach ($this->ipmap as $ip => $id) {
 				if (validIp($ip, false) == true) {
 					$lines = explode("\n", trim(`/sbin/iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 					if (sizeof($lines) == 2) {
