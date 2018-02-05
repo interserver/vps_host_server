@@ -1,3 +1,4 @@
+#!/bin/env php
 <?php
 use Workerman\Worker;
 //use Workerman\WebServer;

@@ -62,9 +62,9 @@ class Events {
 	public function onClose($conn) {
 		echo 'Connection Closed, Shutting Down'.PHP_EOL;
 		//$conn->close();
-		Worker::stopAll();
+		$conn->reConnect(1);
+		//Worker::stopAll();
 	}
-
 
 	public function get_vps_ipmap() {
 		if ($this->type = 'kvm')
