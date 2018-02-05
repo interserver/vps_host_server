@@ -10,6 +10,7 @@ class Events {
 	public $var;
 	public $vps_list = [];
 	public $bandwidth = null;
+	public $traffic_last = null;
 	public $timers = [];
 	public $ipmap = [];
 	public $type;
@@ -69,7 +70,7 @@ class Events {
 		if ($this->type = 'kvm')
 			$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
 		else
-			$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
+			$output = rtrim(`/usr/sbin/vzlist -H -o veid,ip 2>/dev/null`);
 		$lines = explode("\n", $output);
 		$ips = array();
 		foreach ($lines as $line) {
@@ -108,8 +109,8 @@ class Events {
 	public function get_vps_iptables_traffic() {
 		$totals = array();
 		if ($this->type == 'kvm') {
-			if (is_null($this->bandwidth))
-				$this->bandwidth = unserialize(file_get_contents('/root/.traffic.last'));
+			if (is_null($this->traffic_last) && file_exists('/root/.traffic.last'))
+				$this->traffic_last = unserialize(file_get_contents('/root/.traffic.last'));
 			$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 			if ($vnetcounters != '') {
 				$vnetcounters = explode("\n", $vnetcounters);
@@ -156,7 +157,7 @@ class Events {
 						}
 					}
 					if (sizeof($totals) > 0) {
-						$this->bandwidth = $vpss;
+						$this->traffic_last = $vpss;
 						file_put_contents('/root/.traffic.last', serialize($vpss));
 					}
 				}
@@ -173,9 +174,11 @@ class Events {
 					}
 				}
 			}
+
 			`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
 			$this->vps_iptables_traffic_rules();
 		}
+		$this->bandwidth = $totals;
 		return $totals;
 	}
 

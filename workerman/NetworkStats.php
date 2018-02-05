@@ -173,7 +173,6 @@ class NetworkStats {
 		return $ipiparr['ip'];
 	}
 
-
 	/* this parts from tupa */
 
 	/**
