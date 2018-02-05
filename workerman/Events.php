@@ -163,9 +163,9 @@ class Events {
 				}
 			}
 		} else {
-			foreach ($ips as $ip => $id) {
+			foreach ($this->ips as $ip => $id) {
 				if (validIp($ip, false) == true) {
-					$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
+					$lines = explode("\n", trim(`/sbin/iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 					if (sizeof($lines) == 2) {
 						list($in,$out) = $lines;
 						$total = $in + $out;
