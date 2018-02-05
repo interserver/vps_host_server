@@ -55,20 +55,6 @@ $worker->onWorkerStart = function($worker) {
 		//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
 
 	}
-	if ($global->settings['vmstat']['enable'] === TRUE) {
-		// Save the process handle, close the handle when the process is closed
-		$worker->process_handle = popen('vmstat 1', 'r');
-		if ($worker->process_handle) {
-			$process_connection = new TcpConnection($worker->process_handle);
-			$process_connection->onMessage = function($process_connection, $data) use ($worker) {
-				foreach($worker->connections as $connection) {
-					$connection->send('vmstat:'.$data);
-				}
-			};
-		} else {
-		   echo "vmstat 1 fail\n";
-		}
-	}
 	$context = [																						// Certificate is best to apply for a certificate
 		'ssl' => [									// use the absolute/full paths
 			'local_cert' => __DIR__.'/myadmin.crt',
