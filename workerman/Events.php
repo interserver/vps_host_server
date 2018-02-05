@@ -26,13 +26,13 @@ class Events {
 			echo "Generating new SSL Certificate for encrypted communications\n";
 			echo shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$this->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/myadmin.crt -set_serial 0');
 		}
-
 	}
 
 	public function onConnect($conn) {
 		$this->conn = $conn;
 		$conn->send('{"type":"login","client_name":"'.$this->hostname.'","room_id":"1"}');
 		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
+		$this->vps_get_list();
 	}
 
 	public function onMessage($conn, $data) {
@@ -188,6 +188,17 @@ class Events {
 	}
 
 	public function vps_get_list() {
+		global $global, $settings;
+		$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);
+		$task_connection->send(json_encode(['function' => 'vps_get_list', 'args' => ['type' => $this->type]]));
+		$conn = $this->conn;
+		$task_connection->onMessage = function($task_connection, $task_result) use ($conn) {
+			//var_dump($task_result);
+			$task_connection->close();
+			$conn->send($task_result);
+		};
+		$task_connection->connect();
 
+		$this->conn->send(json_encode($data));
 	}
 }
