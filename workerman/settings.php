@@ -14,12 +14,6 @@ $settings = [
 			'ip' => '0.0.0.0',
 			'port' => 55554,
 		],
-		'http' => [
-			'enable' => FALSE,
-			'ip' => '0.0.0.0',
-			'port' => 55555,
-			'count' => 2,
-		],
 	],
 	'auth' => [
 		'enable' => FALSE,

@@ -239,13 +239,6 @@ $worker->onWorkerStop = function($worker) {
 	}
 };
 
-if ($settings['servers']['http']['enable'] === TRUE) {
-	$web = new WebServer('http://'.$settings['servers']['http']['ip'].':'.$settings['servers']['http']['port']); // WebServer, used to split html js css browser
-	$web->count = $settings['servers']['http']['count']; // WebServer number
-	$web->addRoot(isset($_SERVER['HOSTNAME']) ? $_SERVER['HOSTNAME'] : trim(`hostname -f`), __DIR__.'/Web'); // Set the site root
-	//$web->addRoot('localhost', __DIR__ . '/Web');
-}
-
 // If not in the root directory, run runAll method
 if(!defined('GLOBAL_START'))
 	Worker::runAll();
