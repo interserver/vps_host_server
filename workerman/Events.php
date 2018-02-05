@@ -5,6 +5,7 @@ use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
 class Events {
+	public $hostname;
 	public $var;
 	public $vps_list = [];
 	public $bandwidth = null;
@@ -16,10 +17,14 @@ class Events {
 		$this->type = file_exists('/usr/sin/vzctl') ? 'vzctl' : 'kvm';
 		//Events::update_network_dev();
 		$this->get_vps_ipmap();
+		if (isset($_SERVER['HOSTNAME']))
+			$this->hostname = $_SERVER['HOSTNAME'];
+		else
+			$this->hostname = trim(shell_exec('hostname -f'));
 	}
 
 	public function onConnect($conn) {
-		$conn->send('{"type":"login","client_name":"'.$_SERVER['HOSTNAME'].'","room_id":"1"}');
+		$conn->send('{"type":"login","client_name":"'.$this->hostname.'","room_id":"1"}');
 	}
 
 	public function onMessage($conn, $data) {
