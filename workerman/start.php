@@ -72,11 +72,8 @@ $worker->onWorkerStart = function($worker) {
 	}
 	$context = [																						// Certificate is best to apply for a certificate
 		'ssl' => [									// use the absolute/full paths
-			'local_cert' => '/etc/ssl/certs/ssl-cert-snakeoil.pem',
-			'local_pk' => '/etc/ssl/private/ssl-cert-snakeoil.key',
-			//'local_cert' => '/home/my/files/apache_setup/interserver.net.crt',							// can also be a crt file
-			//'local_pk' => '/home/my/files/apache_setup/interserver.net.key',
-			//'cafile' => '/home/my/files/apache_setup/AlphaSSL.root.crt',
+			'local_cert' => __DIR__.'/myadmin.crt',
+			'local_pk' => __DIR__.'/myadmin.key',
 			'verify_peer' => false,
 			'verify_peer_name' => false,
 		]

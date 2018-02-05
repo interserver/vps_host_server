@@ -21,7 +21,12 @@ class Events {
 		if (isset($_SERVER['HOSTNAME']))
 			$this->hostname = $_SERVER['HOSTNAME'];
 		else
-			$this->hostname = trim(shell_exec('hostname -f'));
+			$this->hostname = trim(shell_exec('hostname -f 2>/dev/null||hostname'));
+		if (!file_exists(__DIR__.'/myadmin.crt')) {
+			echo "Generating new SSL Certificate for encrypted communications\n";
+			echo shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$this->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/myadmin.crt -set_serial 0');
+		}
+
 	}
 
 	public function onConnect($conn) {
@@ -180,5 +185,9 @@ class Events {
 			'type' => 'bandwidth',
 			'content' => $totals,
 		]));
+	}
+
+	public function vps_get_list() {
+
 	}
 }
