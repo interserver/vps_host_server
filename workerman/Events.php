@@ -25,6 +25,7 @@ class Events {
 
 	public function onConnect($conn) {
 		$conn->send('{"type":"login","client_name":"'.$this->hostname.'","room_id":"1"}');
+		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
 	}
 
 	public function onMessage($conn, $data) {
@@ -171,6 +172,7 @@ class Events {
 	}
 
 	public function vps_get_traffic() {
+		echo "Firing ".__FUNCTION__." Event\n";
 		$totals = $this->get_vps_iptables_traffic();
 		echo "Got Totals:".print_r($totals, TRUE).PHP_EOL;
 	}

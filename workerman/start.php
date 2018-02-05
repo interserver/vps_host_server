@@ -54,7 +54,6 @@ $worker->onWorkerStart = function($worker) {
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
 		//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
 		//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
-		$events->timers['vps_get_traffic'] = Timer::add(60, [$events, 'vps_get_traffic']);
 
 	}
 	if ($global->settings['vmstat']['enable'] === TRUE) {
