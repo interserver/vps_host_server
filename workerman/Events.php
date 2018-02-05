@@ -198,7 +198,5 @@ class Events {
 			$conn->send($task_result);
 		};
 		$task_connection->connect();
-
-		$this->conn->send(json_encode($data));
 	}
 }
