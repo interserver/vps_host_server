@@ -77,7 +77,7 @@ class Events {
 	public function onClose($conn) {
 		echo 'Connection Closed, Shutting Down'.PHP_EOL;
 		//$conn->close();
-		$conn->reConnect(1);
+		$conn->reConnect(5);
 		//Worker::stopAll();
 	}
 

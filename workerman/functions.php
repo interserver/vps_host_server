@@ -406,7 +406,7 @@ fi;\n";
 		'cpu_flags' => $flags,
 	);
 	$data = [
-		'type' => 'bandwidth',
+		'type' => 'vps_list',
 		'content' => [
 			'servers' => $servers,
 	]];
