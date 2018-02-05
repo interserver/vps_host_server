@@ -48,6 +48,21 @@ class Events {
 				break;
 			case 'login':
 				break;
+			case 'vmstat_start':
+				// Save the process handle, close the handle when the process is closed
+				$worker->process_handle = popen('vmstat 1', 'r');
+				if ($worker->process_handle) {
+					$process_connection = new TcpConnection($worker->process_handle);
+					$process_connection->onMessage = function($process_connection, $data) use ($worker) {
+						foreach($worker->connections as $connection) {
+							$connection->send('vmstat:'.$data);
+						}
+					};
+				} else {
+					echo "vmstat 1 fail\n";
+				}
+
+				break;
 			case 'phptty':
 				if ($global->settings['phptty']['client_input'] === TRUE)
 					fwrite($conn->pipes[0], $data);
@@ -67,7 +82,7 @@ class Events {
 	}
 
 	public function get_vps_ipmap() {
-		if ($this->type = 'kvm')
+		if ($this->type == 'kvm')
 			$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
 		else
 			$output = rtrim(`/usr/sbin/vzlist -H -o veid,ip 2>/dev/null`);

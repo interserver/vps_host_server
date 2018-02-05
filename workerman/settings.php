@@ -61,6 +61,5 @@ if (!file_exists('/usr/sbin/vzctl')) {
 	$settings['vps_queue']['cmds'][] = 'getvncmap';
 }
 $settings['vps_queue']['cmds'][] = 'getqueue';
-$settings['vps_queue']['cmds'][] = 'vps_get_list.php';
 
 return $settings;
