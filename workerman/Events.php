@@ -5,6 +5,7 @@ use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
 class Events {
+	public $conn = null;
 	public $hostname;
 	public $var;
 	public $vps_list = [];
@@ -24,11 +25,13 @@ class Events {
 	}
 
 	public function onConnect($conn) {
+		$this->conn = $conn;
 		$conn->send('{"type":"login","client_name":"'.$this->hostname.'","room_id":"1"}');
 		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
 	}
 
 	public function onMessage($conn, $data) {
+		$this->conn = $conn;
 		echo $data.PHP_EOL;
 		global $global;
 		$conn->lastMessageTime = time();
@@ -172,8 +175,10 @@ class Events {
 	}
 
 	public function vps_get_traffic() {
-		echo "Firing ".__FUNCTION__." Event\n";
 		$totals = $this->get_vps_iptables_traffic();
-		echo "Got Totals:".print_r($totals, TRUE).PHP_EOL;
+		$this->conn->send(json_encode([
+			'type' => 'bandwidth',
+			'content' => $totals,
+		]));
 	}
 }
