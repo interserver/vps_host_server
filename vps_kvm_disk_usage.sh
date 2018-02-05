@@ -1,5 +1,4 @@
 #!/bin/bash
-exit;
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
@@ -26,13 +25,13 @@ for i in $(lvdisplay --all -c | sed s#" "#""#g | grep "/dev/vz/$name"); do
 #		echo "J:$j"
 		# Sample sfdisk output
 		#windows1p1 7
-		type="$(sfdisk -d $vz | grep "^/dev/vz" | cut -d= -f1,4 | sed s#" : start= "#" "#g | cut -d, -f1 |grep -v " 0" | sed s#"/dev/vz/"#""#g | grep "$j" | cut -d" " -f 2)"
+		type="$(sfdisk -d $vz | grep "^/dev/vz" | cut -d= -f1,4 | sed s#" : start= *"#" "#g | cut -d, -f1 |grep -v " 0" | sed s#"/dev/vz/"#""#g | grep "$(echo "$j"|sed s#"^vz-"#""#g)" | cut -d" " -f 2)"
 #		echo "Type:$type"
 		if [ $type = 83 ]; then
-			reservedblocks="$(dumpe2fs -h -f /dev/mapper/$j | grep "^Reserved block count" | awk '{ print $4 }')"
-			freeblocks="$(dumpe2fs -h -f /dev/mapper/$j | grep "^Free blocks" | awk '{ print $3 }')"
-			blocksize="$(dumpe2fs -h -f /dev/mapper/$j | grep "^Block size" | awk '{ print $3 }')"
-			totalblocks="$(dumpe2fs -h -f /dev/mapper/$j | grep "^Block count" | awk '{ print $3 }')"
+			reservedblocks="$(dumpe2fs -h -f /dev/mapper/$j 2>/dev/null | grep "^Reserved block count" | awk '{ print $4 }')"
+			freeblocks="$(dumpe2fs -h -f /dev/mapper/$j 2>/dev/null | grep "^Free blocks" | awk '{ print $3 }')"
+			blocksize="$(dumpe2fs -h -f /dev/mapper/$j 2>/dev/null | grep "^Block size" | awk '{ print $3 }')"
+			totalblocks="$(dumpe2fs -h -f /dev/mapper/$j 2>/dev/null | grep "^Block count" | awk '{ print $3 }')"
 			total="$(echo "$blocksize * $totalblocks / 1024" | bc -l | cut -d\. -f1)"
 			free="$(echo "$blocksize * ($freeblocks - $reservedblocks) / 1024" | bc -l | cut -d\. -f1)"
 			echo "$vzname:$total:$free"
