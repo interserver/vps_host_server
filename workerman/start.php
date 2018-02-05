@@ -11,7 +11,7 @@ $settings = include __DIR__.'/settings.php';
 include_once __DIR__.'/functions.php';
 include_once __DIR__.'/Events.php';
 include_once __DIR__.'/SystemStats.php';
-
+include_once __DIR__.'/../xml2array.php';
 
 if (ini_get('date.timezone') == '')
 	ini_set('date.timezone', 'America/New_York');
