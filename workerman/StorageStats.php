@@ -103,7 +103,7 @@ class StorageStats {
 		while (list(,$mount) = each($output))
 			$mounts[] = $mount;
 		$fstype = array();
-		if ($output = rtrim(file_get_contents('/proc/mounts')))
+		if ($output = explode("\n", rtrim(file_get_contents('/proc/mounts'))))
 			while (list(,$buf) = each($output)) {
 				list($dev, $mpoint, $type) = preg_split('/\s+/', trim($buf), 4);
 				$fstype[$mpoint] = $type;

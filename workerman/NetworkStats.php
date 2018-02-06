@@ -168,7 +168,7 @@ class NetworkStats {
 
 	public static function Getipv4() {
 		$ipipurl = 'http://ip.huomao.com/ip';
-		$ipipjson = curl($ipipurl);
+		$ipipjson = self::curl($ipipurl);
 		$ipiparr = json_decode($ipipjson,true);
 		return $ipiparr['ip'];
 	}
@@ -180,7 +180,7 @@ class NetworkStats {
 	 *
 	 * @return array	network information
 	 */
-	function network2() {
+	public static function network2() {
 		$results = array();
 		if ($output = explode("\n", rtrim(file_get_contents('/proc/net/dev')))) {
 			while (list(,$buf) = each($output)) {

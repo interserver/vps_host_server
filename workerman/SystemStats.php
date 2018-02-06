@@ -54,11 +54,12 @@ class SystemStats {
 		}
 		return trim($new_info);
 	}
-	/*
+
 	public static function top_both() {
 		return shell_exec("ps aux | sort -b -r -k 3 -k 4 | head -6 | tail -5 | awk '{print $3,$4,$11}'");
 	}
-	*/
+
+
 	public static function uptime() {
 		$info = trim(shell_exec('uptime'));
 		preg_match('/(\d{1,2}:\d{1,2}), /', $info, $m);
@@ -72,7 +73,7 @@ class SystemStats {
 	 */
 	public static function uptime_from_proc() {
 		if ($result = rtrim(file_get_contents('/proc/uptime'))) {
-			$ar_buf = split(' ', $result[0]);
+			$ar_buf = explode(' ', $result[0]);
 
 			$sys_ticks = trim($ar_buf[0]);
 
@@ -206,7 +207,7 @@ class SystemStats {
 	 */
 	public static function loadavg_from_proc() {
 		if ($results = rtrim(file_get_contents('/proc/loadavg'))) {
-			$results = split(' ', $results[0]);
+			$results = explode(' ', $results[0]);
 		} else {
 			$results = 'N.A.';
 		}
@@ -306,7 +307,7 @@ class SystemStats {
 	 * @return string	hostname
 	 */
 	public static function chostname() {
-		if ($result = rtrim(file_get_contents('/proc/sys/kernel/hostname'))) {
+		if ($result = explode("\n", rtrim(file_get_contents('/proc/sys/kernel/hostname')))) {
 			$result = gethostbyaddr(gethostbyname($result[0]));
 		} else {
 			$result = 'N.A.';
@@ -342,7 +343,7 @@ class SystemStats {
 	 * @return array	mem/swap informations
 	 */
 	public static function memory() {
-		if ($output = rtrim(file_get_contents('/proc/meminfo'))) {
+		if ($output = explode("\n", rtrim(file_get_contents('/proc/meminfo')))) {
 			$results['ram'] = array();
 			$results['swap'] = array();
 			$results['devswap'] = array();
@@ -363,7 +364,7 @@ class SystemStats {
 			$results['ram']['used'] = $results['ram']['total'] - $results['ram']['free'];
 			$results['swap']['used'] = $results['swap']['total'] - $results['swap']['free'];
 			if (file_exists('/proc/swaps') && count(file('/proc/swaps')) > 1) {
-				$swaps = rtrim(file_get_contents('/proc/swaps'));
+				$swaps = explode("\n", rtrim(file_get_contents('/proc/swaps')));
 				while (list(,$swap) = each($swaps))
 					$swapdevs[] = $swap;
 				for ($i = 1; $i < (count($swapdevs) - 1); $i++) {
