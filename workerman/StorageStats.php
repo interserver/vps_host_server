@@ -49,9 +49,6 @@ class StorageStats {
 		return trim(shell_exec('cat /proc/sys/vm/swappiness'));
 	}
 
-
-	/* from prober */
-
 	public static function hddusage() {
 		$df = `df`;
 		if($df == null) {
@@ -88,10 +85,6 @@ class StorageStats {
 			return $array;
 		}
 	}
-
-
-	/* from tupa */
-
 
 	/**
 	 * Gets filesystem informations
