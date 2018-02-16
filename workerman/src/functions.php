@@ -1,6 +1,8 @@
 <?php
 use Workerman\Connection\AsyncTcpConnection;
 
+include_once __DIR__.'/src/Data/xml2array.php';
+
 function vps_update_info_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);

@@ -2,7 +2,12 @@
 	"name": "detain/vps-host-service",
 	"description": "Service providing Asynchronous communication and updates to the host servers vps related stuff.",
 	"type": "project",
-	"license": "proprietary",
+	"keywords": [
+		"server",
+		"administration",
+		"vps"
+	],
+	"license": "LGPL-2.1-or-later",
 	"authors": [
 		{
 			"name": "Joe Huss",
@@ -10,9 +15,24 @@
 		}
 	],
 	"require": {
-		"workerman/gateway-worker" : ">=3.0.0",
+		"php": ">=5.3.0",
+		"ext-curl": "*",
+		"roave/security-advisories": "dev-master",
+		"workerman/gateway-worker" : "*",
 		"react/http-client": "*",
 		"workerman/workerman": "*",
 		"workerman/globaldata": "*"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "*",
+		"vlucas/phpdotenv": "*",
+		"codeclimate/php-test-reporter": "dev-master",
+		"satooshi/php-coveralls": "*",
+		"codacy/coverage": "dev-master"
+	},
+	"autoload": {
+		"psr-4": {
+			"MyAdmin\\VpsHost\\": "src/"
+		}
 	}
 }
