@@ -14,7 +14,7 @@ if (ini_get('default_socket_timeout') < 1200 && ini_get('default_socket_timeout'
 
 global $composer, $settings;
 $composer = include __DIR__.'/../vendor/autoload.php';
-$settings = include __DIR__.'/src/Config/settings.php';
-include_once __DIR__.'/src/functions.php';
+$settings = include __DIR__.'/Config/settings.php';
+include_once __DIR__.'/functions.php';
 
 
