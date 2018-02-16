@@ -32,11 +32,11 @@ use Workerman\Connection\AsyncTcpConnection;
 use Workerman\Lib\Timer;
 
 $composer = include __DIR__.'/vendor/autoload.php';
-$settings = include __DIR__.'/settings.php';
+$settings = include __DIR__.'/src/settings.php';
 include_once __DIR__.'/../xml2array.php';
-include_once __DIR__.'/functions.php';
-include_once __DIR__.'/Events.php';
-include_once __DIR__.'/SystemStats.php';
+include_once __DIR__.'/src/functions.php';
+include_once __DIR__.'/src/Events.php';
+include_once __DIR__.'/src/SystemStats.php';
 
 if (ini_get('date.timezone') == '')
 	ini_set('date.timezone', 'America/New_York');
@@ -71,7 +71,7 @@ $worker->onWorkerStart = function($worker) {
 	if (!isset($global->settings))
 		$global->settings = $settings;
 	$events->onWorkerStart($worker);
-	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', Events::getSslContext());
+	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', getSslContext());
 	$ws_connection->transport = 'ssl';
 	$ws_connection->onConnect = [$events, 'onConnect'];
 	$ws_connection->onMessage = [$events, 'onMessage'];

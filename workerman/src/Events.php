@@ -293,19 +293,4 @@ class Events {
 		};
 		$task_connection->connect();
 	}
-
-	/**
-	 * returns the SSL Context array / connection settings.
-	 * @return array the context array to pass to a connection for SSL support
-	 */
-	public static function getSslContext() {
-		return [
-			'ssl' => [ // use the absolute/full paths
-				'local_cert' => __DIR__.'/myadmin.crt',
-				'local_pk' => __DIR__.'/myadmin.key',
-				'verify_peer' => false,
-				'verify_peer_name' => false,
-			]
-		];
-	}
 }

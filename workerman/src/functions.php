@@ -1,4 +1,5 @@
 <?php
+use Workerman\Connection\AsyncTcpConnection;
 
 function vps_update_info_timer() {
 	global $global, $settings;
@@ -14,7 +15,7 @@ function vps_update_info_timer() {
 function vps_queue($cmds) {
 	foreach ($cmds as $cmd) {
 		if (preg_match('/\.php$', $cmd) && file_exists(__DIR__.'/../'.$cmd))
-			include __DIR__.'/../'.$cmd;
+			include __DIR__.'/../../'.$cmd;
 		elseif (preg_match('/(\/[^ ]+).*$/m', $cmd, $matches))
 			echo `$cmd`;
 		else {
@@ -51,29 +52,25 @@ function vps_queue_timer() {
 }
 
 function validIp($ip, $display_errors = true, $support_ipv6 = false) {
-	if (version_compare(PHP_VERSION, '5.2.0') >= 0)
-	{
+	if (version_compare(PHP_VERSION, '5.2.0') >= 0) {
 		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false)
 			if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)
 				return false;
 	} else {
-		if (!preg_match("/^[0-9\.]{7,15}$/", $ip))
-		{
+		if (!preg_match("/^[0-9\.]{7,15}$/", $ip)) {
 			// don't display errors cuz this gets called w/ a blank entry when people didn't even submit anything yet
 			//add_output('<font class="error">IP '.$ip.' Too short/long</font>');
 			return false;
 		}
 		$quads = explode('.', $ip);
 		$numquads = count($quads);
-		if ($numquads != 4)
-		{
+		if ($numquads != 4) {
 			if ($display_errors)
 				error_log('<font class="error">IP '.$ip.' Too many quads</font>');
 			return false;
 		}
 		for ($i = 0; $i < 4; $i++)
-			if ($quads[$i] > 255)
-			{
+			if ($quads[$i] > 255) {
 				if ($display_errors)
 					error_log('<font class="error">IP '.$ip.' number '.$quads[$i].' too high</font>');
 				return false;
@@ -81,7 +78,6 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false) {
 	}
 	return true;
 }
-
 
 function vps_get_list($params) {
 	$servers = array();
@@ -413,4 +409,19 @@ fi;\n";
 	if (isset($ips))
 		$data['content']['ips'] = $ips;
 	return $data;
+}
+
+/**
+ * returns the SSL Context array / connection settings.
+ * @return array the context array to pass to a connection for SSL support
+ */
+function getSslContext() {
+	return [
+		'ssl' => [ // use the absolute/full paths
+			'local_cert' => __DIR__.'/myadmin.crt',
+			'local_pk' => __DIR__.'/myadmin.key',
+			'verify_peer' => false,
+			'verify_peer_name' => false,
+		]
+	];
 }
