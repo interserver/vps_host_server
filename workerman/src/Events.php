@@ -31,10 +31,22 @@ class Events {
 	}
 
 	public function onWorkerStart($worker) {
+		global $global, $settings;
+		$global = new \GlobalData\Client($settings['servers']['globaldata']['ip'].':'.$settings['servers']['globaldata']['port']);	 // initialize the GlobalData client
+		if (!isset($global->settings))
+			$global->settings = $settings;
 		if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
 			//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
 			//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
 		}
+		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', getSslContext());
+		$ws_connection->transport = 'ssl';
+		$ws_connection->onConnect = [$events, 'onConnect'];
+		$ws_connection->onMessage = [$events, 'onMessage'];
+		$ws_connection->onError = [$events, 'onError'];
+		$ws_connection->onClose = [$events, 'onClose'];
+		$ws_connection->onWorkerStop = [$events, 'onWorkerStop'];
+		$ws_connection->connect();
 	}
 
 	public function onConnect($conn) {
