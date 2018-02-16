@@ -1,7 +1,7 @@
 <?php
 use Workerman\Connection\AsyncTcpConnection;
 
-include_once __DIR__.'/src/Data/xml2array.php';
+include_once __DIR__.'/Data/xml2array.php';
 
 function vps_update_info_timer() {
 	global $global, $settings;
