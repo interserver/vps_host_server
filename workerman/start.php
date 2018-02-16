@@ -32,9 +32,8 @@ use Workerman\Worker;
 
 $composer = include __DIR__.'/vendor/autoload.php';
 $settings = include __DIR__.'/src/settings.php';
-include_once __DIR__.'/../xml2array.php';
+include_once __DIR__.'/src/Data/xml2array.php';
 include_once __DIR__.'/src/functions.php';
-include_once __DIR__.'/src/SystemStats.php';
 include __DIR__.'/src/Workers/GlobalData.php';
 include __DIR__.'/src/Workers/Task.php';
 include __DIR__.'/src/Workers/VpsServer.php';
