@@ -53,7 +53,7 @@ class Events {
 		$this->conn = $conn;
 		$json = [
 			'type' => 'login',
-			'username' => $this->hostname,
+			'name' => $this->hostname,
 			'module' => 'vps',
 			'room_id' => 1,
 			'ima' => 'host',
