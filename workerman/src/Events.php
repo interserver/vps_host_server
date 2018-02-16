@@ -41,11 +41,11 @@ class Events {
 		}
 		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', getSslContext());
 		$ws_connection->transport = 'ssl';
-		$ws_connection->onConnect = [$events, 'onConnect'];
-		$ws_connection->onMessage = [$events, 'onMessage'];
-		$ws_connection->onError = [$events, 'onError'];
-		$ws_connection->onClose = [$events, 'onClose'];
-		$ws_connection->onWorkerStop = [$events, 'onWorkerStop'];
+		$ws_connection->onConnect = [$this, 'onConnect'];
+		$ws_connection->onMessage = [$this, 'onMessage'];
+		$ws_connection->onError = [$this, 'onError'];
+		$ws_connection->onClose = [$this, 'onClose'];
+		$ws_connection->onWorkerStop = [$this, 'onWorkerStop'];
 		$ws_connection->connect();
 	}
 
