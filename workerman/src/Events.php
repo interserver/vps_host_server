@@ -51,7 +51,14 @@ class Events {
 
 	public function onConnect($conn) {
 		$this->conn = $conn;
-		$conn->send('{"type":"login","client_name":"'.$this->hostname.'","room_id":"1"}');
+		$json = [
+			'type' => 'login',
+			'username' => $this->hostname,
+			'module' => 'vps',
+			'room_id' => 1,
+			'ima' => 'host',
+		];
+		$conn->send(json_encode($json));
 		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
 		$this->vps_get_list();
 		/*
