@@ -291,7 +291,7 @@ fi;\n";
 			'packets_total' => $bw[2] + $bw[10],
 			'bytes_sec_total' => 0,
 			'packets_sec_total' => 0,
-		]
+		];
 		if (file_exists('/root/.bw_usage.last')) {
 			$bw_last = unserialize(file_get_contents('/root/.bw_usage.last'));
 			$bw_usage_last = [
@@ -308,7 +308,7 @@ fi;\n";
 				'packets_total' => $bw_last[2] + $bw_last[10],
 				'bytes_sec_total' => 0,
 				'packets_sec_total' => 0,
-			]
+			];
 			$time_diff = $bw[0] - $bw_last[0];
 			foreach(array('bytes', 'packets') as $stat)
 				foreach (array('in','out','total') as $dir)
