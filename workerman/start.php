@@ -31,10 +31,10 @@
 use Workerman\Worker;
 
 include_once __DIR__.'/src/bootstrap.php';
-include __DIR__.'/src/Workers/GlobalData.php';
-include __DIR__.'/src/Workers/Task.php';
-include __DIR__.'/src/Workers/VpsServer.php';
 
-// If not in the root directory, run runAll method
-if(!defined('GLOBAL_START'))
-	Worker::runAll();
+define('GLOBAL_START', 1); // The flag is globally activated
+Worker::$stdoutFile = __DIR__.'/stdout.log';
+foreach(glob(__DIR__.'/src/Workers/*.php') as $start_file)
+	require_once $start_file;
+
+Worker::runAll();
