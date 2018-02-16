@@ -1,6 +1,7 @@
 <?php
 
-use \Workerman\Lib\Timer;
+use Workerman\Worker;
+use Workerman\Lib\Timer;
 use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
@@ -29,11 +30,60 @@ class Events {
 		}
 	}
 
+	public function onWorkerStart($worker) {
+		if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
+			//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
+			//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
+		}
+	}
+
 	public function onConnect($conn) {
 		$this->conn = $conn;
 		$conn->send('{"type":"login","client_name":"'.$this->hostname.'","room_id":"1"}');
 		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
 		$this->vps_get_list();
+		/*
+		global $global;
+		if ($global->settings['auth']['enable'] === TRUE) {
+			$connection->auth_timer_id = Timer::add(30, function() use ($connection){
+				$connection->close();
+			}, null, false);
+		}
+		if ($global->settings['vmstat']['enable'] === TRUE) {
+			$connection->send("vmstat:procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----\n");
+			$connection->send("vmstat:r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa\n");
+		}
+		if ($global->settings['phptty']['enable'] === TRUE) {
+			//To do this, PHP_CAN_DO_PTS must be enabled. See ext/standard/proc_open.c in PHP directory.
+			//$descriptorspec = [
+			//	0 => ['pty'],
+			//	1 => ['pty'],
+			//	2 => ['pty']
+			//];
+			//Pipe can not do PTY. Thus, many features of PTY can not be used. e.g. sudo, w3m, luit, all C programs using termios.h, etc.
+			$descriptorspec = [
+				0 => ['pipe','r'],
+				1 => ['pipe','w'],
+				2 => ['pipe','w']
+			];
+			unset($_SERVER['argv']);
+			$env = array_merge(['COLUMNS' => 130, 'LINES' => 50], $_SERVER);
+			$connection->process = proc_open($global->settings['phptty']['cmd'], $descriptorspec, $pipes, null, $env);
+			$connection->pipes = $pipes;
+			stream_set_blocking($pipes[0], 0);
+			$connection->process_stdout = new TcpConnection($pipes[1]);
+			$connection->process_stdout->onMessage = function($process_connection, $data) use ($connection) {
+				$connection->send('phptty:'.$data);
+			};
+			$connection->process_stdout->onClose = function($process_connection) use ($connection) {
+				$connection->close(); // Close WebSocket connection on process exit.
+			};
+			$connection->process_stdin = new TcpConnection($pipes[2]);
+			$connection->process_stdin->onMessage = function($process_connection, $data) use ($connection) {
+				$connection->send('phptty:'.$data);
+			};
+		}
+		*/
 	}
 
 	public function onMessage($conn, $data) {
@@ -79,6 +129,32 @@ class Events {
 		//$conn->close();
 		$conn->reConnect(5);
 		//Worker::stopAll();
+		/*
+		global $global;
+		if ($global->settings['phptty']['enable'] === TRUE) {
+			$connection->process_stdin->close();
+			$connection->process_stdout->close();
+			fclose($connection->pipes[0]);
+			$connection->pipes = null;
+			proc_terminate($connection->process);
+			proc_close($connection->process);
+			$connection->process = null;
+		}
+		*/
+	}
+
+	public function onWorkerStop($worker) {
+		/*
+		global $global, $settings;
+		if ($settings['phptty']['enable'] === TRUE) {
+			foreach($worker->connections as $connection)
+				$connection->close();
+		}
+		if ($settings['vmstat']['enable'] === TRUE) {
+			@shell_exec('killall vmstat');
+			@pclose($worker->process_handle);
+		}
+		*/
 	}
 
 	public function get_vps_ipmap() {
@@ -216,5 +292,20 @@ class Events {
 			$conn->send($task_result);
 		};
 		$task_connection->connect();
+	}
+
+	/**
+	 * returns the SSL Context array / connection settings.
+	 * @return array the context array to pass to a connection for SSL support
+	 */
+	public static function getSslContext() {
+		return [
+			'ssl' => [ // use the absolute/full paths
+				'local_cert' => __DIR__.'/myadmin.crt',
+				'local_pk' => __DIR__.'/myadmin.key',
+				'verify_peer' => false,
+				'verify_peer_name' => false,
+			]
+		];
 	}
 }
