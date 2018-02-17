@@ -167,27 +167,11 @@ class Events {
 		//$conn->close();
 		$conn->reConnect(5);
 		//Worker::stopAll();
-		/*
-		global $global;
-		if ($global->settings['phptty']['enable'] === TRUE) {
-			$this->running[$data['id']]['process_stdin']->close();
-			$this->running[$data['id']]['process_stdout']->close();
-			fclose($connection->pipes[0]);
-			$connection->pipes = null;
-			proc_terminate($connection->process);
-			proc_close($connection->process);
-			$connection->process = null;
-		}
-		*/
 	}
 
 	public function onWorkerStop($worker) {
 		/*
 		global $global, $settings;
-		if ($settings['phptty']['enable'] === TRUE) {
-			foreach($worker->connections as $connection)
-				$connection->close();
-		}
 		if ($settings['vmstat']['enable'] === TRUE) {
 			@shell_exec('killall vmstat');
 			@pclose($worker->process_handle);
