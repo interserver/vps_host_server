@@ -15,6 +15,7 @@ class Events {
 	public $timers = [];
 	public $ipmap = [];
 	public $type;
+	public $running = [];
 
 	public function __construct() {
 		$this->type = file_exists('/usr/sbin/vzctl') ? 'vzctl' : 'kvm';
@@ -90,15 +91,15 @@ class Events {
 			$connection->process = proc_open($global->settings['phptty']['cmd'], $descriptorspec, $pipes, null, $env);
 			$connection->pipes = $pipes;
 			stream_set_blocking($pipes[0], 0);
-			$connection->process_stdout = new TcpConnection($pipes[1]);
-			$connection->process_stdout->onMessage = function($process_connection, $data) use ($connection) {
+			$this->running[$data['id']]['process_stdout'] = new TcpConnection($pipes[1]);
+			$this->running[$data['id']]['process_stdout']->onMessage = function($process_connection, $data) use ($connection) {
 				$connection->send('phptty:'.$data);
 			};
-			$connection->process_stdout->onClose = function($process_connection) use ($connection) {
+			$this->running[$data['id']]['process_stdout']->onClose = function($process_connection) use ($connection) {
 				$connection->close(); // Close WebSocket connection on process exit.
 			};
-			$connection->process_stdin = new TcpConnection($pipes[2]);
-			$connection->process_stdin->onMessage = function($process_connection, $data) use ($connection) {
+			$this->running[$data['id']]['process_stdin'] = new TcpConnection($pipes[2]);
+			$this->running[$data['id']]['process_stdin']->onMessage = function($process_connection, $data) use ($connection) {
 				$connection->send('phptty:'.$data);
 			};
 		}
@@ -115,7 +116,67 @@ class Events {
 			case 'ping':
 				$conn->send('{"type":"pong"}');
 				break;
-			case 'login':
+			case 'run':
+				/*	$data = [
+						'type' => 'run',
+						'command' => $cmd,
+						'id' => $data['id'],
+						'interact' => false,
+						'host' => $uid,
+						'for' => $for
+					]; */
+				// Save the process handle, close the handle when the process is closed
+				$run_id = $data['id'];
+				$this->running[$data['id']] = [
+					'command' => $data['cmd'],
+					'id' => $data['id'],
+					'interact' => $data['interact'],
+					'for' => $data['for'],
+					'process' => null,
+					'pipes' => null,
+					'process_stdin' => null,
+					'process_stdout' => null,
+					'process_stderr' => null,
+
+				];
+				$loop = Worker::getEventLoop();
+				$this->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command']);
+				$this->running[$data['id']]['process']->start($loop);
+				$this->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($this, $data, $conn) {
+					if (is_null($termSignal))
+						echo "command '{$data['command']}' terminated with signal {$termSignal}\n";
+					else
+						echo "command '{$data['command']}' completed with exit code {$exitCode}\n";
+					$json = [
+						'type' => 'ran',
+						'id' => $data['id'],
+						'code' => $exitCode,
+						'term' => $termSignal,
+					];
+					$conn->send(json_encode($json));
+					unset($this->running[$data['id']]);
+				});
+				$this->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
+					$json = [
+						'type' => 'ran',
+						'id' => $data['id'],
+						'stdout' => $output
+					];
+					$conn->send(json_encode($json));
+				});
+				$this->running[$data['id']]['process']->stderr->on('data', function($output) {
+					$json = [
+						'type' => 'ran',
+						'id' => $data['id'],
+						'stderr' => $output
+					];
+					$conn->send(json_encode($json));
+				});
+				break;
+			case 'running':
+				if (isset($data['id'])) {
+						$this->running[$data['id']]['process']->stdin->write($data['stdin']);
+				}
 				break;
 			case 'vmstat_start':
 				// Save the process handle, close the handle when the process is closed
@@ -151,8 +212,8 @@ class Events {
 		/*
 		global $global;
 		if ($global->settings['phptty']['enable'] === TRUE) {
-			$connection->process_stdin->close();
-			$connection->process_stdout->close();
+			$this->running[$data['id']]['process_stdin']->close();
+			$this->running[$data['id']]['process_stdout']->close();
 			fclose($connection->pipes[0]);
 			$connection->pipes = null;
 			proc_terminate($connection->process);
