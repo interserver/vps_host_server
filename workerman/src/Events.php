@@ -144,9 +144,9 @@ class Events {
 				$this->running[$data['id']]['process']->start($loop);
 				$this->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn) {
 					if (is_null($termSignal))
-						echo "command '{$data['command']}' terminated with signal {$termSignal}\n";
-					else
 						echo "command '{$data['command']}' completed with exit code {$exitCode}\n";
+					else
+						echo "command '{$data['command']}' terminated with signal {$termSignal}\n";
 					$json = [
 						'type' => 'ran',
 						'id' => $data['id'],
