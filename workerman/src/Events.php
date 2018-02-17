@@ -302,7 +302,7 @@ class Events {
 
 	public function vps_get_list() {
 		global $global, $settings;
-		$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);
+		$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 		$task_connection->send(json_encode(['function' => 'vps_get_list', 'args' => ['type' => $this->type]]));
 		$conn = $this->conn;
 		$task_connection->onMessage = function($task_connection, $task_result) use ($conn) {

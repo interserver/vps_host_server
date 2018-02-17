@@ -2,13 +2,13 @@
 use Workerman\Worker;
 use Workerman\Connection\AsyncTcpConnection;
 
-global $settings;
-$task_worker = new Worker('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);
-$task_worker->count = $settings['servers']['task']['count'];
+globa $settings;
+$task_worker = new Worker('Text://127.0.0.1:55552');
+$task_worker->count = 5;
 $task_worker->name = 'TaskWorker';
 $task_worker->onWorkerStart = function($worker) {
 	global $global, $settings;
-	$global = new \GlobalData\Client($settings['servers']['globaldata']['ip'].':'.$settings['servers']['globaldata']['port']);
+	$global = new \GlobalData\Client('127.0.0.1:55553');
 };
 $task_worker->onMessage = function($connection, $task_data) {
 	$task_data = json_decode($task_data, true);

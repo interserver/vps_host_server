@@ -5,7 +5,7 @@ include_once __DIR__.'/Data/xml2array.php';
 
 function vps_update_info_timer() {
 	global $global, $settings;
-	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']);
+	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {
 		 //var_dump($task_result);
@@ -44,7 +44,7 @@ function vps_queue($cmds) {
 
 function vps_queue_timer() {
 	global $global, $settings;
-	$task_connection = new AsyncTcpConnection('Text://'.$settings['servers']['task']['ip'].':'.$settings['servers']['task']['port']); // Asynchronous link with the remote task service
+	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552'); // Asynchronous link with the remote task service
 	$task_connection->send(json_encode(['function' => 'vps_queue', 'args' => $global->settings['vps_queue']['cmds']])); // send data
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
 		 //var_dump($task_result);
