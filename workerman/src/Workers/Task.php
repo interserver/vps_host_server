@@ -2,7 +2,7 @@
 use Workerman\Worker;
 use Workerman\Connection\AsyncTcpConnection;
 
-globa $settings;
+global $settings;
 $task_worker = new Worker('Text://127.0.0.1:55552');
 $task_worker->count = 5;
 $task_worker->name = 'TaskWorker';
