@@ -128,7 +128,7 @@ class Events {
 				// Save the process handle, close the handle when the process is closed
 				$run_id = $data['id'];
 				$this->running[$data['id']] = [
-					'command' => $data['cmd'],
+					'command' => $data['command'],
 					'id' => $data['id'],
 					'interact' => $data['interact'],
 					'for' => $data['for'],
@@ -142,7 +142,7 @@ class Events {
 				$loop = Worker::getEventLoop();
 				$this->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command']);
 				$this->running[$data['id']]['process']->start($loop);
-				$this->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($this, $data, $conn) {
+				$this->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn) {
 					if (is_null($termSignal))
 						echo "command '{$data['command']}' terminated with signal {$termSignal}\n";
 					else
