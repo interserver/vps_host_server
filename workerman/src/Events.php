@@ -73,36 +73,6 @@ class Events {
 			$connection->send("vmstat:procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----\n");
 			$connection->send("vmstat:r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa\n");
 		}
-		if ($global->settings['phptty']['enable'] === TRUE) {
-			//To do this, PHP_CAN_DO_PTS must be enabled. See ext/standard/proc_open.c in PHP directory.
-			//$descriptorspec = [
-			//	0 => ['pty'],
-			//	1 => ['pty'],
-			//	2 => ['pty']
-			//];
-			//Pipe can not do PTY. Thus, many features of PTY can not be used. e.g. sudo, w3m, luit, all C programs using termios.h, etc.
-			$descriptorspec = [
-				0 => ['pipe','r'],
-				1 => ['pipe','w'],
-				2 => ['pipe','w']
-			];
-			unset($_SERVER['argv']);
-			$env = array_merge(['COLUMNS' => 130, 'LINES' => 50], $_SERVER);
-			$connection->process = proc_open($global->settings['phptty']['cmd'], $descriptorspec, $pipes, null, $env);
-			$connection->pipes = $pipes;
-			stream_set_blocking($pipes[0], 0);
-			$this->running[$data['id']]['process_stdout'] = new TcpConnection($pipes[1]);
-			$this->running[$data['id']]['process_stdout']->onMessage = function($process_connection, $data) use ($connection) {
-				$connection->send('phptty:'.$data);
-			};
-			$this->running[$data['id']]['process_stdout']->onClose = function($process_connection) use ($connection) {
-				$connection->close(); // Close WebSocket connection on process exit.
-			};
-			$this->running[$data['id']]['process_stdin'] = new TcpConnection($pipes[2]);
-			$this->running[$data['id']]['process_stdin']->onMessage = function($process_connection, $data) use ($connection) {
-				$connection->send('phptty:'.$data);
-			};
-		}
 		*/
 	}
 
@@ -117,15 +87,6 @@ class Events {
 				$conn->send('{"type":"pong"}');
 				break;
 			case 'run':
-				/*	$data = [
-						'type' => 'run',
-						'command' => $cmd,
-						'id' => $data['id'],
-						'interact' => false,
-						'host' => $uid,
-						'for' => $for
-					]; */
-				// Save the process handle, close the handle when the process is closed
 				$run_id = $data['id'];
 				$this->running[$data['id']] = [
 					'command' => $data['command'],
@@ -193,11 +154,6 @@ class Events {
 				} else {
 					echo "vmstat 1 fail\n";
 				}
-
-				break;
-			case 'phptty':
-				if ($global->settings['phptty']['client_input'] === TRUE)
-					fwrite($conn->pipes[0], $data);
 				break;
 		}
 	}
