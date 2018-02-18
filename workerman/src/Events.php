@@ -62,18 +62,6 @@ class Events {
 		$conn->send(json_encode($json));
 		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
 		$this->vps_get_list();
-		/*
-		global $global;
-		if ($global->settings['auth']['enable'] === TRUE) {
-			$connection->auth_timer_id = Timer::add(30, function() use ($connection){
-				$connection->close();
-			}, null, false);
-		}
-		if ($global->settings['vmstat']['enable'] === TRUE) {
-			$connection->send("vmstat:procs -----------memory---------- ---swap-- -----io---- -system-- ----cpu----\n");
-			$connection->send("vmstat:r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa\n");
-		}
-		*/
 	}
 
 	public function onMessage($conn, $data) {

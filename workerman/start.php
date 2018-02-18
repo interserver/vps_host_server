@@ -26,6 +26,9 @@
  *  -  easily updated.  needs a mechanism to allow it to easily received updates and reload itself w/ the new updates.
  *  -  make it easily expandable. eventually we'll want to easily add custom commands and handling for the chat/ws side to
  *       be able to use so things should be setup in a way that allows this.
+ *
+ * Arnold Schwarzenegger -- Get To The Chopper!
+ *  https://www.youtube.com/watch?v=Xs_OacEq2Sk&feature=youtu.be&t=4s
  */
 
 use Workerman\Worker;
