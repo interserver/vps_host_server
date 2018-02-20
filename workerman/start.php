@@ -18,7 +18,7 @@
  *  -  running commands.  there should be a message type that allows the central server to push a command to it to
  *       run and proxy the output through the ws.  2 examples of this are the VMStat live graph i have setup to have
  *       the server run 'vmstat 1' in a pipe and send the output over the ws connection and accept input from it to
- *       redirect to the pipe.   The other example is the PHPTTY page which provi                                                                    des basic terminal emulation to a
+ *       redirect to the pipe.   The other example is the PHPTTY page which provides basic terminal emulation to a
  *       browser.   on this side a command would be run and i/o redirected over the ws connection.
  *  -  instead of periodically checking for new queued items it will get sent notifications via its client
  *       ws connection for queues.   the central server will periodically check the queue and if theres something
@@ -26,6 +26,7 @@
  *  -  easily updated.  needs a mechanism to allow it to easily received updates and reload itself w/ the new updates.
  *  -  make it easily expandable. eventually we'll want to easily add custom commands and handling for the chat/ws side to
  *       be able to use so things should be setup in a way that allows this.
+ *
  *
  * Arnold Schwarzenegger -- Get To The Chopper!
  *  https://www.youtube.com/watch?v=Xs_OacEq2Sk&feature=youtu.be&t=4s

@@ -71,6 +71,24 @@ class Events {
 		$conn->lastMessageTime = time();
 		$data = json_decode($data, true);
 		switch ($data['type']) {
+			case 'vmstat_start':
+				// Save the process handle, close the handle when the process is closed
+				$worker->process_handle = popen('vmstat 1', 'r');
+				if ($worker->process_handle) {
+					$process_connection = new TcpConnection($worker->process_handle);
+					$process_connection->onMessage = function($process_connection, $data) use ($worker) {
+						foreach($worker->connections as $connection) {
+							$connection->send('vmstat:'.$data);
+						}
+					};
+				} else {
+					echo "vmstat 1 fail\n";
+				}
+				break;
+			case 'timers':
+				break;
+			case 'self-update':
+				break;
 			case 'ping':
 				$conn->send('{"type":"pong"}');
 				break;
@@ -109,7 +127,7 @@ class Events {
 				});
 				$this->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
 					$json = [
-						'type' => 'ran',
+						'type' => 'running',
 						'id' => $data['id'],
 						'stdout' => $output
 					];
@@ -117,7 +135,7 @@ class Events {
 				});
 				$this->running[$data['id']]['process']->stderr->on('data', function($output) {
 					$json = [
-						'type' => 'ran',
+						'type' => 'running',
 						'id' => $data['id'],
 						'stderr' => $output
 					];
@@ -127,20 +145,6 @@ class Events {
 			case 'running':
 				if (isset($data['id'])) {
 						$this->running[$data['id']]['process']->stdin->write($data['stdin']);
-				}
-				break;
-			case 'vmstat_start':
-				// Save the process handle, close the handle when the process is closed
-				$worker->process_handle = popen('vmstat 1', 'r');
-				if ($worker->process_handle) {
-					$process_connection = new TcpConnection($worker->process_handle);
-					$process_connection->onMessage = function($process_connection, $data) use ($worker) {
-						foreach($worker->connections as $connection) {
-							$connection->send('vmstat:'.$data);
-						}
-					};
-				} else {
-					echo "vmstat 1 fail\n";
 				}
 				break;
 		}
