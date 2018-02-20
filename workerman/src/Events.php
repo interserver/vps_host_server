@@ -60,7 +60,8 @@ class Events {
 			'ima' => 'host',
 		];
 		$conn->send(json_encode($json));
-		$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
+		if (!isset($this->timers['vps_get_traffic']))
+			$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
 		$this->vps_get_list();
 	}
 
