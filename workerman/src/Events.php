@@ -108,7 +108,7 @@ class Events {
 
 				);
 				$loop = Worker::getEventLoop();
-				$env = array_merge(['COLUMNS' => 80, 'LINES' => 24], $_SERVER);
+				$env = array_merge(array('COLUMNS' => 80, 'LINES' => 24), $_SERVER);
 				unset($env['argv']);
 				$this->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], '/root/cpaneldirect', $env);
 				$this->running[$data['id']]['process']->start($loop);
