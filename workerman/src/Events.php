@@ -9,13 +9,13 @@ class Events {
 	public $conn = null;
 	public $hostname;
 	public $var;
-	public $vps_list = [];
+	public $vps_list = array();
 	public $bandwidth = null;
 	public $traffic_last = null;
-	public $timers = [];
-	public $ipmap = [];
+	public $timers = array();
+	public $ipmap = array();
 	public $type;
-	public $running = [];
+	public $running = array();
 
 	public function __construct() {
 		$this->type = file_exists('/usr/sbin/vzctl') ? 'vzctl' : 'kvm';
@@ -42,26 +42,26 @@ class Events {
 		}
 		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', getSslContext());
 		$ws_connection->transport = 'ssl';
-		$ws_connection->onConnect = [$this, 'onConnect'];
-		$ws_connection->onMessage = [$this, 'onMessage'];
-		$ws_connection->onError = [$this, 'onError'];
-		$ws_connection->onClose = [$this, 'onClose'];
-		$ws_connection->onWorkerStop = [$this, 'onWorkerStop'];
+		$ws_connection->onConnect = array($this, 'onConnect');
+		$ws_connection->onMessage = array($this, 'onMessage');
+		$ws_connection->onError = array($this, 'onError');
+		$ws_connection->onClose = array($this, 'onClose');
+		$ws_connection->onWorkerStop = array($this, 'onWorkerStop');
 		$ws_connection->connect();
 	}
 
 	public function onConnect($conn) {
 		$this->conn = $conn;
-		$json = [
+		$json = array(
 			'type' => 'login',
 			'name' => $this->hostname,
 			'module' => 'vps',
 			'room_id' => 1,
 			'ima' => 'host',
-		];
+		);
 		$conn->send(json_encode($json));
 		if (!isset($this->timers['vps_get_traffic']))
-			$this->timers['vps_get_traffic'] = Timer::add(60, [$this, 'vps_get_traffic']);
+			$this->timers['vps_get_traffic'] = Timer::add(60, array($this, 'vps_get_traffic'));
 		$this->vps_get_list();
 	}
 
@@ -95,7 +95,7 @@ class Events {
 				break;
 			case 'run':
 				$run_id = $data['id'];
-				$this->running[$data['id']] = [
+				$this->running[$data['id']] = array(
 					'command' => $data['command'],
 					'id' => $data['id'],
 					'interact' => $data['interact'],
@@ -106,7 +106,7 @@ class Events {
 					'process_stdout' => null,
 					'process_stderr' => null,
 
-				];
+				);
 				$loop = Worker::getEventLoop();
 				$env = array_merge(['COLUMNS' => 80, 'LINES' => 24], $_SERVER);
 				unset($env['argv']);
@@ -117,29 +117,29 @@ class Events {
 						echo "command '{$data['command']}' completed with exit code {$exitCode}\n";
 					else
 						echo "command '{$data['command']}' terminated with signal {$termSignal}\n";
-					$json = [
+					$json = array(
 						'type' => 'ran',
 						'id' => $data['id'],
 						'code' => $exitCode,
 						'term' => $termSignal,
-					];
+					);
 					$conn->send(json_encode($json));
 					unset($this->running[$data['id']]);
 				});
 				$this->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
-					$json = [
+					$json = array(
 						'type' => 'running',
 						'id' => $data['id'],
 						'stdout' => $output
-					];
+					);
 					$conn->send(json_encode($json));
 				});
 				$this->running[$data['id']]['process']->stderr->on('data', function($output) {
-					$json = [
+					$json = array(
 						'type' => 'running',
 						'id' => $data['id'],
 						'stderr' => $output
-					];
+					);
 					$conn->send(json_encode($json));
 				});
 				break;
@@ -290,16 +290,16 @@ class Events {
 
 	public function vps_get_traffic() {
 		$totals = $this->get_vps_iptables_traffic();
-		$this->conn->send(json_encode([
+		$this->conn->send(json_encode(array(
 			'type' => 'bandwidth',
 			'content' => $totals,
-		]));
+		)));
 	}
 
 	public function vps_get_list() {
 		global $global, $settings;
 		$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
-		$task_connection->send(json_encode(['function' => 'vps_get_list', 'args' => ['type' => $this->type]]));
+		$task_connection->send(json_encode(array('function' => 'vps_get_list', 'args' => array('type' => $this->type))));
 		$conn = $this->conn;
 		$task_connection->onMessage = function($task_connection, $task_result) use ($conn) {
 			//var_dump($task_result);

@@ -6,7 +6,7 @@ include_once __DIR__.'/Data/xml2array.php';
 function vps_update_info_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
-	$task_connection->send(json_encode(['function' => 'async_hyperv_get_list', 'args' => []]));
+	$task_connection->send(json_encode(array('function' => 'async_hyperv_get_list', 'args' => array())]));
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {
 		 //var_dump($task_result);
 		 $task_connection->close();
@@ -45,7 +45,7 @@ function vps_queue($cmds) {
 function vps_queue_timer() {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552'); // Asynchronous link with the remote task service
-	$task_connection->send(json_encode(['function' => 'vps_queue', 'args' => $global->settings['vps_queue']['cmds']])); // send data
+	$task_connection->send(json_encode(array('function' => 'vps_queue', 'args' => $global->settings['vps_queue']['cmds']))); // send data
 	$task_connection->onMessage = function($task_connection, $task_result) use ($task_connection) {	// get the result asynchronously
 		 //var_dump($task_result);
 		 $task_connection->close(); // remember to turn off the asynchronous link after getting the result
@@ -272,12 +272,12 @@ fi;\n";
 	}
 	//if (preg_match_all("/^[ ]*(?P<dev>[\w]+):(?P<inbytes>[\d]+)[ ]+(?P<inpackets>[\d]+)[ ]+(?P<inerrs>[\d]+)[ ]+(?P<indrop>[\d]+)[ ]+(?P<infifo>[\d]+)[ ]+(?P<inframe>[\d]+)[ ]+(?P<incompressed>[\d]+)[ ]+(?P<inmulticast>[\d]+)[ ]+(?P<outbytes>[\d]+)[ ]+(?P<outpackets>[\d]+)[ ]+(?P<outerrs>[\d]+)[ ]+(?P<outdrop>[\d]+)[ ]+(?P<outfifo>[\d]+)[ ]+(?P<outcolls>[\d]+)[ ]+(?P<outcarrier>[\d]+)[ ]+(?P<outcompressed>[\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 	if (preg_match_all("/^[ ]*([\w]+):\s*([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches)) {
-		$bw = [time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+		$bw = array(time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 		foreach ($matches[1] as $idx => $dev)
 			if (substr($dev, 0, 3) == 'eth')
 				for ($x = 1; $x < 16; $x++)
 					$bw[$x] += $matches[$x+1][$idx];
-		$bw_usage = [
+		$bw_usage = array(
 			'time' => $bw[0],
 			'bytes_in' => $bw[1],
 			'packets_in' => $bw[2],
@@ -291,10 +291,10 @@ fi;\n";
 			'packets_total' => $bw[2] + $bw[10],
 			'bytes_sec_total' => 0,
 			'packets_sec_total' => 0,
-		];
+		);
 		if (file_exists('/root/.bw_usage.last')) {
 			$bw_last = unserialize(file_get_contents('/root/.bw_usage.last'));
-			$bw_usage_last = [
+			$bw_usage_last = array(
 				'time' => $bw_last[0],
 				'bytes_in' => $bw_last[1],
 				'packets_in' => $bw_last[2],
@@ -308,7 +308,7 @@ fi;\n";
 				'packets_total' => $bw_last[2] + $bw_last[10],
 				'bytes_sec_total' => 0,
 				'packets_sec_total' => 0,
-			];
+			);
 			$time_diff = $bw[0] - $bw_last[0];
 			foreach(array('bytes', 'packets') as $stat)
 				foreach (array('in','out','total') as $dir)
@@ -364,11 +364,11 @@ fi;\n";
 		'speed' => $speed,
 		'cpu_flags' => $flags,
 	);
-	$data = [
+	$data = array(
 		'type' => 'vps_list',
-		'content' => [
+		'content' => array(
 			'servers' => $servers,
-	]];
+	));
 	if (isset($ips))
 		$data['content']['ips'] = $ips;
 	return $data;
@@ -379,12 +379,12 @@ fi;\n";
  * @return array the context array to pass to a connection for SSL support
  */
 function getSslContext() {
-	return [
-		'ssl' => [ // use the absolute/full paths
+	return array(
+		'ssl' => array( // use the absolute/full paths
 			'local_cert' => __DIR__.'/myadmin.crt',
 			'local_pk' => __DIR__.'/myadmin.key',
 			'verify_peer' => false,
 			'verify_peer_name' => false,
-		]
-	];
+		)
+	);
 }
