@@ -43,7 +43,7 @@ for i in $(pvdisplay -c); do
   echo "$d:$total:$used:$free:$target";
 done
 ';
-		$servers['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "Rotation Rate")" != "" ]; then smartctl -i /dev/sda |grep "Rotation Rate" | sed -e s#"^.*: *"#""#g -e s#"Solid State Device"#"SSD"#g; elif [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
+		$servers['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
 		$servers['mounts'] = str_replace("\n", ',', trim(`$cmd`));
 		$servers['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
 		if (!file_exists('/usr/bin/iostat'))
