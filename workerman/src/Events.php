@@ -72,23 +72,10 @@ class Events {
 		$conn->lastMessageTime = time();
 		$data = json_decode($data, true);
 		switch ($data['type']) {
-			case 'vmstat_start':
-				// Save the process handle, close the handle when the process is closed
-				$worker->process_handle = popen('vmstat 1', 'r');
-				if ($worker->process_handle) {
-					$process_connection = new TcpConnection($worker->process_handle);
-					$process_connection->onMessage = function($process_connection, $data) use ($worker) {
-						foreach($worker->connections as $connection) {
-							$connection->send('vmstat:'.$data);
-						}
-					};
-				} else {
-					echo "vmstat 1 fail\n";
-				}
-				break;
 			case 'timers':
 				break;
 			case 'self-update':
+				exec('exec svn update --non-interactive /root/cpaneldirect');
 				break;
 			case 'ping':
 				$conn->send('{"type":"pong"}');

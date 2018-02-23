@@ -1,32 +1,5 @@
 <?php
 $settings = array(
-	'servers' => array(
-		'task' => array(
-			'ip' => '127.0.0.1',
-			'port' => 55552,
-			'count' => 5,
-		),
-		'globaldata' => array(
-			'ip' => '127.0.0.1',
-			'port' => 55553,
-		),
-		'ws' => array(
-			'ip' => '0.0.0.0',
-			'port' => 55554,
-		),
-	),
-	'auth' => array(
-		'enable' => FALSE,
-		'timeout' => 30,
-	),
-	'vmstat' => array(
-		'enable' => FALSE,
-	),
-	'phptty' => array(
-		'enable' => FALSE,
-		'cmd' => 'htop', // Command. For example 'tail -f /var/log/nginx/access.log'.
-		'client_input' => TRUE, // Whether to allow client input.
-	),
 	'heartbeat' => array(
 		'enable' => FALSE,
 		'check_interval' => 60,
