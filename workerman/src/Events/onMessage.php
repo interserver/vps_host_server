@@ -15,7 +15,8 @@ return function($stdObject, $conn, $data) {
 		case 'timers':
 			break;
 		case 'self-update':
-			exec('exec svn update --non-interactive /root/cpaneldirect');
+			echo exec('exec svn update --non-interactive /root/cpaneldirect');
+			echo exec('php '.__DIR__.'/../../start.php reload');
 			break;
 		case 'ping':
 			$conn->send('{"type":"pong"}');
