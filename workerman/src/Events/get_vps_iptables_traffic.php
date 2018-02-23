@@ -58,7 +58,7 @@ return function($stdObject) {
 		}
 	} else {
 		foreach ($stdObject->ipmap as $ip => $id) {
-			if (validIp($ip, false) == true) {
+			if ($stdObject->validIp($ip, false) == true) {
 				$lines = explode("\n", trim(`/sbin/iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 				if (sizeof($lines) == 2) {
 					list($in,$out) = $lines;
