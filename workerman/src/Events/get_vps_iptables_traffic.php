@@ -2,9 +2,9 @@
 
 return function($stdObject) {
 	$totals = array();
-	if ($this->type == 'kvm') {
-		if (is_null($this->traffic_last) && file_exists('/root/.traffic.last'))
-			$this->traffic_last = unserialize(file_get_contents('/root/.traffic.last'));
+	if ($stdObject->type == 'kvm') {
+		if (is_null($stdObject->traffic_last) && file_exists('/root/.traffic.last'))
+			$stdObject->traffic_last = unserialize(file_get_contents('/root/.traffic.last'));
 		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 		if ($vnetcounters != '') {
 			$vnetcounters = explode("\n", $vnetcounters);
@@ -51,13 +51,13 @@ return function($stdObject) {
 					}
 				}
 				if (sizeof($totals) > 0) {
-					$this->traffic_last = $vpss;
+					$stdObject->traffic_last = $vpss;
 					file_put_contents('/root/.traffic.last', serialize($vpss));
 				}
 			}
 		}
 	} else {
-		foreach ($this->ipmap as $ip => $id) {
+		foreach ($stdObject->ipmap as $ip => $id) {
 			if (validIp($ip, false) == true) {
 				$lines = explode("\n", trim(`/sbin/iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 				if (sizeof($lines) == 2) {
@@ -69,9 +69,9 @@ return function($stdObject) {
 			}
 		}
 		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
-		$this->vps_iptables_traffic_rules();
+		$stdObject->vps_iptables_traffic_rules();
 	}
-	$this->bandwidth = $totals;
+	$stdObject->bandwidth = $totals;
 	return $totals;
 };
 
