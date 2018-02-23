@@ -1,5 +1,5 @@
 <?php
-return function validIp($stdObject, $ip, $display_errors = true, $support_ipv6 = false) {
+return function($stdObject, $ip, $display_errors = true, $support_ipv6 = false) {
 	if (version_compare(PHP_VERSION, '5.2.0') >= 0) {
 		if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false)
 			if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)

@@ -9,6 +9,11 @@ $task_worker->name = 'TaskWorker';
 $task_worker->onWorkerStart = function($worker) {
 	global $global, $settings;
 	$global = new \GlobalData\Client('127.0.0.1:55553');
+	$functions = new stdObject();
+	foreach(glob(__DIR__.'/../Tasks/*.php') as $function_file) {
+		$function = basename($function_file, '.php');
+		$functions->{$func} = include $function_file;
+	}
 };
 $task_worker->onMessage = function($connection, $task_data) {
 	$task_data = json_decode($task_data, true);
