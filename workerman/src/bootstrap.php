@@ -12,9 +12,7 @@ if (ini_get('date.timezone') == '')
 if (ini_get('default_socket_timeout') < 1200 && ini_get('default_socket_timeout') > 1)
 	ini_set('default_socket_timeout', 1200);
 
-global $composer, $settings;
-$composer = include __DIR__.'/../vendor/autoload.php';
+global $settings;
+include __DIR__.'/../vendor/autoload.php';
 $settings = include __DIR__.'/Config/settings.php';
-include_once __DIR__.'/functions.php';
-
-
+include_once __DIR__.'/stdObject.php';
