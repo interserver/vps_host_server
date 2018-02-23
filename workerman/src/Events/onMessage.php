@@ -6,7 +6,7 @@ use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject, $conn, $data) {
-	$this->conn = $conn;
+	$stdObject->conn = $conn;
 	echo $data.PHP_EOL;
 	global $global;
 	$conn->lastMessageTime = time();
@@ -22,7 +22,7 @@ return function($stdObject, $conn, $data) {
 			break;
 		case 'run':
 			$run_id = $data['id'];
-			$this->running[$data['id']] = array(
+			$stdObject->running[$data['id']] = array(
 				'command' => $data['command'],
 				'id' => $data['id'],
 				'interact' => $data['interact'],
@@ -37,9 +37,9 @@ return function($stdObject, $conn, $data) {
 			$loop = Worker::getEventLoop();
 			$env = array_merge(array('COLUMNS' => 80, 'LINES' => 24), $_SERVER);
 			unset($env['argv']);
-			$this->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], '/root/cpaneldirect', $env);
-			$this->running[$data['id']]['process']->start($loop);
-			$this->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn) {
+			$stdObject->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], '/root/cpaneldirect', $env);
+			$stdObject->running[$data['id']]['process']->start($loop);
+			$stdObject->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn) {
 				if (is_null($termSignal))
 					echo "command '{$data['command']}' completed with exit code {$exitCode}\n";
 				else
@@ -51,9 +51,9 @@ return function($stdObject, $conn, $data) {
 					'term' => $termSignal,
 				);
 				$conn->send(json_encode($json));
-				unset($this->running[$data['id']]);
+				unset($stdObject->running[$data['id']]);
 			});
-			$this->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
+			$stdObject->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
 				$json = array(
 					'type' => 'running',
 					'id' => $data['id'],
@@ -61,7 +61,7 @@ return function($stdObject, $conn, $data) {
 				);
 				$conn->send(json_encode($json));
 			});
-			$this->running[$data['id']]['process']->stderr->on('data', function($output) {
+			$stdObject->running[$data['id']]['process']->stderr->on('data', function($output) {
 				$json = array(
 					'type' => 'running',
 					'id' => $data['id'],
@@ -72,7 +72,7 @@ return function($stdObject, $conn, $data) {
 			break;
 		case 'running':
 			if (isset($data['id'])) {
-					$this->running[$data['id']]['process']->stdin->write($data['stdin']);
+					$stdObject->running[$data['id']]['process']->stdin->write($data['stdin']);
 			}
 			break;
 	}

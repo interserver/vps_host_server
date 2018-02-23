@@ -1,5 +1,7 @@
 <?php
-return function vps_queue($stdObject, $cmds) {
+use Workerman\Worker;
+
+return function($stdObject, $cmds) {
 	foreach ($cmds as $cmd) {
 		if (preg_match('/\.php$', $cmd) && file_exists(__DIR__.'/../'.$cmd))
 			include __DIR__.'/../../'.$cmd;

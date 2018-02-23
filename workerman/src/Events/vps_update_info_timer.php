@@ -1,5 +1,7 @@
 <?php
-return function vps_update_info_timer($stdObject) {
+use Workerman\Connection\AsyncTcpConnection;
+
+return function($stdObject) {
 	global $global, $settings;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 	$task_connection->send(json_encode(array('function' => 'async_hyperv_get_list', 'args' => array())));

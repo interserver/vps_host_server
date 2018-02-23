@@ -1,5 +1,5 @@
 <?php
-return function vps_get_list($stdObject, $params) {
+return function($stdObject, $params) {
 	$servers = array();
 	if ($params['type'] == 'kvm') {
 		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
