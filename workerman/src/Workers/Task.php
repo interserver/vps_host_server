@@ -2,25 +2,25 @@
 use Workerman\Worker;
 use Workerman\Connection\AsyncTcpConnection;
 
-global $settings;
+include_once __DIR__.'/../stdObject.php';
+
 $task_worker = new Worker('Text://127.0.0.1:55552');
 $task_worker->count = 5;
 $task_worker->name = 'TaskWorker';
-$task_worker->onWorkerStart = function($worker) {
-	global $global, $settings, $tasks;
+$task_worker->onWorkerStart = function($worker) use (&$task_worker) {
+	global $global, $settings;
 	$global = new \GlobalData\Client('127.0.0.1:55553');
-	$tasks = new stdObject();
+	$task_worker->mytasks = new stdObject();
 	foreach(glob(__DIR__.'/../Tasks/*.php') as $function_file) {
 		$function = basename($function_file, '.php');
-		$tasks->{$function} = include $function_file;
+		$task_worker->mytasks->{$function} = include $function_file;
 	}
 };
-$task_worker->onMessage = function($connection, $task_data) {
-	global $tasks;
+$task_worker->onMessage = function($connection, $task_data) use (&$task_worker) {
 	$task_data = json_decode($task_data, true);
 	if (isset($task_data['function'])) {
 		echo "Starting Task {$task_data['function']}\n";
-		$return = isset($task_data['args']) ? call_user_func([$tasks, $task_data['function']], $task_data['args']) : call_user_func([$tasks, $task_data['function']]);
+		$return = isset($task_data['args']) ? call_user_func([$task_worker->mytasks, $task_data['function']], $task_data['args']) : call_user_func([$task_worker->mytasks, $task_data['function']]);
 		echo "Ending Task {$task_data['function']}\n";
 		$connection->send(json_encode($return));
 	}

@@ -1,9 +1,11 @@
 <?php
 use Workerman\Worker;
 
-$worker = new Worker();
-$worker->name = 'VpsServer';
-$worker->onWorkerStart = function($worker) {
+include_once __DIR__.'/../stdObject.php';
+
+$vps_worker = new Worker();
+$vps_worker->name = 'VpsServer';
+$vps_worker->onWorkerStart = function($worker) {
 	global $events;
 	$events = new stdObject();
 	foreach(glob(__DIR__.'/../Events/*.php') as $function_file) {
