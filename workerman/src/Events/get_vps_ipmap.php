@@ -12,7 +12,7 @@ return function($stdObject) {
 		if (sizeof($parts) > 1) {
 			$id = $parts[0];
 			$ip = $parts[1];
-			if (validIp($ip, false) == true) {
+			if ($stdObject->validIp($ip, false) == true) {
 				$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
 				if ($extra != '')
 					$parts = array_merge($parts, explode("\n", $extra));

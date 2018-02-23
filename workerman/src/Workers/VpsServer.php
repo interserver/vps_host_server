@@ -8,7 +8,7 @@ $worker->onWorkerStart = function($worker) {
 	$events = new stdObject();
 	foreach(glob(__DIR__.'/../Events/*.php') as $function_file) {
 		$function = basename($function_file, '.php');
-		$events->{$func} = include $function_file;
+		$events->{$function} = include $function_file;
 	}
 	$events->onWorkerStart($worker);
 };

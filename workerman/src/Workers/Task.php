@@ -12,7 +12,7 @@ $task_worker->onWorkerStart = function($worker) {
 	$tasks = new stdObject();
 	foreach(glob(__DIR__.'/../Tasks/*.php') as $function_file) {
 		$function = basename($function_file, '.php');
-		$tasks->{$func} = include $function_file;
+		$tasks->{$function} = include $function_file;
 	}
 };
 $task_worker->onMessage = function($connection, $task_data) {

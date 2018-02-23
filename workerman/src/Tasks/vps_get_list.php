@@ -14,7 +14,7 @@ return function($stdObject, $params) {
 				$veid = str_replace(array('windows', 'linux'), array('', ''), $name);
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
-				$xml = xml2array($out);
+				$xml = $stdObject->xml2array($out);
 				$server = array(
 					'veid' => $veid,
 					'status' => $status,
