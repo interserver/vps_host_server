@@ -33,7 +33,7 @@ class Events {
 
 	public function onWorkerStart($worker) {
 		global $global, $settings;
-		$global = new \GlobalData\Client($settings['servers']['globaldata']['ip'].':'.$settings['servers']['globaldata']['port']);	 // initialize the GlobalData client
+		$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
 		if (!isset($global->settings))
 			$global->settings = $settings;
 		if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
