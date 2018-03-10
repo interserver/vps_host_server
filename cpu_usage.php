@@ -1,4 +1,4 @@
-#!/usr/bin/php
+#!/usr/bin/env php
 <?php
 /**
 # CPU Usage Totals Per VPS Per CPU/Core

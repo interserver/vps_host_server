@@ -1,4 +1,4 @@
-#!/usr/bin/php -q
+#!/usr/bin/env php -q
 <?php
 
 require_once(dirname(__FILE__).'/xml2array.php');
