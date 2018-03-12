@@ -1,8 +1,8 @@
-#!/usr/bin/env php -q 
+#!/usr/bin/env php 
 <?php
 
 $pid = getmypid();
-$oldpid = trim(`ps aux  | grep '/usr/bin/env php -q ./vps_traffic.php' | grep -v grep | awk '{ print $2 }' | grep -v $pid`);
+$oldpid = trim(`ps aux  | grep '/usr/bin/env php ./vps_traffic.php' | grep -v grep | awk '{ print $2 }' | grep -v $pid`);
 if ($oldpid != '')
 {
 	if (time() - trim(file_get_contents('/root/cpaneldirect/vps_traffic.pid')) > (5 * 60))
