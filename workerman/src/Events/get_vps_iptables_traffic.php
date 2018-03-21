@@ -47,7 +47,7 @@ return function($stdObject) {
 							$out_new = $vpss[$vps]['out'];
 						}
 						if ($in_new > 0 || $out_new > 0)
-							$totals[$ip] = array('in' => $in_new, 'out' => $out_new);
+							$totals[$ip] = array('vps' => $vps, 'in' => $in_new, 'out' => $out_new);
 					}
 				}
 				if (sizeof($totals) > 0) {
@@ -64,7 +64,7 @@ return function($stdObject) {
 					list($in,$out) = $lines;
 					$total = $in + $out;
 					if ($total > 0)
-						$totals[$ip] = array('in' => $in, 'out' => $out);
+						$totals[$ip] = array('vps' => $id, 'in' => $in, 'out' => $out);
 				}
 			}
 		}
