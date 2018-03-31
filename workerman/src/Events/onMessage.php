@@ -33,7 +33,6 @@ return function($stdObject, $conn, $data) {
 				'process_stdin' => null,
 				'process_stdout' => null,
 				'process_stderr' => null,
-
 			);
 			$loop = Worker::getEventLoop();
 			$env = array_merge(array('COLUMNS' => 80, 'LINES' => 24), $_SERVER);
