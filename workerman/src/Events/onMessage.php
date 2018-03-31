@@ -39,7 +39,7 @@ return function($stdObject, $conn, $data) {
 			unset($env['argv']);
 			$stdObject->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], '/root/cpaneldirect', $env);
 			$stdObject->running[$data['id']]['process']->start($loop);
-			$stdObject->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn) {
+			$stdObject->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn, &$stdObject) {
 				if (is_null($termSignal))
 					echo "command '{$data['command']}' completed with exit code {$exitCode}\n";
 				else
