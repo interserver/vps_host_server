@@ -61,7 +61,7 @@ return function($stdObject, $conn, $data) {
 				);
 				$conn->send(json_encode($json));
 			});
-			$stdObject->running[$data['id']]['process']->stderr->on('data', function($output) {
+			$stdObject->running[$data['id']]['process']->stderr->on('data', function($output) use ($data, $conn) {
 				$json = array(
 					'type' => 'running',
 					'id' => $data['id'],
