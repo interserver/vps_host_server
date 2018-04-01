@@ -16,7 +16,7 @@ return function($stdObject, $conn, $data) {
 			break;
 		case 'self-update':
 			sleep(rand(0, 60));
-			echo exec('exec svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect').PHP_EOL;
+			echo exec('svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect').PHP_EOL;
 			echo exec('php '.__DIR__.'/../../start.php reload').PHP_EOL;
 			break;
 		case 'ping':
