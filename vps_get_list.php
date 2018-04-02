@@ -90,7 +90,8 @@ fi;\n";
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-		$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
+		$cmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
+		$lines = explode("\n", trim(`$cmd`));
 		$ips = [];
 		$ipIds = [];
 		foreach ($lines as $line) {
