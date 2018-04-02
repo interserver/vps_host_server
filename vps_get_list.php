@@ -64,9 +64,9 @@ function get_vps_list() {
 						{
 // vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
 $cmd .= "if [ -e /usr/bin/timeout ]; then
-    timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+	timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 else
-    ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+	./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 fi;\n";
 //$curl_cmd .= " -F shot".$port."=@shot_".$port.".jpg";
 //					rm -f shot*jpg; for port in $(lsof -n|grep LISTEN |grep 127.0.0.1: |cut -d: -f2 | cut -d" " -f1 | sort | uniq); do ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings "raw" :$(($port - 5900)) shot_${port}.jpg >/dev/null 2>&1; done;
@@ -89,6 +89,20 @@ fi;\n";
 				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
+		}
+		$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
+		$ips = [];
+		$ipIds = [];
+		foreach ($lines as $line) {
+			list($id,$ip) = explode(':', $line);
+			$ipIds[$ip] = $id;
+			$ips[$id] = [];
+			$ips[$id][] = $ip;
+		}
+		$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.ipmap')));
+		foreach ($lines as $line) {
+			list($mainIp,$addonIp) = explode(':', $line);
+			$ips[$ipIds[$mainIp]][] = $addonIp;
 		}
 		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
