@@ -93,13 +93,13 @@ fi;\n";
 		$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
 		$lines = explode("\n", trim(`$ipcmd`));
 		//$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
-		$ips = [];
-		$ipIds = [];
+		$ips = array();
+		$ipIds = array();
 		foreach ($lines as $line) {
 			list($id,$ip) = explode(':', $line);
-			$id = str_replace(['windows','linux'],['',''],$id);
+			$id = str_replace(array('windows','linux'),array('',''),$id);
 			$ipIds[$ip] = $id;
-			$ips[$id] = [];
+			$ips[$id] = array();
 			$ips[$id][] = $ip;
 		}
 		$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.ipmap')));
