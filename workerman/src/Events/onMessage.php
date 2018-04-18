@@ -77,5 +77,13 @@ return function($stdObject, $conn, $data) {
 					$stdObject->running[$data['id']]['process']->stdin->write($data['stdin']);
 			}
 			break;
+		case 'stop_run':
+			if (isset($data['id'])) {
+				$stdObject->running[$data['id']]['process']->stdin->close();
+				$stdObject->running[$data['id']]['process']->stdout->close();
+				$stdObject->running[$data['id']]['process']->stderr->close();
+				$stdObject->running[$data['id']]['process']->terminate(SIGKILL);
+			}
+			break;
 	}
 };
