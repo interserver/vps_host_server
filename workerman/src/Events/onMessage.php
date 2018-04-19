@@ -37,7 +37,7 @@ return function($stdObject, $conn, $data) {
 				'process_stderr' => null,
 			);
 			$loop = Worker::getEventLoop();
-			$env = array_merge(array('COLUMNS' => isset($data['rows']) ? $data['rows'] : 80, 'LINES' => isset($data['cols']) ? $data['cols'] : 24), $_SERVER);
+			$env = array_merge(array('COLUMNS' => isset($data['cols']) ? $data['cols'] : 80, 'LINES' => isset($data['rows']) ? $data['rows'] : 24), $_SERVER);
 			unset($env['argv']);
 			$stdObject->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], '/root/cpaneldirect', $env);
 			$stdObject->running[$data['id']]['process']->start($loop);
