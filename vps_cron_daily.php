@@ -24,3 +24,5 @@ if (file_exists('/usr/bin/prlctl')) {
 	$cmd = dirname(__FILE__).'/update_virtuozzo.sh;';
 	echo `$cmd`;	
 }
+
+`echo > /root/cpaneldirect/workerman/stdout.log`;
