@@ -19,7 +19,7 @@ fi;
 export url=https://myvps2.interserver.net/vps_queue.php
 export dir=/root/cpaneldirect;
 export log=$dir/cron.output;
-if [ "$(ps aux| grep 'php vps_cron.php' | grep -v "grep.*php" |wc -l)" = "0" ]; then
+if [ "$(ps aux| grep 'php /root/cpaneldirect' | grep -v "grep.*php" |wc -l)" = "0" ]; then
 	rm -f cron.age
 	touch .cron.age
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] Crontab Startup" >> $log;
