@@ -1,15 +1,15 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
-set -x
+#set -x
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
 	kpartxopts="-s"
 fi
 if [ -e /etc/dhcp/dhcpd.vps ]; then
-    DHCPVPS=/etc/dhcp/dhcpd.vps
+	DHCPVPS=/etc/dhcp/dhcpd.vps
 else
-    DHCPVPS=/etc/dhcpd.vps
+	DHCPVPS=/etc/dhcpd.vps
 fi
 url="https://myquickserver2.interserver.net/qs_queue.php"
 softraid=""
@@ -44,12 +44,19 @@ fi
 if [ "$7" != "" ]; then
  password=$7
 fi
+if [ "$8" != "" ]; then
+	clientip="$8"
+else
+	clientip=""
+fi
+error=0
+adjust_partitions=1
 export PREPATH="";
 if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1) -le 6 ]; then
-	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then 
+	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
 			pushd $PWD;
-			cd /admin/ports 
+			cd /admin/ports
 			./install e2fsprogs
 			popd;
 		fi;
@@ -65,17 +72,18 @@ if [ $# -lt 3 ]; then
  echo " - Startup"
  echo "Syntax $0 <name> <ip> <template> [diskspace] [memory] [vcpu]"
  echo " ie $0 windows1337 1.2.3.4 windows1"
+	error=$(($error + 1))
 #check if vps exists
 else
  /root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size}
- cd /etc/libvirt/qemu 
+ cd /etc/libvirt/qemu
  if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
   /usr/bin/virsh destroy ${name}
   cp ${name}.xml ${name}.xml.backup
   /usr/bin/virsh undefine ${name}
   mv -f ${name}.xml.backup ${name}.xml
  else
-  echo "Generating XML Config" 
+  echo "Generating XML Config"
   if [ "${template:0:7}" = "windows" ]; then
    templatef="windows"
   else
@@ -83,19 +91,23 @@ else
   fi
   grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
   echo "Defining Config As VPS"
+		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
+		  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
+		fi;
+		sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
+		mv -f ${name}.xml ${name}.xml.backup
+		grep -v "address type='drive'" ${name}.xml.backup > ${name}.xml
+		rm -f ${name}.xml.backup
  fi
  mv -f ${name}.xml ${name}.xml.backup
- cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
-  if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
-   sed s#"rhel5.5.0"#"pc-1.0"#g -i ${name}.xml
-   sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
-  fi
-
- rm -f ${name}.xml.backup
- sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
- mv -f ${name}.xml ${name}.xml.backup
- grep -v "address type='drive'" ${name}.xml.backup > ${name}.xml
- rm -f ${name}.xml.backup
+	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
+	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
+		sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
+	fi
+	rm -f ${name}.xml.backup
+	if [ ! -e /etc/apt ] || [ "$template" != "windows2" ]; then
+		sed s#"<source bridge='br0'\/>"#"<model type='virtio'/>\n          <source bridge='br0'/>"#g -i ${name}.xml
+	fi;
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
   template=windows2
@@ -117,8 +129,8 @@ else
   tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
   echo "Got Total Size $tsize";
   if [ -z $tsize ]; then
-        tsize=$(stat -c%s "/${template}.img.gz");
-        echo "Falling back to filesize check, got size $tsize";
+		tsize=$(stat -c%s "/${template}.img.gz");
+		echo "Falling back to filesize check, got size $tsize";
   fi;
   while [ -d /proc/$pid ]; do
 	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
@@ -129,7 +141,7 @@ else
 		for softfile in $softraid; do
 			echo idle > $softfile
 		done
-	fi		
+	fi
 	echo "$completed%"
 	sleep 10s
   done
@@ -151,11 +163,11 @@ else
 			for softfile in $softraid; do
 				echo idle > $softfile
 			done
-		fi		
+		fi
 	  echo "$completed%"
 	fi
   done
-  rm -f dd.progress  
+  rm -f dd.progress
  else
   echo "Suspending ${template} For Copy"
   /usr/bin/virsh suspend ${template}
@@ -176,11 +188,11 @@ else
 			for softfile in $softraid; do
 				echo idle > $softfile
 			done
-		fi		
+		fi
 	  echo "$completed%"
 	fi
   done
-  rm -f dd.progress  
+  rm -f dd.progress
  fi
  if [ "$softraid" != "" ]; then
 	for softfile in $softraid; do
@@ -215,14 +227,14 @@ else
  pname="$name"
 fi
   fsck -T -p -f /dev/mapper/${pname}p${pn}
-  if [ -f "$(which resize4fs 2>/dev/null)" ]; then 
+  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
    resizefs="resize4fs"
   else
    resizefs="resize2fs"
   fi
   $resizefs -p /dev/mapper/${pname}p${pn}
   mkdir -p /vz/mounts/${name}p${pn}
-  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn}; 
+  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
   PATH="${PREPATH}/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
   umount /dev/mapper/${pname}p${pn}
   kpartx $kpartxopts -d /dev/vz/${name}
@@ -230,9 +242,9 @@ fi
 
 # echo "Coyping MBR"
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=512 count=1 >/dev/null 2>&1
-# echo "Copying Partition Table" 
+# echo "Copying Partition Table"
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
-# echo "Creating Partition Table Links" 
+# echo "Creating Partition Table Links"
 # /sbin/kpartx $kpartxopts -a /dev/vz/${template}
 # /sbin/kpartx $kpartxopts -a /dev/vz/${name}
 # for i in $(sfdisk -d /dev/vz/${name} | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
@@ -242,11 +254,11 @@ fi
 #  psize="$(echo "$i" | cut -d" " -f3)"
 #  if [ $psize -gt 205000 ] && [ "$ptype" = 7 ]; then
 #   mkdir -p /vz/mounts/${tpname}
-#   mkdir -p /vz/mounts/${pname} 
+#   mkdir -p /vz/mounts/${pname}
 #   mount /dev/mapper/${tpname} /vz/mounts/${tpname}
 #   mount /dev/mapper/${pname} /vz/mounts/${pname} >/dev/null 2>&1
 #   if [ "$(mount | grep /vz/mounts/${pname})" = "" ]; then
-#    echo "MKNTFS On $pname Partition" 
+#    echo "MKNTFS On $pname Partition"
 #    mkntfs -Q -L ${name} -v /dev/mapper/${pname}
 #    mount /dev/mapper/${pname} /vz/mounts/${pname}
 #    if [ "$(mount | grep /vz/mounts/${pname})" = "" ]; then
@@ -269,10 +281,10 @@ fi
 #   fi
 #   umount /vz/mounts/${pname}
 #   umount /vz/mounts/${tpname}
-#   echo "Copying Partition Boot Record $pname (dd)" 
+#   echo "Copying Partition Boot Record $pname (dd)"
 #   dd if=/dev/mapper/${tpname} of=/dev/mapper/${pname} bs=512 count=1 >/dev/null 2>&1
 #  else
-#   echo "Copying Partition $pname (dd)" 
+#   echo "Copying Partition $pname (dd)"
 #   dd if=/dev/mapper/${tpname} of=/dev/mapper/${pname} >/dev/null 2>&1
 #  fi
 # done
@@ -301,5 +313,5 @@ fi
  #/usr/bin/virsh resume ${template}
  /root/cpaneldirect/tclimit $ip
  vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
- /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name" 
+ /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
 fi
