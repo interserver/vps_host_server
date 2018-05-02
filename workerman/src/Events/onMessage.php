@@ -13,6 +13,11 @@ return function($stdObject, $conn, $data) {
 	$data = json_decode($data, true);
 	switch ($data['type']) {
 		case 'timers':
+			$json = array(
+				'type' => 'timers',
+				'timers' => $stdObject->timers
+			);
+			$conn->send(json_encode($json));
 			break;
 		case 'self-update':
 			sleep(rand(0, 60));
@@ -71,6 +76,13 @@ return function($stdObject, $conn, $data) {
 				);
 				$conn->send(json_encode($json));
 			});
+			break;
+		case 'run_list':
+			$json = array(
+				'type' => 'run_list',
+				'running' => $stdObject->running
+			);
+			$conn->send(json_encode($json));
 			break;
 		case 'running':
 			if (isset($data['id'])) {
