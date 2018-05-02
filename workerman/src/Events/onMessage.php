@@ -20,13 +20,18 @@ return function($stdObject, $conn, $data) {
 			$conn->send(json_encode($json));
 			break;
 		case 'self-update':
-			sleep(rand(0, 60));
-			echo exec('svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect').PHP_EOL;
-			echo exec('composer install -o --no-dev');
+			sleep(rand(1, 120));
+			sleep(rand(1, 120));
+			echo exec(file_get_contents(__DIR__.'/../../update.sh')).PHP_EOL;
+			//echo exec('svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect').PHP_EOL;
+			//echo exec('composer install -o --no-dev');
 			echo exec('php '.__DIR__.'/../../start.php reload').PHP_EOL;
 			break;
 		case 'ping':
 			$conn->send('{"type":"pong"}');
+			break;
+		case 'phpsysinfo':
+			$stdObject->phpsysinfo($data['for'], $data['params']);
 			break;
 		case 'run':
 			$run_id = $data['id'];
