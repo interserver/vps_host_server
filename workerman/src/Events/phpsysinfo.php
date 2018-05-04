@@ -14,10 +14,10 @@ return function($stdObject, $for, $params) {
 		//var_dump($task_result);
 		$task_connection->close();
 		$conn->send(json_encode(array(
-			'type' => 'phpsysinfo_out',
+			'type' => 'phpsysinfo',
 			'for' => $for,
 			'params' => $orig_params,
-			'content' => json_decode($task_result, true),
+			'data' => json_decode($task_result, true),
 		)));
 	};
 	$task_connection->connect();
