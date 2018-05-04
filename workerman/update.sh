@@ -44,7 +44,8 @@ function check_php() {
 	elif [ -e /etc/yum ]; then
 		yum install -y php php-cli php-bcmath php-devel php-gd php-process php-xml openssl-devel gcc php-curl libev libevent libev-devel libevent-devel php-pear;
 	fi
-	sed s#"^memory_limit = .*$"#"memory_limit = 512M"#g -i /etc/php.ini
+	inifile="$(php -i |grep 'Loaded Configuration' |awk '{ print $5 }')"
+	sed s#"^memory_limit = .*$"#"memory_limit = 512M"#g -i "$inifile"
 }
 function composer_up() {
 	composer update --with-dependencies -v -o --ansi --no-dev
