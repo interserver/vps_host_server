@@ -1,4 +1,8 @@
 #!/bin/bash
+function stop_service() {
+	./start.php stop
+	killall -9 vmstat
+}
 function check_svn() {
 	svnversion=1.9;
 	svnversionshort=$(echo "$svnversion" | sed s#"\."#""#g);
