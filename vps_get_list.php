@@ -102,10 +102,13 @@ fi;\n";
 			$ips[$id] = array();
 			$ips[$id][] = $ip;
 		}
-		$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.ipmap')));
-		foreach ($lines as $line) {
-			list($mainIp,$addonIp) = explode(':', $line);
-			$ips[$ipIds[$mainIp]][] = $addonIp;
+		$lines = trim(file_get_contents('/root/cpaneldirect/vps.ipmap'));
+		if ($lines != '') {
+			$lines = explode("\n", $lines);
+			foreach ($lines as $line) {
+				list($mainIp,$addonIp) = explode(':', $line);
+				$ips[$ipIds[$mainIp]][] = $addonIp;
+			}
 		}
 		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
