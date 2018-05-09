@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# 5.9.2018
+
 function ksmcheck()
 {
         if [ -f /etc/init.d/ksmtuned ]; then
@@ -33,39 +35,45 @@ else
         max=4;
 fi
 
-echo -n "Load approx $load with max $max ";
-if [ "$load" -gt $max ]; then
-        # load above max
-        echo ' which is too high';
-        if [ -e /sys/devices/virtual/block ]; then
-                cd /sys/devices/virtual/block
-                for device in `ls | grep md`; do
-                        echo "found $device"
-                        check=`cat ./$device/md/sync_action`;
-                        if [ "$check" = "recover" ]; then
-                                echo "rebuilding and not a check, lowering raid sync speed temporarily"
-                                echo 1 > /proc/sys/dev/raid/speed_limit_min
-                                echo 2 > /proc/sys/dev/raid/speed_limit_max
-                        elif [ "$check" = "check" ]; then
-                                echo "Idling raid check";
-                                echo idle > ./$device/md/sync_action
-                        else
-                                echo "Raid not rebuilding";
-                        fi
-                done
-        fi
-
-        ksmcheck
-
-
+qscheck=$(crontab -l | grep qs_cron);
+if [ ! "$qscheck" = "" ]; then
+	echo "skipping for qs";
+        if [ -e /sys/kernel/mm/ksm/run ]; then echo 0 > /sys/kernel/mm/ksm/run; fi
+        if [ -f /proc/sys/vm/swappiness ]; then echo 10 > /proc/sys/vm/swappiness; fi
 else
-# load below 5
-echo 'which is ok';
-# normal raid rebuild
-        echo "Normalizing raid";
-        echo 100000 > /proc/sys/dev/raid/speed_limit_min
-        echo 200000 > /proc/sys/dev/raid/speed_limit_max
+	echo -n "Load approx $load with max $max ";
+	if [ "$load" -gt $max ]; then
+      		# load above max
+        	echo ' which is too high';
+        	if [ -e /sys/devices/virtual/block ]; then
+                	cd /sys/devices/virtual/block
+                	for device in `ls | grep md`; do
+                        	echo "found $device"
+                        	check=`cat ./$device/md/sync_action`;
+                        	if [ "$check" = "recover" ]; then
+                                	echo "rebuilding and not a check, lowering raid sync speed temporarily"
+                                	echo 1 > /proc/sys/dev/raid/speed_limit_min
+                                	echo 2 > /proc/sys/dev/raid/speed_limit_max
+                        	elif [ "$check" = "check" ]; then
+                                	echo "Idling raid check";
+                                	echo idle > ./$device/md/sync_action
+                        	else
+                                	echo "Raid not rebuilding";
+                        	fi
+                	done
+        	fi
 
+        	ksmcheck
+
+
+	else
+		# load below 5
+		echo 'which is ok';
+		# normal raid rebuild
+        	echo "Normalizing raid";
+        	echo 100000 > /proc/sys/dev/raid/speed_limit_min
+        	echo 200000 > /proc/sys/dev/raid/speed_limit_max
+	fi
 fi
 
 cd $pwd;
