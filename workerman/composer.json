@@ -22,9 +22,9 @@
 		"react/event-loop": "*",
 		"react/http-client": "*",
 		"roave/security-advisories": "dev-master",
-		"workerman/gateway-worker" : "*",
-		"workerman/globaldata": "*",
-		"workerman/workerman": "*"
+		"workerman/gateway-worker" : "dev-master",
+		"workerman/globaldata": "dev-master",
+		"workerman/workerman": "dev-master"
 	},
 	"require-dev": {
 		"phpunit/phpunit": "*",
