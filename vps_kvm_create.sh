@@ -96,7 +96,7 @@ else
 		fi;
 	fi
 	mv -f ${name}.xml ${name}.xml.backup
-	if [ $vcpu -gt 8 ];
+	if [ $vcpu -gt 8 ]; then
 		max_cpu=$vcpu
 	else
 		max_cpu=8
