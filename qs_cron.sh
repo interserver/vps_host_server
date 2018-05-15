@@ -11,7 +11,8 @@ function age() {
    echo $elapsed
 }
 
-if [ $(ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) "|wc -l) -lt 2 ]; then
+count=$(ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) "|wc -l)
+if [ $count -lt 2 ]; then
 	php qs_cron.php >> cron.output 2>&1
 else
 	# kill a get list older than 2 hours

@@ -19,7 +19,8 @@ fi;
 export url=https://myvps2.interserver.net/vps_queue.php
 export dir=/root/cpaneldirect;
 export log=$dir/cron.output;
-if [ $(ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) "|wc -l) -lt 2 ]; then
+count=$(ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) "|wc -l)
+if [ $count -lt 2 ]; then
 	rm -f cron.age
 	touch .cron.age
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] Crontab Startup" >> $log;
