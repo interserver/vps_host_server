@@ -5,88 +5,87 @@
   <currentMemory unit='KiB'>1024000</currentMemory>
   <vcpu placement='auto' current='1'>4</vcpu>
   <numatune>
-	<memory mode='strict' placement='auto'/>
+    <memory mode='strict' placement='auto'/>
   </numatune>
   <os>
-	<type arch='x86_64' machine='pc'>hvm</type>
-	<boot dev='cdrom'/>
-	<boot dev='hd'/>
+    <type arch='x86_64' machine='pc'>hvm</type>
+    <boot dev='cdrom'/>
+    <boot dev='hd'/>
   </os>
   <features>
-	<acpi/>
-	<apic/>
-	<pae/>
-	<hap/>
-	<hyperv>
-	  <relaxed state='on'/>
-	  <spinlocks state='on' retries='8191'/>
-	</hyperv>
+    <acpi/>
+    <apic/>
+    <pae/>
+    <hap/>
+    <hyperv>
+      <relaxed state='on'/>
+      <spinlocks state='on' retries='8191'/>
+    </hyperv>
   </features>
   <cpu mode='host-model'>
-	<model fallback='allow'/>
+    <model fallback='allow'/>
   </cpu>
   <clock offset='localtime'>
-	<timer name='hypervclock' present='yes'/>
+    <timer name='hypervclock' present='yes'/>
   </clock>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
   <on_crash>restart</on_crash>
   <devices>
-	<emulator>/usr/libexec/qemu-kvm</emulator>
-	<disk type='block' device='disk'>
-	  <driver name='qemu' type='raw' cache='none' io='native'/>
-	  <source dev='/dev/vz/windows'/>
-	  <target dev='vda' bus='virtio'/>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
-	</disk>
-	<disk type='file' device='cdrom'>
-	  <driver name='qemu' type='raw'/>
-	  <target dev='hdc' bus='ide'/>
-	  <readonly/>
-	  <address type='drive' controller='0' bus='1' target='0' unit='0'/>
-	</disk>
-	<controller type='ide' index='0'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
-	</controller>
-	<controller type='usb' index='0'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
-	</controller>
-	<controller type='pci' index='0' model='pci-root'>
-	</controller>
-	<interface type='bridge'>
-	  <mac address='52:54:00:a0:f9:dc'/>
-	  <source bridge='br0'/>
-	  <model type='virtio'/>
-	  <driver name='vhost' queues='4'/>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-	</interface>
-	<serial type='pty'>
-	  <target port='0'/>
-	</serial>
-	<console type='pty'>
-	  <target type='serial' port='0'/>
-	</console>
-	<input type='tablet' bus='usb'/>
-	<input type='mouse' bus='ps2'/>         
-	<graphics type='vnc' port='-1' autoport='yes' keymap='en-us'/>
-	<graphics type='spice' autoport='yes' listen='127.0.0.1'>
-	  <listen type='address' address='127.0.0.1'/>
-	  <image compression='auto_glz'/>
-	  <streaming mode='filter'/>
-	  <mouse mode='client'/>
-	  <clipboard copypaste='yes'/>           
-	</graphics>
-	<sound model='ac97'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
-	</sound>
-	<video>
-	  <model type='qxl' ram='65536' vram='32768' heads='1'>
-		<acceleration accel3d='yes' accel2d='yes'/>
-	  </model>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
-	</video>
-	<memballoon model='virtio'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
-	</memballoon>
+    <emulator>/usr/libexec/qemu-kvm</emulator>
+    <disk type='block' device='disk'>
+      <driver name='qemu' type='raw' cache='none' io='native'/>
+      <source dev='/dev/vz/windows'/>
+      <target dev='vda' bus='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <target dev='hdc' bus='ide'/>
+      <readonly/>
+    </disk>
+    <controller type='ide' index='0'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+    </controller>
+    <controller type='usb' index='0'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+    </controller>
+    <interface type='bridge'>
+      <mac address='52:54:00:a0:f9:dc'/>
+      <source bridge='br0'/>
+      <model type='virtio'/>
+      <driver name='vhost' queues='4'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <input type='tablet' bus='usb'/>
+    <input type='mouse' bus='ps2'/>         
+    <graphics type='vnc' port='-1' autoport='yes' keymap='en-us'/>
+    <graphics type='spice' autoport='yes' listen='127.0.0.1'>
+      <listen type='address' address='127.0.0.1'/>
+      <image compression='auto_glz'/>
+      <streaming mode='filter'/>
+      <mouse mode='client'/>
+      <clipboard copypaste='yes'/>           
+    </graphics>
+    <sound model='ac97'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </sound>
+    <video>
+      <model type='qxl' ram='65536' vram='32768' heads='1'>
+        <acceleration accel3d='yes' accel2d='yes'/>
+      </model>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <memballoon model='virtio'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </memballoon>
   </devices>
 </domain>

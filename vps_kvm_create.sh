@@ -75,7 +75,7 @@ if [ $# -lt 3 ]; then
 	error=$(($error + 1))
 #check if vps exists
 else
-	/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size}
+	/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
 		/usr/bin/virsh destroy ${name}
@@ -94,20 +94,23 @@ else
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
 		  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
 		fi;
-		sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
-		mv -f ${name}.xml ${name}.xml.backup
-		grep -v "address type='drive'" ${name}.xml.backup > ${name}.xml
-		rm -f ${name}.xml.backup
 	fi
 	mv -f ${name}.xml ${name}.xml.backup
-	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
+	if [ $vcpu -gt 8 ];
+		max_cpu=$vcpu
+	else
+		max_cpu=8
+	fi
+	if [ $memory -gt 16384000 ]; then
+		max_memory=$memory
+	else
+		max_memory=16384000;
+	fi
+	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${max_memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g > ${name}.xml
 	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
 		sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
 	fi
 	rm -f ${name}.xml.backup
-	if [ ! -e /etc/apt ] || [ "$template" != "windows2" ]; then
-		sed s#"<source bridge='br0'\/>"#"<model type='virtio'/>\n          <source bridge='br0'/>"#g -i ${name}.xml
-	fi;
 	/usr/bin/virsh define ${name}.xml
 	if [ "$template" = "windows1" ]; then
 		template=windows2

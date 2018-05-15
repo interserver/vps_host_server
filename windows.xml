@@ -1,18 +1,20 @@
 <domain type='kvm'>
   <name>windows</name>
   <uuid>f9bed662-51eb-8ed5-c22a-6e1bbd01b56e</uuid>
-  <memory unit='KiB'>1024000</memory>
+  <memory unit='KiB'>16384000</memory>
   <currentMemory unit='KiB'>1024000</currentMemory>
-  <vcpu placement='static'>1</vcpu>
+  <vcpu placement='static' current='1'>8</vcpu>
   <os>
 	<type arch='x86_64' machine='pc'>hvm</type>
 	<boot dev='hd'/>
   </os>
+  <cpu mode='host-model'/>
   <features>
 	<acpi/>
+	<apic/>
 	<pae/>
   </features>
-  <clock offset='localtime'/>
+  <clock offset='timezone' timezone='America/New_York'/>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
   <on_crash>restart</on_crash>
@@ -21,8 +23,7 @@
 	<disk type='block' device='disk'>
 	  <driver name='qemu' type='raw' cache='none' io='native'/>
 	  <source dev='/dev/vz/windows'/>
-	  <target dev='hda' bus='ide'/>
-	  <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+	  <target dev='vda' bus='virtio'/>
 	</disk>
 	<controller type='ide' index='0'>
 	  <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
@@ -30,6 +31,7 @@
 	<interface type='bridge'>
 	  <mac address='52:54:00:a0:f9:dc'/>
 	  <source bridge='br0'/>
+	  <model type='virtio'/>
 	  <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
 	</interface>
 	<serial type='pty'>

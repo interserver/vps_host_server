@@ -1,9 +1,9 @@
 <domain type='kvm'>
   <name>linux</name>
   <uuid>7d8578f8-788e-a9c6-d472-3639105f1915</uuid>
-  <memory unit='KiB'>524288</memory>
-  <currentMemory unit='KiB'>524288</currentMemory>
-  <vcpu placement='static'>1</vcpu>
+  <memory unit='KiB'>16384000</memory>
+  <currentMemory unit='KiB'>1024000</currentMemory>
+  <vcpu placement='static' current='1'>8</vcpu>
   <os>
 	<type arch='x86_64' machine='pc'>hvm</type>
 	<boot dev='hd'/>
@@ -14,9 +14,7 @@
 	<apic/>
 	<pae/>
   </features>
-  <clock offset='utc'>
-	<timer name='pit' tickpolicy='delay'/>
-  </clock>
+  <clock offset='timezone' timezone='America/New_York'/>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
   <on_crash>restart</on_crash>
@@ -26,7 +24,6 @@
 	  <driver name='qemu' type='raw' cache='none' io='native'/>
 	  <source dev='/dev/vz/linux'/>
 	  <target dev='vda' bus='virtio'/>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
 	</disk>
 	<controller type='ide' index='0'>
 	  <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
