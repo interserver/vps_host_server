@@ -12,7 +12,7 @@ function age() {
 }
 
 export pid=$$
-if [ "$(ps aux |grep "[0-9] /bin/bash $0"|awk '{ print $2 }'|grep -v "^${pid}$")" = "" ]; then
+if [ "$(ps aux |grep "[0-9] /bin/bash $0"|awk '{ print $2 }'|grep -v -e "$(($pid + 1))" -e "^${pid}$")" = "" ]; then
 	php qs_cron.php >> cron.output 2>&1
 else
 	# kill a get list older than 2 hours
