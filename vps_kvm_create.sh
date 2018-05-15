@@ -110,6 +110,9 @@ else
 	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
 		sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
 	fi
+	if [ "$(date +%Z)" = "PDT" ]; then
+		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
+	fi
 	rm -f ${name}.xml.backup
 	/usr/bin/virsh define ${name}.xml
 	if [ "$template" = "windows1" ]; then
