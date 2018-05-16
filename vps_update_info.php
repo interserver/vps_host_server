@@ -40,7 +40,7 @@
 //		$servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
 		$servers['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
 		$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
-for i in $(pvdisplay -c); do 
+for i in $(pvdisplay -c|grep :); do 
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
   blocksize="$(echo "$i" | cut -d: -f8)";
   total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
@@ -114,7 +114,7 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 		} else {
 			if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
 			{
-				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c |grep -v -e centos -e backup`));
+				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep : |grep -v -e centos -e backup`));
 				$pesize = $parts[7];
 				$totalpe = $parts[8];
 				$freepe = $parts[9];
