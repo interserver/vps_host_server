@@ -17,7 +17,7 @@
 	"require": {
 		"php": ">=5.3.0",
 		"ext-curl": "*",
-		"phpsysinfo/phpsysinfo": "*",
+		"detain/phpsysinfo": "dev-master",
 		"react/child-process": "*",
 		"react/event-loop": "*",
 		"react/http-client": "*",

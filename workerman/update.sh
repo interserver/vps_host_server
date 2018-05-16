@@ -55,7 +55,7 @@ function check_php() {
 }
 function composer_up() {
 	composer install --no-dev
-	cat vendor/phpsysinfo/phpsysinfo/phpsysinfo.ini.new > vendor/phpsysinfo/phpsysinfo/phpsysinfo.ini
+	cat vendor/detain/phpsysinfo/phpsysinfo.ini.new > vendor/detain/phpsysinfo/phpsysinfo.ini
 }
 check_svn
 svn_up

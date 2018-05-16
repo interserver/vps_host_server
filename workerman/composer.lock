@@ -4,8 +4,44 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "85f77f98ba7df6611262ec8fbb1223b1",
+    "content-hash": "13891792906d480e9355e2dda7665f39",
     "packages": [
+        {
+            "name": "detain/phpsysinfo",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/detain/phpsysinfo.git",
+                "reference": "04708dc39fc19fbd965bb8c6031cf4beff246bfe"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/detain/phpsysinfo/zipball/04708dc39fc19fbd965bb8c6031cf4beff246bfe",
+                "reference": "04708dc39fc19fbd965bb8c6031cf4beff246bfe",
+                "shasum": ""
+            },
+            "require": {
+                "ext-dom": "*",
+                "ext-pcre": "*",
+                "ext-simplexml": "*",
+                "ext-xml": "*",
+                "php": ">=5.1.3"
+            },
+            "suggest": {
+                "ext-com_dotnet": "Required for Windows environments",
+                "ext-json": "Required for bootstrap mode",
+                "ext-mbstring": "Required for *nix non UTF-8 systems",
+                "ext-xsl": "Required for static mode"
+            },
+            "type": "library",
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "description": "phpSysInfo is a customizable PHP Script that parses /proc, and formats information nicely. It will display information about system facts like Uptime, CPU, Memory, PCI devices, SCSI devices, IDE devices, Network adapters, Disk usage, and more.",
+            "homepage": "http://detain.github.io/phpsysinfo/",
+            "time": "2018-05-16T11:26:13+00:00"
+        },
         {
             "name": "evenement/evenement",
             "version": "v2.1.0",
@@ -53,42 +89,6 @@
                 "event-emitter"
             ],
             "time": "2017-07-17T17:39:19+00:00"
-        },
-        {
-            "name": "phpsysinfo/phpsysinfo",
-            "version": "v3.2.10",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/phpsysinfo/phpsysinfo.git",
-                "reference": "8a37e0e08b3b5b983b7e7dbe930e5f84608ff175"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/phpsysinfo/phpsysinfo/zipball/8a37e0e08b3b5b983b7e7dbe930e5f84608ff175",
-                "reference": "8a37e0e08b3b5b983b7e7dbe930e5f84608ff175",
-                "shasum": ""
-            },
-            "require": {
-                "ext-dom": "*",
-                "ext-pcre": "*",
-                "ext-simplexml": "*",
-                "ext-xml": "*",
-                "php": ">=5.1.3"
-            },
-            "suggest": {
-                "ext-com_dotnet": "Required for Windows environments",
-                "ext-json": "Required for bootstrap mode",
-                "ext-mbstring": "Required for *nix non UTF-8 systems",
-                "ext-xsl": "Required for static mode"
-            },
-            "type": "library",
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "GPL-2.0-or-later"
-            ],
-            "description": "phpSysInfo is a customizable PHP Script that parses /proc, and formats information nicely. It will display information about system facts like Uptime, CPU, Memory, PCI devices, SCSI devices, IDE devices, Network adapters, Disk usage, and more.",
-            "homepage": "http://phpsysinfo.github.io/phpsysinfo/",
-            "time": "2018-02-12T19:18:15+00:00"
         },
         {
             "name": "psr/http-message",
@@ -3246,6 +3246,7 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
+        "detain/phpsysinfo": 20,
         "roave/security-advisories": 20,
         "workerman/gateway-worker": 20,
         "workerman/globaldata": 20,
