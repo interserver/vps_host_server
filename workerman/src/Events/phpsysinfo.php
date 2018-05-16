@@ -13,11 +13,15 @@ return function($stdObject, $for, $params) {
 	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $for, $orig_params) {
 		//var_dump($task_result);
 		$task_connection->close();
+		$data = json_decode($task_result, true);
+		echo "Got Data:";
+		print_r($data);
+		echo "\n";
 		$conn->send(json_encode(array(
 			'type' => 'phpsysinfo',
 			'for' => $for,
 			'params' => $orig_params,
-			'data' => json_decode($task_result, true),
+			'data' => $data,
 		)));
 	};
 	$task_connection->connect();
