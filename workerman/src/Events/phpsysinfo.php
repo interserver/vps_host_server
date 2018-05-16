@@ -20,7 +20,7 @@ return function($stdObject, $for, $params) {
 			'type' => 'phpsysinfo',
 			'for' => $for,
 			'params' => $orig_params,
-			'data' => base64_encode(gzcompress($task_result, 9)),
+			'data' => base64_encode(gzcompress(json_encode($task_result), 9)),
 		)));
 	};
 	$task_connection->connect();
