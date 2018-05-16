@@ -11,7 +11,7 @@ return function($stdObject, $for, $params) {
 	$task_connection->send(json_encode(array('function' => 'run', 'args' => array('cmd' => $cmd))));
 	$conn = $stdObject->conn;
 	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $for, $orig_params) {
-		//var_dump($task_result);
+		var_dump($task_result);
 		$task_connection->close();
 		$conn->send(json_encode(array(
 			'type' => 'phpsysinfo',
