@@ -12,7 +12,7 @@ return function($stdObject, $for, $params) {
 	$conn = $stdObject->conn;
 	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $for, $orig_params) {
 		$task_result = json_decode($task_result, true);
-		if (typeof $task_result == "string")
+		if (!is_array($task_result))
 			$task_result = json_decode($task_result, true);
 		var_dump($task_result);
 		$task_connection->close();
