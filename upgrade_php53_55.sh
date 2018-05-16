@@ -1,5 +1,43 @@
 #!/bin/bash
 if [ -e /etc/yum ]; then
+  if [ "$(cat /etc/redhat-release |cut -d" " -f3|cut -d\. -f1)" = "6" ]; then
+    echo '# CentOS-SCLo-rh.repo
+#
+# Please see http://wiki.centos.org/SpecialInterestGroup/SCLo for more
+# information
+
+[centos-sclo-rh]
+name=CentOS-6 - SCLo rh
+baseurl=http://mirror.centos.org/centos/6/sclo/$basearch/rh/
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+
+[centos-sclo-rh-testing]
+name=CentOS-6 - SCLo rh Testing
+baseurl=http://buildlogs.centos.org/centos/6/sclo/$basearch/rh/
+gpgcheck=0
+enabled=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+
+[centos-sclo-rh-source]
+name=CentOS-6 - SCLo rh Sources
+baseurl=http://vault.centos.org/centos/6/sclo/Source/rh/
+gpgcheck=1
+enabled=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo
+
+[centos-sclo-rh-debuginfo]
+name=CentOS-6 - SCLo rh Debuginfo
+baseurl=http://debuginfo.centos.org/centos/6/sclo/$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo' > /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo;
+    if [ "$(rpm -qa|grep centos-release-scl)" = "" ]; then 
+      yum install centos-release-scl -y; 
+    fi; 
+  fi;
+
   if [ "$(env php -v 2>/dev/null|head -n 1|cut -d" " -f2|cut -d\. -f1-2)" = "5.3" ]; then
     old="$(rpm -qa|grep php)";
     eval yum install -y php55 php55-php-mbstring php55-php-opcache php55-php-xmlrpc php55-php-intl php55-php-$(rpm -qa|grep php|grep "php-[a-z]"|cut -d- -f2|tr "\n" " "|sed s#" $"#""#g|sed s#" "#" php55-php-"#g) && rpm -e $old;
