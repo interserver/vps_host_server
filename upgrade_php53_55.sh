@@ -1,6 +1,7 @@
 #!/bin/bash
 if [ -e /etc/yum ]; then
   if [ "$(cat /etc/redhat-release |cut -d" " -f3|cut -d\. -f1)" = "6" ]; then
+    yum install -y centos-release-scl
     echo '# CentOS-SCLo-rh.repo
 #
 # Please see http://wiki.centos.org/SpecialInterestGroup/SCLo for more
