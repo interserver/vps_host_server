@@ -41,7 +41,7 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-SCLo' > /etc/yum.repos.d/C
 
   if [ "$(env php -v 2>/dev/null|head -n 1|cut -d" " -f2|cut -d\. -f1-2)" = "5.3" ]; then
     old="$(rpm -qa|grep php)";
-    eval yum install -y php55 php55-php-mbstring php55-php-opcache php55-php-xmlrpc php55-php-intl php55-php-$(rpm -qa|grep php|grep "php-[a-z]"|cut -d- -f2|tr "\n" " "|sed s#" $"#""#g|sed s#" "#" php55-php-"#g) && rpm -e $old;
+    eval yum install -y php55 php55-php-devel php55-php-mbstring php55-php-opcache php55-php-xmlrpc php55-php-intl php55-php-$(rpm -qa|grep php|grep "php-[a-z]"|cut -d- -f2|tr "\n" " "|sed s#" $"#""#g|sed s#" "#" php55-php-"#g) && rpm -e $old;
     cd /usr/local/bin;
     for i in /opt/rh/php55/root/usr/bin/*; do
       ln -sf "$i";
