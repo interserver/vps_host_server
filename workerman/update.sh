@@ -54,7 +54,7 @@ function check_php() {
 	sed s#"^memory_limit = .*$"#"memory_limit = 512M"#g -i "$inifile"
 }
 function composer_up() {
-	composer update --with-dependencies -v -o --ansi --no-dev
+	composer install --no-dev
 	cat vendor/phpsysinfo/phpsysinfo/phpsysinfo.ini.new > vendor/phpsysinfo/phpsysinfo/phpsysinfo.ini
 }
 check_svn
