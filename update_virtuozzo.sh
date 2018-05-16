@@ -15,7 +15,7 @@ echo "Disabling VPS Cron"
 crontab -l > crontab.txt ; 
 sed s#"^\(\*.*vps_cron.*\)$"#"\#\1"#g -i crontab.txt;
 crontab crontab.txt
-if [ "$(ps aux|grep vps|grep -v grep)" != "" ]; then
+if [ "$(ps aux|grep root|grep vps|grep -v grep)" != "" ]; then
   echo -n "Waiting for cron to stop"
   while [ "$(ps aux|grep vps|grep -v grep)" != "" ]; do
     sleep 10s;
