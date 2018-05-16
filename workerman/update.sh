@@ -56,6 +56,7 @@ function check_php() {
 function composer_up() {
 	composer install --no-dev
 	cat vendor/detain/phpsysinfo/phpsysinfo.ini.new > vendor/detain/phpsysinfo/phpsysinfo.ini
+	sed -e s#'^TEMP_FORMAT="c"'#'TEMP_FORMAT="f"'#g -e s#'^SHOW_NETWORK_ACTIVE_SPEED=false'#'SHOW_NETWORK_ACTIVE_SPEED=true'#g -e s#'^REFRESH=.*$'#'REFRESH=10000'#g -e s#'^PLUGINS=false'#'PLUGINS=Raid,PS,PSStatus,Quotas,SMART,UpdateNotifier,Uprecords,PingTest'#g -i vendor/detain/phpsysinfo/phpsysinfo.ini
 }
 check_svn
 svn_up
