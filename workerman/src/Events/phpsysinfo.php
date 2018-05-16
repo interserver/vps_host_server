@@ -11,13 +11,14 @@ return function($stdObject, $for, $params) {
 	$task_connection->send(json_encode(array('function' => 'run', 'args' => array('cmd' => $cmd))));
 	$conn = $stdObject->conn;
 	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $for, $orig_params) {
+		$task_result = json_decode($task_result, true);
 		var_dump($task_result);
 		$task_connection->close();
 		$conn->send(json_encode(array(
 			'type' => 'phpsysinfo',
 			'for' => $for,
 			'params' => $orig_params,
-			'data' => base64_encode(gzcompress(json_decode($task_result, true), 9)),
+			'data' => base64_encode(gzcompress($task_result, 9)),
 		)));
 	};
 	$task_connection->connect();
