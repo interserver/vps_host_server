@@ -8,11 +8,15 @@ if [ -e /etc/yum ]; then
       ln -sf "$i";
     done;
   fi;
-  if [ "$(rpm -qa|grep -e "^libevent-[a-z]")" != "" ]; then
-    rpm -e libevent-headers libevent-doc libevent-devel;
-  fi;
-  if [ $(rpm -qa|grep -e libevent2 -e libev-|wc -l) -lt 4 ]; then
-    yum install -y libev libev-devel libevent2 libevent2-devel;
+  if [ "$(yum search libevent2 -q 2>/dev/null)" = "" ]; then
+    yum install -y libev libev-devel libevent libevent-devel;
+  else
+    if [ "$(rpm -qa|grep -e "^libevent-[a-z]")" != "" ]; then
+      rpm -e libevent-headers libevent-doc libevent-devel;
+    fi;
+    if [ $(rpm -qa|grep -e libevent2 -e libev-|wc -l) -lt 4 ]; then
+      yum install -y libev libev-devel libevent2 libevent2-devel;
+    fi;
   fi;
 fi
 if [ "$(env pecl list|grep "^eio")" = "" ]; then
