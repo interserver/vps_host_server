@@ -10,7 +10,7 @@ return function($stdObject, $for, $params) {
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 	$task_connection->send(json_encode(array('function' => 'run', 'args' => array('cmd' => $cmd))));
 	$conn = $stdObject->conn;
-	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $orig_params) {
+	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $for, $orig_params) {
 		//var_dump($task_result);
 		$task_connection->close();
 		$conn->send(json_encode(array(
