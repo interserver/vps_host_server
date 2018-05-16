@@ -19,8 +19,19 @@ fi;
 export url=https://myvps2.interserver.net/vps_queue.php
 export dir=/root/cpaneldirect;
 export log=$dir/cron.output;
-count=$(ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) "|wc -l)
-if [ $count -lt 2 ]; then
+export pslog=$dir/cron.psoutput;
+ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) " > $pslog
+count=$(cat $pslog|wc -l)
+if [ $count -ge 2 ]; then
+	echo "Got count $count" >> $log
+	cat $pslog >> $log;
+	# kill a get list older than 2 hours
+	if [ $(age .cron.age) -gt 7200 ]; then
+		if [ "$(ps uax|grep vps_get_list |grep -v grep)" != "" ]; then
+			kill -9 $(ps uax|grep vps_get_list |grep -v grep | awk '{ print $2 }')
+		fi
+	fi
+else
 	rm -f cron.age
 	touch .cron.age
 	echo "[$(date "+%Y-%m-%d %H:%M:%S")] Crontab Startup" >> $log;
@@ -61,11 +72,4 @@ if [ $count -lt 2 ]; then
 		fi
 	fi
 	/bin/rm -f $dir/cron.cmd;
-else
-	# kill a get list older than 2 hours
-	if [ $(age .cron.age) -gt 7200 ]; then
-		if [ "$(ps uax|grep vps_get_list |grep -v grep)" != "" ]; then
-			kill -9 $(ps uax|grep vps_get_list |grep -v grep | awk '{ print $2 }')
-		fi
-	fi
 fi
