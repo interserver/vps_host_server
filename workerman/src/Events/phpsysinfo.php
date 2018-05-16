@@ -17,7 +17,7 @@ return function($stdObject, $for, $params) {
 			'type' => 'phpsysinfo',
 			'for' => $for,
 			'params' => $orig_params,
-			'data' => json_decode(json_decode($task_result, true), true),
+			'data' => base64_encode(gzcompress(json_decode($task_result, true), 9)),
 		)));
 	};
 	$task_connection->connect();
