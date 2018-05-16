@@ -46,7 +46,8 @@ function check_php() {
 			apt install -y php-dev php-curl; 
 		fi;
 	elif [ -e /etc/yum ]; then
-		yum install -y php php-cli php-bcmath php-devel php-gd php-process php-xml openssl-devel gcc php-curl libev libevent libev-devel libevent-devel php-pear;
+		rpm -e libevent-devel
+		yum install -y php php-cli php-bcmath php-devel php-gd php-process php-xml openssl-devel gcc php-curl libev libevent2 libev-devel libevent2-devel php-pear;
 	fi
 	inifile="$(php -i |grep 'Loaded Configuration' |awk '{ print $5 }')"
 	sed s#"^memory_limit = .*$"#"memory_limit = 512M"#g -i "$inifile"
