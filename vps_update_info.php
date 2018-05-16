@@ -98,7 +98,7 @@ done
 fi;';
 		`$cmd`;
 		$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
-  iodev="/$(pvdisplay -c |grep -v -e centos -e backup -e vz-snap |cut -d/ -f2- |cut -d: -f1)";
+  iodev="/$(pvdisplay -c |grep -v -e centos -e backup -e vz-snap |grep :|cut -d/ -f2- |cut -d: -f1|head -n 1)";
 else 
   iodev=/vz; 
 fi; 
