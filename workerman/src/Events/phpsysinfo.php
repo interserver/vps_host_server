@@ -11,9 +11,9 @@ return function($stdObject, $for, $params) {
 	$task_connection->send(json_encode(array('function' => 'run', 'args' => array('cmd' => $cmd))));
 	$conn = $stdObject->conn;
 	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $for, $orig_params) {
-		$task_result = json_decode($task_result);
+		$task_result = json_decode($task_result, true);
 		if (!is_array($task_result))
-			$task_result = json_decode($task_result);
+			$task_result = json_decode($task_result, true);
 		var_dump($task_result);
 		$task_connection->close();
 		$conn->send(json_encode(array(
