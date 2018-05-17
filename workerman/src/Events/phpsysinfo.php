@@ -14,7 +14,7 @@ return function($stdObject, $for, $params) {
 		$task_result = json_decode($task_result);
 		if (!is_array($task_result))
 			$task_result = json_decode($task_result);
-		var_dump($task_result);
+		//var_dump($task_result);
 		$task_connection->close();
 		$conn->send(json_encode(array(
 			'type' => 'phpsysinfo',
