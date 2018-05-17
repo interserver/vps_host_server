@@ -30,9 +30,9 @@ return function($stdObject, $worker) {
 		//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
 		//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
 	}
-	//$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
-	//$ws_connection->transport = 'ssl';
-	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7271');
+	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
+	$ws_connection->transport = 'ssl';
+	//$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7271');
 	$ws_connection->onConnect = array($stdObject, 'onConnect');
 	$ws_connection->onMessage = array($stdObject, 'onMessage');
 	$ws_connection->onError = array($stdObject, 'onError');
