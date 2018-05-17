@@ -31,7 +31,7 @@ return function($stdObject, $conn, $data) {
 			$conn->send('{"type":"pong"}');
 			break;
 		case 'phpsysinfo':
-			$stdObject->phpsysinfo($data['for'], $data['params']);
+			$stdObject->phpsysinfo($data);
 			break;
 		case 'run':
 			$run_id = $data['id'];
