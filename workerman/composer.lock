@@ -12,12 +12,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/detain/phpsysinfo.git",
-                "reference": "967fbb6b9a96be96be9efb2beb093fe0ae965241"
+                "reference": "68524ca9ccea1a5dadfff1df4955e85efc32f1e5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/detain/phpsysinfo/zipball/967fbb6b9a96be96be9efb2beb093fe0ae965241",
-                "reference": "967fbb6b9a96be96be9efb2beb093fe0ae965241",
+                "url": "https://api.github.com/repos/detain/phpsysinfo/zipball/68524ca9ccea1a5dadfff1df4955e85efc32f1e5",
+                "reference": "68524ca9ccea1a5dadfff1df4955e85efc32f1e5",
                 "shasum": ""
             },
             "require": {
@@ -40,7 +40,7 @@
             ],
             "description": "phpSysInfo is a customizable PHP Script that parses /proc, and formats information nicely. It will display information about system facts like Uptime, CPU, Memory, PCI devices, SCSI devices, IDE devices, Network adapters, Disk usage, and more.",
             "homepage": "http://detain.github.io/phpsysinfo/",
-            "time": "2018-05-17T00:27:08+00:00"
+            "time": "2018-05-17T13:02:44+00:00"
         },
         {
             "name": "evenement/evenement",
@@ -2115,6 +2115,7 @@
                 "github",
                 "test"
             ],
+            "abandoned": "php-coveralls/php-coveralls",
             "time": "2017-12-06T23:17:56+00:00"
         },
         {
