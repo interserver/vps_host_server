@@ -13,5 +13,7 @@ return function($stdObject, $conn) {
 	$conn->send(json_encode($json));
 	if (!isset($stdObject->timers['vps_get_traffic']))
 		$stdObject->timers['vps_get_traffic'] = Timer::add(60, array($stdObject, 'vps_get_traffic'));
+//	if (!isset($stdObject->timers['vps_get_cpu']))
+//		$stdObject->timers['vps_get_cpu'] = Timer::add(60, array($stdObject, 'vps_get_cpu'));
 	$stdObject->vps_get_list();
 };

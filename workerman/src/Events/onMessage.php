@@ -102,5 +102,8 @@ return function($stdObject, $conn, $data) {
 				$stdObject->running[$data['id']]['process']->terminate(SIGKILL);
 			}
 			break;
+		default:
+			echo "Unhandled Mesage Type $data['type']\n";
+			break;
 	}
 };
