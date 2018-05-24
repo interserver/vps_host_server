@@ -772,12 +772,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/GatewayWorker.git",
-                "reference": "b50f901fb390d790df5bd679942eecdaaf880327"
+                "reference": "0d91d66dd5cdcc05a3c6ab17dc7c15087728baed"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/GatewayWorker/zipball/b50f901fb390d790df5bd679942eecdaaf880327",
-                "reference": "b50f901fb390d790df5bd679942eecdaaf880327",
+                "url": "https://api.github.com/repos/walkor/GatewayWorker/zipball/0d91d66dd5cdcc05a3c6ab17dc7c15087728baed",
+                "reference": "0d91d66dd5cdcc05a3c6ab17dc7c15087728baed",
                 "shasum": ""
             },
             "require": {
@@ -798,7 +798,7 @@
                 "communication",
                 "distributed"
             ],
-            "time": "2018-05-08T10:58:29+00:00"
+            "time": "2018-05-22T16:57:48+00:00"
         },
         {
             "name": "workerman/globaldata",
@@ -836,12 +836,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/Workerman.git",
-                "reference": "231e6a540732d021dc88c4723069bad44bda516b"
+                "reference": "cbc6e46deb9e1a82a5f628118c850ebeea7b2224"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/Workerman/zipball/231e6a540732d021dc88c4723069bad44bda516b",
-                "reference": "231e6a540732d021dc88c4723069bad44bda516b",
+                "url": "https://api.github.com/repos/walkor/Workerman/zipball/cbc6e46deb9e1a82a5f628118c850ebeea7b2224",
+                "reference": "cbc6e46deb9e1a82a5f628118c850ebeea7b2224",
                 "shasum": ""
             },
             "require": {
@@ -874,7 +874,7 @@
                 "asynchronous",
                 "event-loop"
             ],
-            "time": "2018-05-10T11:04:23+00:00"
+            "time": "2018-05-23T05:36:47+00:00"
         }
     ],
     "packages-dev": [
