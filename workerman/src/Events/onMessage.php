@@ -103,7 +103,7 @@ return function($stdObject, $conn, $data) {
 			}
 			break;
 		default:
-			echo "Unhandled Mesage Type $data['type']\n";
+			echo "Unhandled Mesage Type {$data['type']}\n";
 			break;
 	}
 };
