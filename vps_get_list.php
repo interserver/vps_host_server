@@ -245,15 +245,9 @@ fi;\n";
 	{
 		$bw = array(time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 		foreach ($matches[1] as $idx => $dev)
-		{
 			if (substr($dev, 0, 3) == 'eth')
-			{
 				for ($x = 1; $x < 16; $x++)
-				{
 					$bw[$x] += $matches[$x+1][$idx];
-				}
-			}
-		}
 		$bw_usage = array(
 			'time' => $bw[0],
 			'bytes_in' => $bw[1],
@@ -289,12 +283,8 @@ fi;\n";
 			);
 			$time_diff = $bw[0] - $bw_last[0];
 			foreach(array('bytes', 'packets') as $stat)
-			{
 				foreach (array('in','out','total') as $dir)
-				{
 					$bw_usage[$stat.'_sec_'.$dir] = ($bw_usage[$stat.'_'.$dir] - $bw_usage_last[$stat.'_'.$dir]) / $time_diff;
-				}
-			}
 		}
 		file_put_contents('/root/.bw_usage.last', serialize($bw));
 		$servers[0]['bw_usage'] = $bw_usage;
@@ -321,8 +311,8 @@ fi;\n";
 		$cmd = 'ethtool $(brctl show $(ip route |grep ^default | sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g) 2>/dev/null |grep -v "bridge id" | awk \'{ print $4 }\') |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
 		$speed = trim(`{$cmd}`);
 	}
-		//echo "Running {$cmd}\n";
-		//echo "Got Speed {$speed}\n";
+	//echo "Running {$cmd}\n";
+	//echo "Got Speed {$speed}\n";
 	$cpuinfo = explode("\n", file_get_contents('/proc/cpuinfo'));
 	$found = false;
 	$lines = sizeof($cpuinfo);
@@ -334,9 +324,9 @@ fi;\n";
 		{
 			$flags = explode(' ', trim(substr($cpuline, strpos($cpuline, ':') + 1)));
 			$found = true;
-		} else {
-			$line++;
 		}
+		else
+			$line++;
 	}
 	sort($flags);
 	$flagsnew = implode(' ', $flags);

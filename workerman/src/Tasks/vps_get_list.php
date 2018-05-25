@@ -1,14 +1,18 @@
 <?php
 return function($stdObject, $params) {
+	$curl_cmd= '';
 	$servers = array();
+	$ips = array();
 	if ($params['type'] == 'kvm') {
 		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
 		//echo "Running $cmd\n";
 		$out = trim(`$cmd`);
 		$lines = explode("\n", $out);
 		$cmd = '';
-		foreach ($lines as $serverline) {
-			if (trim($serverline) != '') {
+		foreach ($lines as $serverline)
+		{
+			if (trim($serverline) != '')
+			{
 				$parts = explode(' ', $serverline);
 				$name = $parts[0];
 				$veid = str_replace(array('windows', 'linux'), array('', ''), $name);
@@ -21,25 +25,31 @@ return function($stdObject, $params) {
 					'hostname' => $name,
 					'kmemsize' => $xml['domain']['memory'],
 				);
-				if (isset($xml['domain']['devices']['interface'])) {
+				if (isset($xml['domain']['devices']['interface']))
+				{
 					if (isset($xml['domain']['devices']['interface']['mac_attr']))
 						$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
 					elseif (isset($xml['domain']['devices']['interface'][0]['mac_attr']))
 						$server['mac'] = $xml['domain']['devices']['interface'][0]['mac_attr']['address'];
 				}
-				if (isset($xml['domain']['devices']['graphics_attr'])) {
+				if (isset($xml['domain']['devices']['graphics_attr']))
+				{
 					$server['vnc'] = $xml['domain']['devices']['graphics_attr']['port'];
 				}
-				if ($status == 'running') {
-					$disk = trim(`/root/cpaneldirect/vps_kvm_disk_usage.sh $name`);
-					if ($disk != '') {
+				if ($status == 'running')
+				{
+/*					$disk = trim(`/root/cpaneldirect/vps_kvm_disk_usage.sh $name`);
+					if ($disk != '')
+					{
 						$dparts = explode(':', $disk);
 						$server['diskused'] = $dparts[2];
 						$server['diskmax'] = $dparts[1];
-					}
-					if (isset($xml['domain']['devices']['graphics_attr'])) {
+					}*/
+					if (isset($xml['domain']['devices']['graphics_attr']))
+					{
 						$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
-						if ($port >= 5900) {
+						if ($port >= 5900)
+						{
 // vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
 $cmd .= "if [ -e /usr/bin/timeout ]; then
 	timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
@@ -60,10 +70,31 @@ fi;\n";
 				$servers[$veid] = $server;
 			}
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`)) {
-			foreach ($cpu_usage as $id => $cpu_data) {
+		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`))
+		{
+			foreach ($cpu_usage as $id => $cpu_data)
+			{
 				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
 				$servers[$id]['cpu_usage'] = $cpu_data;
+			}
+		}
+		$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
+		$lines = explode("\n", trim(`$ipcmd`));
+		//$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
+		$ipIds = array();
+		foreach ($lines as $line) {
+			list($id,$ip) = explode(':', $line);
+			$id = str_replace(array('windows','linux'),array('',''),$id);
+			$ipIds[$ip] = $id;
+			$ips[$id] = array();
+			$ips[$id][] = $ip;
+		}
+		$lines = trim(file_get_contents('/root/cpaneldirect/vps.ipmap'));
+		if ($lines != '') {
+			$lines = explode("\n", $lines);
+			foreach ($lines as $line) {
+				list($mainIp,$addonIp) = explode(':', $line);
+				$ips[$ipIds[$mainIp]][] = $addonIp;
 			}
 		}
 		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
@@ -189,7 +220,8 @@ fi;\n";
 		}
 	}
 	//if (preg_match_all("/^[ ]*(?P<dev>[\w]+):(?P<inbytes>[\d]+)[ ]+(?P<inpackets>[\d]+)[ ]+(?P<inerrs>[\d]+)[ ]+(?P<indrop>[\d]+)[ ]+(?P<infifo>[\d]+)[ ]+(?P<inframe>[\d]+)[ ]+(?P<incompressed>[\d]+)[ ]+(?P<inmulticast>[\d]+)[ ]+(?P<outbytes>[\d]+)[ ]+(?P<outpackets>[\d]+)[ ]+(?P<outerrs>[\d]+)[ ]+(?P<outdrop>[\d]+)[ ]+(?P<outfifo>[\d]+)[ ]+(?P<outcolls>[\d]+)[ ]+(?P<outcarrier>[\d]+)[ ]+(?P<outcompressed>[\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
-	if (preg_match_all("/^[ ]*([\w]+):\s*([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches)) {
+	if (preg_match_all("/^[ ]*([\w]+):\s*([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
+	{
 		$bw = array(time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 		foreach ($matches[1] as $idx => $dev)
 			if (substr($dev, 0, 3) == 'eth')
@@ -210,7 +242,8 @@ fi;\n";
 			'bytes_sec_total' => 0,
 			'packets_sec_total' => 0,
 		);
-		if (file_exists('/root/.bw_usage.last')) {
+		if (file_exists('/root/.bw_usage.last'))
+		{
 			$bw_last = unserialize(file_get_contents('/root/.bw_usage.last'));
 			$bw_usage_last = array(
 				'time' => $bw_last[0],
@@ -260,12 +293,15 @@ fi;\n";
 	$found = false;
 	$lines = sizeof($cpuinfo);
 	$line = 0;
-	while ($found != true && $line < $lines) {
+	while ($found != true && $line < $lines)
+	{
 		$cpuline = $cpuinfo[$line];
-		if (substr($cpuline, 0, 5) == 'flags') {
+		if (substr($cpuline, 0, 5) == 'flags')
+		{
 			$flags = explode(' ', trim(substr($cpuline, strpos($cpuline, ':') + 1)));
 			$found = true;
-		} else
+		}
+		else
 			$line++;
 	}
 	sort($flags);
@@ -286,8 +322,7 @@ fi;\n";
 		'type' => 'vps_list',
 		'content' => array(
 			'servers' => $servers,
+			'ips' => $ips,
 	));
-	if (isset($ips))
-		$data['content']['ips'] = $ips;
 	return $data;
 };
