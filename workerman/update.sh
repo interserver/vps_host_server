@@ -39,7 +39,7 @@ function check_composer() {
 function check_php() {
 	if [ -e /etc/apt ]; then
 		. /etc/lsb-release ;
-		apt install -f php libssl-dev pkg-config php-pear;
+		apt install -f php-cli libssl-dev pkg-config php-pear;
 		if [ "$DISTRIB_CODENAME" = "trusty" ]; then 
 			apt install -y php5-dev php5-curl;
 		else
