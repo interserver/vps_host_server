@@ -11,9 +11,14 @@ return function($stdObject, $conn) {
 		'ima' => 'host',
 	);
 	$conn->send(json_encode($json));
+    if (!isset($stdObject->timers['vps_update_info']))
+        $stdObject->timers['vps_update_info'] = Timer::add(600, array($stdObject, 'vps_update_info'));
 	if (!isset($stdObject->timers['vps_get_traffic']))
 		$stdObject->timers['vps_get_traffic'] = Timer::add(60, array($stdObject, 'vps_get_traffic'));
 //	if (!isset($stdObject->timers['vps_get_cpu']))
 //		$stdObject->timers['vps_get_cpu'] = Timer::add(60, array($stdObject, 'vps_get_cpu'));
-	$stdObject->vps_get_list();
+    if (!isset($stdObject->timers['vps_get_list']))
+        $stdObject->timers['vps_get_list'] = Timer::add(600, array($stdObject, 'vps_get_list'));
+    $stdObject->vps_update_info();
+    $stdObject->vps_get_list();
 };
