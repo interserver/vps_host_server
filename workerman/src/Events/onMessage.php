@@ -30,6 +30,9 @@ return function($stdObject, $conn, $data) {
 		case 'ping':
 			$conn->send('{"type":"pong"}');
 			break;
+        case 'get_map':
+            $stdObject->get_map($data['content']);
+            break;
 		case 'phpsysinfo':
 			$stdObject->phpsysinfo($data);
 			break;
