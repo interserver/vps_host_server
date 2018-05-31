@@ -10,7 +10,7 @@ return function($stdObject, $params) {
             $server = array(
                 'type' => 'lxc',
                 'veid' => $parts[0],
-                'status' => strtolower($parts[1]),
+                'status' => isset($parts[1]) ? strtolower($parts[1]) : 'stopped',
             );
 		if (isset($parts[2])) {
 	            $ipparts = explode(" ", $parts[2]);
