@@ -142,15 +142,17 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
                     $out = "$totalg $freeg";
             }
         }
-        $parts = explode(' ', $out);
-        if (sizeof($parts) == 2)
-        {
-            $server['hdsize'] = $parts[0];
-            $server['hdfree'] = $parts[1];
-            $cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vpsinfo -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
-            // echo "CMD: $cmd\n";
-            echo trim(`$cmd`);
+        if (isset($out)) {
+            $parts = explode(' ', $out);
+            if (sizeof($parts) == 2)
+            {
+                $server['hdsize'] = $parts[0];
+                $server['hdfree'] = $parts[1];
+            }
         }
+        $cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vpsinfo -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
+        // echo "CMD: $cmd\n";
+        echo trim(`$cmd`);
         if (file_exists('/usr/sbin/vzctl'))
         {
             if (!file_exists('/proc/user_beancounters'))
