@@ -112,10 +112,10 @@ else
 	else
 		max_memory=16384000;
 	fi
-    repl="<parameter name='IP' value='{$ip}'/>";
+    repl="<parameter name='IP' value='${ip}'/>";
     if [ "$extraips" != "" ]; then
         for i in $extraips; do
-            repl="${repl}\n        <parameter name='IP' value='{$i}'/>";
+            repl="${repl}\n        <parameter name='IP' value='${i}'/>";
         done
     fi
     cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"${repl}"#g > ${name}.xml
