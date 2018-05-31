@@ -1,5 +1,5 @@
 <?php
 
 return function($stdObject, $connection, $code, $msg){
-	echo "error: {$msg}\n";
+    Worker::safeEcho("error: {$msg}\n");
 };

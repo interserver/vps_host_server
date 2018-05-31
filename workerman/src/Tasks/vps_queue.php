@@ -17,7 +17,7 @@ return function($stdObject, $cmds) {
 			}
 			$request = $client->request('GET', 'https://myvps2.interserver.net/vps_queue.php?action='.$cmd);
 			$request->on('error', function(Exception $e) use ($cmd) {
-				echo "CMD {$cmd} Exception Error {$e->getMessage()}\n";
+                Worker::safeEcho("CMD {$cmd} Exception Error {$e->getMessage()}\n");
 			});
 			$request->on('response', function ($response) {
 				$response->on('data', function ($data, $response) {

@@ -19,7 +19,7 @@ return function($stdObject, $worker) {
 	else
 		$stdObject->hostname = trim(shell_exec('hostname -f 2>/dev/null||hostname'));
 	if (!file_exists(__DIR__.'/../myadmin.crt')) {
-		echo "Generating new SSL Certificate for encrypted communications\n";
+        Worker::safeEcho("Generating new SSL Certificate for encrypted communications\n");
 		echo shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$stdObject->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/../myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/../myadmin.crt -set_serial 0');
 	}
 	global $global, $settings;

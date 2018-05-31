@@ -56,9 +56,9 @@ return function($stdObject, $conn, $data) {
 			$stdObject->running[$data['id']]['process']->start($loop);
 			$stdObject->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn, &$stdObject) {
 				if (is_null($termSignal))
-					echo "command '{$data['command']}' completed with exit code {$exitCode}\n";
+                    Worker::safeEcho("command '{$data['command']}' completed with exit code {$exitCode}\n");
 				else
-					echo "command '{$data['command']}' terminated with signal {$termSignal}\n";
+                    Worker::safeEcho("command '{$data['command']}' terminated with signal {$termSignal}\n");
 				$json = array(
 					'type' => 'ran',
 					'id' => $data['id'],
@@ -106,7 +106,7 @@ return function($stdObject, $conn, $data) {
 			}
 			break;
 		default:
-			echo "Unhandled Mesage Type {$data['type']}\n";
+            Worker::safeEcho("Unhandled Mesage Type {$data['type']}\n");
 			break;
 	}
 };
