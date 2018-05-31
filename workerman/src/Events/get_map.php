@@ -19,9 +19,9 @@ return function($stdObject, $maps) {
         file_put_contents('/root/cpaneldirect/vps.vncmap', trim($maps['vnc']));
         $lines = explode("\n", trim(exec('virsh list --name')));
         foreach ($lines as $vps)
-            if (preg_match("/^(.*{$vps}):(.*)$/m", $maps['vnc'], $matches)) {
+            if (preg_match("/^(.*{$vps}):(.*)$/m", $maps['vnc'], $matches))
                 if (!file_exists('/etc/xinetd.d/'.$matches[0]))
                     exec("sh /root/cpaneldirect/vps_kvm_setup_vnc.sh {$matches[0]} {$matches[1]}");
-    }    
+    }
     $stdObject->vps_get_list();
 };
