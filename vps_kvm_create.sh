@@ -18,8 +18,8 @@ size=101000
 name=$1
 ip=$2
 if [ "$(echo "$ip" |grep ",")" != "" ]; then
-    extraips="$(echo "$i"|cut -d, -f2-|tr , " ")"
-    ip="$(echo "$i"|cut -d, -f1)"
+    extraips="$(echo "$ip"|cut -d, -f2-|tr , " ")"
+    ip="$(echo "$ip"|cut -d, -f1)"
 else
     extraips=""
 fi;
@@ -115,7 +115,7 @@ else
     repl="<parameter name='IP' value='{$ip}'/>";
     if [ "$extraips" != "" ]; then
         for i in $extraips; do
-            repl="${repl}\n        <parameter name='IP' value='{$ip}'/>";
+            repl="${repl}\n        <parameter name='IP' value='{$i}'/>";
         done
     fi
     cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"${repl}"#g > ${name}.xml
@@ -125,7 +125,8 @@ else
 	if [ "$(date +%Z)" = "PDT" ]; then
 		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
 	fi
-	rm -f ${name}.xml.backup
+    rm -f ${name}.xml.backup
+    #/bin/cp -f ${name}.xml ${name}.xml.backup;
 	/usr/bin/virsh define ${name}.xml
 	if [ "$template" = "windows1" ]; then
 		template=windows2
