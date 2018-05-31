@@ -20,7 +20,8 @@ return function($stdObject, $maps) {
         $lines = explode("\n", trim(exec('virsh list --name')));
         foreach ($lines as $vps)
             if (preg_match("/^(.*{$vps}):(.*)$/m", $maps['vnc'], $matches)) {
-                exec("sh /root/cpaneldirect/vps_kvm_setup_vnc.sh {$matches[0]} {$matches[1]}");
+                if (!file_exists('/etc/xinetd.d/'.$matches[0]))
+                    exec("sh /root/cpaneldirect/vps_kvm_setup_vnc.sh {$matches[0]} {$matches[1]}");
     }    
     $stdObject->vps_get_list();
 };
