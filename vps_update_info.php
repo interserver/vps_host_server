@@ -111,7 +111,7 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
         if (file_exists('/usr/sbin/vzctl'))
         {
             $out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
-        } else {
+        } elseif (trim(`pvdisplay`) != '') {
             if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
             {
                 $parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep : |grep -v -e centos -e backup`));
