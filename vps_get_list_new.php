@@ -16,14 +16,16 @@ function get_vps_list() {
         $lines = explode("\n", trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`));
         foreach ($lines as $line) {
             $parts = explode(',', $line);
-            $ipparts = explode(" ", $parts[2]);
             $server = array(
                 'type' => 'lxc',
                 'veid' => $parts[0],
                 'status' => strtolower($parts[1]),
-                'ip' => $ipparts[0],
             );
-            $ips[$parts[0]] = $ipparts[0];
+		if (isset($parts[2])) {
+	            $ipparts = explode(" ", $parts[2]);
+			$server['ip'] = $ipparts[0];
+	            $ips[$parts[0]] = $ipparts[0];
+		}
             if (trim($parts[3]) != '')
                 $server['mac'] = trim($parts[3]);
             $servers[$parts[0]] = $server;
