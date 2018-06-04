@@ -1,7 +1,7 @@
 {
     "_readme": [
         "This file locks the dependencies of your project to a known state",
-        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
     "content-hash": "13891792906d480e9355e2dda7665f39",
@@ -838,12 +838,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/Workerman.git",
-                "reference": "0bf5cf018912286a26bd14e1981dfc060fd98bb0"
+                "reference": "37124ceb2e6de051589a3d8e7bb20ddebc86d87c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/Workerman/zipball/0bf5cf018912286a26bd14e1981dfc060fd98bb0",
-                "reference": "0bf5cf018912286a26bd14e1981dfc060fd98bb0",
+                "url": "https://api.github.com/repos/walkor/Workerman/zipball/37124ceb2e6de051589a3d8e7bb20ddebc86d87c",
+                "reference": "37124ceb2e6de051589a3d8e7bb20ddebc86d87c",
                 "shasum": ""
             },
             "require": {
@@ -876,7 +876,7 @@
                 "asynchronous",
                 "event-loop"
             ],
-            "time": "2018-05-29T05:40:06+00:00"
+            "time": "2018-06-04T13:18:02+00:00"
         }
     ],
     "packages-dev": [
