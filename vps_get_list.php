@@ -110,18 +110,21 @@ fi;\n";
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-		$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
-		$lines = explode("\n", trim(`$ipcmd`));
-		//$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
+		if (file_exists('/etc/dhcpd.vps')) {
+			$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
+			$lines = explode("\n", trim(`$ipcmd`));
+		} else
+			$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
 		$ips = array();
 		$ipIds = array();
-		foreach ($lines as $line) {
-			list($id,$ip) = explode(':', $line);
-			$id = str_replace(array('windows','linux'),array('',''),$id);
-			$ipIds[$ip] = $id;
-			$ips[$id] = array();
-			$ips[$id][] = $ip;
-		}
+		foreach ($lines as $line)
+			if (trim($line) != '') {
+				list($id,$ip) = explode(':', $line);
+				$id = str_replace(array('windows','linux'),array('',''),$id);
+				$ipIds[$ip] = $id;
+				$ips[$id] = array();
+				$ips[$id][] = $ip;
+			}
 		$lines = trim(file_get_contents('/root/cpaneldirect/vps.ipmap'));
 		if ($lines != '') {
 			$lines = explode("\n", $lines);
