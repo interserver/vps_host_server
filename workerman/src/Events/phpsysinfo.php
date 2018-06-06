@@ -8,7 +8,7 @@ return function($stdObject, $data) {
 	$args = escapeshellarg(json_encode($data['params']));
 	$cmd = 'php /root/cpaneldirect/workerman/phpsysinfo.php '.$args;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
-	$task_connection->send(json_encode(array('function' => 'run', 'args' => array('cmd' => $cmd))));
+	$task_connection->send(json_encode(array('type' => 'run', 'args' => array('cmd' => $cmd))));
 	$conn = $stdObject->conn;
 	$task_connection->onMessage = function($task_connection, $task_result) use ($conn, $data, $orig_params) {
 		$task_result = json_decode($task_result);
