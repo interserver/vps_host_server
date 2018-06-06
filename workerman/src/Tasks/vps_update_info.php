@@ -1,4 +1,6 @@
 <?php
+use Workerman\Worker;
+
 return function($stdObject, $params) {
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 	if ($root_used > 90)
