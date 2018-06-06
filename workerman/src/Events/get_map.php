@@ -2,7 +2,7 @@
 use Workerman\Lib\Timer;
 
 return function($stdObject, $maps) {
-	$old = trim(file_get_contents('/root/cpaneldirect/vps.mainips'));
+	$old = file_exists('/root/cpaneldirect/vps.mainips') ? trim(file_get_contents('/root/cpaneldirect/vps.mainips')) : null;
 	if (trim($maps['mainips']) != $old)
 		file_put_contents('/root/cpaneldirect/vps.mainips', trim($maps['mainips']));
 	$old = trim(file_get_contents('/root/cpaneldirect/vps.slicemap'));
