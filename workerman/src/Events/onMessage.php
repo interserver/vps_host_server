@@ -12,6 +12,20 @@ return function($stdObject, $conn, $data) {
 	$conn->lastMessageTime = time();
 	$data = json_decode($data, true);
 	switch ($data['type']) {
+		case 'login':
+			if ($data['ima'] == 'host')
+			{
+				if (!isset($stdObject->timers['vps_update_info']))
+					$stdObject->timers['vps_update_info'] = Timer::add(600, array($stdObject, 'vps_update_info'));
+				if (!isset($stdObject->timers['vps_get_traffic']))
+					$stdObject->timers['vps_get_traffic'] = Timer::add(60, array($stdObject, 'vps_get_traffic'));
+				if (!isset($stdObject->timers['vps_get_cpu']))
+				if (!isset($stdObject->timers['vps_get_list']))
+					$stdObject->timers['vps_get_list'] = Timer::add(600, array($stdObject, 'get_map_timer'));
+				$stdObject->vps_update_info();
+				$stdObject->get_map_timer();
+			}
+			break;
 		case 'timers':
 			$json = array(
 				'type' => 'timers',
@@ -30,9 +44,9 @@ return function($stdObject, $conn, $data) {
 		case 'ping':
 			$conn->send('{"type":"pong"}');
 			break;
-        case 'get_map':
-            $stdObject->get_map($data['content']);
-            break;
+		case 'get_map':
+			$stdObject->get_map($data['content']);
+			break;
 		case 'phpsysinfo':
 			$stdObject->phpsysinfo($data);
 			break;
@@ -56,9 +70,9 @@ return function($stdObject, $conn, $data) {
 			$stdObject->running[$data['id']]['process']->start($loop);
 			$stdObject->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn, &$stdObject) {
 				if (is_null($termSignal))
-                    Worker::safeEcho("command '{$data['command']}' completed with exit code {$exitCode}\n");
+					Worker::safeEcho("command '{$data['command']}' completed with exit code {$exitCode}\n");
 				else
-                    Worker::safeEcho("command '{$data['command']}' terminated with signal {$termSignal}\n");
+					Worker::safeEcho("command '{$data['command']}' terminated with signal {$termSignal}\n");
 				$json = array(
 					'type' => 'ran',
 					'id' => $data['id'],
@@ -106,7 +120,7 @@ return function($stdObject, $conn, $data) {
 			}
 			break;
 		default:
-            Worker::safeEcho("Unhandled Mesage Type {$data['type']}\n");
+			Worker::safeEcho("Unhandled Mesage Type {$data['type']}\n");
 			break;
 	}
 };
