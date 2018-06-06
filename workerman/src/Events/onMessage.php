@@ -22,8 +22,9 @@ return function($stdObject, $conn, $data) {
 				if (!isset($stdObject->timers['vps_get_cpu']))
 				if (!isset($stdObject->timers['vps_get_list']))
 					$stdObject->timers['vps_get_list'] = Timer::add(600, array($stdObject, 'get_map_timer'));
+				Timer::add(10, array($stdObject, 'vps_update_info'), array(), false);
 				$stdObject->vps_update_info();
-				$stdObject->get_map_timer();
+				Timer::add(20, array($stdObject, 'get_map_timer'), array(), false);
 			}
 			break;
 		case 'timers':
