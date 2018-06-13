@@ -27,6 +27,8 @@ return function($stdObject, $worker) {
 	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
 	if (!isset($global->settings))
 		$global->settings = $settings;
+	if (!isset($global->busy))
+		$global->busy = 0;
 	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
 		//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
 		//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
