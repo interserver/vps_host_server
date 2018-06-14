@@ -32,7 +32,7 @@ else
   echo " + Skipping Resize since the New size $size is smaller than the original size $oldsize"
  else
   if [ "$(lvdisplay /dev/vz/$name | grep "LV Size *"$(echo "$size / 1024" | bc -l | cut -d\. -f1))" = "" ]; then
-   echo y | lvresize -L${size} /dev/vz/${name}
+   lvresize -f -L${size} /dev/vz/${name}
    sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
    t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
    p="$(echo $t | awk '{ print $1 }')"
