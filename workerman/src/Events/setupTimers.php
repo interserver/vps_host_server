@@ -5,8 +5,7 @@ use Workerman\Lib\Timer;
 use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
-return function($stdObject, $conn, $data) {
-	$stdObject->conn = $conn;
+return function($stdObject) {
 	$stdObject->vps_update_info();
 	$stdObject->get_map_timer();
 	if (!isset($stdObject->timers['vps_update_info']))
