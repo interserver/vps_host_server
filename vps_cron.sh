@@ -23,6 +23,7 @@ export old_cron=1;
 if [ -e $dir/.enable_workerman ]; then
 	export old_cron=0;
 	if [ $($dir/workerman/start.php status 2>/dev/null|grep "PROCESS STATUS"|wc -l) -eq 0 ]; then
+		$dir/update.sh >> $log 2>&1;
 		$dir/workerman/start.php restart -d >> $log 2>&1;
 	fi;
 	sleep 2s;
