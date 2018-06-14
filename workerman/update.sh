@@ -27,6 +27,13 @@ function check_svn() {
 			apt-get install subversion -y; 
 		fi;
 	fi;
+	if [ "$(which git)" = "" ]; then
+		if [ -e /etc/redhat-release ]; then
+			yum install -y git;
+		else
+			apt-get install -y git;
+		fi
+	fi;
 }
 function svn_up() {
 	svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect
