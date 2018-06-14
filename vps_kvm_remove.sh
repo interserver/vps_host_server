@@ -32,7 +32,7 @@ else
  if [ -e /dev/vz/$name ]; then
   echo "Removing LVM"
   /sbin/kpartx $kpartxopts -dv /dev/vz/$name
-  echo y | lvremove /dev/vz/$name
+  lvremove /dev/vz/$name -f
  fi
  if [ ! "$(grep "host ${name} {" ${DHCPVPS})" = "" ]; then
   echo "Removing DHCP"

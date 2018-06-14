@@ -11,7 +11,7 @@ ID=vm380
 # the extra 512 bytes (1 sector) is already in the image file
 # first partition will start on sector 63, so need to pad with 63*512=32256 for image
 kpartx -dv /dev/vz/$ID
-echo y | lvremove /dev/vz/$ID
+lvremove /dev/vz/$ID -f
 if [ "$(file -s $S|grep "boot sector")" = "" ]; then
   echo "Detected Partition Image(s) Passed - First Converting To Disk Image"
   #we need to convert these partition(s) to a disk image
@@ -24,7 +24,7 @@ if [ "$(file -s $S|grep "boot sector")" = "" ]; then
   #size=$(($(($(($(du -bc $S | tail -n 1 | awk '{ print $1 }') / 512)) + 1)) * 512))
   #size="$(du -bc $S | tail -n 1 | awk '{ print $1 }')"
   size=$(($(($partitions * 512)) + 32256 + $(du -bc $S | tail -n 1 | awk '{ print $1 }')))
-  lvcreate -L ${size}B -n $ID vz
+  lvcreate -y -L ${size}B -n $ID vz
 diskbytes=$(fdisk -l /dev/vz/$ID  |grep "^Disk.* bytes$" | cut -d: -f2-  | awk '{ print $3 }')
 diskcylinders=$(fdisk -l /dev/vz/$ID  |grep "cylinders$" | cut -d, -f3-  | awk '{ print $1 }')
 cylinderbytes=$(fdisk -l /dev/vz/$ID  |grep "^Units = cylinder.*bytes$" | cut -d= -f3-  | awk '{ print $1 }')
@@ -72,7 +72,7 @@ cylinderbytes=$(fdisk -l /dev/vz/$ID  |grep "^Units = cylinder.*bytes$" | cut -d
 else
   echo "Detected Disk image already, no conversion needed"
   size="$(du -bc $S | tail -n 1 | awk '{ print $1 }')"
-  lvcreate -L ${size}B -n $ID vz
+  lvcreate -y -L ${size}B -n $ID vz
   ddcmd="dd if=$S of=/dev/vz/${ID}\n"
 fi
 kpartx -av /dev/vz/${ID}
@@ -101,9 +101,9 @@ fi
 # but i didn't see it the 2nd time around
 umount /mnt
 mkdir /dev/VolGroup
-lvchange -ay /dev/VolGroup/lv_root
+lvchange -f -ay /dev/VolGroup/lv_root
 mount /dev/VolGroup/lv_root /mnt
 
 umount /mnt
-lvchange -an /dev/VolGroup/lv_root
+lvchange -f -an /dev/VolGroup/lv_root
 kpartx -dv /dev/vz/$ID

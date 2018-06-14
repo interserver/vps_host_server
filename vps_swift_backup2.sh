@@ -31,19 +31,19 @@ if which virsh >/dev/null 2>&1; then
  /admin/swift/c mkdir_p vps${id} --force
  sizebytes="$(lvdisplay /dev/vz/${vzid} --units B |grep "LV Size" | awk '{ print $3 }')"
  sizebuffer=10000000000
- lvcreate -L$((${sizebytes} + ${sizebuffer}))B -nimage_storage vz
+ lvcreate -y -L$((${sizebytes} + ${sizebuffer}))B -nimage_storage vz
  mkdir -p /vz/image_storage
  time mke2fs -q /dev/vz/image_storage
  mount /dev/vz/image_storage /vz/image_storage
- lvcreate --size 1000m --snapshot --name snap$id /dev/vz/$vzid
+ lvcreate -y --size 1000m --snapshot --name snap$id /dev/vz/$vzid
  sync
  time qemu-img convert -c -p -O qcow2 /dev/vz/snap${id} /vz/image_storage/${image} 
  delete vps${id} ${image}
  time upload vps${id} /vz/image_storage/${image} 
  umount /vz/image_storage
- echo y | lvremove /dev/vz/image_storage
+ lvremove /dev/vz/image_storage -f
  rmdir /vz/image_storage
- echo y | lvremove /dev/vz/snap${id}
+ lvremove /dev/vz/snap${id} -f
 else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"

@@ -29,7 +29,7 @@ if which virsh >/dev/null 2>&1; then
 		exit;
 	fi
 	/admin/swift/c mkdir_p vps${id} --force
-	lvcreate --size 10000m --snapshot --name snap$id /dev/vz/$vzid
+	lvcreate -y --size 10000m --snapshot --name snap$id /dev/vz/$vzid
 	sync
 	mkdir -p /${image}
 	if which guestmount >/dev/null 2>/dev/null; then 
@@ -48,7 +48,7 @@ if which virsh >/dev/null 2>&1; then
 	fi
 	$INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
 	rmdir /${image}
-	echo y | lvremove /dev/vz/snap${id}
+	lvremove -f /dev/vz/snap${id}
 else
 	VZPARTITION=`vzlist -H -o private $vzid | cut -d/ -f2`;
 	if [ "${image}" = "" ]; then

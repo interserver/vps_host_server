@@ -40,7 +40,7 @@ if [ $imgbuff -ge $freeb ]; then
 	exit
 fi
 lvsize=$(($(($(($imgbuff/512))+1))*512))
-lvcreate -L${lvsize}B -nimage_storage vz
+lvcreate -y -L${lvsize}B -nimage_storage vz
 mke2fs /dev/vz/image_storage
 mkdir -p /image_storage
 mount /dev/vz/image_storage /image_storage
@@ -53,7 +53,7 @@ else
 fi
 umount /image_storage
 rmdir /image_storage
-echo y |lvremove /dev/vz/image_storage
+lvremove /dev/vz/image_storage -f
 virsh start $vps
 bash /root/cpaneldirect/run_buildebtables.sh;
 /root/cpaneldirect/vps_refresh_vnc.sh $vps
