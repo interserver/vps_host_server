@@ -8,5 +8,6 @@ return function($stdObject) {
 		$conn->send(json_encode([
 			'type' => 'get_map'
 		]));
+		$global->busy = 0;
 	}
 };
