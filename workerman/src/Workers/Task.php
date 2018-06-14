@@ -19,9 +19,9 @@ $task_worker->onWorkerStart = function($worker) use (&$task_worker) {
 $task_worker->onMessage = function($connection, $task_data) use (&$task_worker) {
 	$task_data = json_decode($task_data, true);
 	if (isset($task_data['type'])) {
-		Worker::safeEcho("Starting Task {$task_data['type']}\n");
+		//Worker::safeEcho("Starting Task {$task_data['type']}\n");
 		$return = isset($task_data['args']) ? call_user_func([$task_worker->mytasks, $task_data['type']], $task_data['args']) : call_user_func([$task_worker->mytasks, $task_data['type']]);
-		Worker::safeEcho("Ending Task {$task_data['type']}\n");
+		//Worker::safeEcho("Ending Task {$task_data['type']}\n");
 		$connection->send(json_encode($return));
 	}
 };
