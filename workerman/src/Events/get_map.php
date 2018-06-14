@@ -2,6 +2,7 @@
 use Workerman\Lib\Timer;
 
 return function($stdObject, $maps) {
+	echo 'Got Map Startup'.PHP_EOL;
 	if (isset($maps['mainips'])) {
 		$old = file_exists('/root/cpaneldirect/vps.mainips') ? trim(file_get_contents('/root/cpaneldirect/vps.mainips')) : null;
 		if (trim($maps['mainips']) != $old)
@@ -30,5 +31,7 @@ return function($stdObject, $maps) {
 						exec("sh /root/cpaneldirect/vps_kvm_setup_vnc.sh {$matches[0]} {$matches[1]}");
 		}
 	}
+	echo 'Got Map Calling vps_get_list'.PHP_EOL;
 	$stdObject->vps_get_list();
+	echo 'Got Map End'.PHP_EOL;
 };
