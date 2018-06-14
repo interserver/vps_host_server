@@ -8,9 +8,9 @@ return function($stdObject, $maps) {
 			file_put_contents('/root/cpaneldirect/vps.mainips', trim($maps['mainips']));
 	}
 	if (isset($maps['slices'])) {
-	$old = trim(file_get_contents('/root/cpaneldirect/vps.slicemap'));
-	if (trim($maps['slices']) != $old)
-		file_put_contents('/root/cpaneldirect/vps.slicemap', trim($maps['slices']));
+		$old = trim(file_get_contents('/root/cpaneldirect/vps.slicemap'));
+		if (trim($maps['slices']) != $old)
+			file_put_contents('/root/cpaneldirect/vps.slicemap', trim($maps['slices']));
 	}
 	if (isset($maps['ips'])) {
 		$old = trim(file_get_contents('/root/cpaneldirect/vps.ipmap'));
