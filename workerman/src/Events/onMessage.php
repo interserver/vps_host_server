@@ -47,7 +47,8 @@ return function($stdObject, $conn, $data) {
 			$stdObject->running[$data['id']] = array(
 				'command' => $data['command'],
 				'id' => $data['id'],
-				'interact' => $data['interact'],
+				'interact' => isset($data['interact']) ? $data['interact'] : false,
+				'update_after' => isset($data['update_after']) ? $data['update_after'] : false,
 				'for' => $data['for'],
 				'process' => null,
 				'pipes' => null,
@@ -72,6 +73,10 @@ return function($stdObject, $conn, $data) {
 					'term' => $termSignal,
 				);
 				$conn->send(json_encode($json));
+				if ($stdObject->running[$data['id']]['update_after'] == true) {
+					$stdObject->vps_update_info();
+					$stdObject->get_map_timer();                
+				}
 				unset($stdObject->running[$data['id']]);
 			});
 			$stdObject->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
