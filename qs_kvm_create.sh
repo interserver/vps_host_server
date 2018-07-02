@@ -17,6 +17,12 @@ vcpu=2
 size=101000
 name=$1
 ip=$2
+if [ "$(echo "$ip" |grep ",")" != "" ]; then
+	extraips="$(echo "$ip"|cut -d, -f2-|tr , " ")"
+	ip="$(echo "$ip"|cut -d, -f1)"
+else
+	extraips=""
+fi;
 template=$3
 memory=1024000
 if [ "$template" = "windows3" ]; then
@@ -41,6 +47,8 @@ if [ "$6" != "" ]; then
   vcpu="$(lscpu |grep ^CPU\(s\) | awk ' { print $2 }')"
  fi
 fi
+max_cpu=${vcpu}
+max_memory=${memory}
 if [ "$7" != "" ]; then
  password=$7
 fi
@@ -91,23 +99,22 @@ else
   fi
   grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
   echo "Defining Config As VPS"
-		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
-		  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
-		fi;
-		sed s#"<target dev='hda' bus='ide'/>"#"<target dev='vda' bus='virtio'/>"#g -i ${name}.xml
-		mv -f ${name}.xml ${name}.xml.backup
-		grep -v "address type='drive'" ${name}.xml.backup > ${name}.xml
-		rm -f ${name}.xml.backup
  fi
  mv -f ${name}.xml ${name}.xml.backup
-	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<\1>${vcpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory>${memory}</currentMemory>"#g > ${name}.xml
+	repl="<parameter name='IP' value='${ip}'/>";
+	if [ "$extraips" != "" ]; then
+		for i in $extraips; do
+			repl="${repl}\n        <parameter name='IP' value='${i}'/>";
+		done
+	fi
+	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"${repl}"#g > ${name}.xml
 	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
 		sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
 	fi
+	if [ "$(date +%Z)" = "PDT" ]; then
+		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
+	fi
 	rm -f ${name}.xml.backup
-	if [ ! -e /etc/apt ] || [ "$template" != "windows2" ]; then
-		sed s#"<source bridge='br0'\/>"#"<model type='virtio'/>\n          <source bridge='br0'/>"#g -i ${name}.xml
-	fi;
  /usr/bin/virsh define ${name}.xml
  if [ "$template" = "windows1" ]; then
   template=windows2
@@ -309,9 +316,25 @@ fi
  /usr/bin/virsh start ${name};
  bash /root/cpaneldirect/run_buildebtables.sh;
  /root/cpaneldirect/vps_refresh_vnc.sh $name
+	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
+	if [ "$vnc" == "" ]; then
+		sleep 2s;
+		vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
+		if [ "$vnc" == "" ]; then
+			sleep 2s;
+			vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+		fi;
+	fi;
+	if [ "$clientip" != "" ]; then
+		/root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
+	fi;
+	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	#vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+	sleep 1s;
+	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	sleep 2s;
+	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	/admin/kvmenable blocksmtp $name
 
- #/usr/bin/virsh resume ${template}
- /root/cpaneldirect/tclimit $ip
- vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)"
- /root/cpaneldirect/vps_kvm_screenshot.sh $(($vnc - 5900)) "$url?action=screenshot&name=$name"
 fi

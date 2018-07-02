@@ -18,10 +18,10 @@ size=101000
 name=$1
 ip=$2
 if [ "$(echo "$ip" |grep ",")" != "" ]; then
-    extraips="$(echo "$ip"|cut -d, -f2-|tr , " ")"
-    ip="$(echo "$ip"|cut -d, -f1)"
+	extraips="$(echo "$ip"|cut -d, -f2-|tr , " ")"
+	ip="$(echo "$ip"|cut -d, -f1)"
 else
-    extraips=""
+	extraips=""
 fi;
 template=$3
 memory=1024000
@@ -112,21 +112,21 @@ else
 	else
 		max_memory=16384000;
 	fi
-    repl="<parameter name='IP' value='${ip}'/>";
-    if [ "$extraips" != "" ]; then
-        for i in $extraips; do
-            repl="${repl}\n        <parameter name='IP' value='${i}'/>";
-        done
-    fi
-    cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"${repl}"#g > ${name}.xml
+	repl="<parameter name='IP' value='${ip}'/>";
+	if [ "$extraips" != "" ]; then
+		for i in $extraips; do
+			repl="${repl}\n        <parameter name='IP' value='${i}'/>";
+		done
+	fi
+	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"${repl}"#g > ${name}.xml
 	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
 		sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
 	fi
 	if [ "$(date +%Z)" = "PDT" ]; then
 		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
 	fi
-    rm -f ${name}.xml.backup
-    #/bin/cp -f ${name}.xml ${name}.xml.backup;
+	rm -f ${name}.xml.backup
+	#/bin/cp -f ${name}.xml ${name}.xml.backup;
 	/usr/bin/virsh define ${name}.xml
 	if [ "$template" = "windows1" ]; then
 		template=windows2
@@ -406,7 +406,9 @@ q
 				vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
 			fi;
 		fi;
-		/root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
+		if [ "$clientip" != "" ]; then
+			/root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
+		fi;
 		/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		#vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
