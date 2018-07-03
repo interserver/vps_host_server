@@ -1,9 +1,30 @@
-# vim backups
+# editor noise
 *~
 *.sw[op]
+*.bak
+/.idea/
 
 # lockfile by SerialLine
 LCK..ttyNOTTY
 
 # generated now
 /check_raid.pl
+/check_raid.pl.asc
+
+# build related
+/nagios-plugin-*.rpm
+/nagios-plugin-*.deb
+/BUILD
+/builddeps
+/inst-root/
+/sysdeps/
+
+# perl dist
+/fatpack/
+/local/
+/cache/
+/blib/
+/*.tar.gz
+/MANIFEST
+/MYMETA.json
+/MYMETA.yml

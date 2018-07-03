@@ -23,6 +23,7 @@ use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::gdth';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::hp_msa';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::hpacucli';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::hpssacli';
+use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::ssacli';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::ips';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::lsraid';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::lsscsi';
@@ -36,6 +37,7 @@ use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::mvcli';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::sas2ircu';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::smartctl';
 use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::tw_cli';
+use aliased 'App::Monitoring::Plugin::CheckRaid::Plugins::dm';
 
 use constant OK => 0;
 use constant WARNING => 1;

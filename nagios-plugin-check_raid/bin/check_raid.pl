@@ -1,4 +1,11 @@
 #!/usr/bin/perl
+#
+# This is development version of the check_raid.pl plugin
+# If you are running this file directly, you are doing it wrong
+#
+# See installation notes:
+# https://github.com/glensc/nagios-plugin-check_raid#installing
+#
 use Monitoring::Plugin 0.37;
 use App::Monitoring::Plugin::CheckRaid;
 use App::Monitoring::Plugin::CheckRaid::Sudoers;
@@ -8,17 +15,24 @@ use warnings;
 use strict;
 
 my $PROGNAME = 'check_raid';
-my $VERSION = q/4.0.0/;
+my $VERSION = q/4.0.9-dev/;
+my $URL = 'https://github.com/glensc/nagios-plugin-check_raid';
+my $BUGS_URL = 'https://github.com/glensc/nagios-plugin-check_raid#reporting-bugs';
 
 my $mp = Monitoring::Plugin->new(
-    usage =>
-	"Usage: %s [-h] [-V] [-S] [list of devices to ignore]",
+	usage =>
+		"Usage: %s [-h] [-V] [-S] [list of devices to ignore]",
 
-    version => $VERSION,
-    blurb => 'This plugin checks all RAID volumes (hardware and software) that can be identified.',
+	version => $VERSION,
+	blurb => join($/,
+		"This plugin checks all RAID volumes (hardware and software) that can be identified",
+		"",
+		"Homepage: $URL",
+		"Reporting Bugs: $BUGS_URL",
+	),
 
-    plugin  => $PROGNAME,
-    shortname => $PROGNAME,
+	plugin  => $PROGNAME,
+	shortname => $PROGNAME,
 );
 
 $mp->add_arg(
@@ -55,7 +69,7 @@ would define option "serial" for "hp_msa" plugin with value "/dev/ttyS2".
 );
 $mp->add_arg(
 	spec => 'noraid=s',
-	help => 'Return STATE if no RAID controller is found. Defaults to UNKNOWN',
+	help => 'Return STATE if no RAID volumes are found. Defaults to UNKNOWN',
 );
 $mp->add_arg(
 	spec => 'resync=s',
@@ -77,10 +91,6 @@ $mp->add_arg(
 	spec => 'bbu-monitoring',
 	help => 'Enable experimental monitoring of the BBU status',
 );
-$mp->add_arg(
-	spec => 'warnonly|W',
-	help => 'Treat CRITICAL errors as WARNING',
-);
 
 $mp->getopts;
 
@@ -95,12 +105,15 @@ my %plugin_options;
 if ($mp->opts->warnonly) {
 	App::Monitoring::Plugin::CheckRaid::Plugin->set_critical_as_warning;
 }
+if ($mp->opts->get('bbu-monitoring')) {
+	$plugin_options{options}{bbu_monitoring} = 1;
+}
 
 # setup state flags
 my %state_flags = (
 	'resync' => 'resync_status',
 	'check' => 'check_status',
-	'noraid' => 'noraid_state',
+	'noraid' => 'noraid_status',
 	'bbulearn' => 'bbulearn_status',
 	'cache-fail' => 'cache_fail_status',
 );
@@ -123,7 +136,7 @@ if (my $plugins = $mp->opts->plugin) {
 if (my $opts = $mp->opts->get('plugin-option')) {
 	foreach my $o (@$opts) {
 		my($k, $v) = split(/=/, $o, 2);
-		$plugin_options{$k} = $v;
+		$plugin_options{options}{$k} = $v;
 	}
 }
 
@@ -131,14 +144,20 @@ my $mc = App::Monitoring::Plugin::CheckRaid->new(%plugin_options);
 
 $App::Monitoring::Plugin::CheckRaid::Utils::debug = $mp->opts->debug;
 
-my @plugins = $mc->active_plugins;
-if (!@plugins) {
-	$mp->plugin_exit($plugin_options{options}{noraid_state}, "No active plugins (No RAID found)");
+if ($mp->opts->debug) {
+	print "$PROGNAME $VERSION\n";
+	print "Visit <$BUGS_URL> how to report bugs\n";
+	print "Please include output of **ALL** commands in bugreport\n\n";
 }
 
 if ($mp->opts->sudoers) {
-	sudoers($mp->opts->debug, @plugins);
-	$mp->plugin_exit(OK, "sudoers updated");
+	my $res = sudoers($mp->opts->debug, $mc->active_plugins(1));
+	$mp->plugin_exit(OK, $res ? "sudoers updated" : "sudoers not updated");
+}
+
+my @plugins = $mc->active_plugins;
+if (!@plugins) {
+	$mp->plugin_exit($plugin_options{options}{noraid_status}, "No active plugins (No RAID found)");
 }
 
 # print active plugins
@@ -170,10 +189,10 @@ foreach my $plugin (@plugins) {
 		$message .= "$pn:[Plugin error]";
 		next;
 	}
-	if ($plugin->message or $plugin->{options}{noraid_state} == $ERRORS{UNKNOWN}) {
+	if ($plugin->message or $plugin->{options}{noraid_status} == $ERRORS{UNKNOWN}) {
 		$status = $plugin->status if $plugin->status > $status;
 	} else {
-		$status = $plugin->{options}{noraid_state} if $plugin->{options}{noraid_state} > $status;
+		$status = $plugin->{options}{noraid_status} if $plugin->{options}{noraid_status} > $status;
 	}
 	$message .= '; ' if $message;
 	$message .= "$pn:[".$plugin->message."]";
@@ -192,8 +211,8 @@ if ($message) {
 		print "UNKNOWN: ";
 	}
 	print "$message\n";
-} elsif ($plugin::options{noraid_state} != $ERRORS{UNKNOWN}) {
-	$status = $plugin::options{noraid_state};
+} elsif ($plugin::options{noraid_status} != $ERRORS{UNKNOWN}) {
+	$status = $plugin::options{noraid_status};
 	print "No RAID configuration found\n";
 } else {
 	$status = $ERRORS{UNKNOWN};

@@ -6,7 +6,7 @@ BEGIN {
 
 use strict;
 use warnings;
-use constant TESTS => 15;
+use constant TESTS => 20;
 use Test::More tests => 3 + TESTS * 6;
 use test;
 
@@ -60,10 +60,10 @@ my @tests = (
 		c => 'issue47_1',
 	},
 	{
-		status => WARNING,
+		status => CRITICAL,
 		getstatus => 'issue47/getstatus2',
 		getconfig => 'issue47/getconfig2',
-		message => 'Controller:Optimal, ZMM Status: ZMM not installed, Logical device #0: Rebuild: In Progress 1%, Logical Device 0(data):Degraded, Drives: WD-*******,WD-*******,WD-*******=Online WD-*******=Rebuilding',
+		message => 'Controller:Optimal, Degraded drives:1, ZMM Status: ZMM not installed, Logical device #0: Rebuild: In Progress 1%, Logical Device 0(data):Degraded, Drives: WD-*******,WD-*******,WD-*******=Online WD-*******=Rebuilding',
 		c => 'issue47_2',
 	},
 	{
@@ -105,7 +105,7 @@ my @tests = (
 		status => CRITICAL,
 		getstatus => 'issue90/b',
 		getconfig => 'issue90/c',
-		message => 'Controller:Okay, Defunct drives:1, Offline drives:1, Critical drives:1, Logical Device 0(ARRAY01):Offline, Drives: 0:5=Defunct 9QJ40LQ5,9QJ3ZX84,9QJ3Y860,9QJ3ZX0D,9QJ3ZXZ4=Online',
+		message => 'Controller:Okay, Defunct drives:1, Offline drives:1, Logical Device 0(ARRAY01):Offline, Drives: 0:5=Defunct 9QJ40LQ5,9QJ3ZX84,9QJ3Y860,9QJ3ZX0D,9QJ3ZXZ4=Online',
 		c => 'issue90',
 	},
 	{
@@ -122,14 +122,49 @@ my @tests = (
 		message => 'Controller:Optimal, Battery Status: Failed, Logical Device 0(RAID10):Optimal, Drives: WD-WMATV3471115,WD-WMATV3047731,WD-WMATV3036928,WD-WMATV3086188=Online',
 		c => 'issue105',
 	},
-# test framework doesn't support multiple outputs for same command
 	{
+		# test framework doesn't support multiple outputs for same command
 		skip => 1,
 		status => CRITICAL,
 		getstatus => 'issue110/getstatus',
 		getconfig => 'issue110/getconfig-1',
 		message => 'Controller:Optimal, Defunct drives:1, ZMM Status: ZMM Optimal, Controller:Optimal, Defunct drives:1, ZMM Status: ZMM Optimal, Logical Device 0(Main0):Optimal, Drives: OCZ-B8AV7L1U72V0GT61,22R0A094FRG8,22R0A092FRG8,22R0A03GFRG8,22R0A091FRG8,22R0A03HFRG8,22R0A0A9FRG8,22R0A0A4FRG8=Online',
 		c => 'issue110',
+	},
+	{
+		status => CRITICAL,
+		getstatus => '86/arcconf-getstatus.out',
+		getconfig => '86/arcconf-getconfig.out',
+		message => 'Controller:Optimal, Defunct drives:1, Degraded drives:1, Logical Device 0(raid1):Degraded, Drives: 0,1(1:0)=Failed 3KT2ZPHH000076165TAD=Online',
+		c => '86',
+	},
+	{
+		status => OK,
+		getstatus => 'issue152/arc2_getstatus.txt',
+		getconfig => 'issue152/arc2_getconfig.txt',
+		message => 'Controller:Optimal, Logical Device 0(mordor):Optimal, Drives: JPW9K0J80A2PLL,Z1N0CB3T,Z1N0CC2Q=Online',
+		c => 'issue152',
+	},
+	{
+		status => OK,
+		getstatus => 'issue128/getstatus',
+		getconfig => 'issue128/getconfig',
+		message => 'Controller:OK, Logical Device 0:Optimal, Drives: 0:0,0:1,0:2,0:3,0:4,0:5,0:6,0:7,0:8,0:9,0:10,0:11,0:12,0:13,0:14,0:15=Online',
+		c => 'issue128',
+	},
+	{
+		status => CRITICAL,
+		getstatus => 'issue155/getstatus',
+		getconfig => 'issue155/getconfig',
+		message => 'Controller:Optimal, Defunct drives:1, Degraded drives:1, Logical Device 0(HDD):Optimal, Logical Device 1(SSD):Degraded, Drives: 0:2=Failed WD-WMC4M1057040,WD-WMC4M1019533,50026B726900BD5E,WD-WMC4M1311378,WD-WMC4M1081289,50026B726900BD87,50026B726900BD5F=Online',
+		c => 'issue155',
+	},
+	{
+		status => OK,
+		getstatus => 'pr156/arcconf_getstatus.txt',
+		getconfig => 'pr156/arcconf.txt',
+		message => 'Controller:Optimal, Logical Device 0(RAID6-ID0-7):Optimal, Drives: N8GP15YY,N8GPZWEY,N8GPZZ7Y,N8GPYHUY,N8GPZZ3Y,N8GPZZ4Y,N8GPZZ9Y,N8GR000Y=Online',
+		c => 'pr156',
 	},
 );
 
@@ -147,7 +182,7 @@ foreach my $test (@tests) {
 		options => { bbu_monitoring => 1 },
 	);
 
-	ok($plugin, "plugin created");
+	ok($plugin, "plugin created: $test->{c}");
 
 	$plugin->check;
 	ok(1, "check ran");

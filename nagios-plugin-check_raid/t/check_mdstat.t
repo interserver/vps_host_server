@@ -7,7 +7,7 @@ BEGIN {
 use strict;
 use warnings;
 use constant INACTIVE_TESTS => 2;
-use constant ACTIVE_TESTS => 18;
+use constant ACTIVE_TESTS => 19;
 use Test::More tests => 1 + ACTIVE_TESTS * 6 + INACTIVE_TESTS * 2;
 use test;
 
@@ -91,6 +91,10 @@ my @tests = (
 		active => 1,
 		message => 'md2(1.64 TiB raid1):UU, md1(186.26 GiB raid1):UU, md0(486.99 MiB raid1):UU',
 	},
+	{ input => 'issue164', status => WARNING,
+		active => 1,
+		message => 'md1(1.82 TiB raid1):hot-spare failure:sdh1:UUUUU, md0(119.18 GiB raid1):UU',
+	},
 );
 
 # test that plugin can be created
@@ -111,7 +115,7 @@ foreach my $test (@tests) {
 		options => \%options,
 	);
 
-	ok($plugin, "plugin created");
+	ok($plugin, "plugin created: $test->{input}");
 
 	my $active = $plugin->active;
 	ok($active == $test->{active}, "active matches");

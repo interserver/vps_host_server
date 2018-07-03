@@ -1,0 +1,26 @@
+$VAR1 = [
+          {
+            'Controller Status' => 'OK',
+            'array' => [
+                         {
+                           'logicaldrives' => [
+                                                {
+                                                  'id' => '1',
+                                                  'raid' => 'RAID 1',
+                                                  'size' => '558.9 GB',
+                                                  'status' => 'OK'
+                                                }
+                                              ],
+                           'name' => 'A',
+                           'status' => 'OK'
+                         }
+                       ],
+            'controller' => 'Smart HBA H240ar',
+            'modes' => [
+                         'Embedded',
+                         'RAID Mode'
+                       ],
+            'slot' => '0',
+            'target' => 'slot=0'
+          }
+        ];

@@ -12,8 +12,9 @@ sub program_names {
 
 sub commands {
 	{
-		'mvcli blk' => ['-|', '@CMD'],
-		'mvcli smart' => ['-|', '@CMD'],
+		'mvcli blk' => ['-|', '@CMD', 'info', '-o', 'blk'],
+		'mvcli vd' => ['-|', '@CMD', 'info', '-o', 'vd'],
+		'mvcli smart' => ['-|', '@CMD', 'smart', '-p', '0'],
 	}
 }
 
@@ -65,6 +66,48 @@ sub parse_blk {
 	return wantarray ? @blk : \@blk;
 }
 
+sub parse_vd {
+	my $this = shift;
+
+	my (@vd, %vd);
+	my ($name, $value);
+
+	my $fh = $this->cmd('mvcli vd');
+	while (<$fh>) {
+		chomp;
+
+		if (/^$/
+				|| /----+/
+				|| /SG driver version/
+				|| /Virtual Disk Information/
+			) {
+			next;
+		}
+
+		unless (($name, $value) = /^(.+):\s+(.+)$/) {
+			warn "UNPARSED: [$_]";
+			next;
+		}
+
+		if ($name eq 'id') {
+			# id is first item, so push previous item to list
+			if (%vd) {
+				push(@vd, { %vd });
+				%vd = ();
+			}
+		}
+
+		$vd{$name} = $value;
+	}
+	close $fh;
+
+	if (%vd) {
+		push(@vd, { %vd });
+	}
+
+	return wantarray ? @vd : \@vd;
+}
+
 sub parse_smart {
 	my ($this, $blk) = @_;
 
@@ -78,13 +121,14 @@ sub parse_smart {
 		while (<$fh>) {
 			chomp;
 
-			if (my($id, $name, $current, $worst, $treshold, $raw) = /
-				([\dA-F]{2})\s+ # attr
+			if (my($id, $name, $current, $worst, $treshold, $raw, $status) = /
+				([\dA-F]{2})\s+ # id
 				(.*?)\s+        # name
 				(\d+)\s+        # current
 				(\d+)\s+        # worst
 				(\d+)\s+        # treshold
-				([\dA-F]+)      # raw
+				([\dA-F]{12})   # raw
+				(?:\s+(\w+))?   # status
 			/x) {
 				my %attr = ();
 				$attr{id} = $id;
@@ -93,6 +137,7 @@ sub parse_smart {
 				$attr{worst} = int($worst);
 				$attr{treshold} = int($treshold);
 				$attr{raw} = $raw;
+				$attr{status} = $status || undef;
 				$attrs{$id} = { %attr };
 			} else {
 #				warn "[$_]\n";
@@ -109,10 +154,12 @@ sub parse {
 	my $this = shift;
 
 	my $blk = $this->parse_blk;
+	my $vd = $this->parse_vd;
 	my $smart = $this->parse_smart($blk);
 
 	return {
 		blk => $blk,
+		vd => $vd,
 		smart => $smart,
 	};
 }
@@ -120,11 +167,21 @@ sub parse {
 sub check {
 	my $this = shift;
 
-	my (@status);
-	my @d = $this->parse;
+	my @status;
+	my $c = $this->parse;
 
-	# not implemented yet
-	$this->unknown;
+	foreach my $vd (@{$c->{vd}}) {
+		my $size = $this->format_bytes($this->parse_bytes($vd->{size}));
+		if ($vd->{status} ne 'functional') {
+			$this->critical;
+		}
+		push(@status, "VD($vd->{name} $vd->{'RAID mode'} $size): $vd->{status}");
+	}
+
+	return unless @status;
+
+	# denote this plugin as ran ok
+	$this->ok;
 
 	$this->message(join('; ', @status));
 }

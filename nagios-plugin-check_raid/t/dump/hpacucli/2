@@ -1,0 +1,49 @@
+$VAR1 = [
+          {
+            'Battery/Capacitor Status' => 'OK',
+            'Cache Status' => 'OK',
+            'Controller Status' => 'OK',
+            'array' => [
+                         {
+                           'logicaldrives' => [
+                                                {
+                                                  'id' => '1',
+                                                  'raid' => 'RAID 5',
+                                                  'size' => '136.7 GB',
+                                                  'status' => 'Interim Recovery Mode'
+                                                }
+                                              ],
+                           'name' => 'A',
+                           'status' => 'OK'
+                         }
+                       ],
+            'chassisname' => 'MY STORAGE',
+            'controller' => 'MSA1500 CS',
+            'target' => 'chassisname=MY STORAGE'
+          },
+          {
+            'Battery/Capacitor Status' => 'OK',
+            'Cache Status' => 'OK',
+            'Controller Status' => 'OK',
+            'array' => [
+                         {
+                           'logicaldrives' => [
+                                                {
+                                                  'id' => '1',
+                                                  'raid' => 'RAID 5',
+                                                  'size' => '136.7 GB',
+                                                  'status' => 'Interim Recovery Mode'
+                                                }
+                                              ],
+                           'name' => 'A',
+                           'status' => 'OK'
+                         }
+                       ],
+            'controller' => 'Smart Array P400i',
+            'modes' => [
+                         'Embedded'
+                       ],
+            'slot' => '0',
+            'target' => 'slot=0'
+          }
+        ];

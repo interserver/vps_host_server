@@ -1,7 +1,11 @@
-# Nagios/Icinga plugin to check current server's RAID status
+# Nagios/Icinga/Sensu plugin to check current server's RAID status
 
 This plugin checks all RAID volumes (hardware and software) that can be
 identified.
+
+While written originally for Nagios, it's known to work also with:
+- [Icinga](https://www.icinga.com/)
+- [Sensu](https://sensuapp.org/docs/1.0/overview/what-is-sensu.html)
 
 This is supposed to be a general plugin to run via NRPE.
 It checks for the various RAID systems, and verifies they are working correctly.
@@ -56,7 +60,7 @@ Command line arguments
 	-S  --sudoers           Configure /etc/sudoers file
 	-W  --warnonly          Don't send CRITICAL status
 	-p  --plugin <name(s)>  Force the use of selected plugins, comma separated
-	    --noraid=STATE      Set status as STATE if RAID controller is found. Defaults to `UNKNOWN`
+	    --noraid=STATE      Set status as STATE if RAID volumes are not found. Defaults to `UNKNOWN`
 	    --resync=STATE      Set status as STATE if RAID is in resync state. Defaults to `WARNING`
 	    --check=STATE       Set status as STATE if RAID is in check state. Defaults to `OK`
 	    --cache-fail=STATE  Set status as STATE if Write Cache is present but disabled. Defaults to `WARNING`
@@ -73,7 +77,7 @@ Supported RAIDs that can be checked:
 - Adaptec AAC RAID via `aaccli` or `afacli` or `arcconf`
 - AIX software RAID via `lsvg`
 - HP/Compaq Smart Array via `cciss_vol_status` (hpsa supported too)
-- HP Smart Array Controllers and MSA Controllers via `hpacucli` and `hpssacli`
+- HP Smart Array Controllers and MSA Controllers with `hpacucli`, `hpssacli`, `ssacli`
 - HP Smart Array (MSA1500) via serial line
 - Linux 3ware SATA RAID via `tw_cli`
 - Linux Device Mapper RAID via dmraid
@@ -82,6 +86,7 @@ Supported RAIDs that can be checked:
 - Linux LSI MegaRaid hardware RAID via CmdTool2
 - Linux LSI MegaRaid hardware RAID via megarc
 - Linux LSI MegaRaid hardware RAID via `/proc/megaraid`
+- Linux Device Mapper
 - Linux MegaIDE hardware RAID controllers via `/proc/megaide`
 - Linux MPT hardware RAID via mpt-status
 - Linux software RAID (md) via `/proc/mdstat`
@@ -109,7 +114,7 @@ License: GPL v2
 http://www.steveshipway.org/forum/viewtopic.php?f=20&t=417&p=3211
 Steve Shipway Thanks M Carmier for megaraid section.
 
-(c) 2009-2015 Elan Ruusamäe <glen@pld-linux.org> (maintainer from version 2.1 and upwards)
+(c) 2009-2018 Elan Ruusamäe <glen@pld-linux.org> (maintainer from version 2.1 and upwards)
 
 
 

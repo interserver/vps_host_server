@@ -2,6 +2,7 @@ package App::Monitoring::Plugin::CheckRaid::Plugins::cciss;
 
 use base 'App::Monitoring::Plugin::CheckRaid::Plugin';
 use App::Monitoring::Plugin::CheckRaid::Plugins::lsscsi;
+use App::Monitoring::Plugin::CheckRaid::Plugins::smartctl;
 use strict;
 use warnings;
 
@@ -222,6 +223,9 @@ sub parse {
 	my $fh = $this->cmd($v1_10 ? 'controller status verbose' : 'controller status', { '@devs' => \@devs });
 	while (<$fh>) {
 		chomp;
+
+		# skip empty lines and artificial comments (added by this project)
+		next if /^$/ or /^#/;
 
 		if (/Controller:/) {
 			# this is first item when new controller is found

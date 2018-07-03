@@ -13,8 +13,8 @@ our %options = (
 	# status to set when RAID is in resync state
 	resync_status => $ERRORS{WARNING},
 
-	# Status code to use when no raid was detected
-	noraid_state => $ERRORS{UNKNOWN},
+	# Status code to use when no raid volumes were detected
+	noraid_status => $ERRORS{UNKNOWN},
 
 	# status to set when RAID is in check state
 	check_status => $ERRORS{OK},
@@ -169,6 +169,14 @@ sub check_status {
 	return $this;
 }
 
+# helper to set status for no raid condition
+# returns $this to allow fluent api
+sub noraid {
+	my ($this) = @_;
+	$this->status($this->{options}{noraid_status});
+	return $this;
+}
+
 # helper to set status for spare
 # returns $this to allow fluent api
 sub spare {
@@ -272,6 +280,25 @@ use constant K => 1024;
 use constant M => K * 1024;
 use constant G => M * 1024;
 use constant T => G * 1024;
+
+sub parse_bytes {
+	my ($this, $size) = @_;
+
+	if ($size =~ s/\sT//) {
+		return int($size) * T;
+	}
+	if ($size =~ s/\sG//) {
+		return int($size) * G;
+	}
+	if ($size =~ s/\sM//) {
+		return int($size) * M;
+	}
+	if ($size =~ s/\sK//) {
+		return int($size) * K;
+	}
+
+	return int($size);
+}
 
 sub format_bytes {
 	my $this = shift;

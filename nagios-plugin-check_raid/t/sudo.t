@@ -7,7 +7,7 @@ BEGIN {
 use strict;
 use warnings;
 
-use Test::More tests => 21;
+use Test::More tests => 23;
 use test;
 
 my $bindir = TESTDIR . '/data/bin';
@@ -50,7 +50,10 @@ my %sudo = (
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/mpt-status -p",
 	],
 	tw_cli => [
-		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info*",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx info *",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx show",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/tw_cli-9xxx * show all",
 	],
 	arcconf => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/arcconf GETSTATUS 1",
@@ -77,6 +80,10 @@ my %sudo = (
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/hpssacli controller all show status",
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/hpssacli controller * logicaldrive all show",
 	],
+	ssacli => [
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/ssacli controller all show status",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/ssacli controller * logicaldrive all show",
+	],
 	areca => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/cli64 rsf info",
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/cli64 disk info",
@@ -86,6 +93,10 @@ my %sudo = (
 	],
 	metastat => [
 		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/metastat",
+	],
+	dm => [
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/dmsetup status --noflush",
+		"CHECK_RAID ALL=(root) NOPASSWD: $bindir/dmsetup status",
 	],
 );
 

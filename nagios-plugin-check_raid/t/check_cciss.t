@@ -6,7 +6,7 @@ BEGIN {
 
 use strict;
 use warnings;
-use constant TESTS => 12;
+use constant TESTS => 13;
 use Test::More tests =>  1 + TESTS * 6;
 use test;
 
@@ -155,6 +155,18 @@ my @tests = (
 		message => '/dev/sda(Smart Array P410i): Volume 0 (RAID 5): OK, Drives(3): 1I-1-1,1I-1-2,1I-1-3=OK',
 		c => 'issue100_1.10',
 	},
+	{
+		status => OK,
+		lsscsi => 'cciss/issue149/lsscsi-g',
+		detect_hpsa => '',
+		detect_cciss => '',
+		version => 'cciss-1.11',
+		controller => 'issue149/cciss_vol_status-V',
+		cciss_proc => '',
+		smartctl => '',
+		message => '/dev/sda(Smart Array): Volume 0 (RAID 5): OK, Drives(4): 1I-1-1,1I-1-2,1I-1-3,1I-1-4=OK, Cache: WriteCache FlashCache ReadMem:182 MiB WriteMem:1634 MiB',
+		c => 'issue149',
+	},
 );
 
 # test that plugin can be created
@@ -175,7 +187,7 @@ foreach my $test (@tests) {
 		no_smartctl => 1,
 		use_lsscsi => $test->{lsscsi} ne '',
 	);
-	ok($plugin, "plugin created");
+	ok($plugin, "plugin created: $test->{c}");
 
 	$plugin->check;
 	ok(1, "check ran");
@@ -192,5 +204,5 @@ foreach my $test (@tests) {
 		ok(0, "Created dump for $df");
 	}
 	my $dump = read_dump($df);
-	is_deeply($c, $dump, "controller structure $df");
+	is_deeply($c, $dump, "controller structure");
 }

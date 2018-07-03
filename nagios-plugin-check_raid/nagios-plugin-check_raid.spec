@@ -1,7 +1,10 @@
 %define	have_suggests	0%{?pld_release:1}
 
+%define		_sysconfdir	/etc/nagios/plugins
+%define		plugindir	%{_prefix}/lib/nagios/plugins
+
 %define		plugin	check_raid
-Summary:	Nagios plugin to check current server's RAID status
+Summary:	Nagios/Icinga plugin to check current server's RAID status
 Name:		nagios-plugin-%{plugin}
 Version:	%{version}
 Release:	%{release}
@@ -10,7 +13,7 @@ Group:		Networking
 Source0:	%{plugin}.pl
 Source1:	%{plugin}.cfg
 Source2:	README.md
-Source3:	ChangeLog.md
+Source3:	CHANGELOG.md
 Source4:	CONTRIBUTING.md
 URL:		https://github.com/glensc/nagios-plugin-check_raid
 Requires:	%{plugindir}
@@ -32,9 +35,6 @@ Suggests:	tw_cli-9xxx
 %endif
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
-
-%define		_sysconfdir	/etc/nagios/plugins
-%define		plugindir	%{_prefix}/lib/nagios/plugins
 
 %description
 This plugin checks all RAID volumes (hardware and software) that can
@@ -79,7 +79,7 @@ cp -p %{SOURCE4} .
 
 %install
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_sysconfdir},%{plugindir}}
+install -d $RPM_BUILD_ROOT%{_sysconfdir} $RPM_BUILD_ROOT%{plugindir}
 install -p %{plugin}.pl $RPM_BUILD_ROOT%{plugindir}/%{plugin}
 cp -p %{plugin}.cfg $RPM_BUILD_ROOT%{_sysconfdir}/%{plugin}.cfg
 
@@ -100,6 +100,6 @@ fi
 
 %files
 %defattr(644,root,root,755)
-%doc README.md ChangeLog.md CONTRIBUTING.md
+%doc README.md CHANGELOG.md CONTRIBUTING.md
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{plugin}.cfg
 %attr(755,root,root) %{plugindir}/%{plugin}
