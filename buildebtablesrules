@@ -1,10 +1,15 @@
 #!/bin/bash
 
-# version 1.7.13.2015
+# version 1.6.6.2018
 
 # added ipv6 support
 # needs to be in /root/cpaneldirect/vps.ip6map
 # add another gateway in dhcpd.conf using ###option routers
+# disable bw limit (tc limit)
+
+if [ -x /admin/resolvconf ]; then
+	/admin/resolvconf > /dev/null 2>&1
+fi
 
 if [ ! -x /usr/local/sbin/ebtables ] && [ ! -x /sbin/ebtables ]; then
        echo 'neither /usr/local/sbin/ebtables nor /sbin/ebtables exist or is not executable';
@@ -17,6 +22,7 @@ fi
 check=`crontab -l | grep qs_cron`;
 if [ ! "$check" = "" ]; then
 	echo "#skipping for qs";
+	echo "/admin/kvmenable ebflush"
 	if [ -e /sbin/service ]; then
 		echo "# stopping cgroups and ksm";
 		service ksm stop > /dev/null 2>&1
@@ -24,6 +30,10 @@ if [ ! "$check" = "" ]; then
 		chkconfig ksm off > /dev/null 2>&1
 		chkconfig ksmtuned off > /dev/null 2>&1
 	fi
+	exit;
+fi
+
+if [ -e /root/_disableebtables ]; then
 	exit;
 fi
 
@@ -97,6 +107,15 @@ elif [ -e /etc/debian_version ]; then
 		eth=p2p1;
 	elif  [ -e /sys/class/net/em1 ]; then
 		eth=em1;
+	else
+		eth=eth0;
+	fi
+elif [ -e /etc/redhat-release ]; then
+	#enp11s0f0
+	if [ -e /sys/class/net/enp9s0f0 ]; then
+		eth=enp9s0f0;
+	elif [ -e /sys/class/net/enp11s0f0 ]; then
+		eth=enp11s0f0;
 	else
 		eth=eth0;
 	fi
@@ -208,10 +227,11 @@ echo "ebtables -P VMS DROP"
 # this outputs all the protection for each individual server
 for user in $list; do
 
-	if [ -e /scripts/_tmp/ebtables/$user ]; then
-		echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
-		continue
-	fi
+	# instead below we skip by not specifying a mac
+	#if [ -e /scripts/_tmp/ebtables/$user ]; then
+	#	echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
+	#	continue
+	#fi
 
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2 | head -n 1`;
 	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2 | head -n 1`;
@@ -408,13 +428,13 @@ done
 if [ ! "$debug" = "1" ]; then
 	echo '# DISABLE ARP Rules';
 	echo '# dump arp (seems to solve arping ip stealing, what is the draw back?)'
+	if [ ! -f /scripts/_tmp/ebtables/nodump ]; then
 	echo 'ebtables -A FORWARD -p ARP $LOG -j DROP'
-
 	# does not work
 	#echo '#disable ipv6 for non matches';	
 	#--log-ip6
 	echo 'ebtables -A FORWARD -p IPv6 $LOG -j DROP';
-
+	fi
 	###
 	# Block SMTP
 	###
@@ -452,12 +472,12 @@ if [ -e /proxyarp ]; then
 	echo "echo 1 > /proc/sys/net/ipv4/conf/$bridge/proxy_arp"
 fi
 
-if [ -e /scripts/limitbw ]; then
-	if [ ! -e /nolimitbw ]; then
-		echo "#limiting bandwidth"
-		echo "/scripts/limitbw"
-	fi
-fi
+#if [ -e /scripts/limitbw ]; then
+#	if [ ! -e /nolimitbw ]; then
+#		echo "#limiting bandwidth"
+#		echo "/scripts/limitbw"
+#	fi
+#fi
 
 if [ -e /limitpacket ]; then
         echo "#beta packet limit"
