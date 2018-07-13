@@ -1,5 +1,4 @@
 <?php
-echo "Building LXC Image List\n";
 $out = `lxc image list images:;`;
 $valid_archs = ['x86_64','i686'];
 $json = json_decode(`lxc image list images: --format json`, TRUE);
@@ -10,7 +9,7 @@ foreach ($json as $idx => $image) {
                 if (!isset($image['aliases']))
                         continue;
                 foreach ($image['aliases'] as $alias) {
-                        if ($size == 0 || strlen($alias['name']) < $size) {
+                        if ($size == 0 || strlen($alias['name']) < $size && preg_match('/^..*\/..*\/..*/', $alias['name'])) {
                                 $size = strlen($alias['name']);
                                 $name = $alias['name'];
                         }
