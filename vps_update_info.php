@@ -112,7 +112,8 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
         {
             $out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
 	} elseif (file_exists('/usr/bin/lxc')) {
-		$out = trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2|tr "\n" " "`);
+		$parts = explode("\n", trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
+		$out = ceil($parts[0]/1000000).' '.ceil($parts[1]/1000000);
         } elseif (trim(`pvdisplay`) != '') {
             if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
             {
