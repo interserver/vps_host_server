@@ -24,7 +24,7 @@ if [ "$(file -s $S|grep "boot sector")" = "" ]; then
   #size=$(($(($(($(du -bc $S | tail -n 1 | awk '{ print $1 }') / 512)) + 1)) * 512))
   #size="$(du -bc $S | tail -n 1 | awk '{ print $1 }')"
   size=$(($(($partitions * 512)) + 32256 + $(du -bc $S | tail -n 1 | awk '{ print $1 }')))
-  lvcreate -y -L ${size}B -n $ID vz
+  virsh vol-create-as --pool vz --name $ID --capacity ${size}
 diskbytes=$(fdisk -l /dev/vz/$ID  |grep "^Disk.* bytes$" | cut -d: -f2-  | awk '{ print $3 }')
 diskcylinders=$(fdisk -l /dev/vz/$ID  |grep "cylinders$" | cut -d, -f3-  | awk '{ print $1 }')
 cylinderbytes=$(fdisk -l /dev/vz/$ID  |grep "^Units = cylinder.*bytes$" | cut -d= -f3-  | awk '{ print $1 }')
@@ -72,7 +72,7 @@ cylinderbytes=$(fdisk -l /dev/vz/$ID  |grep "^Units = cylinder.*bytes$" | cut -d
 else
   echo "Detected Disk image already, no conversion needed"
   size="$(du -bc $S | tail -n 1 | awk '{ print $1 }')"
-  lvcreate -y -L ${size}B -n $ID vz
+  virsh vol-create-as --pool vz --name $ID --capacity ${size}
   ddcmd="dd if=$S of=/dev/vz/${ID}\n"
 fi
 kpartx -av /dev/vz/${ID}

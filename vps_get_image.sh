@@ -76,7 +76,7 @@ if [ $imgbuff -ge $freeb ]; then
 fi
 if [ $uselvm -eq 1 ]; then
 	lvsize=$(($(($(($imgbuff/512))+1))*512))
-	lvcreate -L${lvsize}B -nimage_storage vz
+	virsh vol-create-as --pool vz --name image_storage --capacity ${lvsize}
 	mke2fs -q /dev/vz/image_storage
 	mkdir -p /image_storage
 	mount /dev/vz/image_storage /image_storage

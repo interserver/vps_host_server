@@ -20,7 +20,7 @@ if [ $# -ne 2 ]; then
 elif /usr/bin/virsh dominfo $name >/dev/null 2>&1; then
  echo "VPS $name already exists!";
 else
- lvcreate -L101000 -n$name vz
+ virsh vol-create-as --pool vz --name $name --capacity 100G
  /usr/bin/virsh suspend windows1
  virt-clone --force -o windows1 -n $name -f /dev/vz/$name
  /usr/bin/virsh resume windows1
