@@ -163,7 +163,7 @@ else
 			done
 			echo "Removing Downloaded Image"
 			umount /image_storage
-			lvremove -f /dev/vz/image_storage
+			virsh vol-delete --pool vz image_storage
 			rmdir /image_storage
 		fi
 	elif [ -e "/${template}.img.gz" ]; then

@@ -48,7 +48,7 @@ if which virsh >/dev/null 2>&1; then
 	fi
 	$INSTDIR/vps_kvm_automount.sh snap${id} /${image} unmount
 	rmdir /${image}
-	lvremove -f /dev/vz/snap${id}
+	virsh vol-delete --pool vz snap${id}
 else
 	VZPARTITION=`vzlist -H -o private $vzid | cut -d/ -f2`;
 	if [ "${image}" = "" ]; then

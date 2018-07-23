@@ -11,7 +11,7 @@ ID=vm380
 # the extra 512 bytes (1 sector) is already in the image file
 # first partition will start on sector 63, so need to pad with 63*512=32256 for image
 kpartx -dv /dev/vz/$ID
-lvremove /dev/vz/$ID -f
+virsh vol-delete --pool vz $ID
 if [ "$(file -s $S|grep "boot sector")" = "" ]; then
   echo "Detected Partition Image(s) Passed - First Converting To Disk Image"
   #we need to convert these partition(s) to a disk image

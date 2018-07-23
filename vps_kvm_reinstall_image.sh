@@ -53,7 +53,7 @@ else
 fi
 umount /image_storage
 rmdir /image_storage
-lvremove /dev/vz/image_storage -f
+virsh vol-delete --pool vz image_storage
 virsh start $vps
 bash /root/cpaneldirect/run_buildebtables.sh;
 /root/cpaneldirect/vps_refresh_vnc.sh $vps

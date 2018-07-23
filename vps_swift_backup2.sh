@@ -41,9 +41,9 @@ if which virsh >/dev/null 2>&1; then
  delete vps${id} ${image}
  time upload vps${id} /vz/image_storage/${image} 
  umount /vz/image_storage
- lvremove /dev/vz/image_storage -f
+ virsh vol-delete --pool vz image_storage
  rmdir /vz/image_storage
- lvremove /dev/vz/snap${id} -f
+ virsh vol-delete --pool vz snap${id}
 else
  if ! vzlist $vzid >/dev/null 2>&1; then
   echo "Invalid VPS $vzid"

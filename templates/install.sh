@@ -2,7 +2,7 @@
 name=testcent6;
 virsh destroy $name ; 
 virsh undefine $name; 
-lvremove -f /dev/vz/$name; 
+virsh vol-delete --pool vz $name
 lvcreate -y -L 25G -n $name vz; 
 virt-install \
 --hvm \
