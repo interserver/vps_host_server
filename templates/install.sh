@@ -3,7 +3,7 @@ name=testcent6;
 virsh destroy $name ; 
 virsh undefine $name; 
 virsh vol-delete --pool vz $name
-lvcreate -y -L 25G -n $name vz; 
+virsh vol-create-as --pool vz --name $name --capacity 25G
 virt-install \
 --hvm \
 --name=$name \
