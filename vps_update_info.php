@@ -117,7 +117,10 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 			$free = $total - $used;
 			$out = $total.' '.$free;
 		} elseif (file_exists('/usr/bin/virsh')) {
-			$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'`);
+			if (file_exists('/etc/redhat-release') && strpos(file_get_contents('/etc/redhat-release'),'CentOS release 6') !== false)
+				$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'`);
+			else
+				$out = '';
 			if ($out != '') {
 				$parts = explode("\n", $out);
 				$totalb = $parts[5];
