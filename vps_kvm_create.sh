@@ -140,6 +140,10 @@ else
 	if [ -e "/${template}.img" ]; then
 		echo "Uploading $template Image"
 		virsh vol-upload $name "/${template}.img" --pool vz --sparse
+	elif [ -e "/${template}.img.gz" ]; then
+		echo "Uploading $template Image"
+		gunzip "/${template}.img.gz"
+		virsh vol-upload $name "/${template}.img" --pool vz --sparse
 	elif [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
 		adjust_partitions=0
 		echo "Downloading $template Image"
