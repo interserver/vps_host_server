@@ -12,7 +12,7 @@ if [ -x /admin/resolvconf ]; then
 fi
 
 if [ ! -x /usr/local/sbin/ebtables ] && [ ! -x /sbin/ebtables ]; then
-       echo 'neither /usr/local/sbin/ebtables nor /sbin/ebtables exist or is not executable';
+	   echo 'neither /usr/local/sbin/ebtables nor /sbin/ebtables exist or is not executable';
 fi
 
 #debug
@@ -42,17 +42,17 @@ debug=0;
 limit=10000;
 
 if [ -e /etc/dhcp/dhcpd.vps ]; then
-    DHCPVPS=/etc/dhcp/dhcpd.vps
+	DHCPVPS=/etc/dhcp/dhcpd.vps
 else
-    DHCPVPS=/etc/dhcpd.vps
+	DHCPVPS=/etc/dhcpd.vps
 fi
 
 #/etc/dhcpd.conf
 
 if [ -e /etc/dhcp/dhcpd.conf ]; then
-    DHCPCONF=/etc/dhcp/dhcpd.conf
+	DHCPCONF=/etc/dhcp/dhcpd.conf
 else
-    DHCPCONF=/etc/dhcpd.conf
+	DHCPCONF=/etc/dhcpd.conf
 fi
 
 
@@ -72,28 +72,28 @@ else
 fi
 
 if [ "$check" = "" ]; then
-        echo "#Libvirtd is not running";
+		echo "#Libvirtd is not running";
 
-        sleep 1s;
+		sleep 1s;
 	if [ -e /usr/bin/systemctl ]; then
 		 systemctl restart libvirtd.service	
 	else
 		service $service restart
 	fi
 
-        check2=`ps auxw | grep -e sbin/libvirt -e "libvirtd --daemon" | grep -v grep`;
-        if [ "$check" = "" ]; then
-                echo "Libvirtd did not restart, emailing";
-                hostname=`hostname`
-                date=`date`;
-                echo "Libvirtd is not running on $hostname at $date" | mail -s "libvirt on $hostname not running" hardware@interserver.net
-                exit;
-        else
-                echo "#Libvirtd is running again";
-        fi	
+		check2=`ps auxw | grep -e sbin/libvirt -e "libvirtd --daemon" | grep -v grep`;
+		if [ "$check" = "" ]; then
+				echo "Libvirtd did not restart, emailing";
+				hostname=`hostname`
+				date=`date`;
+				echo "Libvirtd is not running on $hostname at $date" | mail -s "libvirt on $hostname not running" hardware@interserver.net
+				exit;
+		else
+				echo "#Libvirtd is running again";
+		fi	
 else
 
-        echo "#Libvirtd is running";
+		echo "#Libvirtd is running";
 fi
 #endcheck
 
@@ -101,7 +101,7 @@ fi
 # interface
 hostname=`hostname`
 if [ "$hostname" = "kvm1.trouble-free.net" -o "$hostname" = "kvm2.interserver.net" -o "$hostname" = "kvm50.interserver.net" ]; then
-        eth=eth1;
+		eth=eth1;
 elif [ -e /etc/debian_version ]; then
 	if [ -e /sys/class/net/p2p1 ]; then
 		eth=p2p1;
@@ -120,7 +120,7 @@ elif [ -e /etc/redhat-release ]; then
 		eth=eth0;
 	fi
 else
-        eth=eth0;
+		eth=eth0;
 fi
 echo "#eth is $eth"
 
@@ -166,8 +166,8 @@ fi
 
 export PATH=$PATH:/sbin:/usr/local/sbin
 
-if [ -e /usr/bin/systemctl ]; then
-	br=`ifconfig br0 | grep "inet" | grep -v inet6 | cut -d: -f2 | awk '{print $2}'`;
+if [ -e /usr/bin/systemctl ] || [ -e /bin/systemctl ]; then
+	br=`ifconfig br0 | grep "inet" | grep -v inet6 | cut -d: -f2 | awk '{ print $2 }'`;
 else
 	br=`ifconfig br0 | grep "inet addr" | cut -d: -f2 | awk '{print $1}'`;
 fi
@@ -239,7 +239,7 @@ for user in $list; do
 	ip=`cat $DHCPVPS  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
 	if [ -z "$ip" ]; then
 		echo "echo \"VPS $user Device $dev MAC $mac Got a Blank IP\";"
-        	continue;
+			continue;
 	fi
 	if [ "$debug" = "1" ]; then
 		echo "found user $user"
@@ -269,29 +269,29 @@ for user in $list; do
 		echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gateway -i $dev -o $eth $LOG -j ACCEPT"
 
 		echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $ip -i $eth -o $dev $LOG -j ACCEPT"
-                echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $br -i $dev -o $eth $LOG -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $br -i $dev -o $eth $LOG -j ACCEPT"
 		# new addition
-                echo "# new addition"
-                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $dev -o $eth $LOG -j ACCEPT"
-                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $eth -o $dev $LOG -j ACCEPT"
-                # end
+				echo "# new addition"
+				echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $dev -o $eth $LOG -j ACCEPT"
+				echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $ip -i $eth -o $dev $LOG -j ACCEPT"
+				# end
 
-                echo "#VMS main rules"
-                echo "ebtables -A FORWARD -p ip -i $dev -j VMS"
+				echo "#VMS main rules"
+				echo "ebtables -A FORWARD -p ip -i $dev -j VMS"
 		if [ -e /scripts/_tmp/ebtables/$user ]; then
 			echo "ebtables -A VMS -p ip --ip-src $ip $LOG -j ACCEPT"
 			echo "ebtables -A VMS -p ip --ip-src $ip $LOG -j ACCEPT"
 		else
 			echo "ebtables -A VMS -p ip --ip-src $ip -s $mac $LOG -j ACCEPT"
-                        echo "ebtables -A VMS -p ip --ip-src $ip -s $mac $LOG -j ACCEPT"
+						echo "ebtables -A VMS -p ip --ip-src $ip -s $mac $LOG -j ACCEPT"
 		fi
 		  if [ -e /limitpacket ]; then
-	          	echo "#beta packet limit"
-                        ruleid=`expr $ruleid + 1`
-                        echo "iptables -I FORWARD $ruleid -m physdev --physdev-in $dev -o $bridge -s $ip -m limit --limit $limit/sec -j ACCEPT"
-                        ruleid=`expr $ruleid + 1`
-                        echo "iptables -I FORWARD $ruleid -m physdev --physdev-in $dev -o $bridge -s $ip -j DROP"
-                  fi
+				echo "#beta packet limit"
+						ruleid=`expr $ruleid + 1`
+						echo "iptables -I FORWARD $ruleid -m physdev --physdev-in $dev -o $bridge -s $ip -m limit --limit $limit/sec -j ACCEPT"
+						ruleid=`expr $ruleid + 1`
+						echo "iptables -I FORWARD $ruleid -m physdev --physdev-in $dev -o $bridge -s $ip -j DROP"
+				  fi
 
 		###
 		# EXTRA IPS Rules
@@ -306,7 +306,7 @@ for user in $list; do
 				if [ "$multi_gw" = "1" ]; then
 					for gw in $gateways; do
 						echo "ebtables -A FORWARD -p ARP --arp-ip-src $gw --arp-ip-dst $extraip -i $eth -o $dev $LOG -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gw -i $dev -o $eth $LOG -j ACCEPT"
+											echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gw -i $dev -o $eth $LOG -j ACCEPT"
 					done
 
 				fi
@@ -315,19 +315,19 @@ for user in $list; do
 				echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $gateway -i $dev -o $eth $LOG -j ACCEPT"
 
 				echo "ebtables -A FORWARD -p ARP --arp-ip-src $br --arp-ip-dst $extraip -i $eth -o $dev $LOG -j ACCEPT"
-		                echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $br -i $dev -o $eth $LOG -j ACCEPT"
+						echo "ebtables -A FORWARD -p ARP --arp-ip-src $extraip --arp-ip-dst $br -i $dev -o $eth $LOG -j ACCEPT"
 				# new addition
-                                echo "# new addition"
-                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $dev -o $eth $LOG -j ACCEPT"
-                                echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $eth -o $dev $LOG -j ACCEPT"
-                                # end
-		                echo "#VMS extra"
+								echo "# new addition"
+								echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $dev -o $eth $LOG -j ACCEPT"
+								echo "ebtables -A FORWARD -p ARP -s $mac --arp-ip-src $extraip -i $eth -o $dev $LOG -j ACCEPT"
+								# end
+						echo "#VMS extra"
 				if [ -e /scripts/_tmp/ebtables/$user ]; then
-                			echo "ebtables -A VMS -p ip --ip-src $extraip $LOG -j ACCEPT"
-                			echo "ebtables -A VMS -p ip --ip-src $extraip $LOG -j ACCEPT"
+							echo "ebtables -A VMS -p ip --ip-src $extraip $LOG -j ACCEPT"
+							echo "ebtables -A VMS -p ip --ip-src $extraip $LOG -j ACCEPT"
 				else
 					echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac $LOG -j ACCEPT"
-                                        echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac $LOG -j ACCEPT"
+										echo "ebtables -A VMS -p ip --ip-src $extraip -s $mac $LOG -j ACCEPT"
 				fi
 				if [ -e /limitpacket ]; then
 					echo "#beta packet limit"
@@ -364,15 +364,15 @@ for user in $list; do
 		###
 		echo "# $user mac spoof protect"
 		if [ -e /scripts/_tmp/ebtables/$user ]; then
-                	echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
+					echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
 			echo "ebtables -A FORWARD -i $dev $LOG -j ACCEPT"
-                        echo "# $user IP PROTECT"
-                        echo "ebtables -A FORWARD -p IPv4 --ip-src $ip $LOG -j ACCEPT"
-                        if [ ! "$ips" = "" ]; then
-                                for extraip in $ips; do
-                                        echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip $LOG -j ACCEPT"
-                                done
-                        fi
+						echo "# $user IP PROTECT"
+						echo "ebtables -A FORWARD -p IPv4 --ip-src $ip $LOG -j ACCEPT"
+						if [ ! "$ips" = "" ]; then
+								for extraip in $ips; do
+										echo "ebtables -A FORWARD -p IPv4 --ip-src $extraip $LOG -j ACCEPT"
+								done
+						fi
 		else
 			echo "ebtables -A FORWARD -i $dev -s ! $mac $LOG -j DROP"
 			echo "# $user IP PROTECT"
@@ -393,15 +393,15 @@ for user in $list; do
 						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
 						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
+											echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 					
 						echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
-                                        	echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
+											echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
+											echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
+											echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 
 						if [ -e /scripts/_tmp/ebtables/$user ]; then
-                        				echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
+										echo "#SKIPPING user $user to to /scripts/_tmp/ebtables/$user";
 							echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ip -s $LOG -j ACCEPT"
 						else
 							echo "ebtables -A FORWARD -p IPv6 --ip6-src $ip6ip -s ! $mac $LOG -j DROP"
@@ -456,12 +456,12 @@ if [ ! "$debug" = "1" ]; then
 	if [ -e /scripts/_tmp/blockip/ ]; then
 		cd /scripts/_tmp/blockip
 		for i in `ls`; do
-                        if [ ! "$i" = "" ]; then
-                                echo '# block ips';
-                                echo "/admin/kvmenable blockip $i"
-                        fi
-                done
-        fi
+						if [ ! "$i" = "" ]; then
+								echo '# block ips';
+								echo "/admin/kvmenable blockip $i"
+						fi
+				done
+		fi
 
 fi
 
@@ -480,11 +480,11 @@ fi
 #fi
 
 if [ -e /limitpacket ]; then
-        echo "#beta packet limit"
-        echo "iptables -N LOGGING"
-        echo "iptables -A FORWARD -j LOGGING"
-        echo "iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped: " --log-level 4"
-        echo "iptables -A LOGGING -j DROP"
+		echo "#beta packet limit"
+		echo "iptables -N LOGGING"
+		echo "iptables -A FORWARD -j LOGGING"
+		echo "iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped: " --log-level 4"
+		echo "iptables -A LOGGING -j DROP"
 fi
 
 if [ -e /etc/debian_version ]; then
