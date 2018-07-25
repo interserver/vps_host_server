@@ -2,7 +2,7 @@
 function vaddpool() {
   if [ "$(virsh pool-list|grep -v -e "^$" -e "^-" -e "^ Name "|awk '{ print $1 }'|grep "$2")" = "" ]; then 
     echo "Adding $1 Pool $2";
-    if [ "$2" = "logical" ]; then
+    if [ "$1" = "logical" ]; then
       virsh pool-define-as "$2" $1 --source-name "$2" --target /dev/$2
     else
       virsh pool-define-as "$2" $1 --source-name "$2"
