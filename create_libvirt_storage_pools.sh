@@ -2,7 +2,7 @@
 function vaddpool() {
   if [ "$(virsh pool-list --name|grep -v "^$"|grep "$2")" = "" ]; then 
     echo "Adding $1 Pool $2";
-    virsh pool-define-as --name "$2" --source-name "$2" --type $1;
+    virsh pool-define-as "$2" $1 --source-name "$2"
     virsh pool-start "$2";
     virsh pool-autostart "$2";
   else 
