@@ -116,10 +116,10 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 			$total = ceil($parts[1]/1000000000);
 			$free = $total - $used;
 			$out = $total.' '.$free;
-		} elseif (trim(`pvdisplay`) != '') {
-			$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'|tr "\n" :`);
+		} elseif (file_exists('/usr/bin/virsh')) {
+			$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'`);
 			if ($out != '') {
-				$parts = explode(':', $out);
+				$parts = explode("\n", $out);
 				$totalb = $parts[5];
 				$usedb = $parts[6];
 				$freeb = $parts[7];
@@ -127,6 +127,7 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 				$freeg = ceil($freeb / 1000000000);
 				$usedg = ceil($usedb / 1000000000);
 				$out = $totalg.' '.$freeg;
+				echo "OUT:$out\n";
 			} elseif (trim(`lvdisplay  |grep 'Allocated pool';`) == '') {
 				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep : |grep -v -e centos -e backup`));
 				$pesize = $parts[7];
