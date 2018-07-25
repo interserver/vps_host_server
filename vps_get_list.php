@@ -110,7 +110,7 @@ fi;\n";
 		} elseif (file_exists('/root/cpaneldirect/vps.mainips')) {
 			$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
 		} else {
-			$lines = [];
+			$lines = array();
 		}
 		$ips = array();
 		$ipIds = array();
