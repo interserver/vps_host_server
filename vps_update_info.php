@@ -108,18 +108,26 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 //ioping -B -R ${iodev} | cut -d" " -f4;';
 //ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f6;';
 		$server['ioping'] = trim(`$cmd`);
-		if (file_exists('/usr/sbin/vzctl'))
-		{
+		if (file_exists('/usr/sbin/vzctl')) {
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
-	} elseif (file_exists('/usr/bin/lxc')) {
-		$parts = explode("\n", trim(`lxc storage info vz --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
-		$used = ceil($parts[0]/1000000000);
-		$total = ceil($parts[1]/1000000000);
-		$free = $total - $used;
-		$out = $total.' '.$free;
+		} elseif (file_exists('/usr/bin/lxc')) {
+			$parts = explode("\n", trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
+			$used = ceil($parts[0]/1000000000);
+			$total = ceil($parts[1]/1000000000);
+			$free = $total - $used;
+			$out = $total.' '.$free;
 		} elseif (trim(`pvdisplay`) != '') {
-			if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
-			{
+			$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'|tr "\n" :`);
+			if ($out != '') {
+				$parts = explode(':', $out);
+				$totalb = $parts[5];
+				$usedb = $parts[6];
+				$freeb = $parts[7];
+				$totalg = ceil($totalb / 1000000000);
+				$freeg = ceil($freeb / 1000000000);
+				$usedg = ceil($usedb / 1000000000);
+				$out = $totalg.' '.$freeg;
+			} elseif (trim(`lvdisplay  |grep 'Allocated pool';`) == '') {
 				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep : |grep -v -e centos -e backup`));
 				$pesize = $parts[7];
 				$totalpe = $parts[8];
