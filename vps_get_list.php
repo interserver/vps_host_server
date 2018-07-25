@@ -12,27 +12,27 @@ function get_vps_list() {
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$curl_cmd = '';
 	$servers = array();
-    if (file_exists('/usr/bin/lxc')) {
-        $lines = explode("\n", trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`));
-        foreach ($lines as $line) {
-            $parts = explode(',', $line);
-            $server = array(
-                'type' => 'lxc',
-                'veid' => $parts[0],
-                'status' => isset($parts[1]) ? strtolower($parts[1]) : 'stopped',
-            );
+	if (file_exists('/usr/bin/lxc')) {
+		$lines = explode("\n", trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`));
+		foreach ($lines as $line) {
+			$parts = explode(',', $line);
+			$server = array(
+				'type' => 'lxc',
+				'veid' => $parts[0],
+				'status' => isset($parts[1]) ? strtolower($parts[1]) : 'stopped',
+			);
 		if (isset($parts[2])) {
-	            $ipparts = explode(" ", $parts[2]);
+				$ipparts = explode(" ", $parts[2]);
 			$server['ip'] = $ipparts[0];
-	            $ips[$parts[0]] = $ipparts[0];
+				$ips[$parts[0]] = $ipparts[0];
 		}
-            if (isset($parts[3]) && trim($parts[3]) != '')
-                $server['mac'] = trim($parts[3]);
-            $servers[$parts[0]] = $server;
-        }
-    }
-    if (file_exists('/usr/bin/virsh'))
-    {
+			if (isset($parts[3]) && trim($parts[3]) != '')
+				$server['mac'] = trim($parts[3]);
+			$servers[$parts[0]] = $server;
+		}
+	}
+	if (file_exists('/usr/bin/virsh'))
+	{
 		$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
 		//echo "Running $cmd\n";
 		$out = trim(`$cmd`);
@@ -49,7 +49,7 @@ function get_vps_list() {
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);
 				$server = array(
-                    'type' => 'kvm',
+					'type' => 'kvm',
 					'veid' => $veid,
 					'status' => $status,
 					'hostname' => $name,
@@ -107,8 +107,11 @@ fi;\n";
 		if (file_exists('/etc/dhcpd.vps')) {
 			$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
 			$lines = explode("\n", trim(`$ipcmd`));
-		} else
+		} elseif (file_exists('/root/cpaneldirect/vps.mainips')) {
 			$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
+		} else {
+			$lines = [];
+		}
 		$ips = array();
 		$ipIds = array();
 		foreach ($lines as $line)
@@ -132,16 +135,16 @@ fi;\n";
 		//echo "CMD:$cmd\n";
 		echo `$cmd`;
 	}
-    if (file_exists('/usr/sbin/vzctl') || file_exists('/usr/bin/prlctl'))
-    {
+	if (file_exists('/usr/sbin/vzctl') || file_exists('/usr/bin/prlctl'))
+	{
 		if (file_exists('/usr/bin/prlctl')) {
-            $type = 'virtuozzo';
+			$type = 'virtuozzo';
 			$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -a -o uuid,name,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H;';
 			//echo "Running $cmd\n";
 			$out = `$cmd`;
 			preg_match_all('/^\s*(?P<uuid>[^\s]+)\s+(?P<ctid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<vswap>[^\s]+)\s+(?P<layout>[^\s]+)\s+(?P<kmemsize>[^\s]+)\s+(?P<kmemsize_f>[^\s]+)\s+(?P<lockedpages>[^\s]+)\s+(?P<lockedpages_f>[^\s]+)\s+(?P<privvmpages>[^\s]+)\s+(?P<privvmpages_f>[^\s]+)\s+(?P<shmpages>[^\s]+)\s+(?P<shmpages_f>[^\s]+)\s+(?P<numproc_f>[^\s]+)\s+(?P<physpages>[^\s]+)\s+(?P<physpages_f>[^\s]+)\s+(?P<vmguarpages>[^\s]+)\s+(?P<vmguarpages_f>[^\s]+)\s+(?P<oomguarpages>[^\s]+)\s+(?P<oomguarpages_f>[^\s]+)\s+(?P<numtcpsock>[^\s]+)\s+(?P<numtcpsock_f>[^\s]+)\s+(?P<numflock>[^\s]+)\s+(?P<numflock_f>[^\s]+)\s+(?P<numpty>[^\s]+)\s+(?P<numpty_f>[^\s]+)\s+(?P<numsiginfo>[^\s]+)\s+(?P<numsiginfo_f>[^\s]+)\s+(?P<tcpsndbuf>[^\s]+)\s+(?P<tcpsndbuf_f>[^\s]+)\s+(?P<tcprcvbuf>[^\s]+)\s+(?P<tcprcvbuf_f>[^\s]+)\s+(?P<othersockbuf>[^\s]+)\s+(?P<othersockbuf_f>[^\s]+)\s+(?P<dgramrcvbuf>[^\s]+)\s+(?P<dgramrcvbuf_f>[^\s]+)\s+(?P<numothersock>[^\s]+)\s+(?P<numothersock_f>[^\s]+)\s+(?P<dcachesize>[^\s]+)\s+(?P<dcachesize_f>[^\s]+)\s+(?P<numfile>[^\s]+)\s+(?P<numfile_f>[^\s]+)\s+(?P<numiptent>[^\s]+)\s+(?P<numiptent_f>[^\s]+)\s+(?P<diskspace>[^\s]+)\s+(?P<diskspace_s>[^\s]+)\s+(?P<diskspace_h>[^\s]+)\s+(?P<diskinodes>[^\s]+)\s+(?P<diskinodes_s>[^\s]+)\s+(?P<diskinodes_h>[^\s]+)\s+(?P<laverage>[^\s]+)/m', $out, $matches);
 		} else {
-            $type = 'openvz';
+			$type = 'openvz';
 			$cmd = 'export PATH="$PATH:/bin:/usr/bin:/sbin:/usr/sbin";if [ "$(vzlist -L |grep vswap)" = "" ]; then prlctl list -a -o ctid,numproc,status,ip,hostname,swappages,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; else vzlist -a -o ctid,numproc,status,ip,hostname,vswap,layout,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage -H; fi;';
 			//echo "Running $cmd\n";
 			$out = `$cmd`;
@@ -151,7 +154,7 @@ fi;\n";
 		foreach ($matches['ctid'] as $key => $id)
 		{
 			$server = array(
-                'type' => $type,
+				'type' => $type,
 				'veid' => $id,
 				'numproc' => $matches['numproc'][$key],
 				'status' => $matches['status'][$key],
