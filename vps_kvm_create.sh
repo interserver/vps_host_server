@@ -83,7 +83,7 @@ if [ $# -lt 3 ]; then
 else
 	if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
-		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print \$2 }')"
+		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 		device="${device}"
