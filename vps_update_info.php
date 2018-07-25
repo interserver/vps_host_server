@@ -43,9 +43,9 @@
 for i in $(pvdisplay -c|grep :); do 
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
   blocksize="$(echo "$i" | cut -d: -f8)";
-  total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
-  free="$(echo "$(echo "$i" | cut -d: -f10) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
-  used="$(echo "$(echo "$i" | cut -d: -f11) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
+  total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
+  free="$(echo "$(echo "$i" | cut -d: -f10) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
+  used="$(echo "$(echo "$i" | cut -d: -f11) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
   target="$(echo "$i" | cut -d: -f2)";
   echo "$d:$total:$used:$free:$target";
 done
@@ -112,8 +112,8 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
 		} elseif (file_exists('/usr/bin/lxc')) {
 			$parts = explode("\n", trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
-			$used = ceil($parts[0]/1000000000);
-			$total = ceil($parts[1]/1000000000);
+			$used = ceil($parts[0]/1073741824);
+			$total = ceil($parts[1]/1073741824);
 			$free = $total - $used;
 			$out = $total.' '.$free;
 		} elseif (file_exists('/usr/bin/virsh')) {
@@ -123,9 +123,9 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 				$totalb = $parts[5];
 				$usedb = $parts[6];
 				$freeb = $parts[7];
-				$totalg = ceil($totalb / 1000000000);
-				$freeg = ceil($freeb / 1000000000);
-				$usedg = ceil($usedb / 1000000000);
+				$totalg = ceil($totalb / 1073741824);
+				$freeg = ceil($freeb / 1073741824);
+				$usedg = ceil($usedb / 1073741824);
 				$out = $totalg.' '.$freeg;
 				echo "OUT:$out\n";
 			} elseif (trim(`lvdisplay  |grep 'Allocated pool';`) == '') {
@@ -133,8 +133,8 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 				$pesize = $parts[7];
 				$totalpe = $parts[8];
 				$freepe = $parts[9];
-				$totalg = ceil($pesize * $totalpe / 1000000);
-				$freeg = ceil($pesize * $freepe / 1000000);
+				$totalg = ceil($pesize * $totalpe / 1048576);
+				$freeg = ceil($pesize * $freepe / 1048576);
 				$out = "$totalg $freeg";
 			} else {
 				//$totalg = trim(`lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut -d\. -f1`);
