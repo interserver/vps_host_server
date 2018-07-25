@@ -127,7 +127,6 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 				$freeg = ceil($freeb / 1073741824);
 				$usedg = ceil($usedb / 1073741824);
 				$out = $totalg.' '.$freeg;
-				echo "OUT:$out\n";
 			} elseif (trim(`lvdisplay  |grep 'Allocated pool';`) == '') {
 				$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep : |grep -v -e centos -e backup`));
 				$pesize = $parts[7];
@@ -135,26 +134,24 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 				$freepe = $parts[9];
 				$totalg = ceil($pesize * $totalpe / 1048576);
 				$freeg = ceil($pesize * $freepe / 1048576);
-				$out = "$totalg $freeg";
+				$out = $totalg.' '.$freeg;
 			} else {
 				//$totalg = trim(`lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut -d\. -f1`);
 				//$freeg = trim(`echo "\$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) - ( \$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g) / 100 * \$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) )" |bc -l |cut -d\. -f1`);
 				// this one doubles the space usage to make it stop at 50%
 				//$freeg = trim(`echo "\$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) - ( \$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g) / 100 * \$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) * 2 )" |bc -l |cut -d\. -f1`);
-$TOTAL_GB = '$(lvdisplay --units g /dev/vz/thin |grep "LV Size" | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut  -d\. -f1)';
-$USED_PCT = '$(lvdisplay --units g /dev/vz/thin |grep "Allocated .*data" | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)';
-$GB_PER_PCT = '$(echo "'.$TOTAL_GB.' / 100" |bc -l | cut -d\. -f1)';
-$USED_GB = '$(echo "'.$USED_PCT.' * '.$GB_PER_PCT.'" | bc -l)';
-$MAX_PCT =  60;
-$FREE_PCT = '$(echo "'.$MAX_PCT.' - '.$USED_PCT.'" |bc -l)';
-$FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
-//echo 'Total GB '.$TOTAL_GB.'Used % '.$USED_PCT.'GB Per % '.$GB_PER_PCT.'USED GB  '.$USED_GB.'MAX % '.$MAX_PCT.'FREE PCT '.$FREE_PCT.'FREE GB '.$FREE_GB;
-
-
-					//$parts= explode("\n", trim(`$cmd`));
-					$totalg = trim(`echo $TOTAL_GB;`);
-					$freeg = trim(`echo $FREE_GB;`);
-					$out = "$totalg $freeg";
+				$TOTAL_GB = '$(lvdisplay --units g /dev/vz/thin |grep "LV Size" | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut  -d\. -f1)';
+				$USED_PCT = '$(lvdisplay --units g /dev/vz/thin |grep "Allocated .*data" | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g)';
+				$GB_PER_PCT = '$(echo "'.$TOTAL_GB.' / 100" |bc -l | cut -d\. -f1)';
+				$USED_GB = '$(echo "'.$USED_PCT.' * '.$GB_PER_PCT.'" | bc -l)';
+				$MAX_PCT =  60;
+				$FREE_PCT = '$(echo "'.$MAX_PCT.' - '.$USED_PCT.'" |bc -l)';
+				$FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
+				//echo 'Total GB '.$TOTAL_GB.'Used % '.$USED_PCT.'GB Per % '.$GB_PER_PCT.'USED GB  '.$USED_GB.'MAX % '.$MAX_PCT.'FREE PCT '.$FREE_PCT.'FREE GB '.$FREE_GB;
+				//$parts= explode("\n", trim(`$cmd`));
+				$totalg = trim(`echo $TOTAL_GB;`);
+				$freeg = trim(`echo $FREE_GB;`);
+				$out = $totalg.' '.$freeg;
 			}
 		}
 		if (isset($out)) {
