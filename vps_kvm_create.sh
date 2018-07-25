@@ -14,7 +14,7 @@ fi
 url="https://myvps2.interserver.net/vps_queue.php"
 softraid=""
 vcpu=2
-size=101000
+size=102400
 name=$1
 ip=$2
 if [ "$(echo "$ip" |grep ",")" != "" ]; then
@@ -24,10 +24,10 @@ else
 	extraips=""
 fi;
 template=$3
-memory=1024000
+memory=1048576
 if [ "$template" = "windows3" ]; then
-	size=50500
-	memory=256000
+	size=52000
+	memory=262144
 	vcpu=1
 fi
 IFS="
@@ -81,7 +81,13 @@ if [ $# -lt 3 ]; then
 	error=$(($error + 1))
 #check if vps exists
 else
-	/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
+	if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
+		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print \$2 }')"
+	else
+		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
+		device="${device}"
+	fi
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
 		/usr/bin/virsh destroy ${name}
@@ -140,7 +146,7 @@ else
 			error=$(($error + 1))
 		else
 			echo "Copying $template Image"
-			dd if=/image_storage/image.raw.img of=/dev/vz/${name} >dd.progress 2>&1 &
+			dd if=/image_storage/image.raw.img of=${device} >dd.progress 2>&1 &
 			pid=$!
 			tsize=$(stat -c%s "/image_storage/image.raw.img")
 			while [ -d /proc/$pid ]; do
@@ -168,7 +174,7 @@ else
 		fi
 	elif [ -e "/${template}.img.gz" ]; then
 		echo "Copying $template Image"
-		gzip -dc "/${template}.img.gz"  | dd of=/dev/vz/${name} 2>&1 &
+		gzip -dc "/${template}.img.gz"  | dd of=${device} 2>&1 &
 		pid=$!
 		echo "Got DD PID $pid";
 		sleep 2s;
@@ -202,7 +208,7 @@ else
 	elif [ -e "/${template}.img" ]; then
 		echo "Copying $template Image"
 		tsize=$(stat -c%s "/$template.img")
-		dd if="/${template}.img" of=/dev/vz/${name} >dd.progress 2>&1 &
+		dd if="/${template}.img" of=${device} >dd.progress 2>&1 &
 		pid=$!
 		while [ -d /proc/$pid ]; do
 			sleep 9s
@@ -227,7 +233,7 @@ else
 		/usr/bin/virsh suspend ${template}
 		echo "Copying Image"
 		tsize=$(stat -c%s "/dev/vz/$template")
-		dd if=/dev/vz/${template} of=/dev/vz/${name} >dd.progress 2>&1 &
+		dd if=/dev/vz/${template} of=${device} >dd.progress 2>&1 &
 		pid=$!
 		while [ -d /proc/$pid ]; do
 			sleep 9s
@@ -260,14 +266,14 @@ else
 	if [ $error -eq 0 ]; then
 		if [ "$adjust_partitions" = "1" ]; then
 			curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
-			sects="$(fdisk -l -u /dev/vz/${name}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g)"
-			t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
+			sects="$(fdisk -l -u ${device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g)"
+			t="$(fdisk -l -u ${device} | sed s#"\*"#""#g | grep "^${device}" | tail -n 1)"
 			p="$(echo $t | awk '{ print $1 }')"
 			fs="$(echo $t | awk '{ print $5 }')"
 			if [ "$(echo "$fs" | grep "[A-Z]")" != "" ]; then
 				fs="$(echo $t | awk '{ print $6 }')"
 			fi;
-			pn="$(echo "$p" | sed s#"/dev/vz/${name}[p]*"#""#g)"
+			pn="$(echo "$p" | sed s#"${device}[p]*"#""#g)"
 			if [ $pn -gt 4 ]; then
 				pt=l
 			else
@@ -287,8 +293,8 @@ $start
 w
 print
 q
-" | fdisk -u /dev/vz/${name}
-				kpartx $kpartxopts -av /dev/vz/${name}
+" | fdisk -u ${device}
+				kpartx $kpartxopts -av ${device}
 				pname="$(ls /dev/mapper/{vz-,}${name}{p,}${pn} 2>/dev/null | cut -d/ -f4 | sed s#"${pn}$"#""#g)"
 				e2fsck -p -f /dev/mapper/${pname}${pn}
 				if [ -f "$(which resize4fs 2>/dev/null)" ]; then
@@ -306,19 +312,19 @@ q
 					echo "kvm:${password}" | chroot /vz/mounts/${name}${pn} chpasswd
 				fi;
 				umount /dev/mapper/${pname}${pn}
-				kpartx $kpartxopts -d /dev/vz/${name}
+				kpartx $kpartxopts -d ${device}
 			else
 				echo "Skipping Resizing Last Partition FS is not 83. Space (Sect ${sects} P ${p} FS ${fs} PN ${pn} PT ${pt} Start ${start}"
 			fi
 
 			# echo "Coyping MBR"
-			# dd if=/dev/vz/${template} of=/dev/vz/${name} bs=512 count=1 >/dev/null 2>&1
+			# dd if=/dev/vz/${template} of=${device} bs=512 count=1 >/dev/null 2>&1
 			# echo "Copying Partition Table"
-			# dd if=/dev/vz/${template} of=/dev/vz/${name} bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
+			# dd if=/dev/vz/${template} of=${device} bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
 			# echo "Creating Partition Table Links"
 			# /sbin/kpartx $kpartxopts -a /dev/vz/${template}
-			# /sbin/kpartx $kpartxopts -a /dev/vz/${name}
-			# for i in $(sfdisk -d /dev/vz/${name} | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
+			# /sbin/kpartx $kpartxopts -a ${device}
+			# for i in $(sfdisk -d ${device} | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
 			#  pname="$(echo "$i" | cut -d" " -f1)"
 			#  tpname="$(echo "$pname" | sed s#"${name}"#"${template}"#g)"
 			#  ptype="$(echo "$i" | cut -d" " -f2)"
@@ -360,7 +366,7 @@ q
 			#  fi
 			# done
 			# /sbin/kpartx $kpartxopts -d /dev/vz/${template}
-			# /sbin/kpartx $kpartxopts -d /dev/vz/${name}
+			# /sbin/kpartx $kpartxopts -d ${device}
 
 			# /usr/bin/virsh setmaxmem ${name} ${memory};
 			# /usr/bin/virsh setmem ${name} ${memory};
