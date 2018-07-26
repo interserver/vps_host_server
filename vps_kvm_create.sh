@@ -86,7 +86,7 @@ else
 	#	device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	#else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
-		device="${device}"
+		#device="${device}"
 	#fi
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
