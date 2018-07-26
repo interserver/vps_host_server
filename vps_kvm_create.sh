@@ -58,7 +58,7 @@ fi
 error=0
 adjust_partitions=1
 export PREPATH="";
-if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1) -le 6 ]; then
+if [ -e /etc/redhat-release ] && [ "$(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1)" = "6" ]; then
 	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
 			pushd $PWD;
