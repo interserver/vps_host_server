@@ -2,8 +2,11 @@
 use Workerman\Lib\Timer;
 use Workerman\Worker;
 
+/**
+* onConnect event for websocket connection to hub
+*/
 return function($stdObject, $conn) {
-	$stdObject->conn = $conn;
+	/** sends a login request to the hub **/
 	$json = array(
 		'type' => 'login',
 		'name' => $stdObject->hostname,
@@ -11,5 +14,5 @@ return function($stdObject, $conn) {
 		'room_id' => 1,
 		'ima' => 'host',
 	);
-	$conn->send(json_encode($json));
+	$stdObject->conn->send(json_encode($json));
 };

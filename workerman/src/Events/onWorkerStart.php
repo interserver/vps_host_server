@@ -4,6 +4,7 @@ use Workerman\Lib\Timer;
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject, $worker) {
+	$stdObject->debug = true;
 	$stdObject->conn = null;
 	$stdObject->var = null;
 	$stdObject->vps_list = array();

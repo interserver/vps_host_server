@@ -4,7 +4,7 @@ use Workerman\Worker;
 include_once __DIR__.'/../stdObject.php';
 
 $vps_worker = new Worker();
-$vps_worker->name = 'VpsServer';
+$vps_worker->name = 'VpsHostWorker';
 $vps_worker->onWorkerStart = function($worker) {
 	global $events;
 	$events = new stdObject();
