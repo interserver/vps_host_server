@@ -81,13 +81,13 @@ if [ $# -lt 3 ]; then
 	error=$(($error + 1))
 #check if vps exists
 else
-	if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
-		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
-		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
-	else
+	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
+	#	virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+	#	device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
+	#else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 		device="${device}"
-	fi
+	#fi
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
 		/usr/bin/virsh destroy ${name}
