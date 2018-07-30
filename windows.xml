@@ -5,59 +5,62 @@
   <currentMemory unit='KiB'>1024000</currentMemory>
   <vcpu placement='static' current='1'>8</vcpu>
   <os>
-	<type arch='x86_64' machine='pc'>hvm</type>
+    <type arch='x86_64' machine='pc'>hvm</type>
     <boot dev='cdrom'/>
-	<boot dev='hd'/>
+    <boot dev='hd'/>
   </os>
   <cpu mode='host-model'/>
   <features>
-	<acpi/>
-	<apic/>
-	<pae/>
+    <acpi/>
+    <apic/>
+    <pae/>
   </features>
   <clock offset='timezone' timezone='America/New_York'/>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
   <on_crash>restart</on_crash>
   <devices>
-	<emulator>/usr/libexec/qemu-kvm</emulator>
-	<disk type='block' device='disk'>
-	  <driver name='qemu' type='raw' cache='none' io='native'/>
-	  <source dev='/dev/vz/windows'/>
-	  <target dev='vda' bus='virtio'/>
-	</disk>
+    <emulator>/usr/libexec/qemu-kvm</emulator>
+    <disk type='block' device='disk'>
+      <driver name='qemu' type='raw' cache='none' io='native'/>
+      <source dev='/dev/vz/windows'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
       <target dev='sdb' bus='scsi'/>
       <readonly/>
     </disk>    
-	<controller type='ide' index='0'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
-	</controller>
-	<interface type='bridge'>
-	  <mac address='52:54:00:a0:f9:dc'/>
-	  <source bridge='br0'/>
-	  <model type='virtio'/>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-	</interface>
-	<serial type='pty'>
-	  <target port='0'/>
-	</serial>
-	<console type='pty'>
-	  <target type='serial' port='0'/>
-	</console>
-	<input type='tablet' bus='usb'/>
-	<input type='mouse' bus='ps2'/>
-	<graphics type='vnc' port='-1' autoport='yes' keymap='en-us'/>
-	<sound model='ac97'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
-	</sound>
-	<video>
-	  <model type='vga' vram='9216' heads='1'/>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
-	</video>
-	<memballoon model='virtio'>
-	  <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
-	</memballoon>
+    <controller type='ide' index='0'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+    </controller>
+    <interface type='bridge'>
+      <mac address='52:54:00:a0:f9:dc'/>
+      <source bridge='br0'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+      <filterref filter='clean-traffic-int'>
+        <parameter name='IP' value='IP.ADDRESS'/>
+      </filterref>      
+    </interface>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <input type='tablet' bus='usb'/>
+    <input type='mouse' bus='ps2'/>
+    <graphics type='vnc' port='-1' autoport='yes' keymap='en-us'/>
+    <sound model='ac97'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </sound>
+    <video>
+      <model type='vga' vram='9216' heads='1'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <memballoon model='virtio'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </memballoon>
   </devices>
 </domain>
