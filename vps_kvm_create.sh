@@ -82,10 +82,10 @@ if [ $# -lt 3 ]; then
 	error=$(($error + 1))
 #check if vps exists
 else
-	pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
+	export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	if [ "$pool" = "" ]; then
 		/root/cpaneldirect/create_libvirt_storage_pools.sh
-		pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
+		export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
@@ -267,7 +267,7 @@ else
 				fs="$(echo $t | awk '{ print $6 }')"
 			fi;
 			pn="$(echo "$p" | sed s#"${device}[p]*"#""#g)"
-			if [ $pn -gt 4 ]; then
+			[ $pn -gt 4 ]; then
 				pt=l
 			else
 				pt=p
