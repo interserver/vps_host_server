@@ -150,11 +150,12 @@ else
 			echo "Uncompressing $template.img.gz Image"
 			gunzip "/${template}.img.gz"
 		fi
-		if [ -e "/${template}.img" ]; then
-			echo "Uploading $template Image"
-			virsh vol-upload $name "/${template}.img" --pool vz
-		fi;
-	elif [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
+		#if [ -e "/${template}.img" ]; then
+		#	echo "Uploading $template Image"
+		#	virsh vol-upload $name "/${template}.img" --pool vz
+		#fi;
+	fi;
+	if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
 		adjust_partitions=0
 		echo "Downloading $template Image"
 		/root/cpaneldirect/vps_get_image.sh "$template"
@@ -189,6 +190,31 @@ else
 			virsh vol-delete --pool vz image_storage
 			rmdir /image_storage
 		fi
+	elif [ -e "/${template}.img" ]; then
+		echo "Suspending ${template} For Copy"
+		/usr/bin/virsh suspend ${template}
+		echo "Copying Image"
+		tsize=$(stat -c%s "/dev/vz/$template")
+		dd if=/${template}.img of=${device} >dd.progress 2>&1 &
+		pid=$!
+		while [ -d /proc/$pid ]; do
+			sleep 9s
+			kill -SIGUSR1 $pid;
+			sleep 1s
+			if [ -d /proc/$pid ]; then
+			  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
+			  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+			  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+				if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+					for softfile in $softraid; do
+						echo idle > $softfile
+					done
+				fi
+			  echo "$completed%"
+			fi
+		done
+		rm -f dd.progress
 	elif [ -e "/${template}.img.gz" ]; then
 		echo "Copying $template Image"
 		gzip -dc "/${template}.img.gz"  | dd of=${device} 2>&1 &
