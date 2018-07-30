@@ -94,7 +94,7 @@ else
 	else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 		#device="${device}"
-	#fi
+	fi
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
 		/usr/bin/virsh destroy ${name}
