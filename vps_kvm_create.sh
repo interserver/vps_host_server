@@ -90,6 +90,7 @@ else
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
 		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
