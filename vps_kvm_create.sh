@@ -192,7 +192,7 @@ else
 		fi
 	elif [ -e "/${template}.img" ]; then
 		echo "Copying Image"
-		tsize=$(stat -c%s "/dev/vz/$template")
+		tsize=$(stat -c%s "/${template}.img")
 		dd if=/${template}.img of=${device} >dd.progress 2>&1 &
 		pid=$!
 		while [ -d /proc/$pid ]; do
@@ -215,6 +215,7 @@ else
 		rm -f dd.progress
 	elif [ -e "/${template}.img.gz" ]; then
 		echo "Copying $template Image"
+		tsize=$(stat -c%s "/${template}.img.gz")
 		gzip -dc "/${template}.img.gz"  | dd of=${device} 2>&1 &
 		pid=$!
 		echo "Got DD PID $pid";
