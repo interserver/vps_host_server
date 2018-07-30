@@ -26,31 +26,31 @@ fi;
 template=$3
 memory=1024000
 if [ "$template" = "windows3" ]; then
- size=50500
- memory=256000
- vcpu=1
+	size=50500
+	memory=256000
+	vcpu=1
 fi
 IFS="
 "
 if [ "$4" != "" ]; then
- size=$4
+	size=$4
 fi
 if [ "$5" != "" ]; then
- memory=$5
- if [ "$memory" = "all" ]; then
-  memory="$(echo `cat /proc/meminfo  | grep ^MemTotal | awk '{print $2}'` - 102400 | bc -l)"
- fi
+	memory=$5
+	if [ "$memory" = "all" ]; then
+		memory="$(echo `cat /proc/meminfo  | grep ^MemTotal | awk '{print $2}'` - 102400 | bc -l)"
+	fi
 fi
 if [ "$6" != "" ]; then
- vcpu=$6
- if [ "$vcpu" = "all" ]; then
-  vcpu="$(lscpu |grep ^CPU\(s\) | awk ' { print $2 }')"
- fi
+	vcpu=$6
+	if [ "$vcpu" = "all" ]; then
+		vcpu="$(lscpu |grep ^CPU\(s\) | awk ' { print $2 }')"
+	fi
 fi
 max_cpu=${vcpu}
 max_memory=${memory}
 if [ "$7" != "" ]; then
- password=$7
+	password=$7
 fi
 if [ "$8" != "" ]; then
 	clientip="$8"
@@ -72,35 +72,48 @@ if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cu
 		export PATH="${PREPATH}${PATH}";
 	fi;
 fi;
+device=/dev/vz/${name}
 if [ $# -lt 3 ]; then
- echo "Create a New KVM"
- echo " - Creates LVM"
- echo " - Clones Windows VPS/LVM"
- echo " - Rebuild DHCPD"
- echo " - Startup"
- echo "Syntax $0 <name> <ip> <template> [diskspace] [memory] [vcpu]"
- echo " ie $0 windows1337 1.2.3.4 windows1"
+	echo "Create a New KVM"
+	echo " - Creates LVM"
+	echo " - Clones Windows VPS/LVM"
+	echo " - Rebuild DHCPD"
+	echo " - Startup"
+	echo "Syntax $0 <name> <ip> <template> [diskspace] [memory] [vcpu]"
+	echo " ie $0 windows1337 1.2.3.4 windows1"
 	error=$(($error + 1))
 #check if vps exists
 else
- /root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size}
- cd /etc/libvirt/qemu
- if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
-  /usr/bin/virsh destroy ${name}
-  cp ${name}.xml ${name}.xml.backup
-  /usr/bin/virsh undefine ${name}
-  mv -f ${name}.xml.backup ${name}.xml
- else
-  echo "Generating XML Config"
-  if [ "${template:0:7}" = "windows" ]; then
-   templatef="windows"
-  else
-   templatef="linux"
-  fi
-  grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
-  echo "Defining Config As VPS"
- fi
- mv -f ${name}.xml ${name}.xml.backup
+	export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
+	if [ "$pool" = "" ]; then
+		/root/cpaneldirect/create_libvirt_storage_pools.sh
+		export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
+	fi
+	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
+	if [ "$pool" = "zfs" ]; then
+		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+		sleep 5s;
+		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
+	else
+		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
+	fi
+	cd /etc/libvirt/qemu
+	if /usr/bin/virsh dominfo ${name} >/dev/null 2>&1; then
+		/usr/bin/virsh destroy ${name}
+		cp ${name}.xml ${name}.xml.backup
+		/usr/bin/virsh undefine ${name}
+		mv -f ${name}.xml.backup ${name}.xml
+	else
+		echo "Generating XML Config"
+		templatef="windows"
+		if [ "$pool" != "zfs" ]; then
+			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
+		else
+			  grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
+		fi
+		echo "Defining Config As VPS"
+	fi
+	mv -f ${name}.xml ${name}.xml.backup
 	repl="<parameter name='IP' value='${ip}'/>";
 	if [ "$extraips" != "" ]; then
 		for i in $extraips; do
@@ -115,31 +128,31 @@ else
 		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
 	fi
 	rm -f ${name}.xml.backup
- /usr/bin/virsh define ${name}.xml
- if [ "$template" = "windows1" ]; then
-  template=windows2
- fi
- if [ -e "/${template}.img.gz" ]; then
-  echo "Copying $template Image"
-  gzip -dc "/${template}.img.gz"  | dd of=/dev/vz/${name} 2>&1 &
-  #pid="$(pidof gzip)"
-  pid=$!
-  echo "Got gzip PID $pid";
-  if [ "$(pidof gzip)" != "" ]; then
-   pid="$(pidof gzip)"
-   echo "Tried again, got gzpi PID $pid"
-  fi
-  if [ "$(echo "$pid" | grep " ")" != "" ]; then
-   pid=$(pgrep -f 'gzip -dc')
-   echo "Didn't like gzip pid (had a space?), going with gzip PID $pid"
-  fi
-  tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
-  echo "Got Total Size $tsize";
-  if [ -z $tsize ]; then
+	/usr/bin/virsh define ${name}.xml
+	if [ "$template" = "windows1" ]; then
+		template=windows2
+	fi
+	if [ -e "/${template}.img.gz" ]; then
+		echo "Copying $template Image"
+		gzip -dc "/${template}.img.gz"  | dd of=/dev/vz/${name} 2>&1 &
+		#pid="$(pidof gzip)"
+		pid=$!
+		echo "Got gzip PID $pid";
+		if [ "$(pidof gzip)" != "" ]; then
+			pid="$(pidof gzip)"
+			echo "Tried again, got gzpi PID $pid"
+		fi
+		if [ "$(echo "$pid" | grep " ")" != "" ]; then
+			pid=$(pgrep -f 'gzip -dc')
+			echo "Didn't like gzip pid (had a space?), going with gzip PID $pid"
+		fi
+		tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
+		echo "Got Total Size $tsize";
+		if [ -z $tsize ]; then
 		tsize=$(stat -c%s "/${template}.img.gz");
 		echo "Falling back to filesize check, got size $tsize";
-  fi;
-  while [ -d /proc/$pid ]; do
+		fi;
+		while [ -d /proc/$pid ]; do
 	copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
 	completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
@@ -151,13 +164,13 @@ else
 	fi
 	echo "$completed%"
 	sleep 10s
-  done
- elif [ -e "/${template}.img" ]; then
-  echo "Copying $template Image"
-  tsize=$(stat -c%s "/$template.img")
-  dd if="/${template}.img" of=/dev/vz/${name} >dd.progress 2>&1 &
-  pid=$!
-  while [ -d /proc/$pid ]; do
+		done
+	elif [ -e "/${template}.img" ]; then
+		echo "Copying $template Image"
+		tsize=$(stat -c%s "/$template.img")
+		dd if="/${template}.img" of=/dev/vz/${name} >dd.progress 2>&1 &
+		pid=$!
+		while [ -d /proc/$pid ]; do
 	sleep 9s
 	kill -SIGUSR1 $pid;
 	sleep 1s
@@ -173,16 +186,16 @@ else
 		fi
 	  echo "$completed%"
 	fi
-  done
-  rm -f dd.progress
- else
-  echo "Suspending ${template} For Copy"
-  /usr/bin/virsh suspend ${template}
-  echo "Copying Image"
-  tsize=$(stat -c%s "/dev/vz/$template")
-  dd if=/dev/vz/${template} of=/dev/vz/${name} >dd.progress 2>&1 &
-  pid=$!
-  while [ -d /proc/$pid ]; do
+		done
+		rm -f dd.progress
+	else
+		echo "Suspending ${template} For Copy"
+		/usr/bin/virsh suspend ${template}
+		echo "Copying Image"
+		tsize=$(stat -c%s "/dev/vz/$template")
+		dd if=/dev/vz/${template} of=/dev/vz/${name} >dd.progress 2>&1 &
+		pid=$!
+		while [ -d /proc/$pid ]; do
 	sleep 9s
 	kill -SIGUSR1 $pid;
 	sleep 1s
@@ -198,24 +211,24 @@ else
 		fi
 	  echo "$completed%"
 	fi
-  done
-  rm -f dd.progress
- fi
- if [ "$softraid" != "" ]; then
+		done
+		rm -f dd.progress
+	fi
+	if [ "$softraid" != "" ]; then
 	for softfile in $softraid; do
 		echo check > $softfile
 	done
- fi
- curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
- sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
- t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
- p="$(echo $t | awk '{ print $1 }')"
- fs="$(echo $t | awk '{ print $5 }')"
- pn="$(echo "$p" | sed s#"/dev/vz/${name}p"#""#g)"
- start="$(echo $t | awk '{ print $2 }')"
- if [ "$fs" = "83" ]; then
-  echo "Resizing Last Partition To Use All Free Space"
-  echo -e "d
+	fi
+	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=${name} "$url" 2>/dev/null
+	sects="$(fdisk -l -u /dev/vz/${name}  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
+	t="$(fdisk -l -u /dev/vz/${name} | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
+	p="$(echo $t | awk '{ print $1 }')"
+	fs="$(echo $t | awk '{ print $5 }')"
+	pn="$(echo "$p" | sed s#"/dev/vz/${name}p"#""#g)"
+	start="$(echo $t | awk '{ print $2 }')"
+	if [ "$fs" = "83" ]; then
+		echo "Resizing Last Partition To Use All Free Space"
+		echo -e "d
 $pn
 n
 p
@@ -227,25 +240,25 @@ w
 print
 q
 " | fdisk -u /dev/vz/${name}
-  kpartx $kpartxopts -av /dev/vz/${name}
+		kpartx $kpartxopts -av /dev/vz/${name}
 if [ -e "/dev/mapper/vz-${name}p${pn}" ]; then
- pname="vz-${name}"
+	pname="vz-${name}"
 else
- pname="$name"
+	pname="$name"
 fi
-  fsck -T -p -f /dev/mapper/${pname}p${pn}
-  if [ -f "$(which resize4fs 2>/dev/null)" ]; then
-   resizefs="resize4fs"
-  else
-   resizefs="resize2fs"
-  fi
-  $resizefs -p /dev/mapper/${pname}p${pn}
-  mkdir -p /vz/mounts/${name}p${pn}
-  mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
-  PATH="${PREPATH}/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
-  umount /dev/mapper/${pname}p${pn}
-  kpartx $kpartxopts -d /dev/vz/${name}
- fi
+		fsck -T -p -f /dev/mapper/${pname}p${pn}
+		if [ -f "$(which resize4fs 2>/dev/null)" ]; then
+			resizefs="resize4fs"
+		else
+			resizefs="resize2fs"
+		fi
+		$resizefs -p /dev/mapper/${pname}p${pn}
+		mkdir -p /vz/mounts/${name}p${pn}
+		mount /dev/mapper/${pname}p${pn} /vz/mounts/${name}p${pn};
+		PATH="${PREPATH}/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:${password}" | chroot /vz/mounts/${name}p${pn} chpasswd
+		umount /dev/mapper/${pname}p${pn}
+		kpartx $kpartxopts -d /dev/vz/${name}
+	fi
 
 # echo "Coyping MBR"
 # dd if=/dev/vz/${template} of=/dev/vz/${name} bs=512 count=1 >/dev/null 2>&1
@@ -301,21 +314,21 @@ fi
 # /usr/bin/virsh setmaxmem ${name} ${memory};
 # /usr/bin/virsh setmem ${name} ${memory};
 # /usr/bin/virsh setvcpus ${name} ${vcpu};
- /usr/bin/virsh autostart ${name}
- mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)"
- /bin/cp -f $DHCPVPS ${DHCPVPS}.backup
- grep -v -e "host ${name} " -e "fixed-address $ip;" ${DHCPVPS}.backup > $DHCPVPS
- echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
- rm -f ${DHCPVPS}.backup
- if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
-  /etc/init.d/isc-dhcp-server restart
- else
-  /etc/init.d/dhcpd restart
- fi
- curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
- /usr/bin/virsh start ${name};
- bash /root/cpaneldirect/run_buildebtables.sh;
- /root/cpaneldirect/vps_refresh_vnc.sh $name
+	/usr/bin/virsh autostart ${name}
+	mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)"
+	/bin/cp -f $DHCPVPS ${DHCPVPS}.backup
+	grep -v -e "host ${name} " -e "fixed-address $ip;" ${DHCPVPS}.backup > $DHCPVPS
+	echo "host ${name} { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
+	rm -f ${DHCPVPS}.backup
+	if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
+		/etc/init.d/isc-dhcp-server restart
+	else
+		/etc/init.d/dhcpd restart
+	fi
+	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=${name} "$url" 2>/dev/null
+	/usr/bin/virsh start ${name};
+	bash /root/cpaneldirect/run_buildebtables.sh;
+	/root/cpaneldirect/vps_refresh_vnc.sh $name
 	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 	if [ "$vnc" == "" ]; then
 		sleep 2s;

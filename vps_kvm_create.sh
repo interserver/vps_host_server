@@ -104,11 +104,7 @@ else
 		mv -f ${name}.xml.backup ${name}.xml
 	else
 		echo "Generating XML Config"
-		if [ "${template:0:7}" = "windows" ]; then
-			templatef="windows"
-		else
-			templatef="linux"
-		fi
+		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
 			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
 		else
