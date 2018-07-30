@@ -50,17 +50,27 @@ function check_php() {
 		if [ "$DISTRIB_CODENAME" = "trusty" ]; then 
 			apt install -y php5-dev php5-curl;
 		else
-			apt install -y php-dev php-curl php-pear libssl-dev libev4 libev-dev libev-libevent-dev php-bcmath php-cli php-curl php-xml php-bz2 php-zip php-mbstring php-imagick php-intl php-json php-soap; 
+			apt install -y php-dev php-curl php-pear libev4 libev-dev libev-libevent-dev php-bcmath php-curl php-xml php-bz2 php-zip php-mbstring php-imagick php-intl php-json php-soap; 
 		fi;
-		if [ "$(php -m|grep swoole)" = "" ]; then
-			pecl install swoole
-			echo extension=swoole.so > $(echo /etc/php/*/mods-available)/swoole.ini
-			phpenmod -v ALL -s ALL swoole
-
 	elif [ -e /etc/yum ]; then
 		rpm -e libevent-devel libevent-headers libevent-doc
 		#yum install -y php php-cli php-bcmath php-devel php-gd php-process php-xml php-curl php-pear;
 		yum install -y openssl-devel gcc libev libevent2 libev-devel libevent2-devel  || yum install openssl-devel gcc libev-devel libevent-devel libev libevent -y
+	fi
+	if [ "$(php -m|grep swoole)" = "" ]; then
+		git clone https://github.com/swoole/swoole-src.git
+		cd swoole-src
+		phpize
+		./configure --enable-sockets --enable-openssl --with-swoole
+		make && make install
+		cd ..
+		rm -rf swoole-src
+		if [ -e /etc/apt ]; then
+			echo extension=swoole.so > $(echo /etc/php/*/mods-available)/swoole.ini
+		else
+			echo extension=swoole.so > /etc/php.d/swoole.ini
+		fi
+		phpenmod -v ALL -s ALL swoole
 	fi
 	inifile="$(php -i |grep 'Loaded Configuration' |awk '{ print $5 }')"
 	sed s#"^memory_limit = .*$"#"memory_limit = 512M"#g -i "$inifile"
