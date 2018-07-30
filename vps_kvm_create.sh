@@ -422,7 +422,6 @@ q
 			virsh blkiotune ${name} --weight $ioweight --current;
 			virsh blkiotune ${name} --weight $ioweight --config;
 		fi;
-		/root/cpaneldirect/run_buildebtables.sh
 		/root/cpaneldirect/tclimit $ip;
 		vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 		if [ "$vnc" == "" ]; then
