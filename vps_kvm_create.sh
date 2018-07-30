@@ -144,14 +144,16 @@ else
 	if [ "$template" = "windows1" ]; then
 		template=windows2
 	fi
-	#if [ -e "/${template}.img" ]; then
-	#	echo "Uploading $template Image"
-	#	virsh vol-upload $name "/${template}.img" --pool vz
-	#elif [ -e "/${template}.img.gz" ]; then
-	#	echo "Uploading $template Image"
-	#	gunzip "/${template}.img.gz"
-	#	virsh vol-upload $name "/${template}.img" --pool vz
-	if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
+	if [ "$pool" = "zfs" ]; then
+		if [ -e "/${template}.img.gz" ]; then
+			echo "Uncompressing $template.img.gz Image"
+			gunzip "/${template}.img.gz"
+		fi
+		if [ -e "/${template}.img" ]; then
+			echo "Uploading $template Image"
+			virsh vol-upload $name "/${template}.img" --pool vz
+		fi;
+	elif [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
 		adjust_partitions=0
 		echo "Downloading $template Image"
 		/root/cpaneldirect/vps_get_image.sh "$template"
