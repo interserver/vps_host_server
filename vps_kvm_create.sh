@@ -267,7 +267,7 @@ else
 				fs="$(echo $t | awk '{ print $6 }')"
 			fi;
 			pn="$(echo "$p" | sed s#"${device}[p]*"#""#g)"
-			[ $pn -gt 4 ]; then
+			if [ $pn -gt 4 ]; then
 				pt=l
 			else
 				pt=p
