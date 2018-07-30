@@ -191,8 +191,6 @@ else
 			rmdir /image_storage
 		fi
 	elif [ -e "/${template}.img" ]; then
-		echo "Suspending ${template} For Copy"
-		/usr/bin/virsh suspend ${template}
 		echo "Copying Image"
 		tsize=$(stat -c%s "/dev/vz/$template")
 		dd if=/${template}.img of=${device} >dd.progress 2>&1 &
