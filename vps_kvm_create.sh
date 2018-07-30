@@ -82,10 +82,16 @@ if [ $# -lt 3 ]; then
 	error=$(($error + 1))
 #check if vps exists
 else
+	pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
+	if [ "$pool" = "" ]; then
+		/root/cpaneldirect/create_libvirt_storage_pools.sh
+		pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
+	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
-	#	virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
-	#	device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
-	#else
+	if [ "$pool" = "zfs" ]; then
+		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
+	else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 		#device="${device}"
 	#fi
