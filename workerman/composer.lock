@@ -779,12 +779,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/GatewayWorker.git",
-                "reference": "45684e0bc332934d183d841bce728c4d8f15cb09"
+                "reference": "e826c56b30c3248bef94672f0196368551af7ca5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/GatewayWorker/zipball/45684e0bc332934d183d841bce728c4d8f15cb09",
-                "reference": "45684e0bc332934d183d841bce728c4d8f15cb09",
+                "url": "https://api.github.com/repos/walkor/GatewayWorker/zipball/e826c56b30c3248bef94672f0196368551af7ca5",
+                "reference": "e826c56b30c3248bef94672f0196368551af7ca5",
                 "shasum": ""
             },
             "require": {
@@ -805,7 +805,7 @@
                 "communication",
                 "distributed"
             ],
-            "time": "2018-07-21T02:51:47+00:00"
+            "time": "2018-08-03T01:59:36+00:00"
         },
         {
             "name": "workerman/globaldata",
