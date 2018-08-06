@@ -121,6 +121,7 @@ else
 		done
 	fi
 	cat ${name}.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='${vcpu}'>${max_cpu}</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>${memory}</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>${memory}</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"${repl}"#g > ${name}.xml
+	sed s#"<cpu.*$"#"<cpu mode='host-passthrough' check='none'/>"#g -i ${name}.xml;
 	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
 		sed s#"<features>"#"<features>\n    <hap/>"#g -i ${name}.xml
 	fi
