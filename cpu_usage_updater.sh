@@ -20,7 +20,7 @@ while [ ${spent} -lt ${maxtime} ]; do
 	[ $showts -eq 1 ] && echo -n "${new} ";
 	echo -n "Grabbing";
 	#cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -serialize | sed s#"\""#"\&quot;"#g)";
-	cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -json | sed s#"\""#"\&quot;"#g)";
+	cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -json | tr '"' "'")";
 	new=$(date +%s);
 	lastspent=$((${new} - ${prev}));
 	prev=$new;
