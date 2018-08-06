@@ -5,7 +5,7 @@ if [ "$(crontab -l|grep qs_cron)" != "" ]; then
 else
 	url="https://myvps2.interserver.net/vps_queue.php";
 fi
-curl --connect-timeout 300 --max-time 600 -k -d action=getvpsmainips "$url" 2>/dev/null | sh;
+curl --connect-timeout 300 --max-time 600 -k -d action=get_vps_main_ips "$url" 2>/dev/null | sh;
 if [ -e /root/cpaneldirect/vps.mainips ]; then
 	IFS="
 ";

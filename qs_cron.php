@@ -39,7 +39,7 @@ $cmd = dirname(__FILE__).'/qs_traffic.php;';
 echo `$cmd`;
 if (!file_exists('/usr/sbin/vzctl'))
 {
-	$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getipmap '{$url}' 2>/dev/null;";
+	$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=get_ip_map '{$url}' 2>/dev/null;";
 	//echo "Running Command: $cmd\n";
 	$out = trim(`$cmd`);
 	//echo "Get IP List Running:	$out\n";
@@ -47,7 +47,7 @@ if (!file_exists('/usr/sbin/vzctl'))
 	{
 		echo `$out`;
 	}
-	$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getvncmap '{$url}' 2>/dev/null;";
+	$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=get_vnc_map '{$url}' 2>/dev/null;";
 	//echo "Running Command: $cmd\n";
 	$out = trim(`$cmd`);
 	//echo "Get IP List Running:	$out\n";
@@ -56,7 +56,7 @@ if (!file_exists('/usr/sbin/vzctl'))
 		echo `$out`;
 	}
 }
-$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getqueue '{$url}' 2>/dev/null;";
+$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=get_queue '{$url}' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
 $out = trim(`$cmd`);
 if ($out != '')

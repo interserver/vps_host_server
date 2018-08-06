@@ -53,27 +53,27 @@ if [ $old_cron -eq 1 ]; then
 			$dir/cpu_usage_updater.sh 2>$dir/cron.cpu_usage >&2 &
 		fi;
 		$dir/vps_update_info.php >> $log 2>&1
-		curl -s --connect-timeout 60 --max-time 600 -k -d action=getnewvps $url 2>/dev/null > $dir/cron.cmd;
+		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_vps $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			echo "Get New VPS Running:	$(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
 		$dir/vps_traffic_new.php >> $log 2>&1
-		curl -s --connect-timeout 60 --max-time 600 -k -d action=getslicemap $url 2>/dev/null > $dir/cron.cmd;
+		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_slice_map $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
 		if [ ! -e /usr/sbin/vzctl ]; then
-			curl -s --connect-timeout 60 --max-time 600 -k -d action=getipmap $url 2>/dev/null > $dir/cron.cmd;
+			curl -s --connect-timeout 60 --max-time 600 -k -d action=get_ip_map $url 2>/dev/null > $dir/cron.cmd;
 			if [ "$(cat $dir/cron.cmd)" != "" ]; then
 				. $dir/cron.cmd >> $log 2>&1;
 			fi;
-			curl -s --connect-timeout 60 --max-time 600 -k -d action=getvncmap $url 2>/dev/null > $dir/cron.cmd;
+			curl -s --connect-timeout 60 --max-time 600 -k -d action=get_vnc_map $url 2>/dev/null > $dir/cron.cmd;
 			if [ "$(cat $dir/cron.cmd)" != "" ]; then
 				. $dir/cron.cmd >> $log 2>&1;
 			fi;
 		fi;
-		curl -s --connect-timeout 60 --max-time 600 -k -d action=getqueue $url 2>/dev/null > $dir/cron.cmd;
+		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			echo "Get Queue Running:	$(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;

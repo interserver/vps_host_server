@@ -165,7 +165,7 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 				$server['hdfree'] = $parts[1];
 			}
 		}
-		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vpsinfo -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
+		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vps_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
 		// echo "CMD: $cmd\n";
 		echo trim(`$cmd`);
 		if (file_exists('/usr/sbin/vzctl'))

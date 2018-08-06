@@ -90,7 +90,7 @@ class Queue implements \Core_IWorker
 
 		// If this is our first call, create initial results
 	//      if ($calls == 1) {
-			$this->results['queue'] = trim(`curl -s --connect-timeout 60 --max-time 600 -k -d action=getqueue 'https://myvps2.interserver.net/vps_queue.php'`);
+			$this->results['queue'] = trim(`curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue 'https://myvps2.interserver.net/vps_queue.php'`);
 			return $this->results;
 	//      }
 
