@@ -19,15 +19,12 @@ while [ ${spent} -lt ${maxtime} ]; do
 	prev=$new;
 	[ $showts -eq 1 ] && echo -n "${new} ";
 	echo -n "Grabbing";
-	#cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -serialize | sed s#"\""#"\&quot;"#g)";
-	cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -json | tr '"' "'")";
+	cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -json| sed s#"\""#"\&quot;"#g)";
 	new=$(date +%s);
 	lastspent=$((${new} - ${prev}));
 	prev=$new;
 	echo -n "(${lastspent}s),Sending";
-	curl --connect-timeout 60 --max-time 600 -k -d action=cpu_usage \
-		-d "cpu_usage=${cpu_usage}" \
-		"https://myvps2.interserver.net/vps_queue.php" 2>/dev/null;
+	curl --connect-timeout 60 --max-time 600 -k -d action=cpu_usage -d "cpu_usage=${cpu_usage}" "https://myvps2.interserver.net/vps_queue.php" 2>/dev/null;
 	new=$(date +%s);
 	lastspent=$((${new} - ${prev}));
 	prev=$new;
