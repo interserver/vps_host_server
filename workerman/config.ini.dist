@@ -4,7 +4,7 @@ check_interval = 60
 timeout = 600
 
 [options]
-use_ssl = 0
+use_ssl = 1
 
 [timers]
 vps_update_info = 600
