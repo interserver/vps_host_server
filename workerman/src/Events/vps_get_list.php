@@ -1,5 +1,6 @@
 <?php
 use Workerman\Connection\AsyncTcpConnection;
+use Workerman\Worker;
 
 /**
 * gets a listing of vps services to send to the hub

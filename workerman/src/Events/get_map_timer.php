@@ -1,5 +1,6 @@
 <?php
 use Workerman\Connection\AsyncTcpConnection;
+use Workerman\Worker;
 
 /**
 * ran periodicaly to update our vps mapping files
