@@ -18,14 +18,16 @@ return function($stdObject, $params) {
 		if (trim(file_get_contents($file)) != 'idle')
 			$server['raid_building'] = true;
 	$file = explode(' ', trim(file_get_contents('/proc/loadavg')));
-	$server['load'] = $file[0];
+	$server['load'] = (float)$file[0];
 	$file = explode("\n\n", trim(file_get_contents('/proc/cpuinfo')));
 	$server['cores'] = count($file);
 	preg_match('/^cpu MHz.*: (.*)$/m', $file[0], $matches);
-	$server['cpu_mhz'] = $matches[1];
+	$server['cpu_mhz'] = (float)$matches[1];
 	preg_match('/^model name.*: (.*)$/m', $file[0], $matches);
 	$server['cpu_model'] = $matches[1];
-	$server['ram'] = trim(`free -m | grep Mem: | awk '{ print \$2 }'`);
+	$file = file_get_contents('/proc/meminfo');
+	preg_match('/MemTotal\s*\:\s*(\d+)/i', $file, $matches);
+	$server['ram'] = (int)$matches[1];
 	$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
 for i in $(pvdisplay -c|grep :); do 
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
@@ -51,13 +53,8 @@ done
 		{
 			Worker::safeEcho("Ubuntu Detected...");
 			`apt-get -y install sysstat;`;
-//                `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
 		}
-		Worker::safeEcho("done\n\n");
-		if (!file_exists('/usr/bin/iostat'))
-		{
-			Worker::safeEcho("Error installing iostat\n");
-		}
+		Worker::safeEcho(file_exists('/usr/bin/iostat') ? "Successfully Installed sysstat\n" : "Error installing iostat\n");
 	}
 	if (file_exists('/usr/bin/iostat'))
 	{
