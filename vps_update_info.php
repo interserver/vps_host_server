@@ -54,23 +54,18 @@ function update_vps_info() {
 	$server['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
 	if (!file_exists('/usr/bin/iostat'))
 	{
-		echo "Installing iostat..";
+		Worker::safeEcho("Installing iostat..");
 		if (trim(`which yum;`) != '')
 		{
-			echo "CentOS Detected...";
+			Worker::safeEcho("CentOS Detected...");
 			`yum -y install sysstat;`;
 		}
 		elseif (trim(`which apt-get;`) != '')
 		{
-			echo "Ubuntu Detected...";
+			Worker::safeEcho("Ubuntu Detected...");
 			`apt-get -y install sysstat;`;
-//                `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
 		}
-		echo "done\n\n";
-		if (!file_exists('/usr/bin/iostat'))
-		{
-			echo "Error installing iostat\n";
-		}
+		Worker::safeEcho(file_exists('/usr/bin/iostat') ? "Successfully Installed sysstat\n" : "Error installing iostat\n");
 	}
 	if (file_exists('/usr/bin/iostat'))
 	{
