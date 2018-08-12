@@ -25,21 +25,27 @@ return function($stdObject, $params) {
 	$server['cpu_mhz'] = (float)$matches[1];
 	preg_match('/^model name.*: (.*)$/m', $file[0], $matches);
 	$server['cpu_model'] = $matches[1];
-	$file = file_get_contents('/proc/meminfo');
-	preg_match('/MemTotal\s*\:\s*(\d+)/i', $file, $matches);
+	preg_match('/MemTotal\s*\:\s*(\d+)/i', file_get_contents('/proc/meminfo'), $matches);
 	$server['ram'] = (int)$matches[1];
-	$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
-for i in $(pvdisplay -c|grep :); do 
-  d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
-  blocksize="$(echo "$i" | cut -d: -f8)";
-  total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
-  free="$(echo "$(echo "$i" | cut -d: -f10) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
-  used="$(echo "$(echo "$i" | cut -d: -f11) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
-  target="$(echo "$i" | cut -d: -f2)";
-  echo "$d:$total:$used:$free:$target";
-done
-';
-	$server['mounts'] = str_replace("\n", ',', trim(`$cmd`));
+	preg_match_all('/^(\/\S+)\s+(\S+)\s.*$/m', file_get_contents('/etc/mtab'), $matches);
+	foreach ($matches[1] as $idx => $value) {
+		$dev = $value;
+		$dir = $matches[2][$idx];
+		$total = floor(disk_total_space($dir) / 1073741824);
+		$free = floor(disk_free_space($dir) / 1073741824);
+		$used = $total - $free;
+		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
+	}
+	preg_match_all('/^\s*([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$/m', trim(`pvdisplay -c`), $matches);
+	foreach ($matches[1] as $idx => $value) {
+		$dev = $value;
+		$dir = $matches[2][$idx];
+		$total = floor($matches[9][$idx] * $matches[8][$idx] / 1048576);
+		$free = floor($matches[10][$idx] * $matches[8][$idx] / 1048576);
+		$used = floor($matches[11][$idx] * $matches[8][$idx] / 1048576);
+		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
+	}
+	$server['mounts'] = explode(',', $mounts);
 	$server['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
 	if (!file_exists('/usr/bin/iostat'))
 	{
