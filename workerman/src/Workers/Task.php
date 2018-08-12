@@ -8,7 +8,7 @@ $task_worker = new Worker('Text://127.0.0.1:55552');
 $task_worker->count = 2;
 $task_worker->name = 'TaskWorker';
 $task_worker->onWorkerStart = function($worker) use (&$task_worker) {
-	global $global, $settings;
+	global $global;
 	$global = new \GlobalData\Client('127.0.0.1:55553');
 	$task_worker->mytasks = new stdObject();
 	foreach(glob(__DIR__.'/../Tasks/*.php') as $function_file) {

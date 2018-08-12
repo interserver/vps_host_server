@@ -5,7 +5,7 @@ use Workerman\Connection\AsyncTcpConnection;
 * ran periodicaly to update our vps mapping files
 */
 return function($stdObject) {
-	global $global, $settings;
+	global $global;
 	if ($stdObject->debug === true)
 		Worker::safeEcho('Map Timer Startup'.PHP_EOL);
 	/** gets/sets global lock **/

@@ -2,7 +2,7 @@
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject) {
-	global $global, $settings;
+	global $global;
 	//echo 'Update Info Timer Startup'.PHP_EOL;
 	if ($global->cas('busy', 0, 1)) {
 		$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');

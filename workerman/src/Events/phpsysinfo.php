@@ -2,7 +2,7 @@
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject, $data) {
-	global $global, $settings;
+	global $global;
 	$orig_params = $data['params'];
 	$data['params']['json'] = '';
 	$args = escapeshellarg(json_encode($data['params']));

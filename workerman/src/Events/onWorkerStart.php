@@ -24,19 +24,20 @@ return function($stdObject, $worker) {
 		Worker::safeEcho("Generating new SSL Certificate for encrypted communications\n");
 		echo shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$stdObject->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/../myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/../myadmin.crt -set_serial 0');
 	}
-	global $global, $settings;
+	global $global;
 	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
-	if (!isset($global->settings))
-		$global->settings = $settings;
 	if (!isset($global->busy))
 		$global->busy = 0;
-	if($worker->id === 0) { // The timer is set only on the process whose id number is 0, and the processes of other 1, 2, and 3 processes do not set the timer
-		//$events->timers['vps_update_info_timer'] = Timer::add($global->settings['timers']['vps_update_info'], 'vps_update_info_timer');
-		//$events->timers['vps_queue_timer'] = Timer::add($global->settings['timers']['vps_queue'], 'vps_queue_timer');
+	$stdObject->config = array_merge(parse_ini_file(__DIR__.'/../../config.ini.dist', true), file_exists(__DIR__.'/../../config.ini') ? parse_ini_file(__DIR__.'/../../config.ini', true) : []);        
+	if($worker->id === 0) { 
+		//$events->timers['vps_update_info_timer'] = Timer::add($stdObject->config['timers']['vps_update_info'], 'vps_update_info_timer');
+		//$events->timers['vps_queue_timer'] = Timer::add($stdObject->config['timers']['vps_queue'], 'vps_queue_timer');
 	}
-	$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
-	$ws_connection->transport = 'ssl';
-	//$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7271');
+	if ($stdObject->config['options']['use_ssl'] == 1) {
+		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
+		$ws_connection->transport = 'ssl';
+	} else
+		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7271');
 	$ws_connection->onConnect = array($stdObject, 'onConnect');
 	$ws_connection->onMessage = array($stdObject, 'onMessage');
 	$ws_connection->onError = array($stdObject, 'onError');

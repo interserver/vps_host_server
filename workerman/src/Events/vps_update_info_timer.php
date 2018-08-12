@@ -2,7 +2,7 @@
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject) {
-	global $global, $settings;
+	global $global;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 	$task_connection->send(json_encode(array('type' => 'async_hyperv_get_list', 'args' => array())));
 	$conn = $stdObject->conn;

@@ -5,7 +5,7 @@ use Workerman\Connection\AsyncTcpConnection;
 * gets a listing of vps services to send to the hub
 */
 return function($stdObject) {
-	global $global, $settings;
+	global $global;
 	if ($stdObject->debug === true)
 		Worker::safeEcho('vps_get_list Startup, Getting Lock'.PHP_EOL);
 	/** gets/sets global lock **/    

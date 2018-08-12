@@ -2,7 +2,7 @@
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject) {
-	global $global, $settings;
+	global $global;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552'); // Asynchronous link with the remote task service
 	$task_connection->send(json_encode(array('type' => 'vps_queue', 'args' => $global->settings['vps_queue']['cmds']))); // send data
 	$conn = $stdObject->conn;
