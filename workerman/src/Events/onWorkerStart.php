@@ -29,10 +29,6 @@ return function($stdObject, $worker) {
 	if (!isset($global->busy))
 		$global->busy = 0;
 	$stdObject->config = array_merge(parse_ini_file(__DIR__.'/../../config.ini.dist', true), file_exists(__DIR__.'/../../config.ini') ? parse_ini_file(__DIR__.'/../../config.ini', true) : []);        
-	if($worker->id === 0) { 
-		//$events->timers['vps_update_info_timer'] = Timer::add($stdObject->config['timers']['vps_update_info'], 'vps_update_info_timer');
-		//$events->timers['vps_queue_timer'] = Timer::add($stdObject->config['timers']['vps_queue'], 'vps_queue_timer');
-	}
 	if ($stdObject->config['options']['use_ssl'] == 1) {
 		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
 		$ws_connection->transport = 'ssl';
