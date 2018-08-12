@@ -14,5 +14,6 @@ return function($stdObject, $conn) {
 		'room_id' => 1,
 		'ima' => 'host',
 	);
+	$stdObject->conn = $conn;
 	$stdObject->conn->send(json_encode($json));
 };
