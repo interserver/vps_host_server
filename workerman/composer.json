@@ -17,6 +17,8 @@
 	"require": {
 		"php": ">=5.3.0",
 		"ext-curl": "*",
+		"ext-pcntl": "*",
+		"ext-posix": "*",
 		"detain/phpsysinfo": "dev-master",
 		"react/child-process": "*",
 		"react/event-loop": "*",
@@ -32,6 +34,10 @@
 		"codeclimate/php-test-reporter": "dev-master",
 		"satooshi/php-coveralls": "*",
 		"codacy/coverage": "dev-master"
+	},
+	"suggest": {
+                "ext-ev": "*",
+                "ext-event": "*"
 	},
 	"autoload": {
 		"psr-4": {
