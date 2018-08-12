@@ -50,7 +50,7 @@ function update_vps_info() {
 		$used = floor($matches[11][$idx] * $matches[8][$idx] / 1048576);
 		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
 	}
-	$server['mounts'] = explode(',', $mounts);
+	$server['mounts'] = implode(',', $mounts);
 	$server['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
 	if (!file_exists('/usr/bin/iostat'))
 	{
