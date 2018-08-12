@@ -19,7 +19,7 @@ return function($stdObject) {
 	$conn = $stdObject->conn;
 	if ($stdObject->debug === true)
 		Worker::safeEcho('vps_get_list Launching Task Processor'.PHP_EOL);
-	$task_connection->onMessage = function($task_connection, $task_result) use ($conn) {
+	$task_connection->onMessage = function($task_connection, $task_result) use ($stdObject, $conn) {
 		global $global;
 		if ($stdObject->debug === true)
 			Worker::safeEcho('vps_get_list Got Task Processor Result, Closing Task Connection'.PHP_EOL);
