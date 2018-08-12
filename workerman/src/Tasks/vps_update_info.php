@@ -10,37 +10,29 @@ return function($stdObject, $params) {
 	}
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$server = array();
-	switch (trim(`uname -p`))
-	{
-		case 'i686':
-			$server['bits'] = 32;
-			break;
-		case 'x86_64':
-			$server['bits'] = 64;
-			break;
-	}
-	$server['raid_building'] = (trim(`grep -v idle /sys/block/md*/md/sync_action 2>/dev/null`) == '' ? 0 : 1);
-	$server['kernel'] = trim(`uname -r`);
-	$server['load'] = trim(`cat /proc/loadavg | cut -d" " -f1`);
-
-	if (file_exists('/dev/bcache0') && $server['load'] >= 2.00)
-	{
-		$server['load'] -= 2.00;
-	}
+	$uname = posix_uname();
+	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;
+	$server['kernel'] = $uname['release'];
+	$server['raid_building'] = false;
+	foreach (glob('/sys/block/md*/md/sync_action') as $file)
+		if (trim(file_get_contents($file)) != 'idle')
+			$server['raid_building'] = true;
+	$file = explode(' ', trim(file_get_contents('/proc/loadavg')));
+	$server['load'] = $file[0];
+	$file = explode("\n\n", trim(file_get_contents('/proc/cpuinfo')));
+	$server['cores'] = count($file);
+	preg_match('/^cpu MHz.*: (.*)$/m', $file[0], $matches);
+	$server['cpu_mhz'] = $matches[1];
+	preg_match('/^model name.*: (.*)$/m', $file[0], $matches);
+	$server['cpu_model'] = $matches[1];
 	$server['ram'] = trim(`free -m | grep Mem: | awk '{ print \$2 }'`);
-	$server['cpu_model'] = trim(`grep "model name" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
-	$server['cpu_mhz'] = trim(`grep "cpu MHz" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
-//        $servers['cores'] = trim(`echo \$((\$(lscpu |grep "^Core(s) per socket" | awk '{ print \$4 }') * \$(lscpu |grep "^Socket" | awk '{ print \$2 }')))`);
-//        $servers['cores'] = trim(`echo \$((\$(cat /proc/cpuinfo|grep '^physical id' | sort | uniq | wc -l) * \$(grep '^cpu cores' /proc/cpuinfo  | tail -n 1|  awk '{ print \$4 }')))`);
-//        $servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
-	$server['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
 	$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
 for i in $(pvdisplay -c|grep :); do 
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
   blocksize="$(echo "$i" | cut -d: -f8)";
-  total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
-  free="$(echo "$(echo "$i" | cut -d: -f10) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
-  used="$(echo "$(echo "$i" | cut -d: -f11) * $blocksize / (1024 * 1024)" | bc -l | cut -d\. -f1)";
+  total="$(echo "$(echo "$i" | cut -d: -f9) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
+  free="$(echo "$(echo "$i" | cut -d: -f10) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
+  used="$(echo "$(echo "$i" | cut -d: -f11) * $blocksize / 1048576" | bc -l | cut -d\. -f1)";
   target="$(echo "$i" | cut -d: -f2)";
   echo "$d:$total:$used:$free:$target";
 done
@@ -106,16 +98,34 @@ ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 	if (file_exists('/usr/sbin/vzctl'))
 	{
 		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
-	} else {
-		if (trim(`lvdisplay  |grep 'Allocated pool';`) == '')
-		{
+		} elseif (file_exists('/usr/bin/lxc')) {
+			$parts = explode("\n", trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
+			$used = ceil($parts[0]/1073741824);
+			$total = ceil($parts[1]/1073741824);
+			$free = $total - $used;
+			$out = $total.' '.$free;
+		} elseif (file_exists('/usr/bin/virsh')) {
+			if (file_exists('/etc/redhat-release') && strpos(file_get_contents('/etc/redhat-release'),'CentOS release 6') !== false)
+				$out = '';
+			else
+				$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'`);
+			if ($out != '') {
+				$parts = explode("\n", $out);
+				$totalb = $parts[5];
+				$usedb = $parts[6];
+				$freeb = $parts[7];
+				$totalg = ceil($totalb / 1073741824);
+				$freeg = ceil($freeb / 1073741824);
+				$usedg = ceil($usedb / 1073741824);
+				$out = $totalg.' '.$freeg;
+			} elseif (trim(`lvdisplay  |grep 'Allocated pool';`) == '') {
 			$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep : |grep -v -e centos -e backup`));
 			$pesize = $parts[7];
 			$totalpe = $parts[8];
 			$freepe = $parts[9];
-			$totalg = ceil($pesize * $totalpe / 1000000);
-			$freeg = ceil($pesize * $freepe / 1000000);
-			$out = "$totalg $freeg";
+			$totalg = ceil($pesize * $totalpe / 1048576);
+			$freeg = ceil($pesize * $freepe / 1048576);
+			$out = $totalg.' '.$freeg;
 		} else {
 			//$totalg = trim(`lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"^.*LV Size"#""#g | sed s#"GiB"#""#g | sed s#" "#""#g | cut -d\. -f1`);
 			//$freeg = trim(`echo "\$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) - ( \$(lvdisplay --units g /dev/vz/thin |grep 'Allocated .*data' | sed s#"Allocated.*data"#""#g |sort -nr| head -n1 |sed s#"%"#""#g) / 100 * \$(lvdisplay --units g /dev/vz/thin |grep 'LV Size' | sed s#"LV Size"#""#g | sed s#"GiB"#""#g) )" |bc -l |cut -d\. -f1`);
@@ -134,7 +144,7 @@ $FREE_GB = '$(echo "'.$GB_PER_PCT.' * '.$FREE_PCT.'" |bc -l)';
 				//$parts= explode("\n", trim(`$cmd`));
 				$totalg = trim(`echo $TOTAL_GB;`);
 				$freeg = trim(`echo $FREE_GB;`);
-				$out = "$totalg $freeg";
+				$out = $totalg.' '.$freeg;
 		}
 	}
 	$parts = explode(' ', $out);

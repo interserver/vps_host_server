@@ -15,30 +15,22 @@
 		}
 		$url = 'https://myvps2.interserver.net/vps_queue.php';
 		$server = array();
-		switch (trim(`uname -p`))
-		{
-			case 'i686':
-				$server['bits'] = 32;
-				break;
-			case 'x86_64':
-				$server['bits'] = 64;
-				break;
-		}
-		$server['raid_building'] = (trim(`grep -v idle /sys/block/md*/md/sync_action 2>/dev/null`) == '' ? 0 : 1);
-		$server['kernel'] = trim(`uname -r`);
-		$server['load'] = trim(`cat /proc/loadavg | cut -d" " -f1`);
-
-		if (file_exists('/dev/bcache0') && $server['load'] >= 2.00)
-		{
-			$server['load'] -= 2.00;
-		}
+		$uname = posix_uname();
+		$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;
+		$server['kernel'] = $uname['release'];
+		$server['raid_building'] = false;
+		foreach (glob('/sys/block/md*/md/sync_action') as $file)
+			if (trim(file_get_contents($file)) != 'idle')
+				$server['raid_building'] = true;
+		$file = explode(' ', trim(file_get_contents('/proc/loadavg')));
+		$server['load'] = $file[0];
+		$file = explode("\n\n", trim(file_get_contents('/proc/cpuinfo')));
+		$server['cores'] = count($file);
+		preg_match('/^cpu MHz.*: (.*)$/m', $file[0], $matches);
+		$server['cpu_mhz'] = $matches[1];
+		preg_match('/^model name.*: (.*)$/m', $file[0], $matches);
+		$server['cpu_model'] = $matches[1];
 		$server['ram'] = trim(`free -m | grep Mem: | awk '{ print \$2 }'`);
-		$server['cpu_model'] = trim(`grep "model name" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
-		$server['cpu_mhz'] = trim(`grep "cpu MHz" /proc/cpuinfo | head -n1 | cut -d: -f2-`);
-//        $servers['cores'] = trim(`echo \$((\$(lscpu |grep "^Core(s) per socket" | awk '{ print \$4 }') * \$(lscpu |grep "^Socket" | awk '{ print \$2 }')))`);
-//        $servers['cores'] = trim(`echo \$((\$(cat /proc/cpuinfo|grep '^physical id' | sort | uniq | wc -l) * \$(grep '^cpu cores' /proc/cpuinfo  | tail -n 1|  awk '{ print \$4 }')))`);
-//        $servers['cores'] = trim(`lscpu |grep "^CPU(s)"| awk '{ print $2 }';`);
-		$server['cores'] = trim(`grep '^processor' /proc/cpuinfo |wc -l;`);
 		$cmd = 'df --block-size=1G |grep "^/" | grep -v -e "/dev/mapper/" | awk \'{ print $1 ":" $2 ":" $3 ":" $4 ":" $6 }\'
 for i in $(pvdisplay -c|grep :); do 
   d="$(echo "$i" | cut -d: -f1 | sed s#" "#""#g)";
