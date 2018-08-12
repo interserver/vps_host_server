@@ -29,10 +29,9 @@ function update_vps_info() {
 	$server['cpu_mhz'] = (float)$matches[1];
 	preg_match('/^model name.*: (.*)$/m', $file[0], $matches);
 	$server['cpu_model'] = $matches[1];
-	$file = file_get_contents('/proc/meminfo');
-	preg_match('/MemTotal\s*\:\s*(\d+)/i', $file, $matches);
+	preg_match('/MemTotal\s*\:\s*(\d+)/i', file_get_contents('/proc/meminfo'), $matches);
 	$server['ram'] = (int)$matches[1];
-	preg_match_all('/^(\/\S+)\s+(\S+)\s.*$/m', file_get_contents('/etc/mtab'), $matches);
+	preg_match_all('/^(\/\S+)\s+(\S+)\s.*$/m', file_get_contents('/proc/mounts'), $matches);
 	foreach ($matches[1] as $idx => $value) {
 		$dev = $value;
 		$dir = $matches[2][$idx];
