@@ -48,6 +48,36 @@ function check_composer() {
 	fi;
 }
 
+function check_packages() {
+	if [ "$(which iostat 2>/dev/null)" = "" ]; then
+		if [ "$(which yum)" != "" ]; then
+			yum -y install sysstat;
+		else
+			apt-get -y install sysstat;
+		fi;
+	fi;
+	if [ "$(which ioping 2>/dev/null)" = "" ]; then 
+		if [ -e /usr/bin/apt-get ]; then 
+			apt-get update; 
+			apt-get install -y ioping; 
+		else
+			if [ "$(which rpmbuild 2>/dev/null)" = "" ]; then 
+				yum install -y rpm-build; 
+			fi;
+			if [ "$(which make 2>/dev/null)" = "" ]; then 
+				yum install -y make;
+			fi;
+			if [ ! -e /usr/include/asm/unistd.h ]; then
+				yum install -y kernel-headers;
+			fi;
+			wget http://mirror.trouble-free.net/tf/SRPMS/ioping-0.9-1.el6.src.rpm -O ioping-0.9-1.el6.src.rpm; 
+			export spec="/$(rpm --install ioping-0.9-1.el6.src.rpm --nomd5 -vv 2>&1|grep spec | cut -d\; -f1 | cut -d/ -f2-)"; 
+			rpm --upgrade $(rpmbuild -ba $spec |grep "Wrote:.*ioping-0.9" | cut -d" " -f2); 
+			rm -f ioping-0.9-1.el6.src.rpm; 
+		fi; 
+	fi;
+}
+
 function check_php() {
 	if [ -e /etc/apt ]; then
 		. /etc/lsb-release ;
@@ -145,8 +175,10 @@ function composer_up() {
 	sed -e s#'^PLUGINS=.*$'#'PLUGINS=false'#g -i vendor/detain/phpsysinfo/phpsysinfo.ini
 	sed -e s#'^TEMP_FORMAT="c"'#'TEMP_FORMAT="f"'#g -e s#'^SHOW_NETWORK_ACTIVE_SPEED=false'#'SHOW_NETWORK_ACTIVE_SPEED=true'#g -e s#'^REFRESH=.*$'#'REFRESH=10000'#g -i vendor/detain/phpsysinfo/phpsysinfo.ini
 }
+
 check_svn
 svn_up
+check_packages
 check_php
 check_php_event
 check_php_ev
