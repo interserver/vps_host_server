@@ -85,7 +85,7 @@ function check_php() {
 		if [ "$DISTRIB_CODENAME" = "trusty" ]; then 
 			sudo apt install -y php5-dev php5-curl;
 		else
-			sudo apt install -y php-dev php-curl php-pear libev4 libev-dev libev-libevent-dev php-bcmath php-curl php-xml php-bz2 php-zip php-mbstring php-imagick php-intl php-json php-soap; 
+			sudo apt install -y php-dev php-curl php-pear libev4 libev-dev libevent-dev php-bcmath php-curl php-xml php-bz2 php-zip php-mbstring php-imagick php-intl php-json php-soap; 
 		fi;
 	elif [ -e /etc/yum ]; then
 		sudo rpm -e libevent-devel libevent-headers libevent-doc
