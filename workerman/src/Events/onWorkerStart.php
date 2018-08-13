@@ -4,7 +4,6 @@ use Workerman\Lib\Timer;
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject, $worker) {
-	$global->lastMessageTime = 0;
 	$stdObject->debug = true;
 	$stdObject->conn = null;
 	$stdObject->var = null;
@@ -29,6 +28,7 @@ return function($stdObject, $worker) {
 	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
 	if (!isset($global->busy))
 		$global->busy = 0;
+	$global->lastMessageTime = 0;
 	$stdObject->config = array_merge(parse_ini_file(__DIR__.'/../../config.ini.dist', true), file_exists(__DIR__.'/../../config.ini') ? parse_ini_file(__DIR__.'/../../config.ini', true) : []);        
 	if ($stdObject->config['options']['use_ssl'] == 1) {
 		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
