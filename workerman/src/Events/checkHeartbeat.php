@@ -12,7 +12,7 @@ return function($stdObject) {
 		Worker::safeEcho("Time Since Last Message {$timeSinceMessage}, Closing Connection".PHP_EOL);
 		$stdObject->conn->close();
 	} elseif ($timeSinceMessage >= $stdObject->config['heartbeat']['ping_when_silent_for']) {
-		Worker::safeEcho("Time Since Last Message {$timeSinceMessage}, Sending Ping".PHP_EOL);
+		//Worker::safeEcho("Time Since Last Message {$timeSinceMessage}, Sending Ping".PHP_EOL);
 		$stdObject->sendPing();
 	}
 };
