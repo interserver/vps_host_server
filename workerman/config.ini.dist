@@ -1,7 +1,8 @@
 [heartbeat]
 enable = 1
-check_interval = 60
-timeout = 600
+check_interval = 40
+timeout = 90
+ping_when_silent_for = 60
 
 [options]
 use_ssl = 0
@@ -16,4 +17,3 @@ get_queue = 60
 vps_get_list = 60
 vps_update_extra_info = 86400
 update_virtuozzo = 86400
-ping = 55

@@ -4,6 +4,7 @@ use Workerman\Lib\Timer;
 use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject, $worker) {
+	$global->lastMessageTime = 0;
 	$stdObject->debug = true;
 	$stdObject->conn = null;
 	$stdObject->var = null;

@@ -9,7 +9,7 @@ return function($stdObject, $conn, $data) {
 	$stdObject->conn = $conn;
 	echo $data.PHP_EOL;
 	global $global;
-	$conn->lastMessageTime = time();
+	$global->lastMessageTime = time();
 	$data = json_decode($data, true);
 	switch ($data['type']) {
 		case 'login':
