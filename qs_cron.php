@@ -23,7 +23,7 @@ echo `$cmd`;
 $cmd = dirname(__FILE__).'/qs_get_list.php;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
-$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=getnewqs '{$url}' 2>/dev/null;";
+$cmd = "curl --connect-timeout 60 --max-time 600 -k -d action=get_new_qs '{$url}' 2>/dev/null;";
 //echo "Running Command: $cmd\n";
 $out = trim(`$cmd`);
 if ($out != '')

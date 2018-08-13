@@ -113,7 +113,7 @@ function update_qs_info() {
 			$server['hdfree'] = $parts[1];
 		}
 	}
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=qsinfo -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=qs_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
 	// echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }
