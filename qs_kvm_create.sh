@@ -113,6 +113,10 @@ else
 			  grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
 		fi
 		echo "Defining Config As VPS"
+                echo "Defining Config As VPS"
+                if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
+                  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml 
+                fi;
 	fi
 	mv -f ${name}.xml ${name}.xml.backup
 	repl="<parameter name='IP' value='${ip}'/>";
