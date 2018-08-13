@@ -1,7 +1,7 @@
 [heartbeat]
 enable = 1
-check_interval = 40
-timeout = 90
+check_interval = 60
+timeout = 120
 ping_when_silent_for = 60
 
 [options]
