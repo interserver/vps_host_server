@@ -91,7 +91,7 @@ else
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
-		virsh vol-create-as --pool vz --name ${name} --capacity $(echo "$(virsh pool-info vz --bytes|grep "^Available"|awk "{ print \$2 }") / 100 * 70"|bc)b
+		virsh vol-create-as --pool vz --name ${name} --capacity $(echo "$block * $(echo "$(virsh pool-info vz --bytes|grep "^Available"|awk "{ print \$2 }") / 100 * 70 / ${block}"|bc)"|bc)b
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	else
