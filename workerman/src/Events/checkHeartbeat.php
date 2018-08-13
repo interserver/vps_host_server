@@ -6,7 +6,8 @@ use Workerman\Worker;
 * ran periodicaly to update our vps mapping files
 */
 return function($stdObject) {
-	$timeSinceMessage = time() - $stdObject->lastMessageTime;
+	global $global;
+	$timeSinceMessage = time() - $global->lastMessageTime;
 	if ($timeSinceMessage >= $stdObject->config['heartbeat']['timeout']) {
 		Worker::safeEcho("Time Since Last Message {$timeSinceMessage}, Closing Connection".PHP_EOL);
 		$stdObject->conn->close();
