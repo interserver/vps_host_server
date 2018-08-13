@@ -34,7 +34,9 @@ return function($stdObject, $conn, $data) {
 			echo exec('php '.__DIR__.'/../../start.php reload').PHP_EOL;
 			break;
 		case 'ping':
-			$conn->send('{"type":"pong"}');
+			$stdObject->sendPong();
+			break;
+		case 'pong':
 			break;
 		case 'get_map':
 			$stdObject->get_map($data['content']);
