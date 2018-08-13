@@ -7,7 +7,7 @@ use Workerman\Connection\AsyncTcpConnection;
 
 return function($stdObject, $conn, $data) {
 	$stdObject->conn = $conn;
-	echo $data.PHP_EOL;
+	echo "onMessage Got: ".$data.PHP_EOL;
 	global $global;
 	$global->lastMessageTime = time();
 	$data = json_decode($data, true);
