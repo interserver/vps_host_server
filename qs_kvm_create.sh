@@ -38,7 +38,7 @@ fi
 if [ "$5" != "" ]; then
 	memory=$5
 	if [ "$memory" = "all" ]; then
-		memory="$(echo `cat /proc/meminfo  | grep ^MemTotal | awk '{print $2}'` - 102400 | bc -l)"
+		memory=$(echo "$(grep "^MemTotal" /proc/meminfo|awk "{ print \$2 }") / 100 * 70"|bc)
 	fi
 fi
 if [ "$6" != "" ]; then
@@ -91,7 +91,7 @@ else
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
-		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+		virsh vol-create-as --pool vz --name ${name} --capacity 70%
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	else
