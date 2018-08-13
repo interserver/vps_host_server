@@ -16,3 +16,4 @@ get_queue = 60
 vps_get_list = 60
 vps_update_extra_info = 86400
 update_virtuozzo = 86400
+ping = 55

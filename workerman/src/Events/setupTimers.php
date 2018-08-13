@@ -17,4 +17,7 @@ return function($stdObject) {
 	if (isset($stdObject->timers['vps_get_list']))
 		Timer::del($stdObject->timers['vps_get_list']);
 	$stdObject->timers['vps_get_list'] = Timer::add($stdObject->config['timers']['get_map'], array($stdObject, 'get_map_timer'));
+	if (isset($stdObject->timers['ping']))
+		Timer::del($stdObject->timers['ping']);
+	$stdObject->timers['ping'] = Timer::add($stdObject->config['timers']['ping'], array($stdObject, 'sendPong'));
 };
