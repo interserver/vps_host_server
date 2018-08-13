@@ -122,7 +122,7 @@ function update_vps_info() {
 
 		}
 	}
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=vps_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=server_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
 	// echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }
