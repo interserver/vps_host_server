@@ -803,12 +803,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/GlobalData.git",
-                "reference": "74a6752c5cca953e14353b4f70e1841ccdc925e4"
+                "reference": "baf3b7af338f329e88136ebe92266dfe40dd00a7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/GlobalData/zipball/74a6752c5cca953e14353b4f70e1841ccdc925e4",
-                "reference": "74a6752c5cca953e14353b4f70e1841ccdc925e4",
+                "url": "https://api.github.com/repos/walkor/GlobalData/zipball/baf3b7af338f329e88136ebe92266dfe40dd00a7",
+                "reference": "baf3b7af338f329e88136ebe92266dfe40dd00a7",
                 "shasum": ""
             },
             "require": {
@@ -825,7 +825,7 @@
                 "MIT"
             ],
             "homepage": "http://www.workerman.net",
-            "time": "2018-03-26T05:05:23+00:00"
+            "time": "2018-08-16T03:59:34+00:00"
         },
         {
             "name": "workerman/workerman",
