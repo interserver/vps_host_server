@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3adf6622e51ebdfaab9425e95fbb35b3",
+    "content-hash": "fd0074a1d77592174464585127345da1",
     "packages": [
         {
             "name": "detain/phpsysinfo",
@@ -762,40 +762,6 @@
             ],
             "description": "Prevents installation of composer packages with known security vulnerabilities: no API, simply require it",
             "time": "2018-08-14T15:39:17+00:00"
-        },
-        {
-            "name": "workerman/gateway-worker",
-            "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/walkor/GatewayWorker.git",
-                "reference": "e826c56b30c3248bef94672f0196368551af7ca5"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/walkor/GatewayWorker/zipball/e826c56b30c3248bef94672f0196368551af7ca5",
-                "reference": "e826c56b30c3248bef94672f0196368551af7ca5",
-                "shasum": ""
-            },
-            "require": {
-                "workerman/workerman": ">=3.1.8"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "GatewayWorker\\": "./src"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "homepage": "http://www.workerman.net",
-            "keywords": [
-                "communication",
-                "distributed"
-            ],
-            "time": "2018-08-03T01:59:36+00:00"
         },
         {
             "name": "workerman/globaldata",
@@ -3307,9 +3273,8 @@
     "stability-flags": {
         "detain/phpsysinfo": 20,
         "roave/security-advisories": 20,
-        "workerman/gateway-worker": 20,
-        "workerman/globaldata": 20,
         "workerman/workerman": 20,
+        "workerman/globaldata": 20,
         "codeclimate/php-test-reporter": 20,
         "codacy/coverage": 20
     },
