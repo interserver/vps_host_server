@@ -139,6 +139,12 @@ else
 	if [ "$(date +%Z)" = "PDT" ]; then
 		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
 	fi
+	if [ -e /etc/lsb-release ]; then 
+		. /etc/lsb-release; 
+		if [ $(echo $DISTRIB_RELEASE|cut -d\. -f1) -ge 18 ]; then 
+			sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='${vcpu}'/>"#g -i v.xml ; 
+		fi; 
+	fi;
 	rm -f ${name}.xml.backup
 	#/bin/cp -f ${name}.xml ${name}.xml.backup;
 	/usr/bin/virsh define ${name}.xml
