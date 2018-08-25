@@ -104,7 +104,10 @@ fi;\n";
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-		if (file_exists('/etc/dhcpd.vps')) {
+		if (file_exists('/etc/dhcp/dhcpd.vps')) {
+			$ipcmd = 'grep host /etc/dhcp/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
+			$lines = explode("\n", trim(`$ipcmd`));
+		} elseif (file_exists('/etc/dhcpd.vps')) {
 			$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
 			$lines = explode("\n", trim(`$ipcmd`));
 		} elseif (file_exists('/root/cpaneldirect/vps.mainips')) {
