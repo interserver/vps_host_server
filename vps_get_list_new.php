@@ -41,7 +41,8 @@ function get_vps_list() {
 			if (trim($serverline) != '') {
 				$parts = explode(' ', $serverline);
 				$name = $parts[0];
-				$veid = str_replace(array('windows', 'linux'), array('', ''), $name);
+				$veid = $name;
+				//$veid = str_replace(array('windows', 'linux'), array('', ''), $veid);
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out);

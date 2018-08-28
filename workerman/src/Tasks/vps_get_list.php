@@ -34,7 +34,8 @@ return function($stdObject, $params) {
 			{
 				$parts = explode(' ', $serverline);
 				$name = $parts[0];
-				$veid = str_replace(array('windows', 'linux'), array('', ''), $name);
+				$veid = $name;
+				//$veid = str_replace(array('windows', 'linux'), array('', ''), $veid);
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = $stdObject->xml2array($out);
@@ -107,7 +108,7 @@ fi;\n";
 		foreach ($lines as $line)
 			if (trim($line) != '') {
 				list($id,$ip) = explode(':', $line);
-				$id = str_replace(array('windows','linux'),array('',''),$id);
+				//$id = str_replace(array('windows','linux'),array('',''),$id);
 				$ipIds[$ip] = $id;
 				$ips[$id] = array();
 				$ips[$id][] = $ip;
