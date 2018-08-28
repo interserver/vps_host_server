@@ -21,29 +21,29 @@ for i in $(virt-builder -l|sort -n); do
 	label="$(echo "$i"|sed s#"^[^ ]* *[^ ]* *"#""#g)"
 	os="$(echo "$tag"|cut -d- -f1)"
 	version="$(echo "$tag"|cut -d- -f2-)"
-	cmd="nice -n -19 ionice -c 2 -n 0 virt-builder ${tag} --network --colors -m 1024 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext} --root-password 'password:interserver123' --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'"
+	cmd="nice -n -19 ionice -c 2 -n 0 virt-builder \\\n    ${tag} --network --colors \\\n    -m 1024 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext} \\\n    --root-password 'password:interserver123' \\\n    --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'"
 	if [ "$arch" != "x86_64" ] || [ "$os" = "freebsd" ]; then
 		continue
 	fi;
 	case $os in
 	"centos")
-		h=mirror.trouble-free.net cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};' --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --selinux-relabel --update";;
+		h=mirror.trouble-free.net cmd="${cmd}\\\n    --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};' --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --selinux-relabel --update";;
 	"fedora")
 		for h in mirrors.fedoraproject.org dl.fedoraproject.org mirrors.rit.edu mirrors.kernel.org; do
-			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
+			cmd="${cmd}\\\n    --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		done;
-		cmd="${cmd} --selinux-relabel --update";;
+		cmd="${cmd}\\\n    --selinux-relabel --update";;
 	"opensuse")
-		h=download.opensuse.org	cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
+		h=download.opensuse.org	cmd="${cmd}\\\n    --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		if [ "$(echo ${version:0:1}|grep "[0-9]")" != "" ]; then
-			cmd="${cmd} --update";
+			cmd="${cmd}\\\n    --update";
 		fi;;
 	"scientificlinux")
-		h=ftp.scientificlinux.org cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --update";;
+		h=ftp.scientificlinux.org cmd="${cmd}\\\n    --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --update";;
 	"debian" | "ubuntu")
-		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server' --update";;
+		cmd="${cmd}\\\n    --firstboot-command 'dpkg-reconfigure openssh-server' --update";;
 	esac;
-	echo "Building/Updating Tag: ${tag}  Arch: ${arch}  Label: ${label}  With: ${cmd}"
+	echo "Building/Updating Tag: ${tag}  Arch: ${arch}  Label: ${label}  With: \n${cmd}"
 	eval $cmd $*;
 	if [ ! -e "${tag}.${ext}" ]; then
 		echo $tag >> errors.txt
