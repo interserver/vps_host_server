@@ -89,7 +89,7 @@ else
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
-		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M
+		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M --format qcow2 --prealloc-metadata
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	else
@@ -139,11 +139,11 @@ else
 	if [ "$(date +%Z)" = "PDT" ]; then
 		sed s#"America/New_York"#"America/Los_Angeles"#g -i ${name}.xml
 	fi
-	if [ -e /etc/lsb-release ]; then 
-		. /etc/lsb-release; 
-		if [ $(echo $DISTRIB_RELEASE|cut -d\. -f1) -ge 18 ]; then 
-			sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='${vcpu}'/>"#g -i v.xml ; 
-		fi; 
+	if [ -e /etc/lsb-release ]; then
+		. /etc/lsb-release;
+		if [ $(echo $DISTRIB_RELEASE|cut -d\. -f1) -ge 18 ]; then
+			sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='${vcpu}'/>"#g -i v.xml ;
+		fi;
 	fi;
 	rm -f ${name}.xml.backup
 	#/bin/cp -f ${name}.xml ${name}.xml.backup;
