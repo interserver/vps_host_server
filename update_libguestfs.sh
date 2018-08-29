@@ -1,4 +1,21 @@
 #!/bin/bash
+#
+# give it any ubuntu package name and it:
+# - it finds the correct source repo path, 
+# - looks at the repo to find the latest version among all ubuntu versions, 
+# - compaired it to the currently installed version if installed
+# - if its not hte same it grabs the source file and all other required source files
+# - installs any build-tools as needed
+# - creates a meta package with missing build requirements and installs it
+# - builds the package
+# - removes the meta package autoremoving any build-deps that were installed just for the build
+# - figures out all the debs/packages the source just built, 
+# - from them it finds packages that were installed already , 
+# - builds a list of the new built .debs but just the ones that were already installed then upgrades them 
+#
+# @author detain@interserver.net
+# @copyright 2018
+
 if [ "$(which equivs 2>/dev/null)" = "" ]; then apt-get install -y equivs; fi;
 if [ "$(which dpkg-source 2>/dev/null)" = "" ]; then apt-get install -y dpkg-dev; fi;
 if [ "$(which mk-build-deps 2>/dev/null)" = "" ]; then apt-get install -y devscripts; fi;
