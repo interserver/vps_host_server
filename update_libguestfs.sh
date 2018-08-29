@@ -20,8 +20,8 @@ echo y|mk-build-deps -i || exit
 rm -f ${pkg}-build-deps_${latest}_amd64.deb    
 debuild || exit
 apt-get purge -y --auto-remove ${pkg}-build-deps    
-cd .. && \
-packages="$(grep "^Package" debian/control |cut -d" " -f2)" \
-installedpkgs="$(echo "$packages"|sed -e s#" $"#""#g -e s#" "#" -e "#g)|awk '{ print $2 }'|cut -d: -f1)" \
-upgradepkgs="$(eval dpkg -l |grep -e $(echo "${installedpkgs}"|tr "\n" " "|sed s#" "#"_${latest}\*deb "#g)" && \
+cd ..
+packages="$(grep "^Package" debian/control |cut -d" " -f2)"
+installedpkgs="$(echo "$packages"|sed -e s#" $"#""#g -e s#" "#" -e "#g)|awk '{ print $2 }'|cut -d: -f1)"
+upgradepkgs="$(eval dpkg -l |grep -e $(echo "${installedpkgs}"|tr "\n" " "|sed s#" "#"_${latest}\*deb "#g)"
 eval dpkg --install ${pkg}-tools_${latest}_amd64.deb ${upgradepkgs};    
