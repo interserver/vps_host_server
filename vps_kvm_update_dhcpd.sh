@@ -49,11 +49,11 @@ if [ -e /root/cpaneldirect/vps.mainips ]; then
 		ip="$(grep "^$user:" /root/cpaneldirect/vps.mainips | cut -d: -f2-)";
 		if valid_ip $ip; then
 				echo "host $user { hardware ethernet $mac; fixed-address $ip;}" >> ${DHCPVPS};
-		else
-			if [ -e ${DHCPVPS}.backup ]; then
-				/bin/mv -f ${DHCPVPS}.backup ${DHCPVPS};
-				break;
-			fi;
+		#else
+			#if [ -e ${DHCPVPS}.backup ]; then
+				#/bin/mv -f ${DHCPVPS}.backup ${DHCPVPS};
+				#break;
+			#fi;
 		fi;
 	done;
 	if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
