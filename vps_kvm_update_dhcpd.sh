@@ -46,7 +46,7 @@ if [ -e /root/cpaneldirect/vps.mainips ]; then
 	for user in $(virsh list | grep running | awk '{print $2}' |grep -v "^guestfs-"); do
 		mac=`virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 		id="$(echo "$user" | sed s#"[[:alpha:]]"#""#g)"
-		ip="$(grep "^$id:" /root/cpaneldirect/vps.mainips | cut -d: -f2-)";
+		ip="$(grep "^$user:" /root/cpaneldirect/vps.mainips | cut -d: -f2-)";
 		if valid_ip $ip; then
 				echo "host $user { hardware ethernet $mac; fixed-address $ip;}" >> ${DHCPVPS};
 		else
