@@ -1,14 +1,14 @@
-#!/bin/bash
 if [ "$(which equivs 2>/dev/null)" = "" ]; then apt-get install -y equivs; fi;
 if [ "$(which dpkg-source 2>/dev/null)" = "" ]; then apt-get install -y dpkg-dev; fi;
 if [ "$(which mk-build-deps 2>/dev/null)" = "" ]; then apt-get install -y devscripts; fi;
-latest="$(curl -s "http://us.archive.ubuntu.com/ubuntu/pool/universe/libg/libguestfs/"|grep "libguestfs_.*dsc"|cut -d\" -f8|sort -nr|head -n 1|sed s#"^libguestfs_\(.*\).dsc$"#"\1"#g)"
+url="http://us.archive.ubuntu.com/ubuntu/pool/universe/libg/libguestfs/"
+latest="$(curl -s "${url}"|grep "libguestfs_.*dsc"|cut -d\" -f8|sort -nr|head -n 1|sed s#"^libguestfs_\(.*\).dsc$"#"\1"#g)"                                                            
 installed="$(dpkg -l |grep libguestfs0|awk '{ print $3 }'|cut -d: -f2)"
 echo "Latest version: $latest     Installed Version: $installed"
 if [ "$latest" = "$installed" ]; then echo "No Update Needed"; exit; fi
-wget "http://us.archive.ubuntu.com/ubuntu/pool/universe/libg/libguestfs/libguestfs_${latest}.dsc" -O "libguestfs_${latest}.dsc"
+wget "${url}libguestfs_${latest}.dsc" -O "libguestfs_${latest}.dsc"                                                            
 for i in $(cat libguestfs_${latest}.dsc|grep "^ [^ ]* [0-9]* "|awk '{ print $3 }'|sort|uniq); do
-        wget "http://us.archive.ubuntu.com/ubuntu/pool/universe/libg/libguestfs/$i" -O "$i"
+    wget "${url}$i" -O "$i"                                                                
 done
 dir="$(echo "libguestfs-${latest}"|cut -d- -f1-2)"
 rm -rf $dir
