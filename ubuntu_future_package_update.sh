@@ -19,7 +19,7 @@
 if [ "$(which equivs 2>/dev/null)" = "" ]; then apt-get install -y equivs; fi;
 if [ "$(which dpkg-source 2>/dev/null)" = "" ]; then apt-get install -y dpkg-dev; fi;
 if [ "$(which mk-build-deps 2>/dev/null)" = "" ]; then apt-get install -y devscripts; fi;
-pkg=libguestfs
+pkg=$1
 path="$(apt-cache showsrc ${pkg}|grep ^Directory|cut -d" " -f2|head -n1)"
 url="http://us.archive.ubuntu.com/ubuntu/${path}/"
 latest="$(curl -s "${url}"|grep "${pkg}_.*dsc"|cut -d\" -f8|sort -nr|head -n 1|sed s#"^${pkg}_\(.*\).dsc$"#"\1"#g)"
