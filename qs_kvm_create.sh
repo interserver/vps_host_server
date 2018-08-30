@@ -60,7 +60,7 @@ fi
 error=0
 adjust_partitions=1
 export PREPATH="";
-if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1) -le 6 ]; then
+if [ -e /etc/redhat-release ] && [ "cat /etc/redhat-release |sed s#"^[^0-9]* "#""#g|cut -c1) -le 6 ]; then
 	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
 			pushd $PWD;
@@ -91,7 +91,7 @@ else
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
-		block=$(zfs get -pH recordsize |awk "{ print \$3 }") 
+		block=$(zfs get -pH recordsize |awk "{ print \$3 }")
 		virsh vol-create-as --pool vz --name ${name} --capacity $(echo "$block * $(echo "$(virsh pool-info vz --bytes|grep "^Available"|awk "{ print \$2 }") / 100 * 70 / ${block}"|bc)"|bc)b
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
@@ -113,10 +113,10 @@ else
 			  grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
 		fi
 		echo "Defining Config As VPS"
-                echo "Defining Config As VPS"
-                if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
-                  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml 
-                fi;
+				echo "Defining Config As VPS"
+				if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
+				  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i ${name}.xml
+				fi;
 	fi
 	mv -f ${name}.xml ${name}.xml.backup
 	repl="<parameter name='IP' value='${ip}'/>";
