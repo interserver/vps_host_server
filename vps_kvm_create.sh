@@ -452,5 +452,8 @@ q
 		sleep 2s;
 		/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		/admin/kvmenable blocksmtp $name
+		/admin/kvmenable ebflush
+		/scripts/buildebtablesrules | sh
+		service xinetd restart
 	fi
 fi;
