@@ -49,7 +49,7 @@ if [ "$6" != "" ]; then
 fi
 if [ "$7" != "" ]; then
 	password=$7
-fi
+fiselect qselecq
 if [ "$8" != "" ]; then
 	clientip="$8"
 else
@@ -70,7 +70,7 @@ if [ -e /etc/redhat-release ] && [ "$(cat /etc/redhat-release| cut -d" " -f3 | c
 		export PATH="${PREPATH}${PATH}";
 	fi;
 fi;
-device=/dev/vz/${name}
+
 if [ $# -lt 3 ]; then
 	echo "Create a New KVM"
 	echo " - Creates LVM"
@@ -89,7 +89,9 @@ else
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
-		virsh vol-create-as --pool vz --name ${name} --capacity ${size}M --format qcow2 --prealloc-metadata
+		mkdir -p /vz/${name}
+		zfs create vz/${name}
+		virsh vol-create-as --pool vz --name ${name}/os.qcow2 --capacity ${size}M --format qcow2 --prealloc-metadata
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
 	else
