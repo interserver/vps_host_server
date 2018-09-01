@@ -49,7 +49,8 @@ if [ "$6" != "" ]; then
 fi
 if [ "$7" != "" ]; then
 	password=$7
-fiselect qselecq
+fi
+#select qselecq
 if [ "$8" != "" ]; then
 	clientip="$8"
 else
