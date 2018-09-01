@@ -75,12 +75,9 @@ if [ "$check" = "" ]; then
 		echo "#Libvirtd is not running";
 
 		sleep 1s;
-	if [ -e /usr/bin/systemctl ]; then
-		 systemctl restart libvirtd.service	
-	else
-		service $service restart
-	fi
-
+service $service restart
+if [ $service != "libvirtd" ]; then
+	service libvirtd restart
 		check2=`ps auxw | grep -e sbin/libvirt -e "libvirtd --daemon" | grep -v grep`;
 		if [ "$check" = "" ]; then
 				echo "Libvirtd did not restart, emailing";

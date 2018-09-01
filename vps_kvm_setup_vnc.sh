@@ -35,12 +35,6 @@ elif [ "$(which virsh)" != "" ];then
     #else
       #echo "no spice port found for $myip, skipping"
     fi
-    if [ "$(which systemctl)" != "" ]; then
-       systemctl reload xinetd
-    elif [ -e /etc/init.d/xinetd ]; then
-      /etc/init.d/xinetd reload >/dev/null 2>&1
-    else
-      service xinetd reload >/dev/null 2>&1
-    fi;
+    service xinetd reload
   fi;
 fi
