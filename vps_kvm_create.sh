@@ -50,7 +50,6 @@ fi
 if [ "$7" != "" ]; then
 	password=$7
 fi
-#select qselecq
 if [ "$8" != "" ]; then
 	clientip="$8"
 else
@@ -71,7 +70,7 @@ if [ -e /etc/redhat-release ] && [ "$(cat /etc/redhat-release| cut -d" " -f3 | c
 		export PATH="${PREPATH}${PATH}";
 	fi;
 fi;
-
+device=/dev/vz/${name}
 if [ $# -lt 3 ]; then
 	echo "Create a New KVM"
 	echo " - Creates LVM"
