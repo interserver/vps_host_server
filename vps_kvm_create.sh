@@ -91,6 +91,7 @@ else
 	if [ "$pool" = "zfs" ]; then
 		mkdir -p /vz/${name}
 		zfs create vz/${name}
+		cd /vz
 		virsh vol-create-as --pool vz --name ${name}/os.qcow2 --capacity ${size}M --format qcow2 --prealloc-metadata
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " ${name}[/ ]"|awk '{ print $2 }')"
