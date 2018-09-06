@@ -199,7 +199,30 @@ else
 			virsh vol-delete --pool vz image_storage
 			rmdir /image_storage
 		fi
-	elif [ -e "/${template}.img" ]; then
+	elif [ -e "/vz/templates/${template}" ]; then
+		echo "Copying Image"
+		tsize=$(stat -c%s "/vz/templates/${template}")
+		dd if=/vz/templates/${template} of=${device} >dd.progress 2>&1 &
+		pid=$!
+		while [ -d /proc/$pid ]; do
+			sleep 9s
+			kill -SIGUSR1 $pid;
+			sleep 1s
+			if [ -d /proc/$pid ]; then
+			  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
+			  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+			  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
+				if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+					for softfile in $softraid; do
+						echo idle > $softfile
+					done
+				fi
+			  echo "$completed%"
+			fi
+		done
+		rm -f dd.progress
+	elif [ -e "/vz/templates/${template}" ]; then
 		echo "Copying Image"
 		tsize=$(stat -c%s "/${template}.img")
 		dd if=/${template}.img of=${device} >dd.progress 2>&1 &
