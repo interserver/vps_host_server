@@ -111,7 +111,7 @@ else
 		if [ "$pool" != "zfs" ]; then
 			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
 		else
-			grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
+			grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed -e s#"/dev/vz/${templatef}"#"${device}"#g -e s#"${templatef}"#"${name}"#g > ${name}.xml
 		fi
 		echo "Defining Config As VPS"
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
@@ -212,7 +212,7 @@ else
 			  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 			  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 			  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
-				if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+			  if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 					for softfile in $softraid; do
 						echo idle > $softfile
@@ -222,7 +222,7 @@ else
 			fi
 		done
 		rm -f dd.progress
-	elif [ -e "/vz/templates/${template}" ]; then
+	elif [ -e "/${template}.img" ]; then
 		echo "Copying Image"
 		tsize=$(stat -c%s "/${template}.img")
 		dd if=/${template}.img of=${device} >dd.progress 2>&1 &
@@ -235,7 +235,7 @@ else
 			  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 			  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 			  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=${completed} -d server=${name} "$url" 2>/dev/null
-				if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+			  if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 					softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 					for softfile in $softraid; do
 						echo idle > $softfile
