@@ -93,7 +93,7 @@ else
 		zfs create vz/${name}
 		virsh vol-create-as --pool vz --name ${name}/os.qcow2 --capacity ${size}M --format qcow2 --prealloc-metadata
 		sleep 5s;
-		device="$(virsh vol-list vz --details|grep " ${name} "|awk '{ print $2 }')"
+		device="$(virsh vol-list vz --details|grep " ${name}[/ ]"|awk '{ print $2 }')"
 	else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 		#device="${device}"
