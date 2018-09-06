@@ -4,7 +4,11 @@ export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 if [ "$(which prlctl 2>/dev/null)" != "" ]; then
 	for i in $(grep -l "^IP_ADDRESS=\"[^\\\"].*\"" /etc/vz/conf/*.conf); do
 		source $i;
-		echo "$VEID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
+		if [ -v UUID ]; then
+			echo "$UUID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
+		else
+			echo "$VEID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
+		fi
 	done|sort|uniq
 elif [ "$(which vzctl 2>/dev/null)" != "" ]; then
 	grep -H "^IP_ADDRESS" /etc/vz/conf/[0-9a-z-]*.conf 2>/dev/null | grep -v -e "IP_ADDRESS=\"\"" -e "^#" | sed -e s#"^.*/\([0-9a-z-]*\)\.conf:IP_ADDRESS=\"\([-0-9\. :a-f\/]*\)\""#"\1 \2"#g -e s#"/255.255.255.0"#""#g;
