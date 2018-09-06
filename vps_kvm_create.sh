@@ -111,7 +111,7 @@ else
 		if [ "$pool" != "zfs" ]; then
 			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed s#"${templatef}"#"${name}"#g > ${name}.xml
 		else
-			grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed -e s#"/dev/vz/${templatef}"#"${device}"#g -e s#"${templatef}"#"${name}"#g > ${name}.xml
+			grep -v -e uuid -e "mac address" /root/cpaneldirect/${templatef}.xml | sed -e s#"${templatef}"#"${name}"#g -e s#"/dev/vz/${name}"#"${device}"#g > ${name}.xml
 		fi
 		echo "Defining Config As VPS"
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
