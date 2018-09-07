@@ -344,18 +344,7 @@ else
 			start="$(echo $t | awk '{ print $2 }')"
 			if [ "$fs" = "83" ]; then
 				echo "Resizing Last Partition To Use All Free Space (Sect $sects P $p FS $fs PN $pn PT $pt Start $start"
-				echo -e "d
-$pn
-n
-$pt
-$pn
-$start
-
-
-w
-print
-q
-" | fdisk -u $device
+				echo -e "d\n$pn\nn\n$pt\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
 				kpartx $kpartxopts -av $device
 				pname="$(ls /dev/mapper/vz-"$name"p$pn /dev/mapper/vz-$name$pn /dev/mapper/"$name"p$pn /dev/mapper/$name$pn 2>/dev/null | cut -d/ -f4 | sed s#"$pn$"#""#g)"
 				e2fsck -p -f /dev/mapper/$pname$pn
@@ -378,58 +367,6 @@ q
 			else
 				echo "Skipping Resizing Last Partition FS is not 83. Space (Sect $sects P $p FS $fs PN $pn PT $pt Start $start"
 			fi
-
-			# echo "Coyping MBR"
-			# dd if=/dev/vz/$template of=$device bs=512 count=1 >/dev/null 2>&1
-			# echo "Copying Partition Table"
-			# dd if=/dev/vz/$template of=$device bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
-			# echo "Creating Partition Table Links"
-			# /sbin/kpartx $kpartxopts -a /dev/vz/$template
-			# /sbin/kpartx $kpartxopts -a $device
-			# for i in $(sfdisk -d $device | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
-			#  pname="$(echo "$i" | cut -d" " -f1)"
-			#  tpname="$(echo "$pname" | sed s#"$name"#"$template"#g)"
-			#  ptype="$(echo "$i" | cut -d" " -f2)"
-			#  psize="$(echo "$i" | cut -d" " -f3)"
-			#  if [ $psize -gt 205000 ] && [ "$ptype" = 7 ]; then
-			#   mkdir -p /vz/mounts/$tpname
-			#   mkdir -p /vz/mounts/$pname
-			#   mount /dev/mapper/$tpname /vz/mounts/$tpname
-			#   mount /dev/mapper/$pname /vz/mounts/$pname >/dev/null 2>&1
-			#   if [ "$(mount | grep /vz/mounts/$pname)" = "" ]; then
-			#    echo "MKNTFS On $pname Partition"
-			#    mkntfs -Q -L $name -v /dev/mapper/$pname
-			#    mount /dev/mapper/$pname /vz/mounts/$pname
-			#    if [ "$(mount | grep /vz/mounts/$pname)" = "" ]; then
-			#     echo "Mounting problem"
-			#    else
-			#     echo "Rsyncing Data (Initial Sync)"
-			#     rsync -a --delete --inplace --exclude desktop.ini --exclude Desktop.ini /vz/mounts/$tpname/ /vz/mounts/$pname/
-			#     if [ -e /vz/mounts/$pname/Windows/System32/config/SAM ]; then
-			#      echo "Clearing Windows Password"
-			#      /root/cpaneldirect/vps_kvm_setup_password_clear.expect $pname >/dev/null 2>&1
-			#     fi
-			#    fi
-			#   else
-			#    echo "Rsyncing Data (Quick Sync)"
-			#    rsync -a --delete --inplace --exclude desktop.ini --exclude Desktop.ini /vz/mounts/$tpname/ /vz/mounts/$pname/
-			#    if [ -e /vz/mounts/$pname/Windows/System32/config/SAM ]; then
-			#     echo "Clearing Windows Password"
-			#     /root/cpaneldirect/vps_kvm_setup_password_clear.expect $pname >/dev/null 2>&1
-			#    fi
-			#   fi
-			#   umount /vz/mounts/$pname
-			#   umount /vz/mounts/$tpname
-			#   echo "Copying Partition Boot Record $pname (dd)"
-			#   dd if=/dev/mapper/$tpname of=/dev/mapper/$pname bs=512 count=1 >/dev/null 2>&1
-			#  else
-			#   echo "Copying Partition $pname (dd)"
-			#   dd if=/dev/mapper/$tpname of=/dev/mapper/$pname >/dev/null 2>&1
-			#  fi
-			# done
-			# /sbin/kpartx $kpartxopts -d /dev/vz/$template
-			# /sbin/kpartx $kpartxopts -d $device
-
 			# /usr/bin/virsh setmaxmem $name $memory;
 			# /usr/bin/virsh setmem $name $memory;
 			# /usr/bin/virsh setvcpus $name $vcpu;
