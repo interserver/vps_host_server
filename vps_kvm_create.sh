@@ -91,11 +91,12 @@ else
 	if [ "$pool" = "zfs" ]; then
 		mkdir -p /vz/${name}
 		zfs create vz/${name}
+		device=/vz/${name}/os.qcow2
 		cd /vz
 		sleep 5s;
-		virsh vol-create-as --pool vz --name /vz/${name}/os.qcow2 --capacity ${size}M --format qcow2 --prealloc-metadata
-		sleep 5s;
-		device="$(virsh vol-list vz --details|grep " ${name}[/ ]"|awk '{ print $2 }')"
+		#virsh vol-create-as --pool vz --name ${name}/os.qcow2 --capacity ${size}M --format qcow2 --prealloc-metadata
+		#sleep 5s;
+		#device="$(virsh vol-list vz --details|grep " ${name}[/ ]"|awk '{ print $2 }')"
 	else
 		/root/cpaneldirect/vps_kvm_lvmcreate.sh ${name} ${size} || exit
 		#device="${device}"
@@ -157,16 +158,20 @@ else
 		template=windows2
 	fi
 	if [ "$pool" = "zfs" ]; then
-		if [ -e "/${template}.img.gz" ]; then
-			echo "Uncompressing $template.img.gz Image"
-			gunzip "/${template}.img.gz"
+		if [ -e "/vz/templates/${template}" ]; then
+			echo "Copy $template Image"
+			/bin/cp -f "/vz/templates/${template}" ${device};
+			adjust_partitions=0
 		fi
+		#if [ -e "/${template}.img.gz" ]; then
+		#	echo "Uncompressing $template.img.gz Image"
+		#	gunzip "/${template}.img.gz"
+		#fi
 		#if [ -e "/${template}.img" ]; then
 		#	echo "Uploading $template Image"
 		#	virsh vol-upload $name "/${template}.img" --pool vz
 		#fi;
-	fi;
-	if [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
+	elif [ "${template:0:7}" = "http://" ] || [ "${template:0:8}" = "https://" ] || [ "${template:0:6}" = "ftp://" ]; then
 		adjust_partitions=0
 		echo "Downloading $template Image"
 		/root/cpaneldirect/vps_get_image.sh "$template"
