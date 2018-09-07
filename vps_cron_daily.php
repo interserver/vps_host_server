@@ -7,12 +7,10 @@
  * @package MyAdmin
  * @category VPS
  */
-if (ini_get('date.timezone') == '')
-{
+if (ini_get('date.timezone') == '') {
 	ini_set('date.timezone', 'America/New_York');
 }
-if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron.vps.disabled'))
-{
+if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron.vps.disabled')) {
 	exit;
 }
 $url = 'https://myvps2.interserver.net/vps_queue.php';
@@ -22,7 +20,7 @@ $cmd = dirname(__FILE__).'/vps_update_extra_info.php;';
 echo `$cmd`;
 if (file_exists('/usr/bin/prlctl')) {
 	$cmd = dirname(__FILE__).'/update_virtuozzo.sh;';
-	echo `$cmd`;	
+	echo `$cmd`;
 }
 
 `echo > /root/cpaneldirect/workerman/stdout.log`;

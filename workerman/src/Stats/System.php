@@ -1,29 +1,34 @@
 <?php
 
-class SystemStats {
-
-	public static function kernel() {
+class SystemStats
+{
+	public static function kernel()
+	{
 		return trim(shell_exec('uname -r'));
 	}
 
-	public static function hostname() {
+	public static function hostname()
+	{
 		return trim(shell_exec('hostname'));
 	}
 
-	public static function distro() {
+	public static function distro()
+	{
 		$info = trim(shell_exec('cat /etc/*-release'));
 		if (preg_match('/DISTRIB_DESCRIPTION="(.*?)"/', $info, $m)) {
 			return trim($m[1]);
 		} else {
 			$lines = explode("\n", $info);
-			if (sizeof($lines) == 1)
+			if (sizeof($lines) == 1) {
 				return $info;
-			else
+			} else {
 				return "N/A";
+			}
 		}
 	}
 
-	public static function top_ram() {
+	public static function top_ram()
+	{
 		$info = trim(shell_exec('ps aux | sort -b -r -g -k 4 | head -3 | awk \'{print $4"%",$11}\''));
 		$new_info = '';
 		foreach (explode("\n", $info) as $line) {
@@ -39,7 +44,8 @@ class SystemStats {
 		return trim($new_info);
 	}
 
-	public static function top_cpu() {
+	public static function top_cpu()
+	{
 		$info = trim(shell_exec('ps aux | sort -b -r -g -k 3 | head -3 | awk \'{print $3"%",$11}\''));
 		$new_info = '';
 		foreach (explode("\n", $info) as $line) {
@@ -55,12 +61,14 @@ class SystemStats {
 		return trim($new_info);
 	}
 
-	public static function top_both() {
+	public static function top_both()
+	{
 		return shell_exec("ps aux | sort -b -r -k 3 -k 4 | head -6 | tail -5 | awk '{print $3,$4,$11}'");
 	}
 
 
-	public static function uptime() {
+	public static function uptime()
+	{
 		$info = trim(shell_exec('uptime'));
 		preg_match('/(\d{1,2}:\d{1,2}), /', $info, $m);
 		return trim($m[1]);
@@ -71,7 +79,8 @@ class SystemStats {
 	 *
 	 * @return string	uptime
 	 */
-	public static function uptime_from_proc() {
+	public static function uptime_from_proc()
+	{
 		if ($result = rtrim(file_get_contents('/proc/uptime'))) {
 			$ar_buf = explode(' ', $result[0]);
 
@@ -91,32 +100,38 @@ class SystemStats {
 	}
 
 
-	public static function all_processes() {
+	public static function all_processes()
+	{
 		return trim(shell_exec('ps auxh | wc -l'));
 	}
 
-	public static function running_processes() {
+	public static function running_processes()
+	{
 		return trim(shell_exec('ps -e | grep -v ? | tail -n +2 | wc -l'));
 	}
 
-	public static function cpu_freq() {
+	public static function cpu_freq()
+	{
 		$info = trim(shell_exec('cat /proc/cpuinfo | grep MHz | awk \'{print $4}\' | head -1'));
 		// Returns frequency in gigahertz
 		return round($info / 1000, 2) . " GHz";
 	}
 
-	public static function cpu_cores() {
+	public static function cpu_cores()
+	{
 		$info = trim(shell_exec('cat /proc/cpuinfo'));
 		return count(explode("\n\n", $info)) - 1;
 	}
 
-	public static function cpu_model() {
+	public static function cpu_model()
+	{
 		$info = trim(shell_exec('cat /proc/cpuinfo | grep "model name" | head -1'));
 		preg_match('/: (.*)/', $info, $m);
 		return trim(str_replace('CPU', '', $m[1]));
 	}
 
-	public static function cpu_temp() {
+	public static function cpu_temp()
+	{
 		// Get temp from ´sensors´
 		$info = trim(shell_exec('sensors'));
 		preg_match('/:\s+([+|-].*?)\s*?\(/', $info, $m);
@@ -135,30 +150,36 @@ class SystemStats {
 
 	// Alternative: top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%\id.*/\1/" | awk '{print 100 - $1"%"}'
 
-	public static function cpu_load_perc_free() {
+	public static function cpu_load_perc_free()
+	{
 		return (int) trim(shell_exec("vmstat | tail -1 | awk '{print $15}'"));
 	}
 
-	public static function cpu_load_perc_used() {
+	public static function cpu_load_perc_used()
+	{
 		return 100 - self::cpu_load_perc_free();
 	}
-	public static function ram_total() {
+	public static function ram_total()
+	{
 		$info = trim(shell_exec('cat /proc/meminfo | grep MemTotal: | awk \'{print $2}\''));
 		// Returns size in gigabytes
-		return round($info / pow(1024,2), 2) . " GiB";
+		return round($info / pow(1024, 2), 2) . " GiB";
 	}
-	public static function ram_free() {
+	public static function ram_free()
+	{
 		$info = trim(shell_exec('cat /proc/meminfo | grep MemFree: | awk \'{print $2}\''));
 		// Returns size in gigabytes
-		return round($info / pow(1024,2), 2) . " GiB";
+		return round($info / pow(1024, 2), 2) . " GiB";
 	}
-	public static function ram_used() {
+	public static function ram_used()
+	{
 		// Returns size in megabytes
 		// Need to remove the prefix before minus
 		return substr(self::ram_total(), 0, -4) - substr(self::ram_free(), 0, -4) . " GiB";
 	}
 
-	public static function gfx_model() {
+	public static function gfx_model()
+	{
 		$info = trim(shell_exec('lspci | grep -i vga'));
 		preg_match('/: (.*?) \(/', $info, $m);
 //		return trim($m[1]);
@@ -167,7 +188,8 @@ class SystemStats {
 
 	/* from prober */
 
-	public static function cpuinfo() {
+	public static function cpuinfo()
+	{
 		$cpuinfo = file('/proc/cpuinfo');
 		foreach ($cpuinfo as $line) {
 			$templine = str_replace("\t", '', $line);
@@ -185,17 +207,22 @@ class SystemStats {
 		$cpuinfo = json_decode($json, true);
 		unset($json, $cpu);
 		$cpu = array();
-		foreach($cpuinfo as $array) {
+		foreach ($cpuinfo as $array) {
 			$name = $array[0];
-			if($name == '') continue;
+			if ($name == '') {
+				continue;
+			}
 			$val = ltrim($array[1]);
 			$cpu[$name] = $val;
 		}
 		return $cpu;
 	}
 
-	public static function loadavg() {
-		if(!is_readable('/proc/loadavg')) return false;
+	public static function loadavg()
+	{
+		if (!is_readable('/proc/loadavg')) {
+			return false;
+		}
 		$loadavg = explode(' ', file_get_contents('/proc/loadavg'));
 		return implode(' ', current(array_chunk($loadavg, 4)));
 	}
@@ -205,7 +232,8 @@ class SystemStats {
 	 *
 	 * @return array	1/5/15 min load
 	 */
-	public static function loadavg_from_proc() {
+	public static function loadavg_from_proc()
+	{
 		if ($results = rtrim(file_get_contents('/proc/loadavg'))) {
 			$results = explode(' ', $results[0]);
 		} else {
@@ -215,23 +243,31 @@ class SystemStats {
 		return $results;
 	}
 
-	public static function getcores() {
-		if(!is_readable('/proc/cpuinfo')) return str_replace("\n",'',`nproc`);
+	public static function getcores()
+	{
+		if (!is_readable('/proc/cpuinfo')) {
+			return str_replace("\n", '', `nproc`);
+		}
 		$cpuinfo = file('/proc/cpuinfo');
 		$cores = 0;
-		for($i=0;$i<count($cpuinfo);$i++) {
+		for ($i=0;$i<count($cpuinfo);$i++) {
 			$linenow = $cpuinfo[$i];
-			if(strstr($linenow,'flags')) $cores++;
+			if (strstr($linenow, 'flags')) {
+				$cores++;
+			}
 		}
-		if($cores>0) {
+		if ($cores>0) {
 			return $cores;
 		} else {
-			return str_replace("\n",'',`nproc`);
+			return str_replace("\n", '', `nproc`);
 		}
 	}
 
-	public static function ramuse() {
-		if(!is_readable('/proc/meminfo')) return false;
+	public static function ramuse()
+	{
+		if (!is_readable('/proc/meminfo')) {
+			return false;
+		}
 		$meminfo = file_get_contents('/proc/meminfo');
 		$res['MemTotal'] = preg_match('/MemTotal\s*\:\s*(\d+)/i', $meminfo, $MemTotal) ? (int)$MemTotal[1] : 0;
 		$res['MemFree'] = preg_match('/MemFree\s*\:\s*(\d+)/i', $meminfo, $MemFree) ? (int)$MemFree[1] : 0;
@@ -242,15 +278,18 @@ class SystemStats {
 		return $res;
 	}
 
-	public static function prober_uptime() {
-		if(!is_readable('/proc/uptime')) return false;
+	public static function prober_uptime()
+	{
+		if (!is_readable('/proc/uptime')) {
+			return false;
+		}
 		$cpucores = self::getcores();
-		$uptime = str_replace("\n",'',file_get_contents('/proc/uptime'));
-		$uptimearr = explode(' ',$uptime);
+		$uptime = str_replace("\n", '', file_get_contents('/proc/uptime'));
+		$uptimearr = explode(' ', $uptime);
 		$arr['uptime'] = floor($uptimearr[0]);
 		$arr['freetime'] = floor($uptimearr[1]) / $cpucores;
 		$cpucores = self::getcores();
-		$arr['freepercent'] = round(($arr['freetime'] / $arr['uptime'] * 100) , 2);
+		$arr['freepercent'] = round(($arr['freetime'] / $arr['uptime'] * 100), 2);
 		return $arr;
 	}
 
@@ -261,7 +300,8 @@ class SystemStats {
 	 *
 	 * @return array	distro info
 	 */
-	public static function distrofile() {
+	public static function distrofile()
+	{
 		$result = 'N.A.';
 		$distroFileArr = array('debian_version','SuSE-release','mandrake-release','fedora-release','redhat-release','gentoo-release','slackware-version','eos-version','trustix-release','arch-release');
 
@@ -275,7 +315,8 @@ class SystemStats {
 	}
 
 
-	public static function distroicon() {
+	public static function distroicon()
+	{
 		if (file_exists('/etc/debian_version')) {
 			$result = 'Debian.gif';
 		} elseif (file_exists('/etc/SuSE-release')) {
@@ -306,7 +347,8 @@ class SystemStats {
 	 *
 	 * @return string	hostname
 	 */
-	public static function chostname() {
+	public static function chostname()
+	{
 		if ($result = explode("\n", rtrim(file_get_contents('/proc/sys/kernel/hostname')))) {
 			$result = gethostbyaddr(gethostbyname($result[0]));
 		} else {
@@ -320,17 +362,21 @@ class SystemStats {
 	 *
 	 * @return string	kernel version
 	 */
-	public static function kernel_from_proc() {
+	public static function kernel_from_proc()
+	{
 		if ($result = rtrim(file_get_contents('/proc/version'))) {
 			$buf = $result[0];
 			if (preg_match('/version (.*?) /', $buf, $ar_buf)) {
 				$result = $ar_buf[1];
-				if (preg_match('/SMP/', $buf))
+				if (preg_match('/SMP/', $buf)) {
 					$result .= ' (SMP)';
-			} else
+				}
+			} else {
 				$result = 'N.A.';
-		} else
+			}
+		} else {
 			$result = 'N.A.';
+		}
 		return $result;
 	}
 
@@ -342,31 +388,35 @@ class SystemStats {
 	 *
 	 * @return array	mem/swap informations
 	 */
-	public static function memory() {
+	public static function memory()
+	{
 		if ($output = explode("\n", rtrim(file_get_contents('/proc/meminfo')))) {
 			$results['ram'] = array();
 			$results['swap'] = array();
 			$results['devswap'] = array();
-			while (list(,$buf) = each($output))
-				if (preg_match('/^MemTotal:\s+(.*)\s*kB/i', $buf, $ar_buf))
+			while (list(, $buf) = each($output)) {
+				if (preg_match('/^MemTotal:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
 					$results['ram']['total'] = $ar_buf[1];
-				else if (preg_match('/^MemFree:\s+(.*)\s*kB/i', $buf, $ar_buf))
+				} elseif (preg_match('/^MemFree:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
 					$results['ram']['free'] = $ar_buf[1];
-				else if (preg_match('/^Cached:\s+(.*)\s*kB/i', $buf, $ar_buf))
+				} elseif (preg_match('/^Cached:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
 					$results['ram']['cached'] = $ar_buf[1];
-				else if (preg_match('/^Buffers:\s+(.*)\s*kB/i', $buf, $ar_buf))
+				} elseif (preg_match('/^Buffers:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
 					$results['ram']['buffers'] = $ar_buf[1];
-				else if (preg_match('/^SwapTotal:\s+(.*)\s*kB/i', $buf, $ar_buf))
+				} elseif (preg_match('/^SwapTotal:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
 					$results['swap']['total'] = $ar_buf[1];
-				else if (preg_match('/^SwapFree:\s+(.*)\s*kB/i', $buf, $ar_buf))
+				} elseif (preg_match('/^SwapFree:\s+(.*)\s*kB/i', $buf, $ar_buf)) {
 					$results['swap']['free'] = $ar_buf[1];
+				}
+			}
 			$results['ram']['shared'] = 0;
 			$results['ram']['used'] = $results['ram']['total'] - $results['ram']['free'];
 			$results['swap']['used'] = $results['swap']['total'] - $results['swap']['free'];
 			if (file_exists('/proc/swaps') && count(file('/proc/swaps')) > 1) {
 				$swaps = explode("\n", rtrim(file_get_contents('/proc/swaps')));
-				while (list(,$swap) = each($swaps))
+				while (list(, $swap) = each($swaps)) {
 					$swapdevs[] = $swap;
+				}
 				for ($i = 1; $i < (count($swapdevs) - 1); $i++) {
 					$ar_buf = preg_split('/\s+/', $swapdevs[$i], 6);
 					$results['devswap'][$i - 1] = array();
@@ -376,8 +426,9 @@ class SystemStats {
 					$results['devswap'][$i - 1]['free'] = ($results['devswap'][$i - 1]['total'] - $results['devswap'][$i - 1]['used']);
 					$results['devswap'][$i - 1]['percent'] = round(($ar_buf[3] * 100) / $ar_buf[2]);
 				}
-			} else
+			} else {
 				$results['devswap'] = array();
+			}
 			// I don't like this since buffers and cache really aren't
 			// 'used' per say, but I get too many emails about it.
 			$results['ram']['t_used'] = $results['ram']['used'];
@@ -391,5 +442,4 @@ class SystemStats {
 		}
 		return $results;
 	}
-
 }

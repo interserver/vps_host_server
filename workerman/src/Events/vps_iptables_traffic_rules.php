@@ -1,6 +1,6 @@
 <?php
 
-return function($stdObject) {
+return function ($stdObject) {
 	$cmd = '';
 	foreach ($stdObject->ipmap as $ip => $id) {
 		$cmd .= '/sbin/iptables -D FORWARD -d '.$ip.' 2>/dev/null;';

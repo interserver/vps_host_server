@@ -6,10 +6,10 @@
 *
 * @return
 */
-function update_vps_info() {
+function update_vps_info()
+{
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
-	if ($root_used > 90)
-	{
+	if ($root_used > 90) {
 		$hostname = trim(`hostname;`);
 		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	}
@@ -18,10 +18,12 @@ function update_vps_info() {
 	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;
 	$server['kernel'] = $uname['release'];
 	$server['raid_building'] = false;
-	foreach (glob('/sys/block/md*/md/sync_action') as $file)
-		if (trim(file_get_contents($file)) != 'idle')
+	foreach (glob('/sys/block/md*/md/sync_action') as $file) {
+		if (trim(file_get_contents($file)) != 'idle') {
 			$server['raid_building'] = true;
-		$file = explode(' ', trim(file_get_contents('/proc/loadavg')));
+		}
+	}
+	$file = explode(' ', trim(file_get_contents('/proc/loadavg')));
 	$server['load'] = (float)$file[0];
 	$file = explode("\n\n", trim(file_get_contents('/proc/cpuinfo')));
 	$server['cores'] = count($file);
@@ -51,8 +53,7 @@ function update_vps_info() {
 	}
 	$server['mounts'] = implode(',', $mounts);
 	$server['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
-	if (file_exists('/usr/bin/iostat'))
-	{
+	if (file_exists('/usr/bin/iostat')) {
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
 	$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
@@ -71,10 +72,11 @@ function update_vps_info() {
 		$free = $total - $used;
 		$out = $total.' '.$free;
 	} elseif (file_exists('/usr/bin/virsh')) {
-		if (file_exists('/etc/redhat-release') && strpos(file_get_contents('/etc/redhat-release'),'CentOS release 6') !== false)
+		if (file_exists('/etc/redhat-release') && strpos(file_get_contents('/etc/redhat-release'), 'CentOS release 6') !== false) {
 			$out = '';
-		else
+		} else {
 			$out = trim(`virsh pool-info vz --bytes|awk '{ print \$2 }'`);
+		}
 		if ($out != '') {
 			$parts = explode("\n", $out);
 			$totalb = $parts[5];
@@ -105,21 +107,17 @@ function update_vps_info() {
 	}
 	if (isset($out)) {
 		$parts = explode(' ', $out);
-		if (sizeof($parts) == 2)
-		{
+		if (sizeof($parts) == 2) {
 			$server['hdsize'] = $parts[0];
 			$server['hdfree'] = $parts[1];
 		}
 	}
-	if (file_exists('/usr/sbin/vzctl'))
-	{
-		if (!file_exists('/proc/user_beancounters'))
-		{
+	if (file_exists('/usr/sbin/vzctl')) {
+		if (!file_exists('/proc/user_beancounters')) {
 			$headers = "MIME-Version: 1.0\n";
 			$headers .= "Content-type: text/html; charset=UTF-8\n";
 			$headers .= "From: ".`hostname -s`." <hardware@interserver.net>\n";
 			mail('hardware@interserver.net', 'OpenVZ server does not appear to be booted properly', 'This server does not have /proc/user_beancounters, was it booted into the wrong kernel?', $headers);
-
 		}
 	}
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=server_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';

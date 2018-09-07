@@ -43,7 +43,8 @@ class Queue implements \Core_IWorker
 	 * Called on Construct or Init
 	 * @return void
 	 */
-	public function setup() {
+	public function setup()
+	{
 		// Read Queue details from the INI file
 		// The ini plugin is created in the Poller::setup() method
 		$ini = $this->mediator->daemon('ini');
@@ -56,8 +57,8 @@ class Queue implements \Core_IWorker
 	 * Called on Destruct
 	 * @return void
 	 */
-	public function teardown() {
-
+	public function teardown()
+	{
 	}
 
 	/**
@@ -65,10 +66,12 @@ class Queue implements \Core_IWorker
 	 * @return Array    Return array of error messages (Think stuff like "GD Library Extension Required" or
 	 *                  "Cannot open /tmp for Writing") or an empty array
 	 */
-	public function check_environment(Array $errors = array()) {
+	public function check_environment(array $errors = array())
+	{
 		$errors = [];
-		if (!function_exists('curl_init'))
+		if (!function_exists('curl_init')) {
 			$errors[] = 'PHP Curl Extension Required: Recompile PHP using the --with-curl option.';
+		}
 
 		// Currently this class just simulates an Queue call by generating random results and sleeping a random time.
 		// Curl isn't actually being used but it's included here in the interest of making this feel more real and
@@ -81,7 +84,8 @@ class Queue implements \Core_IWorker
 	 * Poll the Queue for updated information -- Simulate an Queue call of varying duration.
 	 * @return Array    Return associative array of results
 	 */
-	public function poll(Array $existing_results) {
+	public function poll(array $existing_results)
+	{
 		static $calls = 0;
 		$calls++;
 
@@ -89,10 +93,10 @@ class Queue implements \Core_IWorker
 		$this->mediator->log('Calling Queue...');
 
 		// If this is our first call, create initial results
-	//      if ($calls == 1) {
-			$this->results['queue'] = trim(`curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue 'https://myvps2.interserver.net/vps_queue.php'`);
-			return $this->results;
-	//      }
+		//      if ($calls == 1) {
+		$this->results['queue'] = trim(`curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue 'https://myvps2.interserver.net/vps_queue.php'`);
+		return $this->results;
+		//      }
 
 		// Increase the stats in our results array accordingly
 	//    $multiplier = mt_rand(100, 125) / 100;
@@ -101,5 +105,4 @@ class Queue implements \Core_IWorker
 
 	//    return $this->results;
 	}
-
 }

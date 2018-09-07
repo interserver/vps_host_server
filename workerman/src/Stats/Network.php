@@ -1,18 +1,22 @@
 <?php
 
-class NetworkStats {
+class NetworkStats
+{
 	public static $network_dev = 'eth0';
 
-	public static function update_network_dev() {
+	public static function update_network_dev()
+	{
 		preg_match('/^default(\s[\S]+)*\sdev\s([\S]+)/m', shell_exec('ip route'), $matches);
 		self::$network_dev = $matches[2];
 	}
 
-	public static function get_network_dev() {
+	public static function get_network_dev()
+	{
 		return self::$network_dev;
 	}
 
-	public static function wlan_essid() {
+	public static function wlan_essid()
+	{
 		$info = trim(shell_exec('iwconfig'));
 		if (preg_match('/ESSID:"(.*?)"\n/', $info, $m)) {
 			return trim($m[1]);
@@ -21,26 +25,31 @@ class NetworkStats {
 		}
 	}
 
-	public static function network_device() {
+	public static function network_device()
+	{
 		return self::$network_dev;
 	}
 
-	public static function mac_addr() {
+	public static function mac_addr()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		return trim(shell_exec('/sbin/ifconfig '.$dev.' | grep -o -E \'([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}\''));
 	}
 
-	public static function ipv4_addr() {
+	public static function ipv4_addr()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		return trim(shell_exec('/sbin/ifconfig '.$dev.' | sed \'/inet\ /!d;s/.*r://g;s/\ .*//g\''));
 	}
 
-	public static function ipv6_addr() {
+	public static function ipv6_addr()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		return trim(shell_exec('ifconfig '.$dev.' | grep inet6 | awk \'{print $3}\' | head -1'));
 	}
 
-	public static function open_ports_known() {
+	public static function open_ports_known()
+	{
 		$info = trim(shell_exec('/bin/netstat -t -l | grep tcp | grep -v -i localhost | awk \'{print $4}\''));
 		$info = str_replace("\r", "", $info);
 		$output = array();
@@ -57,7 +66,8 @@ class NetworkStats {
 			return 'N/A';
 		}
 	}
-	public static function open_ports_unknown() {
+	public static function open_ports_unknown()
+	{
 		$info = trim(shell_exec('/bin/netstat -t -l | grep tcp | grep -v -i localhost | awk \'{print $4}\''));
 		$info = str_replace("\r", "", $info);
 		$output = array();
@@ -74,7 +84,8 @@ class NetworkStats {
 			return 'N/A';
 		}
 	}
-	public static function dl_speed() {
+	public static function dl_speed()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		$first = trim(shell_exec('cat /proc/net/dev | grep '.$dev.' | awk \'{print $2}\''));
 		sleep(1);
@@ -87,7 +98,8 @@ class NetworkStats {
 		}
 	}
 
-	 public static function ul_speed() {
+	public static function ul_speed()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		$first = trim(shell_exec('cat /proc/net/dev | grep '.$dev.' | awk \'{print $10}\''));
 		sleep(1);
@@ -100,7 +112,8 @@ class NetworkStats {
 		}
 	}
 
-	public static function total_downloaded() {
+	public static function total_downloaded()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		$info = trim(shell_exec('cat /proc/net/dev | grep '.$dev.' | awk \'{print $2}\''));
 		if (($info / pow(1024, 2)) > pow(1024, 2)) {
@@ -110,7 +123,8 @@ class NetworkStats {
 		}
 	}
 
-	public static function total_uploaded() {
+	public static function total_uploaded()
+	{
 		$dev = escapeshellarg(self::$network_dev);
 		$info = trim(shell_exec('cat /proc/net/dev | grep '.$dev.' | awk \'{print $10}\''));
 		if (($info / pow(1024, 2)) > pow(1024, 2)) {
@@ -123,7 +137,8 @@ class NetworkStats {
 
 	/* from some prober */
 
-	public static function curl($url) {
+	public static function curl($url)
+	{
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 2);
@@ -131,45 +146,50 @@ class NetworkStats {
 		$r = curl_exec($ch);
 		$curl_errno = curl_errno($ch);
 		curl_close($ch);
-		if($curl_errno > 0) return false;
+		if ($curl_errno > 0) {
+			return false;
+		}
 		return $r;
 	}
 
-	public static function network() {
+	public static function network()
+	{
 		$net = file("/proc/net/dev");
 		$netname = array('enp2s0','eth1','eth0','venet0','ens18');
 		$dev = array();
-		for($i=2;$i<count($net);$i++) {
+		for ($i=2;$i<count($net);$i++) {
 			$linenow = $net[$i];
 			$arrnow = explode(':', $linenow);
-			for($x=0;$x<count($netname);$x++) {
+			for ($x=0;$x<count($netname);$x++) {
 				$namenow = $netname[$x];
-				if(strstr($arrnow[0], $namenow)) {
+				if (strstr($arrnow[0], $namenow)) {
 					$strs = $linenow;
 				} else {
 					continue;
 				}
 			}
 		}
-		preg_match_all( "/([^\s]+):[\s]{0,}(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/", $strs, $info );
+		preg_match_all("/([^\s]+):[\s]{0,}(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/", $strs, $info);
 		$return['in'] = $info[2][0];
 		$return['out'] = $info[10][0];
 		return $return;
 	}
 
-	public static function Checkipv6() {
+	public static function Checkipv6()
+	{
 		$ping = @file_get_contents('http://[2001:da8:d800::1]/cgi-bin/myipv6addr');
-		if(!$ping) {
+		if (!$ping) {
 			return false;
 		} else {
 			return true;
 		}
 	}
 
-	public static function Getipv4() {
+	public static function Getipv4()
+	{
 		$ipipurl = 'http://ip.huomao.com/ip';
 		$ipipjson = self::curl($ipipurl);
-		$ipiparr = json_decode($ipipjson,true);
+		$ipiparr = json_decode($ipipjson, true);
 		return $ipiparr['ip'];
 	}
 
@@ -180,10 +200,11 @@ class NetworkStats {
 	 *
 	 * @return array	network information
 	 */
-	public static function network2() {
+	public static function network2()
+	{
 		$results = array();
 		if ($output = explode("\n", rtrim(file_get_contents('/proc/net/dev')))) {
-			while (list(,$buf) = each($output)) {
+			while (list(, $buf) = each($output)) {
 				if (preg_match('/:/', $buf)) {
 					list($dev_name, $stats_list) = preg_split('/:/', $buf, 2);
 					$stats = preg_split('/\s+/', trim($stats_list));

@@ -15,7 +15,7 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 $host = 'my.interserver.net';
 if (file_exists(__DIR__ . '/config.php')) {
-    require __DIR__ . '/config.php';
+	require __DIR__ . '/config.php';
 }
 
 // Setup logging
@@ -27,15 +27,13 @@ $logout->pushHandler($stdout);
 
 $app = new App($host, 8080, '0.0.0.0');
 $app->route('/chat',
-    new MessageLogger(       // Log events in case of "oh noes"
-        new ServerProtocol(  // WAMP; the new hotness sub-protocol
-            new Bot(         // People kept asking me if I was a bot, so I made one!
-                new ChatRoom // ...and DISCUSS!
-            )
-        )
-        , $login
-        , $logout
-    )
+	new MessageLogger(       // Log events in case of "oh noes"
+		new ServerProtocol(  // WAMP; the new hotness sub-protocol
+			new Bot(         // People kept asking me if I was a bot, so I made one!
+				new ChatRoom // ...and DISCUSS!
+			)
+		), $login, $logout
+	)
 );
 
 // GO GO GO!

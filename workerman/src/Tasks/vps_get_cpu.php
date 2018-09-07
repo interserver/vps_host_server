@@ -1,12 +1,13 @@
 <?php
-return function($stdObject, $params) {
+return function ($stdObject, $params) {
 	$cpu = array();
 	$files = [];
 	if (file_exists('/proc/vz/fairsched/cpu.proc.stat')) {
 		foreach (glob('/proc/vz/fairsched/*/cpu.proc.stat') as $file) {
 			$id = basename(dirname($file));
-			if ($id > 0)
+			if ($id > 0) {
 				$files[$id] = $file;
+			}
 		}
 	}
 	$files[0] = '/proc/stat';

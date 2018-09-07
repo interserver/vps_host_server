@@ -5,7 +5,7 @@ use Workerman\Worker;
 /**
 * onConnect event for websocket connection to hub
 */
-return function($stdObject, $conn) {
+return function ($stdObject, $conn) {
 	/** sends a login request to the hub **/
 	$json = array(
 		'type' => 'login',

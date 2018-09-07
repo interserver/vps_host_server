@@ -5,7 +5,7 @@ use Workerman\Lib\Timer;
 use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
-return function($stdObject, $conn, $data) {
+return function ($stdObject, $conn, $data) {
 	$stdObject->conn = $conn;
 	echo "onMessage Got: ".$data.PHP_EOL;
 	global $global;
@@ -13,9 +13,8 @@ return function($stdObject, $conn, $data) {
 	$data = json_decode($data, true);
 	switch ($data['type']) {
 		case 'login':
-			if ($data['ima'] == 'host')
-			{
-					$stdObject->setupTimers();
+			if ($data['ima'] == 'host') {
+				$stdObject->setupTimers();
 			}
 			break;
 		case 'timers':
@@ -63,11 +62,12 @@ return function($stdObject, $conn, $data) {
 			unset($env['argv']);
 			$stdObject->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], '/root/cpaneldirect', $env);
 			$stdObject->running[$data['id']]['process']->start($loop);
-			$stdObject->running[$data['id']]['process']->on('exit', function($exitCode, $termSignal) use ($data, $conn, &$stdObject) {
-				if (is_null($termSignal))
+			$stdObject->running[$data['id']]['process']->on('exit', function ($exitCode, $termSignal) use ($data, $conn, &$stdObject) {
+				if (is_null($termSignal)) {
 					Worker::safeEcho("command '{$data['command']}' completed with exit code {$exitCode}\n");
-				else
+				} else {
 					Worker::safeEcho("command '{$data['command']}' terminated with signal {$termSignal}\n");
+				}
 				$json = array(
 					'type' => 'ran',
 					'id' => $data['id'],
@@ -77,11 +77,11 @@ return function($stdObject, $conn, $data) {
 				$conn->send(json_encode($json));
 				if ($stdObject->running[$data['id']]['update_after'] == true) {
 					$stdObject->vps_update_info();
-					$stdObject->get_map_timer();                
+					$stdObject->get_map_timer();
 				}
 				unset($stdObject->running[$data['id']]);
 			});
-			$stdObject->running[$data['id']]['process']->stdout->on('data', function($output) use ($data, $conn) {
+			$stdObject->running[$data['id']]['process']->stdout->on('data', function ($output) use ($data, $conn) {
 				$json = array(
 					'type' => 'running',
 					'id' => $data['id'],
@@ -89,7 +89,7 @@ return function($stdObject, $conn, $data) {
 				);
 				$conn->send(json_encode($json));
 			});
-			$stdObject->running[$data['id']]['process']->stderr->on('data', function($output) use ($data, $conn) {
+			$stdObject->running[$data['id']]['process']->stderr->on('data', function ($output) use ($data, $conn) {
 				$json = array(
 					'type' => 'running',
 					'id' => $data['id'],
@@ -107,7 +107,7 @@ return function($stdObject, $conn, $data) {
 			break;
 		case 'running':
 			if (isset($data['id'])) {
-					$stdObject->running[$data['id']]['process']->stdin->write($data['stdin']);
+				$stdObject->running[$data['id']]['process']->stdin->write($data['stdin']);
 			}
 			break;
 		case 'stop_run':

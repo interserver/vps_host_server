@@ -8,18 +8,16 @@ require_once(dirname(__FILE__).'/xml2array.php');
  *
  * @return
  */
-function get_qs_list() {
+function get_qs_list()
+{
 	$url = 'https://myquickserver2.interserver.net/qs_queue.php';
-	if (!file_exists('/usr/sbin/vzctl'))
-	{
+	if (!file_exists('/usr/sbin/vzctl')) {
 		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
 		$lines = explode("\n", $out);
 		$servers = array();
 		$cmd = '';
-		foreach ($lines as $serverline)
-		{
-			if (trim($serverline) != '')
-			{
+		foreach ($lines as $serverline) {
+			if (trim($serverline) != '') {
 				$parts = explode(' ', $serverline);
 				$name = $parts[0];
 				$veid = $name;
@@ -34,29 +32,24 @@ function get_qs_list() {
 					'hostname' => $name,
 					'kmemsize' => $xml['domain']['memory'],
 				);
-				if (isset($xml['domain']['devices']['interface']))
-				{
+				if (isset($xml['domain']['devices']['interface'])) {
 					$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
 				}
-				if (isset($xml['domain']['devices']['graphics_attr']))
-				{
+				if (isset($xml['domain']['devices']['graphics_attr'])) {
 					$server['vnc'] = $xml['domain']['devices']['graphics_attr']['port'];
 				}
-				if ($status == 'running')
-				{
-/*
-					$disk = trim(`/root/cpaneldirect/vps_kvm_disk_usage.sh $name`);
-					if ($disk != '')
-					{
-						$dparts = explode(':', $disk);
-						$server['diskused'] = $dparts[2];
-						$server['diskmax'] = $dparts[1];
-					}
-*/
-					if (isset($xml['domain']['devices']['graphics_attr']))
-					{
-						if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900)
-						{
+				if ($status == 'running') {
+					/*
+										$disk = trim(`/root/cpaneldirect/vps_kvm_disk_usage.sh $name`);
+										if ($disk != '')
+										{
+											$dparts = explode(':', $disk);
+											$server['diskused'] = $dparts[2];
+											$server['diskmax'] = $dparts[1];
+										}
+					*/
+					if (isset($xml['domain']['devices']['graphics_attr'])) {
+						if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900) {
 							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'].PHP_EOL;
 							$vncdisplay = (integer)abs($xml['domain']['devices']['graphics_attr']['port'] - 5900);
 							$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
@@ -74,8 +67,7 @@ function get_qs_list() {
 		//print_r($matches);
 		$servers = array();
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
-		foreach ($matches['veid'] as $key => $id)
-		{
+		foreach ($matches['veid'] as $key => $id) {
 			$server = array(
 				'veid' => $id,
 				'numproc' => $matches['numproc'][$key],
@@ -133,11 +125,9 @@ function get_qs_list() {
 			);
 			$servers[$id] = $server;
 		}
-		foreach ($servers as $id => $server)
-		{
+		foreach ($servers as $id => $server) {
 			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print $2 " " $3 }'`);
-			if ($out != '')
-			{
+			if ($out != '') {
 				$disk = explode(' ', $out);
 				$servers[$id]['diskused'] = $disk[0];
 				$servers[$id]['diskmax'] = $disk[1];

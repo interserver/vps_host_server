@@ -5,7 +5,7 @@ use Workerman\Worker;
 /**
 * ran periodicaly to update our vps mapping files
 */
-return function($stdObject) {
+return function ($stdObject) {
 	global $global;
 	$timeSinceMessage = time() - $global->lastMessageTime;
 	if ($timeSinceMessage >= $stdObject->config['heartbeat']['timeout']) {

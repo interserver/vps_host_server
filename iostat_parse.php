@@ -1,31 +1,28 @@
 #!/usr/bin/env php
 <?php
 
-function format_size($size) {
+function format_size($size)
+{
 	$mod = 1024;
 	$units = explode(' ', 'B KB MB GB TB PB');
-	for ($i = 0; $size > $mod; $i++)
+	for ($i = 0; $size > $mod; $i++) {
 		$size /= $mod;
+	}
 	return round($size, 2) . (strlen($units[$i]) == 1 ? '  ' : ' ') . $units[$i];
 }
 
-if (!file_exists('/usr/bin/iostat'))
-{
+if (!file_exists('/usr/bin/iostat')) {
 	echo "Installing iostat..";
-	if (trim(`which yum;`) != '')
-	{
+	if (trim(`which yum;`) != '') {
 		echo "CentOS Detected...";
 		`yum -y install sysstat;`;
-	}
-	elseif (trim(`which apt-get;`) != '')
-	{
+	} elseif (trim(`which apt-get;`) != '') {
 		echo "Ubuntu Detected...";
 		`apt-get -y install sysstat;`;
-//        `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
+		//        `echo -e 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades;`;
 	}
 	echo "done\n\n";
-	if (!file_exists('/usr/bin/iostat'))
-	{
+	if (!file_exists('/usr/bin/iostat')) {
 		echo "Error installing iostat\n";
 		exit;
 	}
@@ -46,8 +43,7 @@ $info = array(
 	'mappings' => array(),
 );
 $out = explode("\n", trim(`ls -l /dev/vz | grep -- '->' | awk '{ print $11 " " $9 }' | sed s#"../"#""#g;`));
-foreach ($out as $line)
-{
+foreach ($out as $line) {
 	$parts = explode(' ', $line);
 	$info['mappings'][$parts[0]] = $parts[1];
 }
@@ -55,12 +51,10 @@ preg_match_all('/%(?P<fields>[a-z]+)[^a-z%]*/', $lines[2], $matches);
 $fields = $matches['fields'];
 preg_match_all('/[^\d]*(?P<values>\d+\.\d+)[^\d]*/', $lines[3], $matches);
 $values = $matches['values'];
-foreach  ($fields as $idx => $field)
-{
+foreach ($fields as $idx => $field) {
 	$info['cpu'][$field] = $values[$idx];
 }
-for ($x = 6; $x < sizeof($lines); $x++)
-{
+for ($x = 6; $x < sizeof($lines); $x++) {
 	preg_match('/^(?P<device>[^\s]+)\s+(?P<tps>[^\s]+)\s+(?P<blkreadsec>[^\s]+)\s+(?P<blkwritesec>[^\s]+)\s+(?P<blkread>\d+)\s+(?P<blkwrite>\d+)$/', $lines[$x], $matches);
 	$info['disks'][$matches['device']] = array(
 		'tps' => $matches['tps'],
@@ -72,8 +66,7 @@ for ($x = 6; $x < sizeof($lines); $x++)
 }
 
 $info['procs'] = array();
-if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm'))
-{
+if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
 	$out = `pidstat -l -C kvm;`;
 	$regex = '/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+\/usr\/bin\/kvm.* \-m (?<ram>[\d]*)\s.*sockets=(?P<cores>\d+),.*\-name (?<vps>[^\s]+)\s+.*$/';
 } else {
@@ -94,10 +87,10 @@ $out = `pidstat -l -C qemu-kvm |\
 */
 //echo "$out\n";
 $lines = explode("\n", $out);
-for ($x = 1; $x < sizeof($lines); $x++)
-{
-	if (!preg_match($regex, $lines[$x], $matches))
+for ($x = 1; $x < sizeof($lines); $x++) {
+	if (!preg_match($regex, $lines[$x], $matches)) {
 		continue;
+	}
 	//preg_match('/^(?P<time>[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [AP]M)\s+(?P<pid>\d+)\s+(?P<cpu_user>[\d\.]+)\s+(?P<cpu_system>[\d\.]+)\s+(?P<cpu_guest>[\d\.]+)\s+(?P<cpu_all>[\d\.]+)\s+(?P<cpu_num>[\d]+)\s+/', $lines[$x], $matches);
 	//print_r($matches);
 	//echo "$lines[$x]\n";
@@ -119,8 +112,7 @@ for ($x = 1; $x < sizeof($lines); $x++)
 
 
 echo sprintf("CPU Usage");
-foreach ($info['cpu'] as $idx => $value)
-{
+foreach ($info['cpu'] as $idx => $value) {
 	echo sprintf(" %13s", $value.'% '.$idx);
 }
 echo "\n\n";
@@ -128,10 +120,8 @@ echo sprintf(" %36s %18s %36s\n", $info['os'], $info['bits'], $info['hostname'])
 echo sprintf(" %36s %18s %36s\n", $info['version'], $info['cpus'].' cores', $info['date']);
 echo "\n";
 echo sprintf(" %20s %7s %15s %15s %15s %15s %15s %8s %8s %8s\n", "Target", "Type", "Read Speed", "Write Speed", "Total Read", "Total Written", 'CPU % User', '% System', '% Guest', '% All');
-foreach ($info['disks'] as $device => $data)
-{
-	if (isset($info['mappings'][$device]))
-	{
+foreach ($info['disks'] as $device => $data) {
+	if (isset($info['mappings'][$device])) {
 		$name = $info['mappings'][$device];
 		$type = 'VPS';
 	} else {
@@ -146,8 +136,7 @@ foreach ($info['disks'] as $device => $data)
 		format_size($data['blkread']*$block_size),
 		format_size($data['blkwrite']*$block_size)
 	);
-	if ($type == 'VPS' && isset($info['procs'][$name]))
-	{
+	if ($type == 'VPS' && isset($info['procs'][$name])) {
 		echo sprintf(" %15s %8s %8s %8s", $info['procs'][$name]['cpu_user'], $info['procs'][$name]['cpu_system'], $info['procs'][$name]['cpu_guest'], $info['procs'][$name]['cpu_all']);
 	}
 	echo "\n";

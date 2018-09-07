@@ -6,22 +6,23 @@
 	 *
 	 * @return
 	 */
-	function update_vps_extra_info() {
+	function update_vps_extra_info()
+	{
 		// ensure ethtool is installed
 		`if ! which ethtool 2>/dev/null; then if [ -e /etc/redhat-release ]; then yum install -y ethtool; else apt-get install -y ethtool; fi; fi;`;
-	        if (in_array(trim(`hostname`), array("kvm1.trouble-free.net", "kvm2.interserver.net", "kvm50.interserver.net")))
-	                $eth = 'eth1';
-	        elseif (file_exists('/etc/debian_version'))
-	        {
-	                if (file_exists('/sys/class/net/p2p1'))
-	                        $eth = 'p2p1';
-	                elseif (file_exists('/sys/class/net/em1'))
-	                        $eth = 'em1';
-	                else
+		if (in_array(trim(`hostname`), array("kvm1.trouble-free.net", "kvm2.interserver.net", "kvm50.interserver.net"))) {
+			$eth = 'eth1';
+		} elseif (file_exists('/etc/debian_version')) {
+			if (file_exists('/sys/class/net/p2p1')) {
+				$eth = 'p2p1';
+			} elseif (file_exists('/sys/class/net/em1')) {
+				$eth = 'em1';
+			} else {
 				$eth = trim(`ip link show |grep "^[0-9]"|grep -v -e "lo:" -e "br[0-9]*:"|awk "{ print \\$2 }"|cut -d: -f1|head -n 1`);
-	        }
-	        else
-	                $eth = 'eth0';
+			}
+		} else {
+			$eth = 'eth0';
+		}
 
 		//$speed = trim(`ethtool $eth |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g`);
 		$cmd = 'ethtool '.$eth.' |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';

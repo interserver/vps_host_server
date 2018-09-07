@@ -1,10 +1,11 @@
 <?php
 
-return function($stdObject) {
+return function ($stdObject) {
 	$totals = array();
 	if ($stdObject->type == 'kvm') {
-		if (is_null($stdObject->traffic_last) && file_exists('/root/.traffic.last'))
+		if (is_null($stdObject->traffic_last) && file_exists('/root/.traffic.last')) {
 			$stdObject->traffic_last = unserialize(file_get_contents('/root/.traffic.last'));
+		}
 		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 		if ($vnetcounters != '') {
 			$vnetcounters = explode("\n", $vnetcounters);
@@ -37,17 +38,16 @@ return function($stdObject) {
 						if (isset($last) && isset($vpss[$vps])) {
 							$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
 							$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
-						}
-						elseif (isset($last))
-						{
+						} elseif (isset($last)) {
 							$in_new = $last[$vps]['in'];
 							$out_new = $last[$vps]['out'];
 						} else {
 							$in_new = $vpss[$vps]['in'];
 							$out_new = $vpss[$vps]['out'];
 						}
-						if ($in_new > 0 || $out_new > 0)
+						if ($in_new > 0 || $out_new > 0) {
 							$totals[$ip] = array('vps' => $vps, 'in' => $in_new, 'out' => $out_new);
+						}
 					}
 				}
 				if (sizeof($totals) > 0) {
@@ -61,10 +61,11 @@ return function($stdObject) {
 			if ($stdObject->validIp($ip, false) == true) {
 				$lines = explode("\n", trim(`/sbin/iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
 				if (sizeof($lines) == 2) {
-					list($in,$out) = $lines;
+					list($in, $out) = $lines;
 					$total = $in + $out;
-					if ($total > 0)
+					if ($total > 0) {
 						$totals[$ip] = array('vps' => $id, 'in' => $in, 'out' => $out);
+					}
 				}
 			}
 		}
@@ -74,4 +75,3 @@ return function($stdObject) {
 	$stdObject->bandwidth = $totals;
 	return $totals;
 };
-

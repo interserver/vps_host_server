@@ -1,5 +1,5 @@
 <?php
-return function($stdObject, $worker) {
+return function ($stdObject, $worker) {
 	/*
 	global $global;
 	if ($settings['vmstat']['enable'] === TRUE) {

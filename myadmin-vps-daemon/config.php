@@ -29,12 +29,14 @@ set_include_path(implode(PATH_SEPARATOR, array(
 	get_include_path(),
 )));
 
-function __autoload($class_name) {
+function __autoload($class_name)
+{
 	$class_name = str_replace('\\', '/', $class_name);
 	$class_name = str_replace('_', '/', $class_name);
 	require_once "$class_name.php";
 }
 
-function pathify($class_name) {
+function pathify($class_name)
+{
 	return str_replace("_", "/", $class_name) . ".php";
 }
