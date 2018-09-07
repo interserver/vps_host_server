@@ -160,7 +160,11 @@ else
 	if [ "$pool" = "zfs" ]; then
 		if [ -e "/vz/templates/${template}" ]; then
 			echo "Copy $template Image"
+			/bin/cp -f "/vz/templates/${template}" ${device}.preinstall;
 			/bin/cp -f "/vz/templates/${template}" ${device};
+			qemu-img resize ${device} ${size}M;
+			virt-resize --expand /dev/sda1 ${device}.preinstall ${device};
+			/bin/rm -f ${device}.preinstall;
 			adjust_partitions=0
 		fi
 		#if [ -e "/${template}.img.gz" ]; then
