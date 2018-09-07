@@ -43,7 +43,7 @@ if [ -e /root/cpaneldirect/vps.mainips ]; then
 		/bin/mv -f ${DHCPVPS} ${DHCPVPS}.backup;
 	fi;
 	touch ${DHCPVPS};
-	for user in $(virsh list | grep running | awk '{print $2}' |grep -v "^guestfs-"); do
+	for user in $(virsh list | grep running | awk '{ print $2 }' |grep -v "^guestfs-"); do
 		mac=`virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 		id="$(echo "$user" | sed s#"[[:alpha:]]"#""#g)"
 		# adding head -n 1 in case vps.mainips every has the same entry more than once

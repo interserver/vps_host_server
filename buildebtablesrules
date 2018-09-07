@@ -127,12 +127,12 @@ bridge=br0;
 # gateway
 
 multi_gw=0;
-gw_check=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1 | wc -l`
+gw_check=`cat $DHCPCONF  | grep routers | awk '{ print $3 }' | cut -d\; -f1 | wc -l`
 if [ "$gw_check" -gt "1" ]; then
 	multi_gw=1;
 	echo "#more than one gw found"
-	#gateways=`cat $DHCPCONF  | grep routers | awk '{print $3}' | cut -d\; -f1`;
-	gateways=`cat $DHCPCONF  | grep  "^\([^#]*\|\)option routers\|###option routers" | awk '{print $3}' | cut -d\; -f1`;
+	#gateways=`cat $DHCPCONF  | grep routers | awk '{ print $3 }' | cut -d\; -f1`;
+	gateways=`cat $DHCPCONF  | grep  "^\([^#]*\|\)option routers\|###option routers" | awk '{ print $3 }' | cut -d\; -f1`;
 fi
 
 # ipv6 addition
@@ -140,7 +140,7 @@ ipv6=0;
 if [ -e /etc/sysconfig/network-scripts/ifcfg-br0 ]; then
 	ip6_gw=`cat /etc/sysconfig/network-scripts/ifcfg-br0  | grep ^IPV6_DEFAULTGW | cut -d= -f2`;
 elif [ -e /etc/network/interfaces ]; then
-	ip6_gw=`cat /etc/network/interfaces | grep gateway | grep : | awk '{print $2}'`;
+	ip6_gw=`cat /etc/network/interfaces | grep gateway | grep : | awk '{ print $2 }'`;
 fi
 if [ ! "$ip6_gw" = "" ]; then
 	ipv6=1;
@@ -150,7 +150,7 @@ fi
 if [ -e /etc/redhat-release ]; then
 	gateway=`cat /etc/sysconfig/network-scripts/ifcfg-br0 | grep ^GATEWAY= | cut -d= -f2`;
 else
-	gateway=`cat /etc/network/interfaces  | grep gateway | awk '{print $2}' | grep -v ^gateway | grep -v :`;
+	gateway=`cat /etc/network/interfaces  | grep gateway | awk '{ print $2 }' | grep -v ^gateway | grep -v :`;
 fi
 
 if [ "$gateway" = "" ]; then
@@ -166,7 +166,7 @@ export PATH=$PATH:/sbin:/usr/local/sbin
 if [ -e /usr/bin/systemctl ] || [ -e /bin/systemctl ]; then
 	br=`ifconfig br0 | grep "inet" | grep -v inet6 | cut -d: -f2 | awk '{ print $2 }'`;
 else
-	br=`ifconfig br0 | grep "inet addr" | cut -d: -f2 | awk '{print $1}'`;
+	br=`ifconfig br0 | grep "inet addr" | cut -d: -f2 | awk '{ print $1 }'`;
 fi
 
 if [ "$DEBUG" = "1" ]; then
@@ -175,7 +175,7 @@ fi
 
 
 # maybe we want --all?
-list=`/usr/bin/virsh list | grep running | awk '{print $2}'`
+list=`/usr/bin/virsh list | grep running | awk '{ print $2 }'`
 
 # output script header
 if [ ! "$debug" = "1" ]; then
@@ -233,7 +233,7 @@ for user in $list; do
 	mac=`/usr/bin/virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2 | head -n 1`;
 	dev=`/usr/bin/virsh dumpxml $user | grep target | grep dev | grep vnet | cut -d\' -f2 | head -n 1`;
 	# improve getting the ip in the future
-	ip=`cat $DHCPVPS  | grep "$mac" | awk '{print $8}' | cut -d\; -f1`;
+	ip=`cat $DHCPVPS  | grep "$mac" | awk '{ print $8 }' | cut -d\; -f1`;
 	if [ -z "$ip" ]; then
 		echo "echo \"VPS $user Device $dev MAC $mac Got a Blank IP\";"
 			continue;

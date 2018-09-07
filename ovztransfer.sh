@@ -58,7 +58,7 @@ function migrate() {
     echo "Container $veid: Shutting down all possible services..."
 
     # Stop all possible processes inside Container
-    for pid in `vzctl exec $veid ps | grep -E -v "^ *(PID|1) " | awk '{print $1}'`; do
+    for pid in `vzctl exec $veid ps | grep -E -v "^ *(PID|1) " | awk '{ print $1 }'`; do
         vzctl exec $veid kill -9 $pid > /dev/null 2>&1
     done
 

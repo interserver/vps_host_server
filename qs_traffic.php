@@ -92,7 +92,7 @@ function get_qs_iptables_traffic($ips) {
 			list($in,$out) = $lines;
 			//echo "$ip $in $out\n";
 			$total = $in + $out;
-//			$total = intval(trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep " $ip " | tr -s [:blank:] |cut -d' ' -f3| awk '{sum+=$1} END {print sum;}'`));
+//			$total = intval(trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep " $ip " | tr -s [:blank:] |cut -d' ' -f3| awk '{ sum += $1 } END { print sum; }'`));
 			if ($total > 0)
 			{
 				$totals[$ip] = array('in' => $in, 'out' => $out);

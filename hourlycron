@@ -22,7 +22,7 @@ function ksmcheck()
 }
 
 pwd=`pwd`;
-load=`cat /proc/loadavg  | awk '{print $1}' | cut -d. -f1`
+load=`cat /proc/loadavg  | awk '{ print $1 }' | cut -d. -f1`
 if [ -e /dev/bcache0 ]; then
         max=7;
 elif [ -e /usr/sbin/vzctl ]; then
