@@ -140,7 +140,7 @@ else
 	fi
 	if [ -e "/$template.img.gz" ]; then
 		echo "Copying $template Image"
-		gzip -dc "/$template.img.gz"  | dd of=/dev/vz/$name 2>&1 &
+		gzip -dc "/$template.img.gz"  | dd of=$device 2>&1 &
 		#pid="$(pidof gzip)"
 		pid=$!
 		echo "Got gzip PID $pid";
@@ -174,7 +174,7 @@ else
 	elif [ -e "/$template.img" ]; then
 		echo "Copying $template Image"
 		tsize=$(stat -c%s "/$template.img")
-		dd if="/$template.img" of=/dev/vz/$name >dd.progress 2>&1 &
+		dd if="/$template.img" of=$device >dd.progress 2>&1 &
 		pid=$!
 		while [ -d /proc/$pid ]; do
 	sleep 9s
@@ -199,7 +199,7 @@ else
 		/usr/bin/virsh suspend $template
 		echo "Copying Image"
 		tsize=$(stat -c%s "/dev/vz/$template")
-		dd if=/dev/vz/$template of=/dev/vz/$name >dd.progress 2>&1 &
+		dd if=/dev/vz/$template of=$device >dd.progress 2>&1 &
 		pid=$!
 		while [ -d /proc/$pid ]; do
 	sleep 9s
@@ -226,32 +226,22 @@ else
 	done
 	fi
 	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=$name "$url" 2>/dev/null
-	sects="$(fdisk -l -u /dev/vz/$name  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
-	t="$(fdisk -l -u /dev/vz/$name | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
+	sects="$(fdisk -l -u $device  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
+	t="$(fdisk -l -u $device | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
 	p="$(echo $t | awk '{ print $1 }')"
 	fs="$(echo $t | awk '{ print $5 }')"
 	pn="$(echo "$p" | sed s#"/dev/vz/"$name"p"#""#g)"
 	start="$(echo $t | awk '{ print $2 }')"
 	if [ "$fs" = "83" ]; then
 		echo "Resizing Last Partition To Use All Free Space"
-		echo -e "d
-$pn
-n
-p
-$pn
-$start
-
-
-w
-print
-q
-" | fdisk -u /dev/vz/$name
-		kpartx $kpartxopts -av /dev/vz/$name
-if [ -e "/dev/mapper/vz-"$name"p$pn" ]; then
-	pname="vz-$name"
-else
-	pname="$name"
-fi
+		echo -e "d\n$pn\nn\n$pt\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
+		echo -e "d\n$pn\nn\np\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
+		kpartx $kpartxopts -av $device
+		if [ -e "/dev/mapper/vz-"$name"p$pn" ]; then
+			pname="vz-$name"
+		else
+			pname="$name"
+		fi
 		fsck -T -p -f /dev/mapper/"$pname"p$pn
 		if [ -f "$(which resize4fs 2>/dev/null)" ]; then
 			resizefs="resize4fs"
@@ -263,63 +253,11 @@ fi
 		mount /dev/mapper/"$pname"p$pn /vz/mounts/"$name"p$pn;
 		PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:$password" | chroot /vz/mounts/"$name"p$pn chpasswd
 		umount /dev/mapper/"$pname"p$pn
-		kpartx $kpartxopts -d /dev/vz/$name
+		kpartx $kpartxopts -d $device
 	fi
-
-# echo "Coyping MBR"
-# dd if=/dev/vz/$template of=/dev/vz/$name bs=512 count=1 >/dev/null 2>&1
-# echo "Copying Partition Table"
-# dd if=/dev/vz/$template of=/dev/vz/$name bs=1 count=64 skip=446 seek=446 >/dev/null 2>&1
-# echo "Creating Partition Table Links"
-# /sbin/kpartx $kpartxopts -a /dev/vz/$template
-# /sbin/kpartx $kpartxopts -a /dev/vz/$name
-# for i in $(sfdisk -d /dev/vz/$name | grep -v "#" | grep "/dev/vz" | cut -d= -f1,3,4 | sed s#" : start="#" "#g | sed s#", Id="#" "#g | sed s#","#""#g | sed s#",bootable"#""#g | awk '{ print $1 " " $3 " " $2 }' | grep -v " 0$" | sed s#"/dev/vz/"#""#g ); do
-#  pname="$(echo "$i" | cut -d" " -f1)"
-#  tpname="$(echo "$pname" | sed s#"$name"#"$template"#g)"
-#  ptype="$(echo "$i" | cut -d" " -f2)"
-#  psize="$(echo "$i" | cut -d" " -f3)"
-#  if [ $psize -gt 205000 ] && [ "$ptype" = 7 ]; then
-#   mkdir -p /vz/mounts/$tpname
-#   mkdir -p /vz/mounts/$pname
-#   mount /dev/mapper/$tpname /vz/mounts/$tpname
-#   mount /dev/mapper/$pname /vz/mounts/$pname >/dev/null 2>&1
-#   if [ "$(mount | grep /vz/mounts/$pname)" = "" ]; then
-#    echo "MKNTFS On $pname Partition"
-#    mkntfs -Q -L $name -v /dev/mapper/$pname
-#    mount /dev/mapper/$pname /vz/mounts/$pname
-#    if [ "$(mount | grep /vz/mounts/$pname)" = "" ]; then
-#     echo "Mounting problem"
-#    else
-#     echo "Rsyncing Data (Initial Sync)"
-#     rsync -a --delete --inplace --exclude desktop.ini --exclude Desktop.ini /vz/mounts/$tpname/ /vz/mounts/$pname/
-#     if [ -e /vz/mounts/$pname/Windows/System32/config/SAM ]; then
-#      echo "Clearing Windows Password"
-#      /root/cpaneldirect/vps_kvm_setup_password_clear.expect $pname >/dev/null 2>&1
-#     fi
-#    fi
-#   else
-#    echo "Rsyncing Data (Quick Sync)"
-#    rsync -a --delete --inplace --exclude desktop.ini --exclude Desktop.ini /vz/mounts/$tpname/ /vz/mounts/$pname/
-#    if [ -e /vz/mounts/$pname/Windows/System32/config/SAM ]; then
-#     echo "Clearing Windows Password"
-#     /root/cpaneldirect/vps_kvm_setup_password_clear.expect $pname >/dev/null 2>&1
-#    fi
-#   fi
-#   umount /vz/mounts/$pname
-#   umount /vz/mounts/$tpname
-#   echo "Copying Partition Boot Record $pname (dd)"
-#   dd if=/dev/mapper/$tpname of=/dev/mapper/$pname bs=512 count=1 >/dev/null 2>&1
-#  else
-#   echo "Copying Partition $pname (dd)"
-#   dd if=/dev/mapper/$tpname of=/dev/mapper/$pname >/dev/null 2>&1
-#  fi
-# done
-# /sbin/kpartx $kpartxopts -d /dev/vz/$template
-# /sbin/kpartx $kpartxopts -d /dev/vz/$name
-
-# /usr/bin/virsh setmaxmem $name $memory;
-# /usr/bin/virsh setmem $name $memory;
-# /usr/bin/virsh setvcpus $name $vcpu;
+	# /usr/bin/virsh setmaxmem $name $memory;
+	# /usr/bin/virsh setmem $name $memory;
+	# /usr/bin/virsh setvcpus $name $vcpu;
 	/usr/bin/virsh autostart $name
 	mac="$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)"
 	/bin/cp -f $DHCPVPS $DHCPVPS.backup
