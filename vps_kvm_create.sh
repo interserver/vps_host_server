@@ -430,6 +430,10 @@ q
 			# /usr/bin/virsh setmem ${name} ${memory};
 			# /usr/bin/virsh setvcpus ${name} ${vcpu};
 		fi
+		if [ "$pool" = "zfs" ]; then
+			virsh detach-disk ${name} vda --persistent;
+			virsh attach-disk ${name} /vz/${name}/os.qcow2 sda --targetbus scsi --driver qemu --subdriver qcow2 --type disk --sourcetype file --address scsi:0.0.0 --persistent;
+		fi;
 		/usr/bin/virsh autostart ${name};
 		mac="$(/usr/bin/virsh dumpxml ${name} |grep 'mac address' | cut -d\' -f2)";
 		/bin/cp -f ${DHCPVPS} ${DHCPVPS}.backup;
