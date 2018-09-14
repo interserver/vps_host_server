@@ -1,4 +1,4 @@
-#!/usr/bin/env php 
+#!/usr/bin/env php
 <?php
 /**
  * VPS Functionality
@@ -10,6 +10,7 @@
 
 function get_vps_ipmap()
 {
+	$dir = __DIR__;
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == '') {
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'`);
@@ -23,7 +24,7 @@ function get_vps_ipmap()
 		if (sizeof($parts) > 1) {
 			$id = $parts[0];
 			$ip = $parts[1];
-			$extra = trim(`touch /root/cpaneldirect/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2`);
+			$extra = trim(`touch {$dir}/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" {$dir}/vps.ipmap | cut -d: -f2`);
 			if ($extra != '') {
 				$parts = array_merge($parts, explode("\n", $extra));
 			}
