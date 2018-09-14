@@ -1,17 +1,18 @@
 #!/bin/bash
+export base="$(readlink -f "$(dirname "$0")")";
 
 # 5.9.2018
 
 function ksmcheck()
 {
-        if [ -f /etc/init.d/ksmtuned ]; then
-                echo 'Checking ksm';
-                ksm=`/etc/init.d/ksmtuned status | grep pid`;
+		if [ -f /etc/init.d/ksmtuned ]; then
+				echo 'Checking ksm';
+				ksm=`/etc/init.d/ksmtuned status | grep pid`;
 		if [ "$ksm" = "" ]; then
 			/etc/init.d/ksmtuned restart
 			/etc/init.d/ksm restart
 		fi
-        elif [ -e /sys/kernel/mm/ksm/run ]; then
+		elif [ -e /sys/kernel/mm/ksm/run ]; then
 		echo 1 > /sys/kernel/mm/ksm/run
 	fi
 
@@ -24,55 +25,55 @@ function ksmcheck()
 pwd=`pwd`;
 load=`cat /proc/loadavg  | awk '{ print $1 }' | cut -d. -f1`
 if [ -e /dev/bcache0 ]; then
-        max=7;
+		max=7;
 elif [ -e /usr/sbin/vzctl ]; then
-        max=15;
+		max=15;
 elif [ -f /win ]; then
 	max=3;
 elif [ -f /lowerprio ]; then
 	max=1;
 else
-        max=4;
+		max=4;
 fi
 
 qscheck=$(crontab -l | grep qs_cron);
 if [ ! "$qscheck" = "" ]; then
 	echo "skipping for qs";
-        if [ -e /sys/kernel/mm/ksm/run ]; then echo 0 > /sys/kernel/mm/ksm/run; fi
-        if [ -f /proc/sys/vm/swappiness ]; then echo 10 > /proc/sys/vm/swappiness; fi
+		if [ -e /sys/kernel/mm/ksm/run ]; then echo 0 > /sys/kernel/mm/ksm/run; fi
+		if [ -f /proc/sys/vm/swappiness ]; then echo 10 > /proc/sys/vm/swappiness; fi
 else
 	echo -n "Load approx $load with max $max ";
 	if [ "$load" -gt $max ]; then
-      		# load above max
-        	echo ' which is too high';
-        	if [ -e /sys/devices/virtual/block ]; then
-                	cd /sys/devices/virtual/block
-                	for device in `ls | grep md`; do
-                        	echo "found $device"
-                        	check=`cat ./$device/md/sync_action`;
-                        	if [ "$check" = "recover" ]; then
-                                	echo "rebuilding and not a check, lowering raid sync speed temporarily"
-                                	echo 1 > /proc/sys/dev/raid/speed_limit_min
-                                	echo 2 > /proc/sys/dev/raid/speed_limit_max
-                        	elif [ "$check" = "check" ]; then
-                                	echo "Idling raid check";
-                                	echo idle > ./$device/md/sync_action
-                        	else
-                                	echo "Raid not rebuilding";
-                        	fi
-                	done
-        	fi
+			# load above max
+			echo ' which is too high';
+			if [ -e /sys/devices/virtual/block ]; then
+					cd /sys/devices/virtual/block
+					for device in `ls | grep md`; do
+							echo "found $device"
+							check=`cat ./$device/md/sync_action`;
+							if [ "$check" = "recover" ]; then
+									echo "rebuilding and not a check, lowering raid sync speed temporarily"
+									echo 1 > /proc/sys/dev/raid/speed_limit_min
+									echo 2 > /proc/sys/dev/raid/speed_limit_max
+							elif [ "$check" = "check" ]; then
+									echo "Idling raid check";
+									echo idle > ./$device/md/sync_action
+							else
+									echo "Raid not rebuilding";
+							fi
+					done
+			fi
 
-        	ksmcheck
+			ksmcheck
 
 
 	else
 		# load below 5
 		echo 'which is ok';
 		# normal raid rebuild
-        	echo "Normalizing raid";
-        	echo 100000 > /proc/sys/dev/raid/speed_limit_min
-        	echo 200000 > /proc/sys/dev/raid/speed_limit_max
+			echo "Normalizing raid";
+			echo 100000 > /proc/sys/dev/raid/speed_limit_min
+			echo 200000 > /proc/sys/dev/raid/speed_limit_max
 	fi
 fi
 
@@ -97,11 +98,11 @@ else
 fi
 
 if [ -e /usr/sbin/libvirtd ]; then
-        echo "KVM running buildebtables";
-        if [ -e /scripts/buildebtablesrules ]; then
-                /scripts/buildebtablesrules | /bin/sh
-        else
-                echo 'ebtables script not found';
-        fi
+		echo "KVM running buildebtables";
+		if [ -e ${base}/buildebtablesrules ]; then
+				${base}/buildebtablesrules | /bin/sh
+		else
+				echo 'ebtables script not found';
+		fi
 fi
 

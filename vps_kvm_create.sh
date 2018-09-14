@@ -429,7 +429,7 @@ else
 		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		/admin/kvmenable blocksmtp $name
 		/admin/kvmenable ebflush
-		/scripts/buildebtablesrules | sh
+		${base}/buildebtablesrules | sh
 		service xinetd restart
 	fi
 fi;

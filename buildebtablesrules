@@ -474,10 +474,10 @@ if [ -e /proxyarp ]; then
 	echo "echo 1 > /proc/sys/net/ipv4/conf/$bridge/proxy_arp"
 fi
 
-#if [ -e /scripts/limitbw ]; then
+#if [ -e ${base}/limitbw ]; then
 #	if [ ! -e /nolimitbw ]; then
 #		echo "#limiting bandwidth"
-#		echo "/scripts/limitbw"
+#		echo "${base}/limitbw"
 #	fi
 #fi
 
@@ -490,5 +490,5 @@ if [ -e /limitpacket ]; then
 fi
 
 if [ -e /etc/debian_version ]; then
-	echo "/scripts/securexinetd";
+	echo "${base}/securexinetd";
 fi
