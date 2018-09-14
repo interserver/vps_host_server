@@ -25,10 +25,11 @@ return function ($stdObject, $conn, $data) {
 			$conn->send(json_encode($json));
 			break;
 		case 'self-update':
+			$dir = __DIR__.'/../../../';
 			sleep(rand(1, 30));
 			sleep(rand(1, 30));
 			echo exec(file_get_contents(__DIR__.'/../../update.sh')).PHP_EOL;
-			//echo exec('svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect').PHP_EOL;
+			//echo exec('svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive {$dir}').PHP_EOL;
 			//echo exec('composer install -o --no-dev');
 			echo exec('php '.__DIR__.'/../../start.php reload').PHP_EOL;
 			break;

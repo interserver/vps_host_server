@@ -3,10 +3,11 @@ use Workerman\Connection\AsyncTcpConnection;
 
 return function ($stdObject, $data) {
 	global $global;
+	$dir = __DIR__.'/../../../';
 	$orig_params = $data['params'];
 	$data['params']['json'] = '';
 	$args = escapeshellarg(json_encode($data['params']));
-	$cmd = 'php /root/cpaneldirect/workerman/phpsysinfo.php '.$args;
+	$cmd = 'php '.$dir.'workerman/phpsysinfo.php '.$args;
 	$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 	$task_connection->send(json_encode(array('type' => 'run', 'args' => array('cmd' => $cmd))));
 	$conn = $stdObject->conn;

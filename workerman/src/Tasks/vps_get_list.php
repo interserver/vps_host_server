@@ -1,5 +1,6 @@
 <?php
 return function ($stdObject, $params) {
+	$dir = __DIR__.'/../../../';
 	$curl_cmd= '';
 	$servers = array();
 	$ips = array();
@@ -56,7 +57,7 @@ return function ($stdObject, $params) {
 					$server['vnc'] = $xml['domain']['devices']['graphics_attr']['port'];
 				}
 				if ($status == 'running') {
-					/*					$disk = trim(`/root/cpaneldirect/vps_kvm_disk_usage.sh $name`);
+					/*					$disk = trim(`{$dir}/vps_kvm_disk_usage.sh $name`);
 										if ($disk != '')
 										{
 											$dparts = explode(':', $disk);
@@ -80,7 +81,7 @@ fi;\n";
 				$servers[$veid] = $server;
 			}
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`)) {
+		if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
 			foreach ($cpu_usage as $id => $cpu_data) {
 				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
 				$servers[$id]['cpu_usage'] = $cpu_data;
@@ -223,14 +224,14 @@ fi;\n";
 				$servers[$id]['diskmax'] = $disk[1];
 			}
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`)) {
+		if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
 			foreach ($cpu_usage as $id => $cpu_data) {
 				//$servers[$id]['cpu_usage'] = serialize($cpu_data);
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
 		//print_r($servers);
-		$tips = trim(`/root/cpaneldirect/vps_get_ip_assignments.sh`);
+		$tips = trim(`{$dir}/vps_get_ip_assignments.sh`);
 		if ($tips != '') {
 			$tips = explode("\n", $tips);
 			foreach ($tips as $line) {
