@@ -799,12 +799,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/Workerman.git",
-                "reference": "462bfff44f027b99d6efbfdd12279a3e062d66ee"
+                "reference": "2dbc07f371a56c517864dd8d176076e76dc56cb6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/Workerman/zipball/462bfff44f027b99d6efbfdd12279a3e062d66ee",
-                "reference": "462bfff44f027b99d6efbfdd12279a3e062d66ee",
+                "url": "https://api.github.com/repos/walkor/Workerman/zipball/2dbc07f371a56c517864dd8d176076e76dc56cb6",
+                "reference": "2dbc07f371a56c517864dd8d176076e76dc56cb6",
                 "shasum": ""
             },
             "require": {
@@ -837,7 +837,7 @@
                 "asynchronous",
                 "event-loop"
             ],
-            "time": "2018-08-24T13:49:46+00:00"
+            "time": "2018-09-11T07:25:06+00:00"
         }
     ],
     "packages-dev": [
@@ -1305,7 +1305,7 @@
                     "homepage": "http://blog.astrumfutura.com"
                 },
                 {
-                    "name": "Théo FIDRY",
+                    "name": "Théo Fidry",
                     "email": "theo.fidry@gmail.com"
                 }
             ],
