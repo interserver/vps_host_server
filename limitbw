@@ -4,15 +4,14 @@
 # each ip is limited, not each account
 
 if [ -e /etc/dhcp/dhcpd.vps ]; then
-    DHCPVPS=/etc/dhcp/dhcpd.vps
+	DHCPVPS=/etc/dhcp/dhcpd.vps
 else
-    DHCPVPS=/etc/dhcpd.vps
+	DHCPVPS=/etc/dhcpd.vps
 fi
 
-
-
-
 export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin
+
+base="$(readlink -f "$(dirname "$0")")";
 
 IFS="
 "
@@ -20,28 +19,28 @@ IFS="
 # don't run on qs
 check=`crontab -l | grep qs_cron`;
 if [ ! "$check" = "" ]; then
-        echo "#skipping for qs";
-        exit;
+		echo "#skipping for qs";
+		exit;
 fi
 
-if [ -e /root/cpaneldirect/_notclimit ]; then
-	echo "#skipping for /root/cpaneldirect/_notclimit"
+if [ -e ${base}/_notclimit ]; then
+	echo "#skipping for ${base}/_notclimit"
 	for i in `ifconfig | grep ^vnet | cut -d: -f1`; do /sbin/tc qdisc del dev $i root; done
 	exit;
 fi
 
 
 for vm in `cat $DHCPVPS | grep fixed | awk '{ print $2 " " $8 }' | cut -d\; -f1`; do
-        ip=`echo $vm | cut -d" " -f2`;
-        host=`echo $vm | cut -d" " -f1`;
+		ip=`echo $vm | cut -d" " -f2`;
+		host=`echo $vm | cut -d" " -f1`;
 	check=`virsh list | grep $host | grep run`;
 	if [ "$check" = "" ]; then
-        	echo "$host not running";
+			echo "$host not running";
 	else
-		vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;     
+		vnet=`virsh dumpxml $host | grep "vnet" | cut -d\' -f2`;
 		echo "Limiting $ip";
-        	/root/cpaneldirect/tclimit $ip $vnet $host
+			${base}/tclimit $ip $vnet $host
 	fi
-        echo
+		echo
 done
 

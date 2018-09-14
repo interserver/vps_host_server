@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+base="$(readlink -f "$(dirname "$0")")";
 #set -x
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
@@ -86,7 +87,7 @@ if [ $# -lt 3 ]; then
 else
 	export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	if [ "$pool" = "" ]; then
-		/root/cpaneldirect/create_libvirt_storage_pools.sh
+		${base}/create_libvirt_storage_pools.sh
 		export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
@@ -96,7 +97,7 @@ else
 		sleep 5s;
 		device="$(virsh vol-list vz --details|grep " $name "|awk '{ print $2 }')"
 	else
-		/root/cpaneldirect/vps_kvm_lvmcreate.sh $name $size || exit
+		${base}/vps_kvm_lvmcreate.sh $name $size || exit
 	fi
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo $name >/dev/null 2>&1; then
@@ -108,9 +109,9 @@ else
 		echo "Generating XML Config"
 		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
-			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" /root/cpaneldirect/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-			  grep -v -e uuid -e "mac address" /root/cpaneldirect/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			  grep -v -e uuid -e "mac address" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		fi
 		echo "Defining Config As VPS"
 				echo "Defining Config As VPS"
@@ -271,8 +272,8 @@ else
 	fi
 	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
 	/usr/bin/virsh start $name;
-	bash /root/cpaneldirect/run_buildebtables.sh;
-	/root/cpaneldirect/vps_refresh_vnc.sh $name
+	bash ${base}/run_buildebtables.sh;
+	${base}/vps_refresh_vnc.sh $name
 	vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 	if [ "$vnc" == "" ]; then
 		sleep 2s;
@@ -283,15 +284,15 @@ else
 		fi;
 	fi;
 	if [ "$clientip" != "" ]; then
-		/root/cpaneldirect/vps_kvm_setup_vnc.sh $name "$clientip";
+		${base}/vps_kvm_setup_vnc.sh $name "$clientip";
 	fi;
-	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 	#vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
 	sleep 1s;
-	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 	sleep 2s;
-	/root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+	${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 	/admin/kvmenable blocksmtp $name
 
 fi

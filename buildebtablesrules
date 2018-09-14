@@ -3,11 +3,11 @@
 # version 1.6.7.2018
 
 # added ipv6 support
-# needs to be in ${installdir}/vps.ip6map
+# needs to be in ${base}/vps.ip6map
 # add another gateway in dhcpd.conf using ###option routers
 # disable bw limit (tc limit)
 
-installdir=/root/cpaneldirect
+base="$(readlink -f "$(dirname "$0")")";
 
 if [ -x /admin/resolvconf ]; then
 	/admin/resolvconf > /dev/null 2>&1
@@ -299,9 +299,9 @@ for user in $list; do
 		# EXTRA IPS Rules
 		###
 		#if vps.ipmap is blank we are ignoring this function
-		ipcheck=`grep . ${installdir}/vps.ipmap`;
+		ipcheck=`grep . ${base}/vps.ipmap`;
 		if [ ! "$ipcheck" = "" ]; then
-			ips="$(grep "^$ip:" ${installdir}/vps.ipmap | cut -d: -f2)"
+			ips="$(grep "^$ip:" ${base}/vps.ipmap | cut -d: -f2)"
 			for extraip in $ips; do
 				echo "# EXTRA IPS Rules"
 				echo "# $user allow arp, $gateway is gw and $extraip is ip of server. $dev changes as well based on server"
@@ -347,8 +347,8 @@ for user in $list; do
 		###
 		# new IP PING remote VM
 		#ALLOW MYIP:OTHERIP:VPSID
-		if [ -e ${installdir}/tmp/$user ]; then
-			data=`grep ^ALLOW ${installdir}/tmp/$user | cut -d" " -f2-`;
+		if [ -e ${base}/tmp/$user ]; then
+			data=`grep ^ALLOW ${base}/tmp/$user | cut -d" " -f2-`;
 			if [ ! "$data" = "" ]; then
 				amyip=`echo $data | cut -d: -f1`;
 				atheirip=`echo $data | cut -d: -f2`;
@@ -387,8 +387,8 @@ for user in $list; do
 		fi
 
 		if [ "$ipv6" = "1" ]; then
-			if [ -e ${installdir}/vps.ip6map ]; then
-				ip6ips=`cat ${installdir}/vps.ip6map | grep ^$user | cut -d"|" -f2`;
+			if [ -e ${base}/vps.ip6map ]; then
+				ip6ips=`cat ${base}/vps.ip6map | grep ^$user | cut -d"|" -f2`;
 				if [ ! "$ip6ips" = "" ]; then
 					for ip6ip in $ip6ips; do
 						echo "#found ipv6 for $user ip is $ip6ip";

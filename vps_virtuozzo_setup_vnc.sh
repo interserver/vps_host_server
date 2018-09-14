@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+export base="$(readlink -f "$(dirname "$0")")";
 name=$1
 myip="$(ifconfig $(ip route list | grep "^default" | sed s#"^default.*dev "#""#g | cut -d" " -f1)  |grep inet |grep -v inet6 | awk '{ print $2 }' | cut -d: -f2)"
 ip=$2
@@ -14,7 +15,7 @@ elif ! prlctl status $name >/dev/null 2>&1; then
 else
  port="$(prlctl list $name -i |grep "Remote display.*port=" | sed s#"^.*port=\([0-9]*\) .*$"#"\1"#g)"
  if [ "$port" != "" ]; then
-  cat /root/cpaneldirect/vps_kvm_xinetd.template | \
+  cat ${base}/vps_kvm_xinetd.template | \
   sed s#"NAME"#"$name"#g | \
   sed s#"MYIP"#"$myip"#g | \
   sed s#"IP"#"$ip"#g | \

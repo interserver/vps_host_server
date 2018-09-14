@@ -1,7 +1,8 @@
 #!/bin/bash
+base="$(readlink -f "$(dirname "$0")")";
 
 function iprogress() {
-	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=$1 -d server=${id} 'https://myvps2.interserver.net/vps_queue.php' 2>/dev/null; 
+	curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=$1 -d server=${id} 'https://myvps2.interserver.net/vps_queue.php' 2>/dev/null;
 }
 
 while [[ $# -gt 1 ]]; do
@@ -20,39 +21,39 @@ while [[ $# -gt 1 ]]; do
 done
 
 iprogress 10 &
-if [ ! -e /vz/template/cache/${template} ]; then 
-  wget -O /vz/template/cache/${template} ${template_url}; 
+if [ ! -e /vz/template/cache/${template} ]; then
+  wget -O /vz/template/cache/${template} ${template_url};
 fi;
 iprogress 15 &
 if [ "$(echo "${template}" | grep "xz$")" != "" ]; then
   newtemplate="$(echo "${template}" | sed s#"\.xz$"#".gz"#g)";
   if [ -e "/vz/template/cache/$newtemplate" ]; then
-    echo "Already Exists in .gz, not changing anything";
+	echo "Already Exists in .gz, not changing anything";
   else
-    echo "Recompressing ${template} to .gz";
-    xz -d --keep "/vz/template/cache/${template}";
-    gzip -9 "$(echo "/vz/template/cache/${template}" | sed s#"\.xz$"#""#g)";
+	echo "Recompressing ${template} to .gz";
+	xz -d --keep "/vz/template/cache/${template}";
+	gzip -9 "$(echo "/vz/template/cache/${template}" | sed s#"\.xz$"#""#g)";
   fi;
   template="$newtemplate";
 fi;
 iprogress 20 &
-if [ "$(uname -i)" = "x86_64" ]; then 
-  limit=9223372036854775807; 
-else 
-  limit=2147483647; 
+if [ "$(uname -i)" = "x86_64" ]; then
+  limit=9223372036854775807;
+else
+  limit=2147483647;
 fi
 if [ "$(vzctl 2>&1 |grep "vzctl set.*--force")" = "" ]; then
   layout=""
   force=""
 else
-  if [ "$(mount | grep "^$(df /vz |grep -v ^File | cut -d" " -f1)" | cut -d" " -f5)" = "ext3" ]; then 
-    layout=simfs; 
+  if [ "$(mount | grep "^$(df /vz |grep -v ^File | cut -d" " -f1)" | cut -d" " -f5)" = "ext3" ]; then
+	layout=simfs;
   else
-    if [ $(echo "$(uname -r | cut -d\. -f1-2) * 10" | bc -l | cut -d\. -f1) -eq 26 ] && [ $(uname -r | cut -d\. -f3 | cut -d- -f1) -lt 32 ]; then 
-      layout=simfs; 
-    else 
-      layout=ploop; 
-    fi; 
+	if [ $(echo "$(uname -r | cut -d\. -f1-2) * 10" | bc -l | cut -d\. -f1) -eq 26 ] && [ $(uname -r | cut -d\. -f3 | cut -d- -f1) -lt 32 ]; then
+	  layout=simfs;
+	else
+	  layout=ploop;
+	fi;
   fi;
   layout="--layout $layout";
   force="--force"
@@ -64,13 +65,13 @@ else
   config="--config ${config}";
 fi;
 /usr/sbin/vzctl create ${vzid} --ostemplate ${ostemplate} $layout $config --ipadd ${ip} --hostname ${hostname} 2>&1 || \
- { 
-    /usr/sbin/vzctl destroy ${vzid} 2>&1;
-    if [ "$layout" == "--layout ploop" ]; then
-      layout="--layout simfs";
-    fi;
-    /usr/sbin/vzctl create ${vzid} --ostemplate ${ostemplate} $layout $config --ipadd ${ip} --hostname ${hostname} 2>&1;
- }; 
+ {
+	/usr/sbin/vzctl destroy ${vzid} 2>&1;
+	if [ "$layout" == "--layout ploop" ]; then
+	  layout="--layout simfs";
+	fi;
+	/usr/sbin/vzctl create ${vzid} --ostemplate ${ostemplate} $layout $config --ipadd ${ip} --hostname ${hostname} 2>&1;
+ };
   iprogress 40 &
   mkdir -p /vz/root/${vzid};
 
@@ -82,12 +83,12 @@ fi;
    --dgramrcvbuf ${dgramrcvbuf}:${dgramrcvbuf_b} --oomguarpages ${oomguarpages}:$limit \
    --numfile ${numfile}:${numfile_b} --numflock ${numflock}:${numflock_b} --physpages 0:$limit --dcachesize ${dcachesize}:${dcachesize_b} \
    --numiptent ${numiptent}:${numiptent_b} --avnumproc ${avnumproc}:${avnumproc_b} --numpty ${numpty}:${numpty_b} \
-   --shmpages ${shmpages}:${shmpages_b} 2>&1; 
+   --shmpages ${shmpages}:${shmpages_b} 2>&1;
 if [ -e /proc/vz/vswap ]; then
   /bin/mv -f /etc/vz/conf/${vzid}.conf /etc/vz/conf/${vzid}.conf.backup;
 #  grep -Ev '^(KMEMSIZE|LOCKEDPAGES|PRIVVMPAGES|SHMPAGES|NUMPROC|PHYSPAGES|VMGUARPAGES|OOMGUARPAGES|NUMTCPSOCK|NUMFLOCK|NUMPTY|NUMSIGINFO|TCPSNDBUF|TCPRCVBUF|OTHERSOCKBUF|DGRAMRCVBUF|NUMOTHERSOCK|DCACHESIZE|NUMFILE|AVNUMPROC|NUMIPTENT|ORIGIN_SAMPLE|SWAPPAGES)=' > /etc/vz/conf/${vzid}.conf <  /etc/vz/conf/${vzid}.conf.backup;
   grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/${vzid}.conf <  /etc/vz/conf/${vzid}.conf.backup;
-  /bin/rm -f /etc/vz/conf/${vzid}.conf.backup;  
+  /bin/rm -f /etc/vz/conf/${vzid}.conf.backup;
   /usr/sbin/vzctl set ${vzid} --ram ${ram}M --swap ${ram}M --save;
   /usr/sbin/vzctl set ${vzid} --reset_ub;
 fi;
@@ -109,17 +110,17 @@ iprogress 80 &
 /usr/sbin/vzctl exec ${vzid} mknod /dev/net/tun c 10 200;
 /usr/sbin/vzctl exec ${vzid} chmod 600 /dev/net/tun;
 iprogress 90 &
-/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh;
+${base}/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh;
 /usr/sbin/vzctl set ${vzid} --save --userpasswd root:${rootpass} 2>&1;
 sshcnf="$(find /vz/root/${vzid}/etc/*ssh/sshd_config 2>/dev/null)";
-if [ -e "$sshcnf" ]; then 
+if [ -e "$sshcnf" ]; then
  if [ ! -z "${ssh_key}" ]; then
   vzctl exec ${vzid} "mkdir -p /root/.ssh;"
   vzctl exec ${vzid} "echo ${ssh_key} >> /root/.ssh/authorized_keys2;"
   vzctl exec ${vzid} "chmod go-w /root; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys2;"
  fi
- if [ "$(grep "^PermitRootLogin" $sshcnf)" = "" ]; then 
-  echo "PermitRootLogin yes" >> $sshcnf; 
+ if [ "$(grep "^PermitRootLogin" $sshcnf)" = "" ]; then
+  echo "PermitRootLogin yes" >> $sshcnf;
   echo "Added PermitRootLogin line in $sshcnf";
   kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]${vzid}[[:space:]]" | sed s#"${vzid}.*ssh.*$"#""#g);
  elif [ "$(grep "^PermitRootLogin" $sshcnf)" != "PermitRootLogin yes" ]; then

@@ -1,9 +1,10 @@
 #!/bin/bash
 # CPU Usage Updater - by Joe Huss <detain@interserver.net>
-#  Updates the CPU Usage at periodic intervals (10).  It measures the time 
+#  Updates the CPU Usage at periodic intervals (10).  It measures the time
 #  spent each time getting + updating the usage, and if it ran faster than
 #  the interval time, it sleeps for the difference.  It repeats this entire
 #  process until a the total time spent is equal or greater than maxtime (60).
+base="$(readlink -f "$(dirname "$0")")";
 start=$(date +%s);
 new=${start};
 last=${start};
@@ -19,7 +20,7 @@ while [ ${spent} -lt ${maxtime} ]; do
 	prev=$new;
 	[ $showts -eq 1 ] && echo -n "${new} ";
 	echo -n "Grabbing";
-	cpu_usage="$(/root/cpaneldirect/cpu_usage.sh -json| sed s#"\""#"\&quot;"#g)";
+	cpu_usage="$(${base}/cpu_usage.sh -json| sed s#"\""#"\&quot;"#g)";
 	new=$(date +%s);
 	lastspent=$((${new} - ${prev}));
 	prev=$new;

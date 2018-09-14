@@ -1,5 +1,6 @@
 #!/bin/bash
 # Converts systemsto using io=native
+base="$(readlink -f "$(dirname "$0")")";
 cd /etc/libvirt/qemu
 sleeptime=10m
 delaytime=1s
@@ -20,11 +21,11 @@ if [ "$1" = "enable" ]; then
    virsh destroy $i;
    sleep $delaytime
    virsh start $i;
-   bash /root/cpaneldirect/run_buildebtables.sh;
-   /root/cpaneldirect/vps_refresh_vnc.sh $i
+   bash ${base}/run_buildebtables.sh;
+   ${base}/vps_refresh_vnc.sh $i
  done
- sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/windows.xml
- sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i /root/cpaneldirect/linux.xml
+ sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i ${base}/windows.xml
+ sed s#"<driver name='qemu' type='raw' cache='none'/>"#"<driver name='qemu' type='raw' cache='none' io='native'/>"#g -i ${base}/linux.xml
 elif [ "$1" = "disable" ]; then
  for i in *xml; do
   a="$(echo "$i" |sed s#".xml"#""#g)";
@@ -42,11 +43,11 @@ elif [ "$1" = "disable" ]; then
    virsh destroy $i;
    sleep $delaytime
    virsh start $i;
-   bash /root/cpaneldirect/run_buildebtables.sh;
-   /root/cpaneldirect/vps_refresh_vnc.sh $i
+   bash ${base}/run_buildebtables.sh;
+   ${base}/vps_refresh_vnc.sh $i
  done
- sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i /root/cpaneldirect/windows.xml
- sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i /root/cpaneldirect/linux.xml
+ sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i ${base}/windows.xml
+ sed s#"<driver name='qemu' type='raw' cache='none' io='native'/>"#"<driver name='qemu' type='raw' cache='none'/>"#g -i ${base}/linux.xml
 else
 	echo "Must call with an argument"
 	echo
