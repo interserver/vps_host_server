@@ -24,6 +24,12 @@ if [ ! "$check" = "" ]; then
         exit;
 fi
 
+if [ -e /root/cpaneldirect/_notclimit ]; then
+	echo "#skipping for /root/cpaneldirect/_notclimit"
+	for i in `ifconfig | grep ^vnet | cut -d: -f1`; do /sbin/tc qdisc del dev $i root; done
+	exit;
+fi
+
 
 for vm in `cat $DHCPVPS | grep fixed | awk '{ print $2 " " $8 }' | cut -d\; -f1`; do
         ip=`echo $vm | cut -d" " -f2`;
