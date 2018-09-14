@@ -1,4 +1,5 @@
 #!/bin/bash
+export base="$(readlink -f "$(dirname "$0")")";
 if [ $# -ne 1 ]; then
 	echo "Refresh VNC settings for VPS"
 	echo "Syntax $0 [vps]"
@@ -6,9 +7,9 @@ if [ $# -ne 1 ]; then
 else
 	vps="$1"
 	id="$(echo "$vps" | sed s#"[a-zA-Z]"#""#g)"
-	vnc="$(grep "^$id:" /root/cpaneldirect/vps.vncmap | cut -d: -f2)"
+	vnc="$(grep "^$id:" ${base}/vps.vncmap | cut -d: -f2)"
 	if [ "$vnc" != "" ]; then
-		/root/cpaneldirect/vps_kvm_setup_vnc.sh $vps $vnc
+		${base}/vps_kvm_setup_vnc.sh $vps $vnc
 	fi
 fi
 

@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+export base="$(readlink -f "$(dirname "$0")")";
 set -x
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
@@ -30,5 +31,5 @@ else
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  virsh start ${name};
  virsh resume windows1
- bash /root/cpaneldirect/run_buildebtables.sh;
+ bash ${base}/run_buildebtables.sh;
 fi

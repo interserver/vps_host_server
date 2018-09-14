@@ -1,6 +1,7 @@
 #!/bin/bash
-svn update --username vpsclient --password interserver123 --trust-server-cert --non-interactive /root/cpaneldirect;
-mkdir -p /root/.subversion/auth/svn.simple/; 
+export base="$(readlink -f "$(dirname "$0")")";
+svn update --username vpsclient --password interserver123 --trust-server-cert --non-interactive ${base};
+mkdir -p /root/.subversion/auth/svn.simple/;
 chmod go-rwx /root/.subversion/auth;
 echo 'K 8
 passtype

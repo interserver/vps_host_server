@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
+export base="$(readlink -f "$(dirname "$0")")";
 display=$1;
 url="$2&vnc=$1";
 if [ $# -lt 1 ]; then
@@ -13,12 +14,12 @@ else
   sleep 40 && kill $$
  }
  if [ -e /usr/bin/timeout ]; then
-  timeout 30s /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
+  timeout 30s ${base}/vncsnapshot -dieblank -compresslevel 9 \
    -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
    -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
  else
   timer & timerpid=$!
-  /root/cpaneldirect/vncsnapshot -dieblank -compresslevel 9 \
+  ${base}/vncsnapshot -dieblank -compresslevel 9 \
    -quality 100 -vncQuality 9 -allowblank -count 1 -fps 5 \
    -quiet 127.0.0.1:$display shot1_$1.jpg >/dev/null 2>&1;
  fi;

@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export base="$(readlink -f "$(dirname "$0")")";
 
 function age() {
    local filename=$1
@@ -17,7 +18,7 @@ if [ -f /dev/shm/lock ]; then
 	exit;
 fi;
 export url=https://myvps2.interserver.net/vps_queue.php
-export dir=/root/cpaneldirect;
+export dir=${base};
 export log=$dir/cron.output;
 export old_cron=1;
 if [ -e $dir/.enable_workerman ]; then

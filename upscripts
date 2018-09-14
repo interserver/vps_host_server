@@ -1,3 +1,4 @@
 #!/bin/sh
-svn update --force --accept theirs-full --username vpsclient --password interserver123 --non-interactive /root/cpaneldirect || rsync -av rsync://vpsadmin.interserver.net/vps/cpaneldirect/ /root/cpaneldirect/;
+export base="$(readlink -f "$(dirname "$0")")";
+svn update --force --accept theirs-full --username vpsclient --password interserver123 --non-interactive ${base} || rsync -av rsync://vpsadmin.interserver.net/vps/cpaneldirect/ ${base}/;
 /admin/upscripts

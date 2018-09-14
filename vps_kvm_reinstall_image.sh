@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export base="$(readlink -f "$(dirname "$0")")";
 vps="$1"
 img="$2"
 if [ $# -ne 2 ]; then
@@ -55,5 +56,5 @@ umount /image_storage
 rmdir /image_storage
 virsh vol-delete --pool vz image_storage
 virsh start $vps
-bash /root/cpaneldirect/run_buildebtables.sh;
-/root/cpaneldirect/vps_refresh_vnc.sh $vps
+bash ${base}/run_buildebtables.sh;
+${base}/vps_refresh_vnc.sh $vps

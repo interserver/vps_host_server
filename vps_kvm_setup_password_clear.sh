@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
+export base="$(readlink -f "$(dirname "$0")")";
 set -x;
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts="";
@@ -42,9 +43,9 @@ else
   rm -f "/vz/mounts/${pname}p2/Windows/winsxs/pending.xml";
  fi;
  echo "Clearing Password";
- #/root/cpaneldirect/vps_kvm_setup_password_clear.expect ${pname}p2
- echo -e "1\n4\nq\ny\n" | /root/cpaneldirect/chntpw -u Administrator /vz/mounts/${pname}p2/Windows/System32/config/SAM /vz/mounts/${pname}p2/Windows/System32/config/SECURITY /vz/mounts/${pname}p2/Windows/System32/config/SYSTEM
- #/root/cpaneldirect/sampasswd -r -u Administrator -v /vz/mounts/${pname}p2/Windows/System32/config/SAM;
+ #${base}/vps_kvm_setup_password_clear.expect ${pname}p2
+ echo -e "1\n4\nq\ny\n" | ${base}/chntpw -u Administrator /vz/mounts/${pname}p2/Windows/System32/config/SAM /vz/mounts/${pname}p2/Windows/System32/config/SECURITY /vz/mounts/${pname}p2/Windows/System32/config/SYSTEM
+ #${base}/sampasswd -r -u Administrator -v /vz/mounts/${pname}p2/Windows/System32/config/SAM;
  echo "Saving Changes";
  sync;
  sleep 2s;
@@ -54,6 +55,6 @@ else
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name};
  echo "Starting VPS";
  virsh start ${name};
- bash /root/cpaneldirect/run_buildebtables.sh;
- /root/cpaneldirect/vps_refresh_vnc.sh $name;
+ bash ${base}/run_buildebtables.sh;
+ ${base}/vps_refresh_vnc.sh $name;
 fi

@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+export base="$(readlink -f "$(dirname "$0")")";
 set -x
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
@@ -32,12 +33,12 @@ else
   mount /dev/mapper/${pname}p1 /vz/mounts/${pname}p2
  fi
  echo "Setting Password"
- /root/cpaneldirect/vps_kvm_setup_password.expect $pname $pass
+ ${base}/vps_kvm_setup_password.expect $pname $pass
  echo "Saving Changes"
  umount /vz/mounts/${pname}p2 2>/dev/null
  /sbin/kpartx $kpartxopts -dv /dev/vz/${name}
  echo "Starting VPS"
  virsh start ${name};
- bash /root/cpaneldirect/run_buildebtables.sh;
- /root/cpaneldirect/vps_refresh_vnc.sh $name
+ bash ${base}/run_buildebtables.sh;
+ ${base}/vps_refresh_vnc.sh $name
 fi

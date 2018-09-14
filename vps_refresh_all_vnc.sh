@@ -1,5 +1,6 @@
 #!/bin/bash
+export base="$(readlink -f "$(dirname "$0")")";
 running="$(virsh list |grep -v -e "^--" -e "Id .*Name .*State" -e "^$" | awk '{ print $2 }')"
 for i in $running; do
-	/root/cpaneldirect/vps_refresh_vnc.sh $i
+	${base}/vps_refresh_vnc.sh $i
 done

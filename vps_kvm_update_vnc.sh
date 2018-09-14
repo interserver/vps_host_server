@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+export base="$(readlink -f "$(dirname "$0")")";
 myip="$(ifconfig $(ip route list | grep "^default" | sed s#"^default.*dev "#""#g | cut -d" " -f1)  |grep inet |grep -v inet6 | awk '{ print $2 }' | cut -d: -f2)"
 name=$1
 if [ $# -ne 1 ]; then
@@ -13,7 +14,7 @@ elif ! virsh dominfo $name >/dev/null 2>&1; then
 else
  port="$(virsh dumpxml $name | grep vnc |grep port= | cut -d\' -f4)"
  if [ "$port" != "" ]; then
-  cat /root/cpaneldirect/vps_kvm_xinetd.template | \
+  cat ${base}/vps_kvm_xinetd.template | \
   sed s#"NAME"#"$name"#g | \
   sed s#"MYIP"#"$myip"#g | \
   sed s#"IP"#"$ip"#g | \
@@ -24,7 +25,7 @@ else
  fi
  port="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
  if [ "$port" != "" ]; then
-  cat /root/cpaneldirect/vps_kvm_xinetd.template | \
+  cat ${base}/vps_kvm_xinetd.template | \
   sed s#"NAME"#"$name"#g | \
   sed s#"MYIP"#"$myip"#g | \
   sed s#"IP"#"$ip"#g | \

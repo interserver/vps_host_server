@@ -1,5 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
+export base="$(readlink -f "$(dirname "$0")")";
 
 # Test an IP address for validity, Usage:
 #      valid_ip IP_ADDRESS
@@ -25,7 +26,7 @@ else
 	url="https://myvps2.interserver.net/vps_queue.php";
 fi
 curl --connect-timeout 300 --max-time 600 -k -d action=get_vps_main_ips "$url" 2>/dev/null | sh;
-if [ -e /root/cpaneldirect/vps.mainips ]; then
+if [ -e ${base}/vps.mainips ]; then
 	IFS="
 ";
 	if [ -e /etc/dhcp/dhcpd.vps ]; then
@@ -47,7 +48,7 @@ if [ -e /root/cpaneldirect/vps.mainips ]; then
 		mac=`virsh dumpxml $user | grep "mac" | grep address | grep : | cut -d\' -f2`;
 		id="$(echo "$user" | sed s#"[[:alpha:]]"#""#g)"
 		# adding head -n 1 in case vps.mainips every has the same entry more than once
-		ip="$(grep "^$user:" /root/cpaneldirect/vps.mainips | cut -d: -f2- | head -n 1)";
+		ip="$(grep "^$user:" ${base}/vps.mainips | cut -d: -f2- | head -n 1)";
 		if valid_ip $ip; then
 				echo "host $user { hardware ethernet $mac; fixed-address $ip;}" >> ${DHCPVPS};
 		#else

@@ -3,6 +3,7 @@
 # By Joe Huss <detain@interserver.net>
 
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export base="$(readlink -f "$(dirname "$0")")";
 set -x
 
 if [ $# -ne 1 ]; then
@@ -25,7 +26,7 @@ vnet="veth${vz}.0"
 ips="$IP_ADDRESS";
 #mastermac="$(/sbin/ifconfig $realnet | grep HWaddr | awk '{ print $5 }')"
 #echo -e "Getting Master Mac $mastermac\n"
-#newmac="$(/root/cpaneldirect/easymac.sh -R -m | grep -v "^$")"
+#newmac="$(${base}/easymac.sh -R -m | grep -v "^$")"
 #echo -e "Getting New Mac $newmac\n"
 /usr/sbin/vzctl stop ${vz}
 /usr/sbin/vzctl set $vz --ipdel all --save
