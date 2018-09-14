@@ -8,6 +8,7 @@
  */
 function update_qs_info()
 {
+	$dir = __DIR__;
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 	if ($root_used > 90) {
 		$hostname = trim(`hostname;`);
@@ -54,15 +55,15 @@ function update_qs_info()
 	}
 	$server['mounts'] = implode(',', $mounts);
 	$server['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
-	$server['raid_status'] = trim(`/root/cpaneldirect/check_raid.sh --check=WARNING 2>/dev/null`);
+	$server['raid_status'] = trim(`{$dir}/check_raid.sh --check=WARNING 2>/dev/null`);
 	if (file_exists('/usr/bin/iostat')) {
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
-	$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then 
+	$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then
 	  iodev="/$(pvdisplay -c |grep -v -e centos -e backup -e vz-snap |grep :|cut -d/ -f2- |cut -d: -f1|head -n 1)";
-	else 
-	  iodev=/vz; 
-	fi; 
+	else
+	  iodev=/vz;
+	fi;
 	ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 	$server['ioping'] = trim(`$cmd`);
 	if (file_exists('/usr/sbin/vzctl')) {

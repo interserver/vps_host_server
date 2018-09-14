@@ -10,6 +10,7 @@ require_once(dirname(__FILE__).'/xml2array.php');
  */
 function get_vps_list()
 {
+	$dir = __DIR__;
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
 	$curl_cmd = '';
 	$servers = array();
@@ -81,7 +82,7 @@ fi;\n";
 				$servers[$veid] = $server;
 			}
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`)) {
+		if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
 			foreach ($cpu_usage as $id => $cpu_data) {
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
@@ -210,7 +211,7 @@ fi;\n";
 				}
 			}
 		}
-		if ($cpu_usage = @unserialize(`bash /root/cpaneldirect/cpu_usage.sh -serialize`)) {
+		if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
 			foreach ($cpu_usage as $id => $cpu_data) {
 				if ($id > 0 && isset($uuids)) {
 					$id = $uuids[$id];
@@ -221,7 +222,7 @@ fi;\n";
 			}
 		}
 		//print_r($servers);
-		$tips = trim(`/root/cpaneldirect/vps_get_ip_assignments.sh`);
+		$tips = trim(`{$dir}/vps_get_ip_assignments.sh`);
 		if ($tips != '') {
 			$tips = explode("\n", $tips);
 			foreach ($tips as $line) {

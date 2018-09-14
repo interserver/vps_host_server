@@ -10,6 +10,7 @@ require_once(dirname(__FILE__).'/xml2array.php');
  */
 function get_qs_list()
 {
+	$dir = __DIR__;
 	$url = 'https://myquickserver2.interserver.net/qs_queue.php';
 	if (!file_exists('/usr/sbin/vzctl')) {
 		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
@@ -40,7 +41,7 @@ function get_qs_list()
 				}
 				if ($status == 'running') {
 					/*
-										$disk = trim(`/root/cpaneldirect/vps_kvm_disk_usage.sh $name`);
+										$disk = trim(`{$dir}/vps_kvm_disk_usage.sh $name`);
 										if ($disk != '')
 										{
 											$dparts = explode(':', $disk);
@@ -52,7 +53,7 @@ function get_qs_list()
 						if ($xml['domain']['devices']['graphics_attr']['port'] >= 5900) {
 							//echo "Port:" . $xml['domain']['devices']['graphics_attr']['port'].PHP_EOL;
 							$vncdisplay = (integer)abs($xml['domain']['devices']['graphics_attr']['port'] - 5900);
-							$cmd .= "/root/cpaneldirect/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
+							$cmd .= "{$dir}/vps_kvm_screenshot.sh $vncdisplay '$url?action=screenshot&name=$name' &\n";
 						}
 					}
 				}
