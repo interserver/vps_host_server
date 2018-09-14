@@ -1,27 +1,18 @@
 #!/bin/bash
 
-function age() {
-	local filename=$1
-	if [ ! -e "$filename" ]; then
-		echo 99999
-		return;
+# exit on lock
+if [ -f /dev/shm/lock ]; then
+	exit;
 	fi
-	local changed=`stat -c %Y "$filename"`
-	local now=`date +%s`
-	local elapsed
-	let elapsed=now-changed
-	echo $elapsed
-}
-
 
 lockfile="/tmp/_securexinetd"
 
 
-if [ -e $file ]; then
-        if [ $(age "$file") -gt "3600" ]; then
-                echo "Lock file is too old"
+if [ -e $lockfile ]; then
+        if [ "$(( $(date +"%s") - $(stat -c "%Y" $lockfile) ))" -gt "300" ]; then
+                echo "$lockfile older than 300 seconds";
         else
-                echo "Lock file found, exiting";
+                echo "ERROR: Lock file found, exiting";
                 exit;
         fi
 fi
@@ -54,5 +45,15 @@ for i in *; do
 
 	 fi
 done
+
+if [ -d /etc/debian_version ]; then
+	service xinetd restart
+elif [ -d /etc/redhat-release ]; then
+	if [ -e /usr/bin/systemctl ]; then
+		/usr/bin/systemctl restart xinetd.service
+	else
+		service xinetd restart
+	fi
+fi
 
 /bin/rm -v $lockfile
