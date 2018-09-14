@@ -1,11 +1,13 @@
 #!/bin/bash
 
-# version 1.6.6.2018
+# version 1.6.7.2018
 
 # added ipv6 support
-# needs to be in /root/cpaneldirect/vps.ip6map
+# needs to be in ${installdir}/vps.ip6map
 # add another gateway in dhcpd.conf using ###option routers
 # disable bw limit (tc limit)
+
+installdir=/root/cpaneldirect
 
 if [ -x /admin/resolvconf ]; then
 	/admin/resolvconf > /dev/null 2>&1
@@ -76,7 +78,7 @@ if [ "$check" = "" ]; then
 
 		sleep 1s;
 	if [ -e /usr/bin/systemctl ]; then
-		 systemctl restart libvirtd.service	
+		 systemctl restart libvirtd.service
 	else
 service $service restart
 	fi
@@ -90,7 +92,7 @@ service $service restart
 				exit;
 		else
 				echo "#Libvirtd is running again";
-		fi	
+		fi
 else
 
 		echo "#Libvirtd is running";
@@ -251,16 +253,16 @@ for user in $list; do
 		###
 		# Main Rules
 		###
-		
+
 		echo "# MAIN RULES"
 		echo "# begin $user"
 		echo "# $user allow arp, $gateway is gw and $ip is ip of server. $dev changes as well based on server"
-	
+
 		# multi gw
 		if [ "$multi_gw" = "1" ]; then
 			for gw in $gateways; do
 				echo "ebtables -A FORWARD -p ARP --arp-ip-src $gw --arp-ip-dst $ip -i $eth -o $dev $LOG -j ACCEPT"
-				echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gw -i $dev -o $eth $LOG -j ACCEPT"			
+				echo "ebtables -A FORWARD -p ARP --arp-ip-src $ip --arp-ip-dst $gw -i $dev -o $eth $LOG -j ACCEPT"
 			done
 		fi
 
@@ -297,9 +299,9 @@ for user in $list; do
 		# EXTRA IPS Rules
 		###
 		#if vps.ipmap is blank we are ignoring this function
-		ipcheck=`grep . /root/cpaneldirect/vps.ipmap`;
+		ipcheck=`grep . ${installdir}/vps.ipmap`;
 		if [ ! "$ipcheck" = "" ]; then
-			ips="$(grep "^$ip:" /root/cpaneldirect/vps.ipmap | cut -d: -f2)"
+			ips="$(grep "^$ip:" ${installdir}/vps.ipmap | cut -d: -f2)"
 			for extraip in $ips; do
 				echo "# EXTRA IPS Rules"
 				echo "# $user allow arp, $gateway is gw and $extraip is ip of server. $dev changes as well based on server"
@@ -345,14 +347,14 @@ for user in $list; do
 		###
 		# new IP PING remote VM
 		#ALLOW MYIP:OTHERIP:VPSID
-		if [ -e /root/cpaneldirect/tmp/$user ]; then
-			data=`grep ^ALLOW /root/cpaneldirect/tmp/$user | cut -d" " -f2-`;
+		if [ -e ${installdir}/tmp/$user ]; then
+			data=`grep ^ALLOW ${installdir}/tmp/$user | cut -d" " -f2-`;
 			if [ ! "$data" = "" ]; then
 				amyip=`echo $data | cut -d: -f1`;
 				atheirip=`echo $data | cut -d: -f2`;
 				avpsid=`echo $data | cut -d: -f3`;
 				adev=`/usr/bin/virsh dumpxml $avpsid | grep target | grep dev | grep vnet | cut -d\' -f2`;
-		
+
 				echo "#allow IP Ping to remote VM"
 				echo "ebtables -A FORWARD -p ARP --arp-ip-src $amyip --arp-ip-dst $atheirip -i $dev -o $adev $LOG -j ACCEPT"
 			fi
@@ -385,8 +387,8 @@ for user in $list; do
 		fi
 
 		if [ "$ipv6" = "1" ]; then
-			if [ -e /root/cpaneldirect/vps.ip6map ]; then
-				ip6ips=`cat /root/cpaneldirect/vps.ip6map | grep ^$user | cut -d"|" -f2`;
+			if [ -e ${installdir}/vps.ip6map ]; then
+				ip6ips=`cat ${installdir}/vps.ip6map | grep ^$user | cut -d"|" -f2`;
 				if [ ! "$ip6ips" = "" ]; then
 					for ip6ip in $ip6ips; do
 						echo "#found ipv6 for $user ip is $ip6ip";
@@ -394,7 +396,7 @@ for user in $list; do
 						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 						echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
 											echo "ebtables -A FORWARD -p IPv6 -s $mac --ip6-dst $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
-					
+
 						echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
 											echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-src $ip6ip -i $eth -o $dev $LOG -j ACCEPT"
 											echo "ebtables -A FORWARD -p IPv6 -d $mac --ip6-dst $ip6ip -i $dev -o $eth $LOG -j ACCEPT"
@@ -416,7 +418,7 @@ for user in $list; do
 		fi
 		echo "# end $user"
 		echo
-		
+
 	fi
 done
 
@@ -431,7 +433,7 @@ if [ ! "$debug" = "1" ]; then
 	if [ ! -f /scripts/_tmp/ebtables/nodump ]; then
 	echo 'ebtables -A FORWARD -p ARP $LOG -j DROP'
 	# does not work
-	#echo '#disable ipv6 for non matches';	
+	#echo '#disable ipv6 for non matches';
 	#--log-ip6
 	echo 'ebtables -A FORWARD -p IPv6 $LOG -j DROP';
 	fi
