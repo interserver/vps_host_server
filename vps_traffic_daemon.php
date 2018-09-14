@@ -4,7 +4,7 @@
 $pid = getmypid();
 $oldpid = trim(`ps aux  | grep '/usr/bin/env php ./vps_traffic.php' | grep -v grep | awk '{ print $2 }' | grep -v $pid`);
 if ($oldpid != '') {
-	if (time() - trim(file_get_contents('/root/cpaneldirect/vps_traffic.pid')) > (5 * 60)) {
+	if (time() - trim(file_get_contents(__DIR__.'/vps_traffic.pid')) > (5 * 60)) {
 		`kill -9 "$oldpid";`;
 	} else {
 		exit;
@@ -121,7 +121,7 @@ curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
 $exit = false;
 while (!$exit) {
-	$fd = fopen('/root/cpaneldirect/vps_traffic.pid', 'w');
+	$fd = fopen(__DIR__.'/vps_traffic.pid', 'w');
 	fputs($fd, time());
 	fclose($fd);
 	if (time() - $lastupdate > $updateinterval) {

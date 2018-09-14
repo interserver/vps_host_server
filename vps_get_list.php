@@ -104,8 +104,8 @@ fi;\n";
 		} elseif (file_exists('/etc/dhcpd.vps')) {
 			$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
 			$lines = explode("\n", trim(`$ipcmd`));
-		} elseif (file_exists('/root/cpaneldirect/vps.mainips')) {
-			$lines = explode("\n", trim(file_get_contents('/root/cpaneldirect/vps.mainips')));
+		} elseif (file_exists(__DIR__.'/vps.mainips')) {
+			$lines = explode("\n", trim(file_get_contents(__DIR__.'/vps.mainips')));
 		} else {
 			$lines = array();
 		}
@@ -120,7 +120,7 @@ fi;\n";
 				$ips[$id][] = $ip;
 			}
 		}
-		$lines = trim(file_get_contents('/root/cpaneldirect/vps.ipmap'));
+		$lines = trim(file_get_contents(__DIR__.'/vps.ipmap'));
 		if ($lines != '') {
 			$lines = explode("\n", $lines);
 			foreach ($lines as $line) {
