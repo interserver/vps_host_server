@@ -112,6 +112,7 @@ else
 		${base}/vps_kvm_lvmcreate.sh $name $size || exit
 		#device="$device"
 	fi
+	touch /tmp/_securexinetd;
 	echo "$pool pool device $device created"
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo $name >/dev/null 2>&1; then
@@ -320,6 +321,7 @@ else
 		echo "Template Does Not Exist"
 		error=$(($error + 1))
 	fi
+	touch /tmp/_securexinetd;
 	if [ "$softraid" != "" ]; then
 		for softfile in $softraid; do
 			echo check > $softfile
@@ -377,6 +379,7 @@ else
 			virsh attach-disk $name /vz/$name/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;
 			virt-customize -d $name --root-password "password:$password" --hostname "$name"
 		fi;
+		touch /tmp/_securexinetd;
 		/usr/bin/virsh autostart $name;
 		mac="$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)";
 		/bin/cp -f $DHCPVPS $DHCPVPS.backup;
@@ -392,7 +395,6 @@ else
 		fi
 		curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
 		/usr/bin/virsh start $name;
-		#/usr/bin/virsh resume $template;
 		if [ "$pool" != "zfs" ]; then
 			bash ${base}/run_buildebtables.sh;
 		fi;
@@ -433,4 +435,5 @@ else
 		service xinetd restart
 	fi
 fi;
+rm -f /tmp/_securexinetd;
 set +x;
