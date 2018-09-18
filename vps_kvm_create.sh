@@ -162,12 +162,10 @@ else
 	if [ "$pool" = "zfs" ]; then
 		if [ -e "/vz/templates/$template.qcow2" ]; then
 			echo "Copy $template.qcow2 Image"
-			/bin/cp -f /vz/templates/$template.qcow2 $device.preinstall;
 			qemu-img create -f qcow2 -o preallocation=metadata $device 25G
 			qemu-img resize $device "$size"M;
 			part=$(virt-list-partitions /vz/templates/$template.qcow2|tail -n 1)
-			virt-resize --expand $part $device.preinstall $device;
-			/bin/rm -f $device.preinstall;
+			virt-resize --expand $part /vz/templates/$template.qcow2 $device;
 			adjust_partitions=0
 		fi
 		#if [ -e "/$template.img.gz" ]; then
