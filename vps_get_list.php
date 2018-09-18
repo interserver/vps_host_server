@@ -48,45 +48,49 @@ function get_vps_list()
 				//$veid = str_replace(array('windows', 'linux'), array('', ''), $veid);
 				$status = $parts[1];
 				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
-				$xml = xml2array($out);
+				$xml = xml2array($out, 1, 'attribute');
 				$server = array(
 					'type' => 'kvm',
 					'veid' => $veid,
 					'status' => $status,
 					'hostname' => $name,
-					'kmemsize' => $xml['domain']['memory'],
+					'kmemsize' => $xml['domain']['memory']['value'],
 				);
 				if (isset($xml['domain']['devices']['interface'])) {
-					if (isset($xml['domain']['devices']['interface']['mac_attr'])) {
-						$server['mac'] = $xml['domain']['devices']['interface']['mac_attr']['address'];
-					} elseif (isset($xml['domain']['devices']['interface'][0]['mac_attr'])) {
-						$server['mac'] = $xml['domain']['devices']['interface'][0]['mac_attr']['address'];
+					if (isset($xml['domain']['devices']['interface']['mac']['attr']['address'])) {
+						$server['mac'] = $xml['domain']['devices']['interface']['mac']['attr']['address'];
+					} elseif (isset($xml['domain']['devices']['interface'][0]['mac']['attr'])) {
+						$server['mac'] = $xml['domain']['devices']['interface'][0]['mac']['attr']['address'];
 					}
 				}
-				if (isset($xml['domain']['devices']['graphics_attr'])) {
-					$server['vnc'] = $xml['domain']['devices']['graphics_attr']['port'];
+				if (isset($xml['domain']['devices']['graphics']['attr']['port'])) {
+					$server['vnc'] = (int)$xml['domain']['devices']['graphics']['attr']['port'];
+				} elseif (isset($xml['domain']['devices']['graphics'][0]['attr']['port'])) {
+					foreach ($xml['domain']['devices']['graphics'] as $idx => $graphics) {
+						$server[$graphics['attr']['type']] = (int)$graphics['attr']['port'];
+					}
 				}
 				if ($status == 'running') {
 					/*
-										$disk = trim(`{$dir}/vps_kvm_disk_usage.sh $name`);
-										if ($disk != '')
-										{
-											$dparts = explode(':', $disk);
-											$server['diskused'] = $dparts[2];
-											$server['diskmax'] = $dparts[1];
-										}
+					$disk = trim(`{$dir}/vps_kvm_disk_usage.sh $name`);
+					if ($disk != '')
+					{
+						$dparts = explode(':', $disk);
+						$server['diskused'] = $dparts[2];
+						$server['diskmax'] = $dparts[1];
+					}
 					*/
-					if (isset($xml['domain']['devices']['graphics_attr'])) {
-						$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
+					if (isset($server['vnc'])) {
+						$port = $server['vnc'];
 						if ($port >= 5900) {
 							// vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
-/*
-$cmd .= "if [ -e /usr/bin/timeout ]; then
-	timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-else
-	./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-fi;\n";
-*/
+							/*
+							$cmd .= "if [ -e /usr/bin/timeout ]; then
+								timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+							else
+								./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+							fi;\n";
+							*/
 						}
 					}
 				}
