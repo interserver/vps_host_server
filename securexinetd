@@ -39,7 +39,7 @@ for i in *; do
 		elif [ "$detainthinks" = "$virshknows" ]; then
 			echo "$i is good"
 		else
-			echo "$i is incorrect, fixing"
+			echo "[securexinetd] $i is incorrect $detainthinks != $virshknows, removing" | tee -a $base/cron.output
 			/bin/rm /etc/xinetd.d/$i
 		fi
 
