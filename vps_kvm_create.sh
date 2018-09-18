@@ -48,6 +48,16 @@ if [ "$6" != "" ]; then
 		vcpu="$(lscpu |grep ^CPU\(s\) | awk ' { print $2 }')"
 	fi
 fi
+if [ $vcpu -gt 8 ]; then
+	max_cpu=$vcpu
+else
+	max_cpu=8
+fi
+if [ $memory -gt 16384000 ]; then
+	max_memory=$memory
+else
+	max_memory=16384000;
+fi
 if [ "$7" != "" ]; then
 	password=$7
 fi
@@ -122,28 +132,20 @@ else
 		  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i $name.xml
 		fi;
 	fi
-	mv -f $name.xml $name.xml.backup
-	if [ $vcpu -gt 8 ]; then
-		max_cpu=$vcpu
-	else
-		max_cpu=8
-	fi
-	if [ $memory -gt 16384000 ]; then
-		max_memory=$memory
-	else
-		max_memory=16384000;
-	fi
 	repl="<parameter name='IP' value='$ip'/>";
 	if [ "$extraips" != "" ]; then
 		for i in $extraips; do
 			repl="$repl\n        <parameter name='IP' value='$i'/>";
 		done
 	fi
-	cat $name.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"$repl"#g > $name.xml
-	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
+	sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i $name.xml;
+	sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i $name.xml;
+	sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i $name.xml;
+	sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i $name.xml;
+	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo)" != "" ]; then
 		sed s#"<features>"#"<features>\n    <hap/>"#g -i $name.xml
 	fi
-	if [ "$(date +%Z)" = "PDT" ]; then
+	if [ "$(date "+%Z")" = "PDT" ]; then
 		sed s#"America/New_York"#"America/Los_Angeles"#g -i $name.xml
 	fi
 	if [ -e /etc/lsb-release ]; then
@@ -152,8 +154,6 @@ else
 			sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='$vcpu'/>"#g -i  $name.xml;
 		fi;
 	fi;
-	rm -f $name.xml.backup
-	#/bin/cp -f $name.xml $name.xml.backup;
 	/usr/bin/virsh define $name.xml
 	if [ "$template" = "windows1" ]; then
 		template=windows2
