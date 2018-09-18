@@ -124,9 +124,9 @@ else
 		echo "Generating XML Config"
 		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
-			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			grep -v -e filterref -e "<parameter name='IP'" -e uuid ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-			grep -v -e uuid -e "mac address" ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
+			grep -v -e uuid ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
 		fi
 		echo "Defining Config As VPS"
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
@@ -139,6 +139,14 @@ else
 			repl="$repl\n        <parameter name='IP' value='$i'/>";
 		done
 	fi
+	id=$(echo $name|sed s#"^\(qs\|windows\|linux\|vps\)\([0-9]*\)$"#"\2"#g)
+	if [ "$id" != "$name" ]; then
+		mac=$($base/convert_id_to_mac.sh $id)
+		sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i $name.xml
+	else
+		sed s#"^.*<mac address.*$"#""#g -i $name.xml
+	fi
+
 	sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i $name.xml;
 	sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i $name.xml;
 	sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i $name.xml;
