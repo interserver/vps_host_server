@@ -163,7 +163,7 @@ else
 		if [ -e "/vz/templates/$template.qcow2" ]; then
 			echo "Copy $template.qcow2 Image"
 			/bin/cp -f /vz/templates/$template.qcow2 $device.preinstall;
-			/bin/cp -f /vz/templates/$template.qcow2 $device;
+			qemu-img create -f qcow2 -o preallocation=metadata $device 25G
 			qemu-img resize $device "$size"M;
 			virt-resize --expand /dev/sda1 $device.preinstall $device;
 			/bin/rm -f $device.preinstall;
