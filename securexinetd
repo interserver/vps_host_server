@@ -33,7 +33,12 @@ for i in *; do
 	if [ -f $i ]; then
 		#echo $i
 		detainthinks=`cat /etc/xinetd.d/$i  | grep port | awk '{print $3}'`;
-		virshknows=`virsh dumpxml $i 2>/dev/null | grep vnc | grep port | cut -d\' -f4`;
+		if [ "$(echo $i|grep -- "-spice$")" != "" ]; then
+			n=$(echo $i|sed s#"-spice$"#""#g)
+			virshknows=`virsh dumpxml $n 2>/dev/null | grep spice | grep port | cut -d\' -f4`;
+		else
+			virshknows=`virsh dumpxml $i 2>/dev/null | grep vnc | grep port | cut -d\' -f4`;
+		fi
 		if [ -z "$virshknows" ]; then
 			echo "$i not a vps, skipping"
 		elif [ "$detainthinks" = "$virshknows" ]; then
