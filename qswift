@@ -159,7 +159,7 @@ function create_config()
 	read config_uname
 	echo -n "Enter APIkey/password: "
 	read config_pass
-	echo -n "Enter auth url (enter for default https://storage-nj.interserver.net:8080/auth/v1.0) "
+	echo -n "Enter auth url (enter for default https://storage-nj2.interserver.net/auth/v1.0) "
 	read config_authurl
 
 	if [ "$config_uname" = "" ]; then
@@ -169,7 +169,7 @@ function create_config()
 		echo "password was blank"
 		exit;
 	elif [ "$config_authurl" = "" ]; then
-		config_authurl="https://storage-nj.interserver.net:8080/auth/v1.0"
+		config_authurl="https://storage-nj2.interserver.net/auth/v1.0"
 	fi
 
 	if [ ! -e $HOME/.swift/config ]; then
