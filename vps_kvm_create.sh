@@ -165,7 +165,8 @@ else
 			/bin/cp -f /vz/templates/$template.qcow2 $device.preinstall;
 			qemu-img create -f qcow2 -o preallocation=metadata $device 25G
 			qemu-img resize $device "$size"M;
-			virt-resize --expand /dev/sda1 $device.preinstall $device;
+			part=$(virt-list-partitions /vz/templates/$template.qcow2|tail -n 1)
+			virt-resize --expand $part $device.preinstall $device;
 			/bin/rm -f $device.preinstall;
 			adjust_partitions=0
 		fi
