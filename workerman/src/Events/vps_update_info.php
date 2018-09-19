@@ -11,7 +11,7 @@ return function ($stdObject) {
 		$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 		$task_connection->send(json_encode(array('type' => 'vps_update_info', 'args' => array('type' => $stdObject->type))));
 		$conn = $stdObject->conn;
-		$task_connection->onMessage = function (\Workerman\Connection\TcpConnection $task_connection, $task_result) use ($conn) {
+		$task_connection->onMessage = function ($task_connection, $task_result) use ($conn) {
 			/**
 			* @var \GlobalData\Client
 			*/

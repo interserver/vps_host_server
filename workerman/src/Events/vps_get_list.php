@@ -26,7 +26,7 @@ return function ($stdObject) {
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('vps_get_list Launching Task Processor'.PHP_EOL);
 	}
-	$task_connection->onMessage = function (\Workerman\Connection\TcpConnection $task_connection, $task_result) use ($stdObject, $conn) {
+	$task_connection->onMessage = function ($task_connection, $task_result) use ($stdObject, $conn) {
 		/**
 		* @var \GlobalData\Client
 		*/
