@@ -19,7 +19,7 @@ $task_worker->onWorkerStart = function ($worker) use (&$task_worker) {
 		$task_worker->mytasks->{$function} = include $function_file;
 	}
 };
-$task_worker->onMessage = function (AsyncTcpConnection $connection, $task_data) use (&$task_worker) {
+$task_worker->onMessage = function (\Workerman\Connection\TcpConnection $connection, $task_data) use (&$task_worker) {
 	$task_data = json_decode($task_data, true);
 	if (isset($task_data['type'])) {
 		//Worker::safeEcho("Starting Task {$task_data['type']}\n");

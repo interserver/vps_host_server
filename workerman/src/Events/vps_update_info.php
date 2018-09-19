@@ -2,20 +2,20 @@
 use Workerman\Connection\AsyncTcpConnection;
 
 return function ($stdObject) {
-    /**
-    * @var \GlobalData\Client
-    */
-    global $global;
+	/**
+	* @var \GlobalData\Client
+	*/
+	global $global;
 	//echo 'Update Info Timer Startup'.PHP_EOL;
 	if ($global->cas('busy', 0, 1)) {
 		$task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 		$task_connection->send(json_encode(array('type' => 'vps_update_info', 'args' => array('type' => $stdObject->type))));
 		$conn = $stdObject->conn;
-		$task_connection->onMessage = function (AsyncTcpConnection $task_connection, $task_result) use ($conn) {
-            /**
-            * @var \GlobalData\Client
-            */
-            global $global;
+		$task_connection->onMessage = function (\Workerman\Connection\TcpConnection $task_connection, $task_result) use ($conn) {
+			/**
+			* @var \GlobalData\Client
+			*/
+			global $global;
 			//var_dump($task_result);
 			$task_connection->close();
 			//echo 'Update Info Got Result, Forwarding It'.PHP_EOL;
