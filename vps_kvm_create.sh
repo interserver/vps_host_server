@@ -433,11 +433,9 @@ else
 			$base/vps_kvm_setup_vnc.sh $name "$clientip";
 		fi;
 		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-		#vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
 		sleep 1s;
 		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-		sleep 2s;
+		sleep 1s;
 		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		/admin/kvmenable blocksmtp $name
 		/admin/kvmenable ebflush
