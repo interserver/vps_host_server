@@ -5,7 +5,7 @@ timeout = 120
 ping_when_silent_for = 70
 
 [options]
-use_ssl = 1
+use_ssl = 0
 
 [timers]
 vps_update_info = 600
