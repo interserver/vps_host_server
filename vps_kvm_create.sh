@@ -95,7 +95,7 @@ if [ $# -lt 3 ]; then
 else
 	export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	if [ "$pool" = "" ]; then
-		${base}/create_libvirt_storage_pools.sh
+		$base/create_libvirt_storage_pools.sh
 		export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
@@ -109,7 +109,7 @@ else
 		#sleep 5s;
 		#device="$(virsh vol-list vz --details|grep " $name[/ ]"|awk '{ print $2 }')"
 	else
-		${base}/vps_kvm_lvmcreate.sh $name $size || exit
+		$base/vps_kvm_lvmcreate.sh $name $size || exit
 		#device="$device"
 	fi
 	touch /tmp/_securexinetd;
@@ -124,9 +124,9 @@ else
 		echo "Generating XML Config"
 		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
-			grep -v -e filterref -e "<parameter name='IP'" -e uuid ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			grep -v -e filterref -e "<parameter name='IP'" -e uuid $base/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-			grep -v -e uuid ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
+			grep -v -e uuid $base/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
 		fi
 		echo "Defining Config As VPS"
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
@@ -192,7 +192,7 @@ else
 	elif [ "$(echo $template | cut -c1-7)" = "http://" ] || [ "$(echo $template | cut -c1-8)" = "https://" ] || [ "$(echo $template | cut -c1-6)" = "ftp://" ]; then
 		adjust_partitions=0
 		echo "Downloading $template Image"
-		${base}/vps_get_image.sh "$template"
+		$base/vps_get_image.sh "$template"
 		if [ ! -e "/image_storage/image.raw.img" ]; then
 			echo "There must have been a problem, the image does not exist"
 			error=$(($error + 1))
@@ -373,7 +373,7 @@ else
 				mount /dev/mapper/$pname$pn /vz/mounts/$name$pn;
 				PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
 				echo "root:$password" | chroot /vz/mounts/$name$pn chpasswd || \
-				php ${base}/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
+				php $base/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
 				if [ -e /vz/mounts/$name$pn/home/kvm ]; then
 					echo "kvm:$password" | chroot /vz/mounts/$name$pn chpasswd
 				fi;
@@ -398,17 +398,15 @@ else
 		grep -v -e "host $name " -e "fixed-address $ip;" $DHCPVPS.backup > $DHCPVPS
 		echo "host $name { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
 		rm -f $DHCPVPS.backup;
-		if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
-			/etc/init.d/isc-dhcp-server restart
-		elif [ -e /etc/init.d/dhcpd ]; then
-			/etc/init.d/dhcpd restart
+		if [ -e /etc/apt ]; then
+			systemctl restart isc-dhcp-server 2>/dev/null || service isc-dhcp-server restart 2>/dev/null || /etc/init.d/isc-dhcp-server restart 2>/dev/null
 		else
-			service dhcpd restart;
+			systemctl restart dhcpd 2>/dev/null || service dhcpd restart 2>/dev/null || /etc/init.d/dhcpd restart 2>/dev/null;
 		fi
 		curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
 		/usr/bin/virsh start $name;
 		if [ "$pool" != "zfs" ]; then
-			bash ${base}/run_buildebtables.sh;
+			bash $base/run_buildebtables.sh;
 		fi;
 		if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
 			echo "CGroups Not Detected, Bailing";
@@ -421,7 +419,7 @@ else
 			virsh blkiotune $name --weight $ioweight --current;
 			virsh blkiotune $name --weight $ioweight --config;
 		fi;
-		${base}/tclimit $ip;
+		$base/tclimit $ip;
 		vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 		if [ "$vnc" == "" ]; then
 			sleep 2s;
@@ -432,18 +430,18 @@ else
 			fi;
 		fi;
 		if [ "$clientip" != "" ]; then
-			${base}/vps_kvm_setup_vnc.sh $name "$clientip";
+			$base/vps_kvm_setup_vnc.sh $name "$clientip";
 		fi;
-		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		#vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
 		sleep 1s;
-		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		sleep 2s;
-		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		/admin/kvmenable blocksmtp $name
 		/admin/kvmenable ebflush
-		${base}/buildebtablesrules | sh
+		$base/buildebtablesrules | sh
 		service xinetd restart
 	fi
 fi;
