@@ -5,10 +5,13 @@ use Workerman\Lib\Timer;
 use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
-return function ($stdObject, $conn, $data) {
+return function ($stdObject, AsyncTcpConnection $conn, $data) {
 	$stdObject->conn = $conn;
 	echo "onMessage Got: ".$data.PHP_EOL;
-	global $global;
+    /**
+    * @var \GlobalData\Client
+    */
+    global $global;
 	$global->lastMessageTime = time();
 	$data = json_decode($data, true);
 	switch ($data['type']) {

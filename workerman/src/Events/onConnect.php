@@ -1,11 +1,12 @@
 <?php
 use Workerman\Lib\Timer;
 use Workerman\Worker;
+use Workerman\Connection\AsyncTcpConnection;
 
 /**
 * onConnect event for websocket connection to hub
 */
-return function ($stdObject, $conn) {
+return function ($stdObject, AsyncTcpConnection $conn) {
 	/** sends a login request to the hub **/
 	$json = array(
 		'type' => 'login',

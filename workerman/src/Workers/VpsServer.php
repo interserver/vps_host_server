@@ -5,7 +5,7 @@ include_once __DIR__.'/../stdObject.php';
 
 $vps_worker = new Worker();
 $vps_worker->name = 'VpsHostWorker';
-$vps_worker->onWorkerStart = function ($worker) {
+$vps_worker->onWorkerStart = function (Worker $worker) {
 	global $events;
 	$events = new stdObject();
 	foreach (glob(__DIR__.'/../Events/*.php') as $function_file) {

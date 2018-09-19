@@ -6,7 +6,10 @@ use Workerman\Worker;
 * gets a listing of vps services to send to the hub
 */
 return function ($stdObject) {
-	global $global;
+    /**
+    * @var \GlobalData\Client
+    */
+    global $global;
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('vps_get_list Startup, Getting Lock'.PHP_EOL);
 	}
@@ -23,8 +26,11 @@ return function ($stdObject) {
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('vps_get_list Launching Task Processor'.PHP_EOL);
 	}
-	$task_connection->onMessage = function ($task_connection, $task_result) use ($stdObject, $conn) {
-		global $global;
+	$task_connection->onMessage = function (AsyncTcpConnection $task_connection, $task_result) use ($stdObject, $conn) {
+        /**
+        * @var \GlobalData\Client
+        */
+        global $global;
 		if ($stdObject->debug === true) {
 			Worker::safeEcho('vps_get_list Got Task Processor Result, Closing Task Connection'.PHP_EOL);
 		}

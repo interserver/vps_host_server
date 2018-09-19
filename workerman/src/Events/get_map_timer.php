@@ -6,7 +6,10 @@ use Workerman\Worker;
 * ran periodicaly to update our vps mapping files
 */
 return function ($stdObject) {
-	global $global;
+    /**
+    * @var \GlobalData\Client
+    */
+    global $global;
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('Map Timer Startup'.PHP_EOL);
 	}

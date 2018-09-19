@@ -3,7 +3,7 @@ use Workerman\Worker;
 use Workerman\Lib\Timer;
 use Workerman\Connection\AsyncTcpConnection;
 
-return function ($stdObject, $worker) {
+return function ($stdObject, Worker $worker) {
 	$stdObject->debug = true;
 	$stdObject->conn = null;
 	$stdObject->var = null;
@@ -25,7 +25,10 @@ return function ($stdObject, $worker) {
 		Worker::safeEcho("Generating new SSL Certificate for encrypted communications\n");
 		echo shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$stdObject->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/../myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/../myadmin.crt -set_serial 0');
 	}
-	global $global;
+    /**
+    * @var \GlobalData\Client
+    */
+    global $global;
 	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
 	if (!isset($global->busy)) {
 		$global->busy = 0;
