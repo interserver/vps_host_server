@@ -10,5 +10,4 @@ return function ($stdObject, Worker $worker) {
 		@shell_exec('killall vmstat');
 		@pclose($worker->process_handle);
 	}
-	*/
 };
