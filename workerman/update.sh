@@ -95,6 +95,11 @@ function check_php() {
 	fi
 	inifile="$(php -i |grep 'Loaded Configuration' |awk '{ print $5 }')"
 	sudo sed s#"^memory_limit = .*$"#"memory_limit = 512M"#g -i "$inifile"
+	if [ "$(date +%Z)" = "PDT" ]; then
+		sudo sed s#";date.timezone =.*$"#"date.timezone = America/Los_Angeles"#g -i "$inifile"
+	else
+		sudo sed s#";date.timezone =.*$"#"date.timezone = America/New_York"#g -i "$inifile"
+	fi
 }
 
 function check_php_event() {
