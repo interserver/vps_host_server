@@ -90,8 +90,7 @@ function check_php() {
 		fi;
 	elif [ -e /etc/yum ]; then
 		sudo rpm -e libevent-devel libevent-headers libevent-doc
-		#yum install -y php php-cli php-bcmath php-devel php-gd php-process php-xml php-curl php-pear;
-		yum install -y php-devel;
+		yum install -y php-cli php-bcmath php-devel php-gd php-process php-xml php-curl php-pear;
 		sudo yum install -y openssl-devel gcc libev libevent2 libev-devel libevent2-devel  || yum install openssl-devel gcc libev-devel libevent-devel libev libevent -y
 	fi
 	inifile="$(php -i |grep 'Loaded Configuration' |awk '{ print $5 }')"
