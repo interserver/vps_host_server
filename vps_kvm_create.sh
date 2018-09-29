@@ -1,7 +1,6 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
 export base="$(readlink -f "$(dirname "$0")")";
-set -x;
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
@@ -444,4 +443,3 @@ else
 	fi
 fi;
 rm -f /tmp/_securexinetd;
-set +x;
