@@ -15,23 +15,26 @@ function get_vps_list()
 	$curl_cmd = '';
 	$servers = array();
 	if (file_exists('/usr/bin/lxc')) {
-		$lines = explode("\n", trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`));
-		foreach ($lines as $line) {
-			$parts = explode(',', $line);
-			$server = array(
-				'type' => 'lxc',
-				'veid' => $parts[0],
-				'status' => isset($parts[1]) ? strtolower($parts[1]) : 'stopped',
-			);
-			if (isset($parts[2])) {
-				$ipparts = explode(" ", $parts[2]);
-				$server['ip'] = $ipparts[0];
-				$ips[$parts[0]] = $ipparts[0];
+		$lines = trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`);
+		if ($lines != '') {
+			$lines = explode("\n", $lines);
+			foreach ($lines as $line) {
+				$parts = explode(',', $line);
+				$server = array(
+					'type' => 'lxc',
+					'veid' => $parts[0],
+					'status' => isset($parts[1]) ? strtolower($parts[1]) : 'stopped',
+				);
+				if (isset($parts[2])) {
+					$ipparts = explode(" ", $parts[2]);
+					$server['ip'] = $ipparts[0];
+					$ips[$parts[0]] = $ipparts[0];
+				}
+				if (isset($parts[3]) && trim($parts[3]) != '') {
+					$server['mac'] = trim($parts[3]);
+				}
+				$servers[$parts[0]] = $server;
 			}
-			if (isset($parts[3]) && trim($parts[3]) != '') {
-				$server['mac'] = trim($parts[3]);
-			}
-			$servers[$parts[0]] = $server;
 		}
 	}
 	if (file_exists('/usr/bin/virsh')) {
