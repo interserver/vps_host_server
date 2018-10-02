@@ -70,7 +70,9 @@ function get_vps_list()
 					$server['vnc'] = (int)$xml['domain']['devices']['graphics']['attr']['port'];
 				} elseif (isset($xml['domain']['devices']['graphics'][0]['attr']['port'])) {
 					foreach ($xml['domain']['devices']['graphics'] as $idx => $graphics) {
-						$server[$graphics['attr']['type']] = (int)$graphics['attr']['port'];
+						if (isset($graphics['attr']['port'])) {
+							$server[$graphics['attr']['type']] = (int)$graphics['attr']['port'];
+						}
 					}
 				}
 				if ($status == 'running') {

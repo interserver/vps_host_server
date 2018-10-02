@@ -265,10 +265,10 @@ else
 	grep -v -e "host $name " -e "fixed-address $ip;" $DHCPVPS.backup > $DHCPVPS
 	echo "host $name { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
 	rm -f $DHCPVPS.backup
-	if [ ! -e /etc/init.d/dhcpd ] && [ -e /etc/init.d/isc-dhcp-server ]; then
-		/etc/init.d/isc-dhcp-server restart
+	if [ -e /etc/apt ]; then
+		systemctl restart isc-dhcp-server 2>/dev/null || service isc-dhcp-server restart 2>/dev/null || /etc/init.d/isc-dhcp-server restart 2>/dev/null
 	else
-		/etc/init.d/dhcpd restart
+		systemctl restart dhcpd 2>/dev/null || service dhcpd restart 2>/dev/null || /etc/init.d/dhcpd restart 2>/dev/null;
 	fi
 	curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
 	/usr/bin/virsh start $name;
