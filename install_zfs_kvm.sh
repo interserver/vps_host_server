@@ -41,6 +41,7 @@ libzfslinux-dev
 nano
 netplan.io
 php-cli
+libvirt-daemon-driver-storage-zfs 
 qemu
 qemu-kvm
 qemu-system-misc
