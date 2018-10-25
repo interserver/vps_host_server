@@ -49,6 +49,25 @@ return function ($stdObject, $params) {
 	}
 	$server['mounts'] = implode(',', $mounts);
 	$server['raid_status'] = trim(`{$dir}check_raid.sh --check=WARNING 2>/dev/null`);
+    if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
+        $server['raid_status'] = 'OK: ';
+    }
+    if (file_exists('/sbin/zpool')) {
+        preg_match('/^([^:]*): (.*)$/m', $server['raid_status'], $matches);
+        if (!isset($matches[2]) || trim($matches[2]) == '') {
+            $parts = [];
+        } else {
+            $parts = explode('; ', $matches[2]);
+        }
+        $zfs_status = trim(`/sbin/zpool status -x`);
+        if ($matches[1] == 'OK') {
+            if ($zfs_status != 'all pools are healthy') {
+                $matches[1] = 'WARNING';
+            }
+        }
+        $parts[] = 'zfs: '.$zfs_status;
+        $server['raid_status'] = $matches[1].': '.implode('; ', $parts);
+    }
 	if (file_exists('/usr/bin/iostat')) {
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
