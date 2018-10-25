@@ -51,7 +51,7 @@ return function ($stdObject, $params) {
     $server['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
     $server['raid_status'] = trim(`{$dir}/check_raid.sh --check=WARNING 2>/dev/null`);
     if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
-        $server['raid_status'] = 'OK: ';
+        $server['raid_status'] = 'OK: none:No Raid found';
     }
     if (file_exists('/sbin/zpool')) {
         preg_match('/^([^:]*): (.*)$/', $server['raid_status'], $matches);
