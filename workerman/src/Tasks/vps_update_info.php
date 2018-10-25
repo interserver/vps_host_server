@@ -56,7 +56,7 @@ return function ($stdObject, $params) {
     if (file_exists('/sbin/zpool')) {
         preg_match('/^([^:]*): (.*)$/', $server['raid_status'], $matches);
         if (!isset($matches[2]) || trim($matches[2]) == '') {
-            $parts = [];
+            $parts = array();
         } else {
             $parts = explode('; ', $matches[2]);
         }

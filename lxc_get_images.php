@@ -1,6 +1,6 @@
 <?php
 $out = `lxc image list images:;`;
-$valid_archs = ['x86_64','i686'];
+$valid_archs = array('x86_64','i686');
 $json = json_decode(`lxc image list images: --format json`, true);
 $images = [];
 foreach ($json as $idx => $image) {
@@ -15,13 +15,13 @@ foreach ($json as $idx => $image) {
 				$name = $alias['name'];
 			}
 		}
-		$images[] = [
-						'name' => $name,
-						'description' => $image['properties']['description'],
-						'os' => $image['properties']['os'],
-						'release' => $image['properties']['release'],
-						'architecture' => $image['architecture'],
-				];
+		$images[] = array(
+            'name' => $name,
+            'description' => $image['properties']['description'],
+            'os' => $image['properties']['os'],
+            'release' => $image['properties']['release'],
+            'architecture' => $image['architecture'],
+        );
 	}
 }
 echo json_encode($images).PHP_EOL;
