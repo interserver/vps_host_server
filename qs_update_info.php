@@ -38,20 +38,20 @@ function update_qs_info()
 	preg_match_all('/^(\/\S+)\s+(\S+)\s.*$/m', file_get_contents('/proc/mounts'), $matches);
 	foreach ($matches[1] as $idx => $value) {
 		$dev = $value;
-		$dir = $matches[2][$idx];
-		$total = floor(disk_total_space($dir) / 1073741824);
-		$free = floor(disk_free_space($dir) / 1073741824);
+		$matchDir = $matches[2][$idx];
+		$total = floor(disk_total_space($matchDir) / 1073741824);
+		$free = floor(disk_free_space($matchDir) / 1073741824);
 		$used = $total - $free;
-		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
+		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$matchDir;
 	}
 	preg_match_all('/^\s*([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$/m', trim(`pvdisplay -c`), $matches);
 	foreach ($matches[1] as $idx => $value) {
 		$dev = $value;
-		$dir = $matches[2][$idx];
+		$matchDir = $matches[2][$idx];
 		$total = floor($matches[9][$idx] * $matches[8][$idx] / 1048576);
 		$free = floor($matches[10][$idx] * $matches[8][$idx] / 1048576);
 		$used = floor($matches[11][$idx] * $matches[8][$idx] / 1048576);
-		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
+		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$matchDir;
 	}
 	$server['mounts'] = implode(',', $mounts);
 	$server['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
@@ -72,7 +72,7 @@ function update_qs_info()
                 $matches[1] = 'WARNING';
             }
         }
-        $parts[] = 'zfs: '.$zfs_status;
+        $parts[] = 'zfs:'.$zfs_status;
         $server['raid_status'] = $matches[1].': '.implode('; ', $parts);
     }
 	if (file_exists('/usr/bin/iostat')) {

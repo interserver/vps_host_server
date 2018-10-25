@@ -35,25 +35,26 @@ function update_vps_info()
 	preg_match('/MemTotal\s*\:\s*(\d+)/i', file_get_contents('/proc/meminfo'), $matches);
 	$server['ram'] = (int)$matches[1];
 	preg_match_all('/^(\/\S+)\s+(\S+)\s.*$/m', file_get_contents('/proc/mounts'), $matches);
-	foreach ($matches[1] as $idx => $value) {
-		$dev = $value;
-		$dir = $matches[2][$idx];
-		$total = floor(disk_total_space($dir) / 1073741824);
-		$free = floor(disk_free_space($dir) / 1073741824);
-		$used = $total - $free;
-		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
-	}
-	preg_match_all('/^\s*([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$/m', trim(`pvdisplay -c`), $matches);
-	foreach ($matches[1] as $idx => $value) {
-		$dev = $value;
-		$dir = $matches[2][$idx];
-		$total = floor($matches[9][$idx] * $matches[8][$idx] / 1048576);
-		$free = floor($matches[10][$idx] * $matches[8][$idx] / 1048576);
-		$used = floor($matches[11][$idx] * $matches[8][$idx] / 1048576);
-		$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$dir;
-	}
-	$server['mounts'] = implode(',', $mounts);
-	$server['raid_status'] = trim(`{$dir}/check_raid.sh --check=WARNING 2>/dev/null`);
+    foreach ($matches[1] as $idx => $value) {
+        $dev = $value;
+        $matchDir = $matches[2][$idx];
+        $total = floor(disk_total_space($matchDir) / 1073741824);
+        $free = floor(disk_free_space($matchDir) / 1073741824);
+        $used = $total - $free;
+        $mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$matchDir;
+    }
+    preg_match_all('/^\s*([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$/m', trim(`pvdisplay -c`), $matches);
+    foreach ($matches[1] as $idx => $value) {
+        $dev = $value;
+        $matchDir = $matches[2][$idx];
+        $total = floor($matches[9][$idx] * $matches[8][$idx] / 1048576);
+        $free = floor($matches[10][$idx] * $matches[8][$idx] / 1048576);
+        $used = floor($matches[11][$idx] * $matches[8][$idx] / 1048576);
+        $mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$matchDir;
+    }
+    $server['mounts'] = implode(',', $mounts);
+    $server['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
+    $server['raid_status'] = trim(`{$dir}/check_raid.sh --check=WARNING 2>/dev/null`);
     if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
         $server['raid_status'] = 'OK: ';
     }
@@ -70,9 +71,10 @@ function update_vps_info()
                 $matches[1] = 'WARNING';
             }
         }
-        $parts[] = 'zfs: '.$zfs_status;
+        $parts[] = 'zfs:'.$zfs_status;
         $server['raid_status'] = $matches[1].': '.implode('; ', $parts);
     }
+
 	if (file_exists('/usr/bin/iostat')) {
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
