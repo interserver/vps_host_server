@@ -58,7 +58,7 @@ function update_vps_info()
         $server['raid_status'] = 'OK: ';
     }
     if (file_exists('/sbin/zpool')) {
-        preg_match('/^([^:]*): (.*)$/m', $server['raid_status'], $matches);
+        preg_match('/^([^:]*): (.*)$/', $server['raid_status'], $matches);
         if (!isset($matches[2]) || trim($matches[2]) == '') {
             $parts = [];
         } else {
