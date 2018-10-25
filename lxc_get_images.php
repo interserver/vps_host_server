@@ -2,7 +2,7 @@
 $out = `lxc image list images:;`;
 $valid_archs = array('x86_64','i686');
 $json = json_decode(`lxc image list images: --format json`, true);
-$images = [];
+$images = array();
 foreach ($json as $idx => $image) {
 	if (in_array($image['architecture'], $valid_archs)) {
 		$size = 0;

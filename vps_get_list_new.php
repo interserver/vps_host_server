@@ -101,7 +101,7 @@ fi;\n";
 			$uuids = array();
 			$veids = array();
 			foreach ($matches['uuid'] as $key => $id) {
-				$id = str_replace(['{','}'], ['',''], $id);
+				$id = str_replace(array('{','}'), array('',''), $id);
 				$veids[$matches['ctid'][$key]] = $id;
 				$uuids[$id] = $matches['ctid'][$key];
 				$server = array(
