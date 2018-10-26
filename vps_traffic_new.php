@@ -52,10 +52,10 @@ function get_vps_ipmap()
         $output = '';
         foreach (glob('/etc/vz/conf/*.conf') as $file) {
             $txt = file_get_contents($file);
-            if (preg_match('/^IP_ADDRESS="(.*)"/', $txt, $matches)) {
+            if (preg_match('/^IP_ADDRESS="(.*)"/m', $txt, $matches)) {
                 $ip = str_replace('/255.255.255.0','', $matches[1]);
                 $veid = basename($file, '.conf');
-                if (preg_match('/^UUID="(.*)"/', $txt, $matches)) {
+                if (preg_match('/^UUID="(.*)"/m', $txt, $matches)) {
                     $veid = $matches[1];
                 }
                 $output .= $veid.' '.$ip.PHP_EOL;
