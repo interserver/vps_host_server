@@ -49,8 +49,20 @@ function get_vps_ipmap()
 	if ($vzctl == ''  && (file_exists('/etc/dhcpd.vps') || file_exists('/etc/dhcp/dhcpd.vps'))) {
 		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  if [ -e \$DHCPVPS ]; then grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'; fi;`);
 	} elseif (file_exists('/usr/bin/prlctl')) {
-		$cmd = 'grep -H "^IP_ADDRESS" /etc/vz/conf/[0-9a-z-]*.conf 2>/dev/null | grep -v -e "^#" | sed -e s#"^.*/\([0-9a-z-]*\)\.conf:IP_ADDRESS=\"\([-0-9\. :a-f\/]*\)\""#"\1 \2"#g -e s#"/255.255.255.0"#""#g -e s#" *$"#""#g';
-		$output = rtrim(`$cmd`);
+        $output = '';
+        foreach (glob('/etc/vz/conf/*.conf') as $file) {
+            $txt = file_get_contents($file);
+            if (preg_match('/^IP_ADDRESS="(.*)"/', $txt, $matches)) {
+                $ip = str_replace('/255.255.255.0','', $matches[1]);
+                $veid = basename($file, '.conf');
+                if (preg_match('/^UUID="(.*)"/', $txt, $matches)) {
+                    $veid = $matches[1];
+                }
+                $output .= $veid.' '.$ip.PHP_EOL;
+            }
+        }
+		//$cmd = 'grep -H "^IP_ADDRESS" /etc/vz/conf/[0-9a-z-]*.conf 2>/dev/null | grep -v -e "^#" | sed -e s#"^.*/\([0-9a-z-]*\)\.conf:IP_ADDRESS=\"\([-0-9\. :a-f\/]*\)\""#"\1 \2"#g -e s#"/255.255.255.0"#""#g -e s#" *$"#""#g';
+		//$output = rtrim(`$cmd`);
 	} else {
 		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip 2>/dev/null`);
 	}
