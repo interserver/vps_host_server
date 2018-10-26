@@ -52,11 +52,11 @@ function get_vps_ipmap()
         $output = '';
         foreach (glob('/etc/vz/conf/*.conf') as $file) {
             $txt = file_get_contents($file);
-            if (preg_match('/^IP_ADDRESS="(.*)"/m', $txt, $matches)) {
+            if (preg_match('/^IP_ADDRESS="([^"]*)"$/mU', $txt, $matches)) {
                 $ip = str_replace('/255.255.255.0','', $matches[1]);
                 $veid = basename($file, '.conf');
-                if (preg_match('/^UUID="(.*)"/m', $txt, $matches)) {
-                    $veid = $matches[1];
+                if (preg_match('/^UUID="([^"]*)"$/mU', $txt, $matches2)) {
+                    $veid = $matches2[1];
                 }
                 $output .= $veid.' '.$ip.PHP_EOL;
             }
@@ -167,7 +167,7 @@ function get_vps_iptables_traffic($ips)
 	} else {
 		foreach ($ips as $ip => $id) {
 			if (validIp($ip, false) == true) {
-				$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print $3 }'`));
+				$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print \$3 }'`));
 				if (sizeof($lines) == 2) {
 					list($in, $out) = $lines;
 					$total = $in + $out;
