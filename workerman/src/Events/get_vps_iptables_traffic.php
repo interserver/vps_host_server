@@ -22,6 +22,7 @@ return function ($stdObject) {
 				$macs = array();
 				foreach ($vnetmacs as $line) {
 					list($vnet, $mac) = explode(' ', $line);
+                    $mac = preg_replace('/^52:16:3e:/', '00:16:3e:', $mac);
 					//echo "Got  VNet:$vnet   Mac:$mac\n";
 					$vnets[$vnet]['mac'] = $mac;
 					$macs[$mac] = $vnet;
