@@ -1,5 +1,7 @@
 <?php
 
+use Workerman\Worker;
+
 return function ($stdObject) {
     Worker::safeEcho("get_vps_iptables_traffic [0] Starting up processing for type '{$stdObject->type}'\n");
 	$totals = array();
