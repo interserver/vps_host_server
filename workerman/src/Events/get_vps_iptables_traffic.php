@@ -15,7 +15,7 @@ return function ($stdObject) {
 			$vnets = array();
 			foreach ($vnetcounters as $line) {
 				list($vnet, $out, $in) = explode(' ', $line);
-				Worker::safeEcho("get_vps_iptables_traffic [1] Got    VNet:$vnet   IN:$in    OUT:$out\n");
+				//Worker::safeEcho("get_vps_iptables_traffic [1] Got    VNet:$vnet   IN:$in    OUT:$out\n");
 				$vnets[$vnet] = array('in' => $in, 'out' => $out);
 			}
 			$cmd = 'grep -H -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
@@ -26,7 +26,7 @@ return function ($stdObject) {
 				foreach ($vnetmacs as $line) {
 					list($vnet, $mac) = explode(' ', $line);
                     $mac = preg_replace('/^52:16:3e:/', '00:16:3e:', $mac);
-					Worker::safeEcho("get_vps_iptables_traffic [2] Got  VNet:$vnet   Mac:$mac\n");
+					//Worker::safeEcho("get_vps_iptables_traffic [2] Got  VNet:$vnet   Mac:$mac\n");
 					$vnets[$vnet]['mac'] = $mac;
 					$macs[$mac] = $vnet;
 				}
@@ -35,7 +35,7 @@ return function ($stdObject) {
 				$vpss = array();
 				foreach ($macvps as $line) {
 					list($mac, $vps, $ip) = explode(' ', $line);
-					Worker::safeEcho("get_vps_iptables_traffic [3] Got  Mac:$mac   VPS:$vps   IP:$ip\n");
+					//Worker::safeEcho("get_vps_iptables_traffic [3] Got  Mac:$mac   VPS:$vps   IP:$ip\n");
 					if (isset($macs[$mac]) && isset($vnets[$macs[$mac]])) {
 						$vpss[$vps] = $vnets[$macs[$mac]];
 						$vpss[$vps]['ip'] = $ip;
