@@ -6,9 +6,9 @@ use Workerman\Connection\TcpConnection;
 use Workerman\Connection\AsyncTcpConnection;
 
 return function ($stdObject, $name, $interval = false, $callable = false) {
-    Worker::safeEcho("addTimer called with ({$name}, ".var_export($callable, true).", ".var_export($interval, true).") called timer set? ".var_export(isset($stdObject->timers[$name]), true));
+    Worker::safeEcho("addTimer called with ({$name}, ".var_export($callable, true).", ".var_export($interval, true).") called timer set? ".var_export(isset($stdObject->timers[$name]), true).PHP_EOL);
     if (isset($stdObject->timers[$name])) {
-        Worker::safeEcho("addTimer deleting timer {$name} id {$stdObject->timers[$name]}");
+        Worker::safeEcho("addTimer deleting timer {$name} id {$stdObject->timers[$name]}\n");
 		Timer::del($stdObject->timers[$name]);
 	}
     if ($callable === false)
@@ -16,5 +16,5 @@ return function ($stdObject, $name, $interval = false, $callable = false) {
     if ($interval === false)
         $interval = $stdObject->config['timers'][$name];
 	$stdObject->timers[$name] = Timer::add($interval, $callable);
-    Worker::safeEcho("addTimer adding timer {$name} every {$interval} got timer id {$stdObject->timers[$name]}");
+    Worker::safeEcho("addTimer adding timer {$name} every {$interval} got timer id {$stdObject->timers[$name]}\n");
 };
