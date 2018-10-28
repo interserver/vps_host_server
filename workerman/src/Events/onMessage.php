@@ -7,7 +7,7 @@ use Workerman\Connection\AsyncTcpConnection;
 
 return function ($stdObject, AsyncTcpConnection $conn, $data) {
 	$stdObject->conn = $conn;
-	echo "onMessage Got: ".$data.PHP_EOL;
+	//echo "onMessage Got: ".$data.PHP_EOL;
     /**
     * @var \GlobalData\Client
     */
