@@ -36,7 +36,9 @@ for i in *; do
 		if [ "$(echo $i|grep -- "-spice$")" != "" ]; then
 			n=$(echo $i|sed s#"-spice$"#""#g)
 			virshknows=`virsh dumpxml $n 2>/dev/null | grep spice | grep port | cut -d\' -f4`;
-		else
+		elif [ -e /usr/bin/prlctl ]; then
+            virshknows=`prlctl list $i -i 2>/dev/null |grep "Remote display:.*port=" |sed s#"^.*port=\([0-9]*\) .*$"#"\1"#g`;
+        else
 			virshknows=`virsh dumpxml $i 2>/dev/null | grep vnc | grep port | cut -d\' -f4`;
 		fi
 		if [ -z "$virshknows" ]; then
