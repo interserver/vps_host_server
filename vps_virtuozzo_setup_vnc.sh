@@ -13,6 +13,7 @@ if [ $# -ne 2 ]; then
 elif ! prlctl status $name >/dev/null 2>&1; then
  echo "Invalid VPS $name";
 else
+ name="$(prlctl list $name -i |grep EnvID|cut -d" " -f2)"
  port="$(prlctl list $name -i |grep "Remote display.*port=" | sed s#"^.*port=\([0-9]*\) .*$"#"\1"#g)"
  if [ "$port" != "" ]; then
   cat ${base}/vps_kvm_xinetd.template | \
