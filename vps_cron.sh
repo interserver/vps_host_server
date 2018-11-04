@@ -1,6 +1,10 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
 export base="$(readlink -f "$(dirname "$0")")";
+export url=https://myvps2.interserver.net/vps_queue.php
+export dir=${base};
+export log=$dir/cron.output;
+export old_cron=1;
 
 function age() {
    local filename=$1
@@ -17,10 +21,6 @@ fi;
 if [ -f /dev/shm/lock ]; then
 	exit;
 fi;
-export url=https://myvps2.interserver.net/vps_queue.php
-export dir=${base};
-export log=$dir/cron.output;
-export old_cron=1;
 if [ -e $dir/.enable_workerman ]; then
 	export old_cron=0;
 	if [ $($dir/workerman/start.php status 2>/dev/null|grep "PROCESS STATUS"|wc -l) -eq 0 ]; then

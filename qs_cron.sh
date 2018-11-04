@@ -1,5 +1,11 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export base="$(readlink -f "$(dirname "$0")")";
+export url=https://myvps2.interserver.net/vps_queue.php
+export dir=${base};
+export log=$dir/cron.output;
+export old_cron=1;
+export pslog=$dir/cron.psoutput;
 
 function age() {
    local filename=$1
@@ -11,7 +17,6 @@ function age() {
    echo $elapsed
 }
 
-export pslog=$dir/cron.psoutput;
 ps ux |grep "/bin/bash $0"|grep -v -e grep -e " $(($$ + 1)) " > $pslog
 count=$(cat $pslog|wc -l)
 if [ $count -ge 2 ]; then
