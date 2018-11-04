@@ -6,7 +6,7 @@ function stop_service() {
 	killall -9 vmstat
 }
 
-function check_svn() {
+function check_vcs() {
 	svnversion=1.9;
 	svnversionshort=$(echo "$svnversion" | sed s#"\."#""#g);
 	if [ ! -e /usr/bin/svn ] || [ $(svn --version |head -n 1 | sed s#"^.* \([0-9]\)\.\([0-9]\).*$"#"\1\2"#g) -lt ${svnversionshort} ]; then
@@ -39,8 +39,8 @@ function check_svn() {
 	fi;
 }
 
-function svn_up() {
-	rsync -av rsync://vpsadmin.interserver.net/vps/cpaneldirect/ ${base}/../ || svn update --accept theirs-full --username vpsclient --password interserver123 --trust-server-cert --non-interactive ${base}/../;
+function vcs_up() {
+	git pull --all -f || rsync -av rsync://vpsadmin.interserver.net/vps/cpaneldirect/ ${base}/../
 }
 
 function check_composer() {
@@ -183,8 +183,8 @@ function composer_up() {
 	sed -e s#'^TEMP_FORMAT="c"'#'TEMP_FORMAT="f"'#g -e s#'^SHOW_NETWORK_ACTIVE_SPEED=false'#'SHOW_NETWORK_ACTIVE_SPEED=true'#g -e s#'^REFRESH=.*$'#'REFRESH=10000'#g -i vendor/detain/phpsysinfo/phpsysinfo.ini
 }
 
-check_svn
-svn_up
+check_vcs
+vcs_up
 check_packages
 check_php
 check_php_event
