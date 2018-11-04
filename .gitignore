@@ -1,0 +1,12 @@
+cron.output
+.cron.age
+.cron_daily.age
+.cron_weekly.age
+vps.ipmap
+vps.mainips
+vps.slicemap
+vps.vncmap
+workerman/stdout.log
+workerman/vendor
+workerman/src/myadmin.crt
+workerman/src/myadmin.key
