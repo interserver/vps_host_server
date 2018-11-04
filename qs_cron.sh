@@ -26,3 +26,4 @@ if [ $count -ge 2 ]; then
 else
 	php qs_cron.php >> cron.output 2>&1
 fi
+rm -f $pslog

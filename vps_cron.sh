@@ -88,4 +88,5 @@ if [ $old_cron -eq 1 ]; then
 #		fi
 		/bin/rm -f $dir/cron.cmd;
 	fi
+	rm -f $pslog
 fi;
