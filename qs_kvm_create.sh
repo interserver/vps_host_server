@@ -191,63 +191,122 @@ else
         #    echo "Uploading $template Image"
         #    virsh vol-upload $name "/$template.img" --pool vz
         #fi;
+    elif [ "$(echo $template | cut -c1-7)" = "http://" ] || [ "$(echo $template | cut -c1-8)" = "https://" ] || [ "$(echo $template | cut -c1-6)" = "ftp://" ]; then
+        adjust_partitions=0
+        echo "Downloading $template Image"
+        ${base}/vps_get_image.sh "$template"
+        if [ ! -e "/image_storage/image.raw.img" ]; then
+            echo "There must have been a problem, the image does not exist"
+            error=$(($error + 1))
+        else
+            echo "Copying $template Image"
+            dd if=/image_storage/image.raw.img of=$device >dd.progress 2>&1 &
+            pid=$!
+            tsize=$(stat -c%s "/image_storage/image.raw.img")
+            while [ -d /proc/$pid ]; do
+            sleep 9s
+            kill -SIGUSR1 $pid;
+            sleep 1s
+            if [ -d /proc/$pid ]; then
+                copied=$(tail -n 1 dd.progress | cut -d" " -f1)
+                completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+                curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
+                if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+                    softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+                    for softfile in $softraid; do
+                        echo idle > $softfile
+                    done
+                fi
+            fi
+            echo "$completed%"
+            sleep 10s
+            done
+            echo "Removing Downloaded Image"
+            umount /image_storage
+            virsh vol-delete --pool vz image_storage
+            rmdir /image_storage
+        fi
+    elif [ -e "/vz/templates/$template" ]; then
+        echo "Copying Image"
+        tsize=$(stat -c%s "/vz/templates/$template")
+        dd if=/vz/templates/$template of=$device >dd.progress 2>&1 &
+        pid=$!
+        while [ -d /proc/$pid ]; do
+            sleep 9s
+            kill -SIGUSR1 $pid;
+            sleep 1s
+            if [ -d /proc/$pid ]; then
+              copied=$(tail -n 1 dd.progress | cut -d" " -f1)
+              completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+              curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
+              if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+                    softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+                    for softfile in $softraid; do
+                        echo idle > $softfile
+                    done
+                fi
+              echo "$completed%"
+            fi
+        done
+        rm -f dd.progress
+    elif [ -e "/$template.img" ]; then
+        echo "Copying Image"
+        tsize=$(stat -c%s "/$template.img")
+        dd if=/$template.img of=$device >dd.progress 2>&1 &
+        pid=$!
+        while [ -d /proc/$pid ]; do
+            sleep 9s
+            kill -SIGUSR1 $pid;
+            sleep 1s
+            if [ -d /proc/$pid ]; then
+              copied=$(tail -n 1 dd.progress | cut -d" " -f1)
+              completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+              curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
+              if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+                    softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+                    for softfile in $softraid; do
+                        echo idle > $softfile
+                    done
+                fi
+              echo "$completed%"
+            fi
+        done
+        rm -f dd.progress
     elif [ -e "/$template.img.gz" ]; then
         echo "Copying $template Image"
+        tsize=$(stat -c%s "/$template.img.gz")
         gzip -dc "/$template.img.gz"  | dd of=$device 2>&1 &
-        #pid="$(pidof gzip)"
         pid=$!
-        echo "Got gzip PID $pid";
+        echo "Got DD PID $pid";
+        sleep 2s;
         if [ "$(pidof gzip)" != "" ]; then
-            pid="$(pidof gzip)"
-            echo "Tried again, got gzpi PID $pid"
-        fi
+            pid="$(pidof gzip)";
+            echo "Tried again, got gzip PID $pid";
+        fi;
         if [ "$(echo "$pid" | grep " ")" != "" ]; then
-            pid=$(pgrep -f 'gzip -dc')
-            echo "Didn't like gzip pid (had a space?), going with gzip PID $pid"
-        fi
+            pid=$(pgrep -f 'gzip -dc');
+            echo "Didn't like gzip pid (had a space?), going with gzip PID $pid";
+        fi;
         tsize=$(stat -L /proc/$pid/fd/3 -c "%s");
         echo "Got Total Size $tsize";
         if [ -z $tsize ]; then
-        tsize=$(stat -c%s "/$template.img.gz");
-        echo "Falling back to filesize check, got size $tsize";
+            tsize=$(stat -c%s "/$template.img.gz");
+            echo "Falling back to filesize check, got size $tsize";
         fi;
         while [ -d /proc/$pid ]; do
-    copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
-    completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-    curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
-    if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-        softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-        for softfile in $softraid; do
-            echo idle > $softfile
+            copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3);
+            completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)";
+            curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null;
+            if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+                softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
+                for softfile in $softraid; do
+                    echo idle > $softfile;
+                done;
+            fi;
+            echo "$completed%";
+            sleep 10s
         done
-    fi
-    echo "$completed%"
-    sleep 10s
-        done
-    elif [ -e "/$template.img" ]; then
-        echo "Copying $template Image"
-        tsize=$(stat -c%s "/$template.img")
-        dd if="/$template.img" of=$device >dd.progress 2>&1 &
-        pid=$!
-        while [ -d /proc/$pid ]; do
-    sleep 9s
-    kill -SIGUSR1 $pid;
-    sleep 1s
-    if [ -d /proc/$pid ]; then
-      copied=$(tail -n 1 dd.progress | cut -d" " -f1)
-      completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-      curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
-        if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-            softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-            for softfile in $softraid; do
-                echo idle > $softfile
-            done
-        fi
-      echo "$completed%"
-    fi
-        done
-        rm -f dd.progress
-    else
+    elif [ -e "/dev/vz/$template" ]; then
         echo "Suspending $template For Copy"
         /usr/bin/virsh suspend $template
         echo "Copying Image"
@@ -255,86 +314,99 @@ else
         dd if=/dev/vz/$template of=$device >dd.progress 2>&1 &
         pid=$!
         while [ -d /proc/$pid ]; do
-    sleep 9s
-    kill -SIGUSR1 $pid;
-    sleep 1s
-    if [ -d /proc/$pid ]; then
-      copied=$(tail -n 1 dd.progress | cut -d" " -f1)
-      completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
-      curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
-        if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-            softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
-            for softfile in $softraid; do
-                echo idle > $softfile
-            done
-        fi
-      echo "$completed%"
-    fi
+            sleep 9s
+            kill -SIGUSR1 $pid;
+            sleep 1s
+            if [ -d /proc/$pid ]; then
+              copied=$(tail -n 1 dd.progress | cut -d" " -f1)
+              completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
+              curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
+                if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+                    softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
+                    for softfile in $softraid; do
+                        echo idle > $softfile
+                    done
+                fi
+              echo "$completed%"
+            fi
         done
         rm -f dd.progress
+    else
+        echo "Template Does Not Exist"
+        error=$(($error + 1))
     fi
+    touch /tmp/_securexinetd;
     if [ "$softraid" != "" ]; then
-    for softfile in $softraid; do
-        echo check > $softfile
-    done
+        for softfile in $softraid; do
+            echo check > $softfile
+        done
     fi
-    curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=$name "$url" 2>/dev/null
-    sects="$(fdisk -l -u $device  | grep -e "total .* sectors$" | sed s#".*total \(.*\) sectors$"#"\1"#g)"
-    t="$(fdisk -l -u $device | sed s#"\*"#""#g | grep "^/dev/vz" | tail -n 1)"
-    p="$(echo $t | awk '{ print $1 }')"
-    fs="$(echo $t | awk '{ print $5 }')"
-    pn="$(echo "$p" | sed s#"/dev/vz/"$name"p"#""#g)"
-    start="$(echo $t | awk '{ print $2 }')"
-    if [ "$fs" = "83" ]; then
-        echo "Resizing Last Partition To Use All Free Space"
-        echo -e "d\n$pn\nn\n$pt\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
-        echo -e "d\n$pn\nn\np\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
-        kpartx $kpartxopts -av $device
-        if [ -e "/dev/mapper/vz-"$name"p$pn" ]; then
-            pname="vz-$name"
-        else
-            pname="$name"
+    echo "Errors: $error  Adjust Partitions: $adjust_partitions";
+    if [ $error -eq 0 ]; then
+        if [ "$adjust_partitions" = "1" ]; then
+            curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=resizing -d server=$name "$url" 2>/dev/null
+            sects="$(fdisk -l -u $device  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g)"
+            t="$(fdisk -l -u $device | sed s#"\*"#""#g | grep "^$device" | tail -n 1)"
+            p="$(echo $t | awk '{ print $1 }')"
+            fs="$(echo $t | awk '{ print $5 }')"
+            if [ "$(echo "$fs" | grep "[A-Z]")" != "" ]; then
+                fs="$(echo $t | awk '{ print $6 }')"
+            fi;
+            pn="$(echo "$p" | sed s#"$device[p]*"#""#g)"
+            if [ $pn -gt 4 ]; then
+                pt=l
+            else
+                pt=p
+            fi
+            start="$(echo $t | awk '{ print $2 }')"
+            if [ "$fs" = "83" ]; then
+                echo "Resizing Last Partition To Use All Free Space (Sect $sects P $p FS $fs PN $pn PT $pt Start $start"
+                echo -e "d\n$pn\nn\n$pt\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
+                kpartx $kpartxopts -av $device
+                pname="$(ls /dev/mapper/vz-"$name"p$pn /dev/mapper/vz-$name$pn /dev/mapper/"$name"p$pn /dev/mapper/$name$pn 2>/dev/null | cut -d/ -f4 | sed s#"$pn$"#""#g)"
+                e2fsck -p -f /dev/mapper/$pname$pn
+               if [ -f "$(which resize4fs 2>/dev/null)" ]; then
+                    resizefs="resize4fs"
+                else
+                    resizefs="resize2fs"
+                fi
+                        $resizefs -p /dev/mapper/$pname$pn
+                        mkdir -p /vz/mounts/$name$pn
+                        mount /dev/mapper/$pname$pn /vz/mounts/$name$pn;
+                        PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
+                        echo "root:$password" | chroot /vz/mounts/$name$pn chpasswd || \
+                        php ${base}/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
+                        if [ -e /vz/mounts/$name$pn/home/kvm ]; then
+                            echo "kvm:$password" | chroot /vz/mounts/$name$pn chpasswd
+                        fi;
+                        umount /dev/mapper/$pname$pn
+                kpartx $kpartxopts -d $device
+            else
+                echo "Skipping Resizing Last Partition FS is not 83. Space (Sect $sects P $p FS $fs PN $pn PT $pt Start $start"
+            fi
+            # /usr/bin/virsh setmaxmem $name $memory;
+            # /usr/bin/virsh setmem $name $memory;
+            # /usr/bin/virsh setvcpus $name $vcpu;
         fi
-        fsck -T -p -f /dev/mapper/"$pname"p$pn
-        if [ -f "$(which resize4fs 2>/dev/null)" ]; then
-            resizefs="resize4fs"
-        else
-            resizefs="resize2fs"
-        fi
-                $resizefs -p /dev/mapper/$pname$pn
-                mkdir -p /vz/mounts/$name$pn
-                mount /dev/mapper/$pname$pn /vz/mounts/$name$pn;
-                PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
-                echo "root:$password" | chroot /vz/mounts/$name$pn chpasswd || \
-                php ${base}/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
-                if [ -e /vz/mounts/$name$pn/home/kvm ]; then
-                    echo "kvm:$password" | chroot /vz/mounts/$name$pn chpasswd
-                fi;
-                umount /dev/mapper/$pname$pn
-        kpartx $kpartxopts -d $device
-    fi
-    # /usr/bin/virsh setmaxmem $name $memory;
-    # /usr/bin/virsh setmem $name $memory;
-    # /usr/bin/virsh setvcpus $name $vcpu;
-    if [ "$pool" = "zfs" ]; then
-        virsh detach-disk $name vda --persistent;
-        virsh attach-disk $name /vz/$name/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;
-        virt-customize -d $name --root-password "password:$password" --hostname "$name"
-    fi;
+        if [ "$pool" = "zfs" ]; then
+            virsh detach-disk $name vda --persistent;
+            virsh attach-disk $name /vz/$name/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;
+            virt-customize -d $name --root-password "password:$password" --hostname "$name"
+        fi;
         touch /tmp/_securexinetd;
         /usr/bin/virsh autostart $name;
         mac="$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)";
         /bin/cp -f $DHCPVPS $DHCPVPS.backup;
-    grep -v -e "host $name " -e "fixed-address $ip;" $DHCPVPS.backup > $DHCPVPS
-    echo "host $name { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
-    rm -f $DHCPVPS.backup;
-    if [ -e /etc/apt ]; then
-        systemctl restart isc-dhcp-server 2>/dev/null || service isc-dhcp-server restart 2>/dev/null || /etc/init.d/isc-dhcp-server restart 2>/dev/null
-    else
-        systemctl restart dhcpd 2>/dev/null || service dhcpd restart 2>/dev/null || /etc/init.d/dhcpd restart 2>/dev/null;
-    fi
-    curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
-    /usr/bin/virsh start $name;
+        grep -v -e "host $name " -e "fixed-address $ip;" $DHCPVPS.backup > $DHCPVPS
+        echo "host $name { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
+        rm -f $DHCPVPS.backup;
+        if [ -e /etc/apt ]; then
+            systemctl restart isc-dhcp-server 2>/dev/null || service isc-dhcp-server restart 2>/dev/null || /etc/init.d/isc-dhcp-server restart 2>/dev/null
+        else
+            systemctl restart dhcpd 2>/dev/null || service dhcpd restart 2>/dev/null || /etc/init.d/dhcpd restart 2>/dev/null;
+        fi
+        curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
+        /usr/bin/virsh start $name;
         if [ "$pool" != "zfs" ]; then
             bash ${base}/run_buildebtables.sh;
         fi;
@@ -356,24 +428,26 @@ else
             ${base}/vps_kvm_setup_vnc.sh $name "$clientip";
         fi;
         ${base}/vps_refresh_vnc.sh $name
-    vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
-    if [ "$vnc" == "" ]; then
-        sleep 2s;
         vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
         if [ "$vnc" == "" ]; then
             sleep 2s;
-            vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+            vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
+            if [ "$vnc" == "" ]; then
+                sleep 2s;
+                vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
+            fi;
         fi;
-    fi;
-    ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-    sleep 1s;
-    ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-    sleep 1s;
-    ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-    /admin/kvmenable blocksmtp $name
+        ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+        sleep 1s;
+        ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+        sleep 1s;
+        ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+        /admin/kvmenable blocksmtp $name
         if [ "$module" = "vps" ]; then
             /admin/kvmenable ebflush
             ${base}/buildebtablesrules | sh
         fi
         service xinetd restart
-fi
+    fi
+fi;
+rm -f /tmp/_securexinetd;
