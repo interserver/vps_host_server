@@ -1,7 +1,6 @@
 #!/bin/bash
-export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
-base="$(readlink -f "$(dirname "$0")")";
-#set -x
+export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin";
+export base="$(readlink -f "$(dirname "$0")")";
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
@@ -15,7 +14,7 @@ fi
 url="https://myquickserver2.interserver.net/qs_queue.php"
 softraid=""
 vcpu=2
-size=101000
+size=102400
 name=$1
 ip=$2
 if [ "$(echo "$ip" |grep ",")" != "" ]; then
@@ -25,11 +24,11 @@ else
 	extraips=""
 fi;
 template=$3
-memory=1024000
+memory=1048576
 if [ "$template" = "windows3" ]; then
-	size=50500
-	memory=256000
-	vcpu=1
+    size=52000
+    memory=262144
+    vcpu=1
 fi
 IFS="
 "
@@ -48,8 +47,16 @@ if [ "$6" != "" ]; then
 		vcpu="$(lscpu |grep ^CPU\(s\) | awk ' { print $2 }')"
 	fi
 fi
-max_cpu=$vcpu
-max_memory=$memory
+if [ $vcpu -gt 8 ]; then
+    max_cpu=$vcpu
+else
+    max_cpu=8
+fi
+if [ $memory -gt 16384000 ]; then
+    max_memory=$memory
+else
+    max_memory=16384000;
+fi
 if [ "$7" != "" ]; then
 	password=$7
 fi
@@ -97,13 +104,14 @@ else
         device=/vz/$name/os.qcow2
         cd /vz
         sleep 5s;
-		#block=$(zfs get -pH recordsize |awk "{ print \$3 }")
-		#virsh vol-create-as --pool vz --name $name --capacity $(echo "$block * $(echo "$(virsh pool-info vz --bytes|grep "^Available"|awk "{ print \$2 }") / 100 * 70 / $block"|bc)"|bc)b
+		#virsh vol-create-as --pool vz --name $name/os.qcow2 --capacity "$size"M --format qcow2 --prealloc-metadata
 		#sleep 5s;
-		#device="$(virsh vol-list vz --details|grep " $name "|awk '{ print $2 }')"
+		#device="$(virsh vol-list vz --details|grep " $name[/ ]"|awk '{ print $2 }')"
 	else
 		${base}/vps_kvm_lvmcreate.sh $name $size || exit
 	fi
+    touch /tmp/_securexinetd;
+    echo "$pool pool device $device created"
 	cd /etc/libvirt/qemu
 	if /usr/bin/virsh dominfo $name >/dev/null 2>&1; then
 		/usr/bin/virsh destroy $name

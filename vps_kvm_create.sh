@@ -38,7 +38,7 @@ fi
 if [ "$5" != "" ]; then
 	memory=$5
 	if [ "$memory" = "all" ]; then
-		memory="$(echo `cat /proc/meminfo  | grep ^MemTotal | awk '{ print $2 }'` - 102400 | bc -l)"
+		memory=$(echo "$(grep "^MemTotal" /proc/meminfo|awk "{ print \$2 }") / 100 * 70"|bc)
 	fi
 fi
 if [ "$6" != "" ]; then
@@ -68,7 +68,7 @@ fi
 error=0
 adjust_partitions=1
 export PREPATH="";
-if [ -e /etc/redhat-release ] && [ "$(cat /etc/redhat-release| cut -d" " -f3 | cut -d"." -f1)" = "6" ]; then
+if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release |sed s#"^[^0-9]* "#""#g|cut -c1) -le 6 ]; then
 	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then
 		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
 			pushd $PWD;
@@ -94,7 +94,7 @@ if [ $# -lt 3 ]; then
 else
 	export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	if [ "$pool" = "" ]; then
-		$base/create_libvirt_storage_pools.sh
+		${base}/create_libvirt_storage_pools.sh
 		export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
@@ -108,8 +108,7 @@ else
 		#sleep 5s;
 		#device="$(virsh vol-list vz --details|grep " $name[/ ]"|awk '{ print $2 }')"
 	else
-		$base/vps_kvm_lvmcreate.sh $name $size || exit
-		#device="$device"
+		${base}/vps_kvm_lvmcreate.sh $name $size || exit
 	fi
 	touch /tmp/_securexinetd;
 	echo "$pool pool device $device created"
