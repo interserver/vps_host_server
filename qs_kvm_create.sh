@@ -114,15 +114,15 @@ else
 		echo "Generating XML Config"
 		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
-			grep -v -e filterref -e "<parameter name='IP'" -e uuid -e "mac address" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			grep -v -e filterref -e "<parameter name='IP'" -e uuid ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-			  grep -v -e uuid -e "mac address" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			  grep -v -e uuid ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		fi
 		echo "Defining Config As VPS"
-				echo "Defining Config As VPS"
-				if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
-				  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i $name.xml
-				fi;
+		echo "Defining Config As VPS"
+		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
+		    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i $name.xml
+		fi;
 	fi
 	mv -f $name.xml $name.xml.backup
 	repl="<parameter name='IP' value='$ip'/>";
@@ -131,15 +131,30 @@ else
 			repl="$repl\n        <parameter name='IP' value='$i'/>";
 		done
 	fi
-	cat $name.xml.backup | sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g | sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g | sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g | sed s#"<parameter name='IP' value.*/>"#"$repl"#g > $name.xml
-	sed s#"<cpu.*$"#"<cpu mode='host-passthrough' check='none'/>"#g -i $name.xml;
-	if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo | head -n 1)" != "" ]; then
-		sed s#"<features>"#"<features>\n    <hap/>"#g -i $name.xml
-	fi
-	if [ "$(date +%Z)" = "PDT" ]; then
-		sed s#"America/New_York"#"America/Los_Angeles"#g -i $name.xml
-	fi
-	rm -f $name.xml.backup
+    id=$(echo $name|sed s#"^\(qs\|windows\|linux\|vps\)\([0-9]*\)$"#"\2"#g)
+    if [ "$id" != "$name" ]; then
+        mac=$($base/convert_id_to_mac.sh $id)
+        sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i $name.xml
+    else
+        sed s#"^.*<mac address.*$"#""#g -i $name.xml
+    fi
+
+    sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i $name.xml;
+    sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i $name.xml;
+    sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i $name.xml;
+    sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i $name.xml;
+    if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo)" != "" ]; then
+        sed s#"<features>"#"<features>\n    <hap/>"#g -i $name.xml
+    fi
+    if [ "$(date "+%Z")" = "PDT" ]; then
+        sed s#"America/New_York"#"America/Los_Angeles"#g -i $name.xml
+    fi
+    if [ -e /etc/lsb-release ]; then
+        . /etc/lsb-release;
+        if [ $(echo $DISTRIB_RELEASE|cut -d\. -f1) -ge 18 ]; then
+            sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='$vcpu'/>"#g -i  $name.xml;
+        fi;
+    fi;
 	/usr/bin/virsh define $name.xml
 	if [ "$template" = "windows1" ]; then
 		template=windows2
