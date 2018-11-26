@@ -410,18 +410,24 @@ else
         if [ "$pool" != "zfs" ]; then
             bash ${base}/run_buildebtables.sh;
         fi;
-        if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
-            echo "CGroups Not Detected, Bailing";
-        else
-            slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
-            cpushares="$(($slices * 512))";
-            ioweight="$(echo "400 + (37 * $slices)" | bc -l | cut -d\. -f1)";
-            virsh schedinfo $name --set cpu_shares=$cpushares --current;
-            virsh schedinfo $name --set cpu_shares=$cpushares --config;
-            virsh blkiotune $name --weight $ioweight --current;
-            virsh blkiotune $name --weight $ioweight --config;
+        if [ "$module" = "vps" ]; then
+            if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
+                echo "CGroups Not Detected, Bailing";
+            else
+                slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
+                cpushares="$(($slices * 512))";
+                ioweight="$(echo "400 + (37 * $slices)" | bc -l | cut -d\. -f1)";
+                virsh schedinfo $name --set cpu_shares=$cpushares --current;
+                virsh schedinfo $name --set cpu_shares=$cpushares --config;
+                virsh blkiotune $name --weight $ioweight --current;
+                virsh blkiotune $name --weight $ioweight --config;
+            fi;
         fi;
         ${base}/tclimit $ip;
+        if [ "$clientip" != "" ]; then
+            ${base}/vps_kvm_setup_vnc.sh $name "$clientip";
+        fi;
+        ${base}/vps_refresh_vnc.sh $name
         vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
         if [ "$vnc" == "" ]; then
             sleep 2s;
@@ -431,17 +437,16 @@ else
                 vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
             fi;
         fi;
-        if [ "$clientip" != "" ]; then
-            ${base}/vps_kvm_setup_vnc.sh $name "$clientip";
-        fi;
         ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
         sleep 1s;
         ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
         sleep 1s;
         ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
         /admin/kvmenable blocksmtp $name
-        /admin/kvmenable ebflush
-        ${base}/buildebtablesrules | sh
+        if [ "$module" = "vps" ]; then
+            /admin/kvmenable ebflush
+            ${base}/buildebtablesrules | sh
+        fi
         service xinetd restart
     fi
 fi;

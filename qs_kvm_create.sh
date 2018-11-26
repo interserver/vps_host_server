@@ -215,7 +215,7 @@ else
     copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3)
     completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
     curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
-    if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+    if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
         softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
         for softfile in $softraid; do
             echo idle > $softfile
@@ -262,7 +262,7 @@ else
       copied=$(tail -n 1 dd.progress | cut -d" " -f1)
       completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
       curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
-        if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+        if [ -e /sys/block/md*/md/sync_action ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
             softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
             for softfile in $softraid; do
                 echo idle > $softfile
@@ -301,11 +301,16 @@ else
         else
             resizefs="resize2fs"
         fi
-        $resizefs -p /dev/mapper/"$pname"p$pn
-        mkdir -p /vz/mounts/"$name"p$pn
-        mount /dev/mapper/"$pname"p$pn /vz/mounts/"$name"p$pn;
-        PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" echo "root:$password" | chroot /vz/mounts/"$name"p$pn chpasswd
-        umount /dev/mapper/"$pname"p$pn
+                $resizefs -p /dev/mapper/$pname$pn
+                mkdir -p /vz/mounts/$name$pn
+                mount /dev/mapper/$pname$pn /vz/mounts/$name$pn;
+                PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
+                echo "root:$password" | chroot /vz/mounts/$name$pn chpasswd || \
+                php ${base}/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
+                if [ -e /vz/mounts/$name$pn/home/kvm ]; then
+                    echo "kvm:$password" | chroot /vz/mounts/$name$pn chpasswd
+                fi;
+                umount /dev/mapper/$pname$pn
         kpartx $kpartxopts -d $device
     fi
     # /usr/bin/virsh setmaxmem $name $memory;
@@ -316,12 +321,13 @@ else
         virsh attach-disk $name /vz/$name/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;
         virt-customize -d $name --root-password "password:$password" --hostname "$name"
     fi;
-    /usr/bin/virsh autostart $name
-    mac="$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)"
-    /bin/cp -f $DHCPVPS $DHCPVPS.backup
+        touch /tmp/_securexinetd;
+        /usr/bin/virsh autostart $name;
+        mac="$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)";
+        /bin/cp -f $DHCPVPS $DHCPVPS.backup;
     grep -v -e "host $name " -e "fixed-address $ip;" $DHCPVPS.backup > $DHCPVPS
     echo "host $name { hardware ethernet $mac; fixed-address $ip;}" >> $DHCPVPS
-    rm -f $DHCPVPS.backup
+    rm -f $DHCPVPS.backup;
     if [ -e /etc/apt ]; then
         systemctl restart isc-dhcp-server 2>/dev/null || service isc-dhcp-server restart 2>/dev/null || /etc/init.d/isc-dhcp-server restart 2>/dev/null
     else
@@ -329,8 +335,27 @@ else
     fi
     curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
     /usr/bin/virsh start $name;
-    bash ${base}/run_buildebtables.sh;
-    ${base}/vps_refresh_vnc.sh $name
+        if [ "$pool" != "zfs" ]; then
+            bash ${base}/run_buildebtables.sh;
+        fi;
+        if [ "$module" = "vps" ]; then
+            if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
+                echo "CGroups Not Detected, Bailing";
+            else
+                slices="$(echo $memory / 1000 / 512 |bc -l | cut -d\. -f1)";
+                cpushares="$(($slices * 512))";
+                ioweight="$(echo "400 + (37 * $slices)" | bc -l | cut -d\. -f1)";
+                virsh schedinfo $name --set cpu_shares=$cpushares --current;
+                virsh schedinfo $name --set cpu_shares=$cpushares --config;
+                virsh blkiotune $name --weight $ioweight --current;
+                virsh blkiotune $name --weight $ioweight --config;
+            fi;
+        fi;
+        ${base}/tclimit $ip;
+        if [ "$clientip" != "" ]; then
+            ${base}/vps_kvm_setup_vnc.sh $name "$clientip";
+        fi;
+        ${base}/vps_refresh_vnc.sh $name
     vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
     if [ "$vnc" == "" ]; then
         sleep 2s;
@@ -340,16 +365,15 @@ else
             vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
         fi;
     fi;
-    if [ "$clientip" != "" ]; then
-        ${base}/vps_kvm_setup_vnc.sh $name "$clientip";
-    fi;
     ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-    ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-    #vnc="$(virsh dumpxml $name |grep -i "graphics type='vnc'" | cut -d\' -f4)";
     sleep 1s;
     ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
-    sleep 2s;
+    sleep 1s;
     ${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
     /admin/kvmenable blocksmtp $name
-
+        if [ "$module" = "vps" ]; then
+            /admin/kvmenable ebflush
+            ${base}/buildebtablesrules | sh
+        fi
+        service xinetd restart
 fi
