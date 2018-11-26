@@ -116,7 +116,7 @@ else
 		if [ "$pool" != "zfs" ]; then
 			grep -v -e "mac address" -e uuid -e filterref -e "<parameter name='IP'" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-            grep -v -e "mac address" -e uuid ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+            grep -v -e "mac address" -e uuid ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
 		fi
 		echo "Defining Config As VPS"
 		echo "Defining Config As VPS"
