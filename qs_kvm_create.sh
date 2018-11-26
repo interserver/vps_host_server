@@ -124,7 +124,6 @@ else
 		    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i $name.xml
 		fi;
 	fi
-	mv -f $name.xml $name.xml.backup
 	repl="<parameter name='IP' value='$ip'/>";
 	if [ "$extraips" != "" ]; then
 		for i in $extraips; do
