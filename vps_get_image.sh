@@ -45,7 +45,7 @@ if [ $showhelp -eq 1 ]; then
 fi
 #first we get the free disk space on the KVM in G
 if [ $uselvm -eq 1 ]; then
-	p="$(pvdisplay -c |grep -v -e centos -e backup)"
+	p="$(pvdisplay -c |grep :vz:)"
 	pesize=$(($(echo "$p" | cut -d: -f8) * 1000))
 	totalpe="$(echo "$p" | cut -d: -f9)"
 	freepe="$(echo "$p" | cut -d: -f10)"
