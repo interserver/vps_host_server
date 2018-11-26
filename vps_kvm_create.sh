@@ -11,8 +11,6 @@ if [ -e /etc/dhcp/dhcpd.vps ]; then
 else
     DHCPVPS=/etc/dhcpd.vps
 fi
-module="vps"
-url="https://myvps2.interserver.net/vps_queue.php"
 softraid=""
 vcpu=2
 size=102400
@@ -65,6 +63,16 @@ if [ "$8" != "" ]; then
     clientip="$8"
 else
     clientip=""
+fi
+if [ "$9" != "" ]; then
+    module="$9"
+else
+    module="vps"
+fi
+if [ "$module" = "quickservers" ]; then
+    url="https://myquickserver2.interserver.net/qs_queue.php"
+else
+    url="https://myvps2.interserver.net/vps_queue.php"
 fi
 error=0
 adjust_partitions=1
