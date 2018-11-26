@@ -11,6 +11,7 @@ if [ -e /etc/dhcp/dhcpd.vps ]; then
 else
 	DHCPVPS=/etc/dhcpd.vps
 fi
+module="vps"
 url="https://myvps2.interserver.net/vps_queue.php"
 softraid=""
 vcpu=2
@@ -122,9 +123,9 @@ else
 		echo "Generating XML Config"
 		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
-			grep -v -e uuid -e filterref -e "<parameter name='IP'" $base/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			grep -v -e uuid -e filterref -e "<parameter name='IP'" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-			grep -v -e uuid $base/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
+			grep -v -e uuid ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
 		fi
 		echo "Defining Config As VPS"
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
@@ -139,7 +140,7 @@ else
 	fi
 	id=$(echo $name|sed s#"^\(qs\|windows\|linux\|vps\)\([0-9]*\)$"#"\2"#g)
 	if [ "$id" != "$name" ]; then
-		mac=$($base/convert_id_to_mac.sh $id)
+		mac=$(${base}/convert_id_to_mac.sh $id $module)
 		sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i $name.xml
 	else
 		sed s#"^.*<mac address.*$"#""#g -i $name.xml
@@ -168,6 +169,9 @@ else
 	if [ "$pool" = "zfs" ]; then
 		if [ -e "/vz/templates/$template.qcow2" ]; then
 			echo "Copy $template.qcow2 Image"
+            if [ "$size" = "all" ]; then
+                size=$(echo "$(zfs list vz -o available -H -p)  / (1024 * 1024)"|bc)
+            fi
 			if [ "$(echo "$template"|grep -i freebsd)" != "" ]; then
 				cp -f /vz/templates/$template.qcow2 $device;
 				qemu-img resize $device "$size"M;
@@ -190,7 +194,7 @@ else
 	elif [ "$(echo $template | cut -c1-7)" = "http://" ] || [ "$(echo $template | cut -c1-8)" = "https://" ] || [ "$(echo $template | cut -c1-6)" = "ftp://" ]; then
 		adjust_partitions=0
 		echo "Downloading $template Image"
-		$base/vps_get_image.sh "$template"
+		${base}/vps_get_image.sh "$template"
 		if [ ! -e "/image_storage/image.raw.img" ]; then
 			echo "There must have been a problem, the image does not exist"
 			error=$(($error + 1))
@@ -371,7 +375,7 @@ else
 				mount /dev/mapper/$pname$pn /vz/mounts/$name$pn;
 				PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
 				echo "root:$password" | chroot /vz/mounts/$name$pn chpasswd || \
-				php $base/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
+				php ${base}/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
 				if [ -e /vz/mounts/$name$pn/home/kvm ]; then
 					echo "kvm:$password" | chroot /vz/mounts/$name$pn chpasswd
 				fi;
@@ -404,7 +408,7 @@ else
 		curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=starting -d server=$name "$url" 2>/dev/null
 		/usr/bin/virsh start $name;
 		if [ "$pool" != "zfs" ]; then
-			bash $base/run_buildebtables.sh;
+			bash ${base}/run_buildebtables.sh;
 		fi;
 		if [ ! -d /cgroup/blkio/libvirt/qemu ]; then
 			echo "CGroups Not Detected, Bailing";
@@ -417,7 +421,7 @@ else
 			virsh blkiotune $name --weight $ioweight --current;
 			virsh blkiotune $name --weight $ioweight --config;
 		fi;
-		$base/tclimit $ip;
+		${base}/tclimit $ip;
 		vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
 		if [ "$vnc" == "" ]; then
 			sleep 2s;
@@ -428,16 +432,16 @@ else
 			fi;
 		fi;
 		if [ "$clientip" != "" ]; then
-			$base/vps_kvm_setup_vnc.sh $name "$clientip";
+			${base}/vps_kvm_setup_vnc.sh $name "$clientip";
 		fi;
-		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		sleep 1s;
-		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		sleep 1s;
-		$base/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
+		${base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=$name";
 		/admin/kvmenable blocksmtp $name
 		/admin/kvmenable ebflush
-		$base/buildebtablesrules | sh
+		${base}/buildebtablesrules | sh
 		service xinetd restart
 	fi
 fi;

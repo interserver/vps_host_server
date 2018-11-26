@@ -11,6 +11,7 @@ if [ -e /etc/dhcp/dhcpd.vps ]; then
 else
 	DHCPVPS=/etc/dhcpd.vps
 fi
+module="quickservers"
 url="https://myquickserver2.interserver.net/qs_queue.php"
 softraid=""
 vcpu=2
@@ -122,11 +123,10 @@ else
 		echo "Generating XML Config"
 		templatef="windows"
 		if [ "$pool" != "zfs" ]; then
-			grep -v -e "mac address" -e uuid -e filterref -e "<parameter name='IP'" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
+			grep -v -e uuid -e filterref -e "<parameter name='IP'" ${base}/$templatef.xml | sed s#"$templatef"#"$name"#g > $name.xml
 		else
-            grep -v -e "mac address" -e uuid ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
+            grep -v -e uuid ${base}/$templatef.xml | sed -e s#"$templatef"#"$name"#g -e s#"/dev/vz/$name"#"$device"#g > $name.xml
 		fi
-		echo "Defining Config As VPS"
 		echo "Defining Config As VPS"
 		if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
 		    sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i $name.xml
@@ -138,13 +138,13 @@ else
 			repl="$repl\n        <parameter name='IP' value='$i'/>";
 		done
 	fi
-    #id=$(echo $name|sed s#"^\(qs\|windows\|linux\|vps\)\([0-9]*\)$"#"\2"#g)
-    #if [ "$id" != "$name" ]; then
-        #mac=$($base/convert_id_to_mac.sh $id)
-        #sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i $name.xml
-    #else
-        #sed s#"^.*<mac address.*$"#""#g -i $name.xml
-    #fi
+    id=$(echo $name|sed s#"^\(qs\|windows\|linux\|vps\)\([0-9]*\)$"#"\2"#g)
+    if [ "$id" != "$name" ]; then
+        mac=$(${base}/convert_id_to_mac.sh $id $module)
+        sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i $name.xml
+    else
+        sed s#"^.*<mac address.*$"#""#g -i $name.xml
+    fi
 
     sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i $name.xml;
     sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i $name.xml;
@@ -237,7 +237,7 @@ else
 	  copied=$(tail -n 1 dd.progress | cut -d" " -f1)
 	  completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)"
 	  curl --connect-timeout 60 --max-time 600 -k -d action=install_progress -d progress=$completed -d server=$name "$url" 2>/dev/null
-		if [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+		if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
 			softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)"
 			for softfile in $softraid; do
 				echo idle > $softfile
