@@ -92,10 +92,15 @@ else
 	fi
 	#if [ "$(virsh pool-info vz 2>/dev/null)" != "" ]; then
 	if [ "$pool" = "zfs" ]; then
-		block=$(zfs get -pH recordsize |awk "{ print \$3 }")
-		virsh vol-create-as --pool vz --name $name --capacity $(echo "$block * $(echo "$(virsh pool-info vz --bytes|grep "^Available"|awk "{ print \$2 }") / 100 * 70 / $block"|bc)"|bc)b
-		sleep 5s;
-		device="$(virsh vol-list vz --details|grep " $name "|awk '{ print $2 }')"
+        mkdir -p /vz/$name
+        zfs create vz/$name
+        device=/vz/$name/os.qcow2
+        cd /vz
+        sleep 5s;
+		#block=$(zfs get -pH recordsize |awk "{ print \$3 }")
+		#virsh vol-create-as --pool vz --name $name --capacity $(echo "$block * $(echo "$(virsh pool-info vz --bytes|grep "^Available"|awk "{ print \$2 }") / 100 * 70 / $block"|bc)"|bc)b
+		#sleep 5s;
+		#device="$(virsh vol-list vz --details|grep " $name "|awk '{ print $2 }')"
 	else
 		${base}/vps_kvm_lvmcreate.sh $name $size || exit
 	fi
@@ -142,6 +147,9 @@ else
     if [ "$pool" = "zfs" ]; then
         if [ -e "/vz/templates/$template.qcow2" ]; then
             echo "Copy $template.qcow2 Image"
+            if [ "$size" = "all" ]; then
+                size=$(echo "$(zfs list vz -o available -H -p)  / (1024 * 1024)"|bc)
+            fi
             if [ "$(echo "$template"|grep -i freebsd)" != "" ]; then
                 cp -f /vz/templates/$template.qcow2 $device;
                 qemu-img resize $device "$size"M;
