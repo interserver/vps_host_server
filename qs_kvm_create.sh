@@ -303,6 +303,11 @@ else
 	# /usr/bin/virsh setmaxmem $name $memory;
 	# /usr/bin/virsh setmem $name $memory;
 	# /usr/bin/virsh setvcpus $name $vcpu;
+    if [ "$pool" = "zfs" ]; then
+        virsh detach-disk $name vda --persistent;
+        virsh attach-disk $name /vz/$name/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;
+        virt-customize -d $name --root-password "password:$password" --hostname "$name"
+    fi;
 	/usr/bin/virsh autostart $name
 	mac="$(/usr/bin/virsh dumpxml $name |grep 'mac address' | cut -d\' -f2)"
 	/bin/cp -f $DHCPVPS $DHCPVPS.backup
