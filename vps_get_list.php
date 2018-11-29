@@ -159,6 +159,8 @@ function get_vps_list()
 		}
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
 		foreach ($matches['ctid'] as $key => $id) {
+            if ($id == '-' && isset($matches['vzid'][$key]))
+                $id = $matches['vzid'][$key];
 			$server = array(
 				'type' => $type,
 				'veid' => $id,
