@@ -1,4 +1,4 @@
-# If not running interactively, don't do anything
+## If not running interactively, don't do anything
 #export base="$(readlink -f "$(dirname "$0")")";
 #[ -z "$PS1" ] && return
 
