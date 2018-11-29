@@ -14,7 +14,7 @@ if [ "$(which prlctl 2>/dev/null)" != "" ]; then
 		elif [ -v UUID ]; then
 			echo "$UUID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
 		else
-			echo "$VEID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
+			echo "$(basename $i .conf) $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
 		fi
 	done|sort|uniq
 elif [ "$(which vzctl 2>/dev/null)" != "" ]; then
