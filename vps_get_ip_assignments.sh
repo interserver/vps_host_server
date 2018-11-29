@@ -3,11 +3,14 @@
 export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 if [ "$(which prlctl 2>/dev/null)" != "" ]; then
 	for i in $(grep -l "^IP_ADDRESS=\"[^\\\"].*\"" /etc/vz/conf/*.conf); do
-		unset NAME;
+        unset VEID;
+        unset NAME;
 		unset UUID;
 		source $i;
-		if [ -v NAME ]; then
-			echo "$NAME $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
+        if [ -v NAME ]; then
+            echo "$NAME $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
+        elif [ -v VEID ]; then
+            echo "$VEID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
 		elif [ -v UUID ]; then
 			echo "$UUID $(echo $IP_ADDRESS|sed s#"/255.255.255.0"#""#g)";
 		else
