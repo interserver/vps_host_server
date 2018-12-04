@@ -301,10 +301,10 @@ fi;\n";
 		} elseif (file_exists('/sys/class/net/em1')) {
 			$eth = 'em1';
 		} else {
-			$eth = trim(`ip link show |grep "^[0-9]"|grep -v -e "lo:" -e "br[0-9]*:"|awk "{ print \\$2 }"|cut -d: -f1|head -n 1`);
+			$eth = trim(`ip link show |grep "^[0-9]"|grep -v -e "lo:" -e "br[0-9]*:"|cut -d: -f2|head -n 1|sed s#" "#""#g`);
 		}
 	} else {
-		$eth = 'eth0';
+		$eth = trim(`ip link show |grep "^[0-9]"|grep -v -e "lo:" -e "br[0-9]*:"|cut -d: -f2|head -n 1|sed s#" "#""#g`);
 	}
 	$cmd = 'ethtool '.$eth.' 2>/dev/null |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
 	$speed = trim(`{$cmd}`);
