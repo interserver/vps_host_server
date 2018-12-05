@@ -1,6 +1,20 @@
 <?php
 use Workerman\Worker;
 
+if (!function_exists('disk_free_space'))
+{
+	function disk_free_space($directory) {
+		return trim(`df -P -B 1 {$directory}|tail -n 1| awk '{ print $4 }'`);
+	}
+}
+
+if (!function_exists('disk_total_space'))
+{
+	function disk_total_space($directory) {
+		return trim(`df -P -B 1 {$directory}|tail -n 1| awk '{ print $2 }'`);
+	}
+}
+
 return function ($stdObject, $params) {
 	$dir = __DIR__.'/../../../';
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);

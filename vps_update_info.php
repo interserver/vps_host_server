@@ -1,6 +1,20 @@
 #!/usr/bin/env php
 <?php
 
+if (!function_exists('disk_free_space'))
+{
+	function disk_free_space($directory) {
+		return trim(`df -P -B 1 {$directory}|tail -n 1| awk '{ print $4 }'`);
+	}
+}
+
+if (!function_exists('disk_total_space'))
+{
+	function disk_total_space($directory) {
+		return trim(`df -P -B 1 {$directory}|tail -n 1| awk '{ print $2 }'`);
+	}
+}
+
 /**
 * update_vps_info()
 *
