@@ -3,7 +3,7 @@
 use Workerman\Worker;
 
 return function ($stdObject) {
-    Worker::safeEcho("get_vps_iptables_traffic [0] Starting up processing for type '{$stdObject->type}'\n");
+    //Worker::safeEcho("get_vps_iptables_traffic [0] Starting up processing for type '{$stdObject->type}'\n");
 	$totals = array();
 	if ($stdObject->type == 'kvm') {
 		if (is_null($stdObject->traffic_last) && file_exists('/root/.traffic.last')) {
