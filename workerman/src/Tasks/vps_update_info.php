@@ -16,7 +16,7 @@ if (!function_exists('disk_total_space'))
 }
 
 return function ($stdObject, $params) {
-	$dir = __DIR__.'/../../../';
+    $dir = dirname(dirname(dirname(__DIR__)));
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 	if ($root_used > 90) {
 		$hostname = trim(`hostname;`);

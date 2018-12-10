@@ -1,7 +1,6 @@
 <?php
 return function ($stdObject, $params) {
 	$dir = dirname(dirname(dirname(__DIR__)));
-    echo "Working Dir: $dir\n";
 	$curl_cmd= '';
 	$servers = array();
 	$ips = array();
