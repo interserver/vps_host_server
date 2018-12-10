@@ -828,12 +828,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/walkor/Workerman.git",
-                "reference": "9893a3b26eb06f9d35a760e0dd049a5dacbfcb40"
+                "reference": "823aa7c9dd185ae2648f8c7164fbe934bc5e0ef4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/walkor/Workerman/zipball/9893a3b26eb06f9d35a760e0dd049a5dacbfcb40",
-                "reference": "9893a3b26eb06f9d35a760e0dd049a5dacbfcb40",
+                "url": "https://api.github.com/repos/walkor/Workerman/zipball/823aa7c9dd185ae2648f8c7164fbe934bc5e0ef4",
+                "reference": "823aa7c9dd185ae2648f8c7164fbe934bc5e0ef4",
                 "shasum": ""
             },
             "require": {
@@ -866,7 +866,7 @@
                 "asynchronous",
                 "event-loop"
             ],
-            "time": "2018-11-19T06:54:52+00:00"
+            "time": "2018-12-10T08:30:33+00:00"
         }
     ],
     "packages-dev": [
