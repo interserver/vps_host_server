@@ -1,7 +1,7 @@
 <?php
 return function ($stdObject, $params) {
 	$dir = dirname(dirname(dirname(__DIR__))).'/../../../';
-    Worker::safeEcho("Working Dir: $dir\n");
+    echo "Working Dir: $dir\n";
 	$curl_cmd= '';
 	$servers = array();
 	$ips = array();
