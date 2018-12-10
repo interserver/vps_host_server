@@ -47,12 +47,12 @@ return function ($stdObject, $params) {
     foreach ($matches[1] as $idx => $value) {
         $dev = $value;
         $matchDir = $matches[2][$idx];
-	if (file_exists($matchDir)) {
+	    if (file_exists($matchDir)) {
 	        $total = floor(disk_total_space($matchDir) / 1073741824);
         	$free = floor(disk_free_space($matchDir) / 1073741824);
 	        $used = $total - $free;
         	$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$matchDir;
-	}
+	    }
     }
     preg_match_all('/^\s*([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$/m', trim(`pvdisplay -c|grep :vz:`), $matches);
     foreach ($matches[1] as $idx => $value) {

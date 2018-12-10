@@ -29,6 +29,7 @@ function update_vps_info()
 		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	}
 	$url = 'https://myvps2.interserver.net/vps_queue.php';
+    $server = array();
 	$uname = posix_uname();
 	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;
 	$server['kernel'] = $uname['release'];
@@ -52,12 +53,12 @@ function update_vps_info()
     foreach ($matches[1] as $idx => $value) {
         $dev = $value;
         $matchDir = $matches[2][$idx];
-	if (file_exists($matchDir)) {
+	    if (file_exists($matchDir)) {
 	        $total = floor(disk_total_space($matchDir) / 1073741824);
        		$free = floor(disk_free_space($matchDir) / 1073741824);
        		$used = $total - $free;
         	$mounts[] = $dev.':'.$total.':'.$used.':'.$free.':'.$matchDir;
-	}
+	    }
     }
     preg_match_all('/^\s*([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):(.*)$/m', trim(`pvdisplay -c|grep :vz:`), $matches);
     foreach ($matches[1] as $idx => $value) {
@@ -90,7 +91,6 @@ function update_vps_info()
         $parts[] = 'zfs:'.$zfs_status;
         $server['raid_status'] = $matches[1].': '.implode('; ', $parts);
     }
-
 	if (file_exists('/usr/bin/iostat')) {
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
