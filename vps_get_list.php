@@ -115,8 +115,8 @@ function get_vps_list()
 		} elseif (file_exists('/etc/dhcpd.vps')) {
 			$ipcmd = 'grep host /etc/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
 			$lines = explode("\n", trim(`$ipcmd`));
-		} elseif (file_exists(__DIR__.'/vps.mainips')) {
-			$lines = explode("\n", trim(file_get_contents(__DIR__.'/vps.mainips')));
+		} elseif (file_exists($dir.'/vps.mainips')) {
+			$lines = explode("\n", trim(file_get_contents($dir.'/vps.mainips')));
 		} else {
 			$lines = array();
 		}
@@ -130,7 +130,7 @@ function get_vps_list()
 				$ips[$id][] = $ip;
 			}
 		}
-		$lines = trim(file_get_contents(__DIR__.'/vps.ipmap'));
+		$lines = trim(file_get_contents($dir.'/vps.ipmap'));
 		if ($lines != '') {
 			$lines = explode("\n", $lines);
 			foreach ($lines as $line) {
