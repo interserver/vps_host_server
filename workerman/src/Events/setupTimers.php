@@ -8,6 +8,7 @@ use Workerman\Connection\AsyncTcpConnection;
 return function ($stdObject) {
 	$stdObject->vps_update_info();
 	$stdObject->get_map_timer();
+    $stdObject->vps_get_list();
     $stdObject->addTimer('vps_update_info');
     $stdObject->addTimer('vps_get_traffic');
     $stdObject->addTimer('vps_get_list', $stdObject->config['timers']['get_map']);
