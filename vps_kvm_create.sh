@@ -140,11 +140,16 @@ else
           sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i $name.xml
         fi;
     fi
-    repl="<parameter name='IP' value='$ip'/>";
-    if [ "$extraips" != "" ]; then
-        for i in $extraips; do
-            repl="$repl\n        <parameter name='IP' value='$i'/>";
-        done
+    if [ "$module" = "quickservers" ]; then
+        sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i $name.xml
+    else
+        repl="<parameter name='IP' value='$ip'/>";
+        if [ "$extraips" != "" ]; then
+            for i in $extraips; do
+                repl="$repl\n        <parameter name='IP' value='$i'/>";
+            done
+        fi
+        sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i $name.xml;
     fi
     id=$(echo $name|sed s#"^\(qs\|windows\|linux\|vps\)\([0-9]*\)$"#"\2"#g)
     if [ "$id" != "$name" ]; then
@@ -153,11 +158,9 @@ else
     else
         sed s#"^.*<mac address.*$"#""#g -i $name.xml
     fi
-
     sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i $name.xml;
     sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i $name.xml;
     sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i $name.xml;
-    sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i $name.xml;
     if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo)" != "" ]; then
         sed s#"<features>"#"<features>\n    <hap/>"#g -i $name.xml
     fi
