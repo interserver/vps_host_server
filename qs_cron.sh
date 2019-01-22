@@ -1,7 +1,7 @@
 #!/bin/bash
 export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
 export base="$(readlink -f "$(dirname "$0")")";
-export url=https://myvps2myquickserver2.interserver.net/qs_queue.php
+export url=https://myquickserver2.interserver.net/qs_queue.php
 export dir=${base};
 export log=$dir/cron.output;
 export old_cron=1;
