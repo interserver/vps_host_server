@@ -148,7 +148,7 @@ function get_vps_iptables_traffic($ips)
 					$vnets[$vnet]['mac'] = $mac;
 					$macs[$mac] = $vnet;
 				}
-				$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host \([a-z0-9\.]*\) { hardware ethernet \([^;]*\); fixed-address \([0-9\.]*\);}$"#"\2 \1 \3"#g';
+				$cmd = 'if [ -e /etc/dhcp/dhcpd.vps ]; then cat /etc/dhcp/dhcpd.vps; else cat /etc/dhcpd.vps; fi | grep ethernet | sed s#"^host *\([a-z0-9\.]*\) *{ *hardware *ethernet *\([^ ;]*\); *fixed-address *\([0-9\.]*\); *} *$"#"\2 \1 \3"#g';
 				$macvps = explode("\n", trim(`$cmd`));
 				$vpss = array();
 				foreach ($macvps as $line) {
