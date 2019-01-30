@@ -123,7 +123,7 @@ function get_vps_iptables_traffic($ips)
 	$totals = array();
 	if ($vzctl == '') {
 		if (file_exists(('/root/.traffic.last'))) {
-            $last = json_decode(file_get_contents('/root/.traffic.last'));
+            $last = json_decode(file_get_contents('/root/.traffic.last'), true);
             if (is_null($last) || $last === false)
                 $last = unserialize(file_get_contents('/root/.traffic.last'));
 		}
