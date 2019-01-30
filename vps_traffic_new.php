@@ -58,6 +58,9 @@ function get_vps_ipmap()
                 if (preg_match('/^UUID="([^"]*)"$/mU', $txt, $matches2)) {
                     $veid = $matches2[1];
                 }
+                if (preg_match('/^NAME="([^"]*)"$/mU', $txt, $matches2)) {
+                    $veid = $matches2[1];
+                }
                 $output .= $veid.' '.$ip.PHP_EOL;
             }
         }
