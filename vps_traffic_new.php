@@ -123,7 +123,9 @@ function get_vps_iptables_traffic($ips)
 	$totals = array();
 	if ($vzctl == '') {
 		if (file_exists(('/root/.traffic.last'))) {
-			$last = unserialize(file_get_contents('/root/.traffic.last'));
+            $last = json_decode(file_get_contents('/root/.traffic.last'));
+            if (is_null($last) || $last === false)
+                $last = unserialize(file_get_contents('/root/.traffic.last'));
 		}
 		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 		if ($vnetcounters != '') {
@@ -171,7 +173,7 @@ function get_vps_iptables_traffic($ips)
 					}
 				}
 				if (sizeof($totals) > 0) {
-					file_put_contents('/root/.traffic.last', serialize($vpss));
+					file_put_contents('/root/.traffic.last', json_encode($vpss));
 				}
 			}
 		}
