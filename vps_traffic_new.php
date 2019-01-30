@@ -95,13 +95,23 @@ function vps_iptables_traffic_rules($ips)
 	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id) {
 		if (validIp($ip, false) == true) {
-			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
-			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-			// run it twice to be safe
-			$cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
-			$cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
-			$cmd .= "iptables -A FORWARD -d $ip; ";
-			$cmd .= "iptables -A FORWARD -s $ip; ";
+            if ($vzctl == '') {
+                $cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
+                $cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
+                // run it twice to be safe
+                $cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
+                $cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
+                $cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-dst $ip -c 0 0; ";
+                $cmd .= "ebtables -t filter -A FORWARD -p IPv4 --ip-src $ip -c 0 0; ";
+            } else {
+			    $cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
+			    $cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
+			    // run it twice to be safe
+			    $cmd .= "iptables -D FORWARD -d $ip 2>/dev/null; ";
+			    $cmd .= "iptables -D FORWARD -s $ip 2>/dev/null; ";
+			    $cmd .= "iptables -A FORWARD -d $ip; ";
+			    $cmd .= "iptables -A FORWARD -s $ip; ";
+            }
 		}
 	}
 	`$cmd`;
@@ -189,7 +199,7 @@ $url = 'https://myvps2.interserver.net/vps_queue.php';
 $ips = get_vps_ipmap();
 $totals = get_vps_iptables_traffic($ips);
 if (sizeof($totals) > 0) {
-	//print_r($totals);
+    //print_r($ips);print_r($totals);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(serialize($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(serialize($totals)))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
