@@ -227,12 +227,12 @@ function get_vps_list()
 		if (file_exists('/usr/bin/prlctl')) {
 			$json_servers = json_decode(`prlctl list -a -j`, true);
 			foreach ($json_servers as $json_server) {
-				$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
+				$servers[$json_server['name']]['ip'] = $json_server['ip_configured'];
 			}
 			$json_servers = json_decode(`prlctl list -a -i -j`, true);
 			foreach ($json_servers as $json_server) {
 				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port'])) {
-					$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
+					$servers[$json_server['Name']]['vnc'] = $json_server['Remote display']['port'];
 				}
 			}
 		}
@@ -240,7 +240,11 @@ function get_vps_list()
 			if ($id == 0) {
 				continue;
 			}
-			$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e /vz/private/{$id}/root.hdd/DiskDescriptor.xml ];then ploop info /vz/private/{$id}/root.hdd/DiskDescriptor.xml 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
+            if (file_exists('/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml'))
+                $file = '/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml';
+            elseif (isset($servers[$id]['uuid']) && file_exists('/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml'))
+                $file = '/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml';
+			$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e {$file} ];then ploop info {$file} 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
 			//echo "Running $cmd\n";
 			$out = trim(`$cmd`);
 			if ($out != '') {
