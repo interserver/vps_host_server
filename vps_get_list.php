@@ -220,21 +220,21 @@ function get_vps_list()
 			if (isset($matches['uuid'])) {
 				$server['uuid'] = $matches['uuid'][$key];
 				$server['vzid'] = $matches['vzid'][$key];
-				$id = $server['uuid'];
+				//$id = $server['uuid'];
 			}
 			$servers[$id] = $server;
 		}
 		if (file_exists('/usr/bin/prlctl')) {
 			$json_servers = json_decode(`prlctl list -a -j`, true);
 			foreach ($json_servers as $json_server) {
-				//$servers[$json_server['name']]['ip'] = $json_server['ip_configured'];
-                $servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
+				$servers[$json_server['name']]['ip'] = $json_server['ip_configured'];
+                //$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
 			}
 			$json_servers = json_decode(`prlctl list -a -i -j`, true);
 			foreach ($json_servers as $json_server) {
 				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port'])) {
-					//$servers[$json_server['Name']]['vnc'] = $json_server['Remote display']['port'];
-                    $servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
+					$servers[$json_server['Name']]['vnc'] = $json_server['Remote display']['port'];
+                    //$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
 				}
 			}
 		}
