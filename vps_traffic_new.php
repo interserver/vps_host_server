@@ -198,7 +198,7 @@ function get_vps_iptables_traffic($ips)
                 $veid = $vpsName2Veid[$id];
                 $line = explode(' ', trim(`vznetstat -c 1 -v "{$veid}"|tail -n 1|awk '{ print \$3 " " \$5 }'`));
                 list($in, $out) = $line;
-                if (isset($last[$veid]))
+                if (isset($last[$ip]))
                     list($in_last, $out_last) = $last[$ip];
                 else
                     list($in_last, $out_last) = [0,0];
