@@ -187,16 +187,32 @@ function get_vps_iptables_traffic($ips)
 		}
     } elseif (file_exists('/usr/bin/prlctl')) {
         global $vpsName2Veid;
+        if (file_exists(('/root/.traffic.last'))) {
+            $last = json_decode(file_get_contents('/root/.traffic.last'), true);
+            if (is_null($last) || $last === false)
+                $last = unserialize(file_get_contents('/root/.traffic.last'));
+        }
+        $vpss = array();
         foreach ($ips as $ip => $id) {
             if (validIp($ip, false) == true) {
                 $veid = $vpsName2Veid[$id];
                 $line = explode(' ', trim(`vznetstat -c 1 -v "{$veid}"|tail -n 1|awk '{ print \$3 " " \$5 }'`));
                 list($in, $out) = $line;
+                if (isset($last[$veid]))
+                    list($in_last, $out_last) = $last[$ip];
+                else
+                    list($in_last, $out_last) = [0,0];
+                $vpss[$ip] = [$in, $out];
+                $in = bcsub($in, $in_last, 0);
+                $out = bcsub($out, $out_last, 0);
                 $total = $in + $out;
                 if ($total > 0) {
                     $totals[$ip] = array('in' => $in, 'out' => $out);
                 }
             }
+        }
+        if (sizeof($totals) > 0) {
+            file_put_contents('/root/.traffic.last', json_encode($vpss));
         }
 	} else {
 		foreach ($ips as $ip => $id) {
