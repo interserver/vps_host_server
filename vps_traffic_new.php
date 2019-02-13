@@ -201,7 +201,7 @@ function get_vps_iptables_traffic($ips)
                 if (isset($last[$ip]))
                     list($in_last, $out_last) = $last[$ip];
                 else
-                    list($in_last, $out_last) = [0,0];
+                    list($in_last, $out_last) = array(0,0);
                 $vpss[$ip] = [$in, $out];
                 $in = bcsub($in, $in_last, 0);
                 $out = bcsub($out, $out_last, 0);
