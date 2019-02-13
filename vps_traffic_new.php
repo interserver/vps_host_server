@@ -45,7 +45,7 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false)
 function get_vps_ipmap()
 {
     global $vpsName2Veid;
-    $vpsName2Veid = [];
+    $vpsName2Veid = array();
 	$dir = __DIR__;
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == ''  && (file_exists('/etc/dhcpd.vps') || file_exists('/etc/dhcp/dhcpd.vps'))) {
