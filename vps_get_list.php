@@ -242,18 +242,21 @@ function get_vps_list()
 			if ($id == 0) {
 				continue;
 			}
+            unset($file);
             if (file_exists('/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml'))
                 $file = '/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml';
             elseif (isset($servers[$id]['uuid']) && file_exists('/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml'))
                 $file = '/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml';
-			$cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e {$file} ];then ploop info {$file} 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
-			//echo "Running $cmd\n";
-			$out = trim(`$cmd`);
-			if ($out != '') {
-				$disk = explode(' ', $out);
-				$servers[$id]['diskused'] = $disk[0];
-				$servers[$id]['diskmax'] = $disk[1];
-			}
+            if (isset($file)) {
+			    $cmd = "export PATH=\"\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e {$file} ];then ploop info {$file} 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
+			    //echo "Running $cmd\n";
+			    $out = trim(`$cmd`);
+			    if ($out != '') {
+				    $disk = explode(' ', $out);
+				    $servers[$id]['diskused'] = $disk[0];
+				    $servers[$id]['diskmax'] = $disk[1];
+			    }
+            }
 		}
 		if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
 			foreach ($cpu_usage as $id => $cpu_data) {
