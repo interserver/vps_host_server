@@ -11,6 +11,13 @@ return function ($stdObject) {
     if ($stdObject->debug === true) {
         Worker::safeEcho('vps_update_info Getting Lock'.PHP_EOL);
     }
+    for ($x = 0; $x < 10; $x++) {
+        $old = $global->busy;
+        Worker::safeEcho('old: '.var_export($old, true).PHP_EOL);
+        if (count($old) > 0) {
+            sleep(1);
+        }
+    }
     do {        
         $old = [];
         $new = ['vps_update_info'];
