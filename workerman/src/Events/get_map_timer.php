@@ -11,7 +11,7 @@ return function ($stdObject) {
     */
     global $global;
 	if ($stdObject->debug === true) {
-		Worker::safeEcho('Map Timer Startup'.PHP_EOL);
+		Worker::safeEcho('Map Timer Getting Lock'.PHP_EOL);
 	}
 	/** gets/sets global lock **/
     do {        
@@ -22,6 +22,9 @@ return function ($stdObject) {
 	/** send get_map request to hub **/
 	$stdObject->conn->send(json_encode(['type' => 'get_map']));
 	/** release global lock **/
+    if ($stdObject->debug === true) {
+        Worker::safeEcho('Map Timer End, Freeing Lock'.PHP_EOL);
+    }
     do {
         $old = $global->busy;
     } while (!$global->cas('busy', $old, 0));

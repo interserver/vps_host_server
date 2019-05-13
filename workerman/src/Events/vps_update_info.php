@@ -8,6 +8,9 @@ return function ($stdObject) {
 	*/
 	global $global;
 	//echo 'Update Info Timer Startup'.PHP_EOL;
+    if ($stdObject->debug === true) {
+        Worker::safeEcho('vps_update_info Getting Lock'.PHP_EOL);
+    }
     do {        
     } while (!$global->cas('busy', 0, 1));
     if ($stdObject->debug === true) {
@@ -25,6 +28,9 @@ return function ($stdObject) {
 		$task_connection->close();
 		//Worker::safeEcho('Update Info Got Result, Forwarding It'.PHP_EOL);
 		$conn->send($task_result);
+        if ($stdObject->debug === true) {
+            Worker::safeEcho('vps_update_info, Freeing Lock'.PHP_EOL);
+        }
         do {
             $old = $global->busy;
         } while (!$global->cas('busy', $old, 0));
