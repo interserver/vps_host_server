@@ -6,7 +6,7 @@ use Workerman\Worker;
 * ran periodicaly to update our vps mapping files
 */
 return function ($stdObject) {
-    Worker::safeEcho("[HeartBeat] Check starting".PHP_EOL);
+    //Worker::safeEcho("[HeartBeat] Check starting".PHP_EOL);
     /**
     * @var \GlobalData\Client
     */

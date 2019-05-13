@@ -11,6 +11,6 @@ return function ($stdObject) {
     */
     global $global;
 	/** send get_map request to hub **/
-	$stdObject->conn->send(json_encode(['type' => 'get_map',  'lock' => true,]));
+	$stdObject->conn->send(json_encode(['type' => 'get_map']));
 	/** release global lock **/
 };
