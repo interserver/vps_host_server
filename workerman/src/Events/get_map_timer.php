@@ -14,18 +14,18 @@ return function ($stdObject) {
 		Worker::safeEcho('Map Timer Startup'.PHP_EOL);
 	}
 	/** gets/sets global lock **/
-    do {
-        Worker::safeEcho('Map Timer Sleep 1s before retrying lock'.PHP_EOL);
-        sleep(1);
+    do {        
     } while (!$global->cas('busy', 0, 1));
 	if ($stdObject->debug === true) {
-		Worker::safeEcho('Map Timer Send get_map'.PHP_EOL);
+		Worker::safeEcho('Map Timer Got Lock, Send get_map'.PHP_EOL);
 	}
 	/** send get_map request to hub **/
 	$stdObject->conn->send(json_encode(['type' => 'get_map']));
 	/** release global lock **/
-	$global->busy = 0;
+    do {
+        $old = $global->busy;
+    } while (!$global->cas('busy', $old, 0));
 	if ($stdObject->debug === true) {
-		Worker::safeEcho('Map Timer End'.PHP_EOL);
+		Worker::safeEcho('Map Timer End, Lock Freed'.PHP_EOL);
 	}
 };

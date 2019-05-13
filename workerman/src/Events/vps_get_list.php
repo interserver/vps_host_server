@@ -15,8 +15,6 @@ return function ($stdObject) {
 	}
 	/** gets/sets global lock **/
     do {
-        Worker::safeEcho('vps_get_list Sleep 1s before retrying lock'.PHP_EOL);
-        sleep(1);
     } while (!$global->cas('busy', 0, 1));
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('vps_get_list Got Lock'.PHP_EOL);
@@ -41,10 +39,12 @@ return function ($stdObject) {
 			Worker::safeEcho('vps_get_list Forwarding Result'.PHP_EOL);
 		}
 		$conn->send($task_result);
-		$global->busy = 0;
-		if ($stdObject->debug === true) {
-			Worker::safeEcho('vps_get_list Removed Lock and Ended'.PHP_EOL);
-		}
+        do {
+            $old = $global->busy;
+        } while (!$global->cas('busy', $old, 0));
+        if ($stdObject->debug === true) {
+            Worker::safeEcho('vps_get_list, Lock Freed'.PHP_EOL);
+        }
 	};
 	$task_connection->connect();
 };
