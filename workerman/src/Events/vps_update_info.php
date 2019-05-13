@@ -11,7 +11,7 @@ return function ($stdObject) {
     if ($stdObject->debug === true) {
         Worker::safeEcho('vps_update_info Getting Lock'.PHP_EOL);
     }
-    for ($x = 0; $x < 10; $x++) {
+    for ($x = 0; $x < 30; $x++) {
         $old = $global->busy;
         Worker::safeEcho('old: '.var_export($old, true).PHP_EOL);
         if (count($old) == 0) {
@@ -30,7 +30,7 @@ return function ($stdObject) {
 	    $task_connection = new AsyncTcpConnection('Text://127.0.0.1:55552');
 	    $task_connection->send(json_encode(array('type' => 'vps_update_info', 'args' => array('type' => $stdObject->type))));
 	    $conn = $stdObject->conn;
-	    $task_connection->onMessage = function ($task_connection, $task_result) use ($conn) {
+	    $task_connection->onMessage = function ($task_connection, $task_result) use ($stdObject, $conn) {
 		    /**
 		    * @var \GlobalData\Client
 		    */

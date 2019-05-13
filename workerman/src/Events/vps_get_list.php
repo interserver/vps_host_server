@@ -14,7 +14,7 @@ return function ($stdObject) {
 		Worker::safeEcho('vps_get_list Startup, Getting Lock'.PHP_EOL);
 	}
 	/** gets/sets global lock **/
-    for ($x = 0; $x < 10; $x++) {
+    for ($x = 0; $x < 30; $x++) {
         $old = $global->busy;
         Worker::safeEcho('old: '.var_export($old, true).PHP_EOL);
         if (count($old) == 0) {
