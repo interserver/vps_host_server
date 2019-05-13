@@ -12,7 +12,9 @@ return function ($stdObject) {
         Worker::safeEcho('vps_update_info Getting Lock'.PHP_EOL);
     }
     do {        
-    } while (!$global->cas('busy', 0, 1));
+        $old = [];
+        $new = ['vps_update_info'];
+    } while (!$global->cas('busy', $old, $new));
     if ($stdObject->debug === true) {
         Worker::safeEcho('vps_update_info Got Lock'.PHP_EOL);
     }
@@ -33,7 +35,8 @@ return function ($stdObject) {
         }
         do {
             $old = $global->busy;
-        } while (!$global->cas('busy', $old, 0));
+            $new = [];
+        } while (!$global->cas('busy', $old, $new));
         if ($stdObject->debug === true) {
             Worker::safeEcho('vps_update_info, Lock Freed'.PHP_EOL);
         }

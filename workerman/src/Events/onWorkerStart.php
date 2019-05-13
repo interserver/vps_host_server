@@ -31,7 +31,7 @@ return function ($stdObject, Worker $worker) {
     global $global;
 	$global = new \GlobalData\Client('127.0.0.1:55553');	 // initialize the GlobalData client
 	if (!isset($global->busy)) {
-		$global->busy = 0;
+		$global->busy = [];
 	}
 	$global->lastMessageTime = 0;
 	$stdObject->config = array_merge(parse_ini_file(__DIR__.'/../../config.ini.dist', true), file_exists(__DIR__.'/../../config.ini') ? parse_ini_file(__DIR__.'/../../config.ini', true) : []);

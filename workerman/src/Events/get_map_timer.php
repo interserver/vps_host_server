@@ -15,7 +15,9 @@ return function ($stdObject) {
 	}
 	/** gets/sets global lock **/
     do {        
-    } while (!$global->cas('busy', 0, 1));
+        $old = [];
+        $new = ['get_map'];
+    } while (!$global->cas('busy', $old, $new));
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('Map Timer Got Lock, Send get_map'.PHP_EOL);
 	}
@@ -27,7 +29,8 @@ return function ($stdObject) {
     }
     do {
         $old = $global->busy;
-    } while (!$global->cas('busy', $old, 0));
+        $new = [];
+    } while (!$global->cas('busy', $old, $new));
 	if ($stdObject->debug === true) {
 		Worker::safeEcho('Map Timer End, Lock Freed'.PHP_EOL);
 	}
