@@ -17,28 +17,31 @@ return function ($stdObject) {
     for ($x = 0; $x < 10; $x++) {
         $old = $global->busy;
         Worker::safeEcho('old: '.var_export($old, true).PHP_EOL);
-        if (count($old) > 0) {
-            sleep(1);
+        if (count($old) == 0) {
+            break;
         }
+        sleep(1);
     }
-    do {        
-        $old = [];
-        $new = ['get_map'];
-    } while (!$global->cas('busy', $old, $new));
-	if ($stdObject->debug === true) {
-		Worker::safeEcho('Map Timer Got Lock, Send get_map'.PHP_EOL);
-	}
-	/** send get_map request to hub **/
-	$stdObject->conn->send(json_encode(['type' => 'get_map']));
-	/** release global lock **/
-    if ($stdObject->debug === true) {
-        Worker::safeEcho('Map Timer End, Freeing Lock'.PHP_EOL);
+    if (count($old) == 0) {
+        do {        
+            $old = [];
+            $new = ['get_map'];
+        } while (!$global->cas('busy', $old, $new));
+	    if ($stdObject->debug === true) {
+		    Worker::safeEcho('Map Timer Got Lock, Send get_map'.PHP_EOL);
+	    }
+	    /** send get_map request to hub **/
+	    $stdObject->conn->send(json_encode(['type' => 'get_map']));
+	    /** release global lock **/
+        if ($stdObject->debug === true) {
+            Worker::safeEcho('Map Timer End, Freeing Lock'.PHP_EOL);
+        }
+        do {
+            $old = $global->busy;
+            $new = [];
+        } while (!$global->cas('busy', $old, $new));
+	    if ($stdObject->debug === true) {
+		    Worker::safeEcho('Map Timer End, Lock Freed'.PHP_EOL);
+	    }
     }
-    do {
-        $old = $global->busy;
-        $new = [];
-    } while (!$global->cas('busy', $old, $new));
-	if ($stdObject->debug === true) {
-		Worker::safeEcho('Map Timer End, Lock Freed'.PHP_EOL);
-	}
 };
