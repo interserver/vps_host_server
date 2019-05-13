@@ -16,15 +16,15 @@ return function ($stdObject) {
 			* @var \GlobalData\Client
 			*/
 			global $global;
-			//var_dump($task_result);
+			//Worker::safeEcho(var_dump($task_result,true));
 			$task_connection->close();
-			//echo 'Update Info Got Result, Forwarding It'.PHP_EOL;
+			//Worker::safeEcho('Update Info Got Result, Forwarding It'.PHP_EOL);
 			$conn->send($task_result);
 			$global->busy = 0;
-			//echo 'Update Info Timer End'.PHP_EOL;
+			//Worker::safeEcho('Update Info Timer End'.PHP_EOL);
 		};
 		$task_connection->connect();
 	} else {
-		echo 'Update Info Timer Startup Failed To Get Lock'.PHP_EOL;
+		Worker::safeEcho('Update Info Timer Startup Failed To Get Lock'.PHP_EOL);
 	}
 };

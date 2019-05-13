@@ -8,9 +8,9 @@ ping_when_silent_for = 70
 use_ssl = 0
 
 [timers]
-vps_update_info = 600
+vps_update_info = 240
 vps_get_traffic = 60
-get_map = 600
+get_map = 240
 vps_queue = 60
 get_new_vps = 60
 get_queue = 60

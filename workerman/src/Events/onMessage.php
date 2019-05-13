@@ -7,7 +7,7 @@ use Workerman\Connection\AsyncTcpConnection;
 
 return function ($stdObject, AsyncTcpConnection $conn, $data) {
 	$stdObject->conn = $conn;
-	//echo "onMessage Got: ".$data.PHP_EOL;
+	Worker::safeEcho("onMessage Got: ".$data.PHP_EOL);
     /**
     * @var \GlobalData\Client
     */
@@ -31,8 +31,8 @@ return function ($stdObject, AsyncTcpConnection $conn, $data) {
 			$dir = __DIR__.'/../../../';
 			sleep(rand(1, 30));
 			sleep(rand(1, 30));
-			echo exec(file_get_contents(__DIR__.'/../../update.sh')).PHP_EOL;
-			echo exec('php '.__DIR__.'/../../start.php reload').PHP_EOL;
+			Worker::safeEcho(exec(file_get_contents(__DIR__.'/../../update.sh')).PHP_EOL);
+			Worker::safeEcho(exec('php '.__DIR__.'/../../start.php reload').PHP_EOL);
 			break;
 		case 'ping':
 			$stdObject->sendPong();
