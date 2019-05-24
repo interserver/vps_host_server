@@ -128,14 +128,14 @@ function check_php_event() {
 function check_php_ev() {
 	if [ "$(php -m|grep ev$)" = "" ]; then
 		pecl download ev
-		tar xvzf ev-1.0.4.tgz
-		cd ev-1.0.4/
+		tar xvzf ev-1.*.tgz
+		cd ev-1.*/
 		phpize
 		./configure --enable-ev
 		make
 		sudo make install
 		cd ..
-		rm -rf ev-1.0.4 ev-1.0.4.tgz
+		rm -rf ev-1.*
 		if [ -e /etc/apt ]; then
 			for i in /etc/php/*/mods-available; do
 				sudo echo extension=ev.so > $i/ev.ini
