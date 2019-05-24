@@ -28,7 +28,7 @@
     </disk>
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
-      <target dev='sdb' bus='scsi'/>
+      <target dev='hda' bus='ide'/>
       <readonly/>
     </disk>    
     <controller type='ide' index='0'>
