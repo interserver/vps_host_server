@@ -7,7 +7,10 @@ return function ($stdObject) {
 	$totals = array();
 	if ($stdObject->type == 'kvm') {
 		if (is_null($stdObject->traffic_last) && file_exists('/root/.traffic.last')) {
-			$stdObject->traffic_last = unserialize(file_get_contents('/root/.traffic.last'));
+            $stdObject->traffic_last = json_decode(file_get_contents('/root/.traffic.last'), true);
+            if (is_null($stdObject->traffic_last) && $stdObject->traffic_last === false) {
+			    $stdObject->traffic_last = unserialize(file_get_contents('/root/.traffic.last'));
+            }
 		}
 		$vnetcounters = trim(`grep vnet /proc/net/dev | tr : " " | awk '{ print $1 " " $2 " " $10 }'`);
 		if ($vnetcounters != '') {
@@ -56,7 +59,7 @@ return function ($stdObject) {
 				}
 				if (sizeof($totals) > 0) {
 					$stdObject->traffic_last = $vpss;
-					file_put_contents('/root/.traffic.last', serialize($vpss));
+					file_put_contents('/root/.traffic.last', json_encode($vpss));
 				}
 			}
 		}
