@@ -20,6 +20,9 @@ $task_worker->onWorkerStart = function ($worker) use (&$task_worker) {
 	}
 };
 $task_worker->onMessage = function ($connection, $task_data) use (&$task_worker) {
+    /**
+    * @var \GlobalData\Client
+    */
     global $global;
 	$task_data = json_decode($task_data, true);
 	if (isset($task_data['type'])) {

@@ -106,14 +106,14 @@ function check_php() {
 function check_php_event() {
 	if [ "$(php -m|grep event)" = "" ]; then
 		pecl download event
-		tar xvzf event-2.4.1.tgz
-		cd event-2.4.1/
+		tar xvzf event-2.*.tgz
+		cd event-2.*/
 		phpize
 		./configure --with-event-core --with-event-pthreads --with-event-extra --with-event-openssl --enable-event-sockets
 		make
 		sudo make install
 		cd ..
-		rm -rf event-2.4.1 event-2.4.1.tgz
+		rm -rf event-2.*
 		if [ -e /etc/apt ]; then
 			for i in /etc/php/*/mods-available; do
 				sudo echo extension=event.so > $i/event.ini

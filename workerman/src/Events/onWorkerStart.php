@@ -16,14 +16,10 @@ return function ($stdObject, Worker $worker) {
 	$stdObject->type = file_exists('/usr/sbin/vzctl') ? 'vzctl' : 'kvm';
 	//Events::update_network_dev();
 	$stdObject->get_vps_ipmap();
-	if (isset($_SERVER['HOSTNAME'])) {
-		$stdObject->hostname = $_SERVER['HOSTNAME'];
-	} else {
-		$stdObject->hostname = trim(shell_exec('hostname -f 2>/dev/null||hostname'));
-	}
+	$stdObject->hostname = isset($_SERVER['HOSTNAME']) ? $_SERVER['HOSTNAME'] : trim(shell_exec('hostname -f 2>/dev/null||hostname'));
 	if (!file_exists(__DIR__.'/../myadmin.crt')) {
-		Worker::safeEcho("Generating new SSL Certificate for encrypted communications\n");
-		echo shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$stdObject->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/../myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/../myadmin.crt -set_serial 0');
+		Worker::safeEcho('Generating new SSL Certificate for encrypted communications'.PHP_EOL);
+		Worker::safeEcho(shell_exec('echo -e "US\nNJ\nSecaucus\nInterServer\nAdministration\n'.$stdObject->hostname.'"|/usr/bin/openssl req -utf8 -batch -newkey rsa:2048 -keyout '.__DIR__.'/../myadmin.key -nodes -x509 -days 365 -out '.__DIR__.'/../myadmin.crt -set_serial 0'));
 	}
     /**
     * @var \GlobalData\Client
