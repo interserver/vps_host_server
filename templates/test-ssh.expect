@@ -1,0 +1,49 @@
+#!/usr/bin/expect
+# ./test.expect $host $user $pass
+set i 0; foreach n $argv {set [incr i] $n}
+set pid [ spawn -noecho ssh $2@$1 echo ]
+set timeout 30
+expect {
+    "(yes/no)" {
+        sleep 1
+        send "yes\n"
+        exp_continue
+    }
+    "(y/n)" {
+        sleep 1
+        send "y\n"
+        exp_continue
+    }
+    password {
+        sleep 1
+        send "$3\n"
+        exp_continue
+    }
+    Password {
+        sleep 1
+        send "$3\n"
+        exp_continue
+    }
+    "Last login" {
+        interact
+    }
+    "Permission denied" {
+        puts "Access not granted, aborting..."
+        exit 1
+    }
+    timeout {
+        puts "Timeout expired, aborting..."
+        exit 1
+    }
+    eof {
+        #puts "EOF reached."
+    }
+}
+set status [split [wait $pid]]
+set osStatus [lindex $status 2]
+set procStatus [lindex $status 3]
+if { $osStatus == 0 } {
+    exit $procStatus
+} else {
+    exit $procStatus
+}
