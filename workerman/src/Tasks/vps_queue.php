@@ -6,7 +6,7 @@ return function ($stdObject, $cmds) {
 		if (preg_match('/\.php$', $cmd) && file_exists(__DIR__.'/../'.$cmd)) {
 			include __DIR__.'/../../'.$cmd;
 		} elseif (preg_match('/(\/[^ ]+).*$/m', $cmd, $matches)) {
-			echo `$cmd`;
+			Worker::safeEcho(`$cmd`);
 		} else {
 			if (!isset($react_client)) {
 				$loop = Worker::getEventLoop();
@@ -21,7 +21,7 @@ return function ($stdObject, $cmds) {
 			});
 			$request->on('response', function ($response) {
 				$response->on('data', function ($data, $response) {
-					echo `$data`;
+					Worker::safeEcho(`$data`);
 				});
 			});
 			$request->end();
