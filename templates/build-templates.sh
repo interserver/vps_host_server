@@ -62,26 +62,20 @@ done
 
 if [ "$format" = "qcow2" ]; then
 	cd /var/www/html/qcow2/linux
-	guestmount -i -w -a ubuntu-16.04.qcow2 /mnt;
-	sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
-	guestunmount /mnt;
-	guestmount -i -w -a ubuntu-18.04.qcow2 /mnt;
-	sed s#ens2#ens3#g -i /mnt/etc/netplan/01-netcfg.yaml;
-	guestunmount /mnt;
+	for i in ubuntu-16.04 ubuntu-18.04 debian-9; do
+		guestmount -i -w -a ${i}.qcow2 /mnt;
+		sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
+		guestunmount /mnt;
+	done
 else
 	cd /var/www/html/raw/linux
-	rm -f /var/www/html/raw/all/ubuntu-16.04.img.gz;
-	gunzip ubuntu-16.04.img.gz;
-	guestmount -i -w -a ubuntu-16.04.img /mnt;
-	sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
-	guestunmount /mnt;
-	gzip -9 ubuntu-16.04.img;
-	ln -vP /var/www/html/raw/linux/ubuntu-16.04.img.gz /var/www/html/raw/all/ubuntu-16.04.img.gz;
-	rm -f /var/www/html/raw/all/ubuntu-18.04.img.gz;
-	gunzip ubuntu-18.04.img.gz;
-	guestmount -i -w -a ubuntu-18.04.img /mnt;
-	sed s#ens2#ens3#g -i /mnt/etc/netplan/01-netcfg.yaml;
-	guestunmount /mnt;
-	gzip -9 ubuntu-18.04.img;
-	ln -vP /var/www/html/raw/linux/ubuntu-18.04.img.gz /var/www/html/raw/all/ubuntu-18.04.img.gz;
+	for i in ubuntu-16.04 ubuntu-18.04 debian-9; do
+		rm -f /var/www/html/raw/all/${i}.img.gz;
+		gunzip ${i}.img.gz;
+		guestmount -i -w -a ${i}.img /mnt;
+		sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
+		guestunmount /mnt;
+		gzip -9 ${i}.img;
+		ln -vP /var/www/html/raw/linux/${i}.img.gz /var/www/html/raw/all/${i}.img.gz;
+	done
 fi
