@@ -21,7 +21,7 @@ fi
 #LOG='--log --log-level=7 --log-prefix DEBUG --log-ip --log-ip6 --log-arp';
 
 # don't run on qs
-check=`crontab -l | grep qs_cron`;
+check=`crontab -l | grep qs_cron | grep -v "^#"`;
 if [ ! "$check" = "" ]; then
 	echo "#skipping for qs";
 	echo "/admin/kvmenable ebflush"

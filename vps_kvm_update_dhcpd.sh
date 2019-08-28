@@ -20,7 +20,7 @@ function valid_ip(){
 	return $stat
 }
 
-if [ "$(crontab -l|grep qs_cron)" != "" ]; then
+if [ "$(crontab -l | grep qs_cron | grep -v "^#")" != "" ]; then
 	url="https://myquickserver2.interserver.net/qs_queue.php"
 else
 	url="https://myvps2.interserver.net/vps_queue.php";

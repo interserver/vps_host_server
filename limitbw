@@ -17,7 +17,7 @@ IFS="
 "
 
 # don't run on qs
-check=`crontab -l | grep qs_cron`;
+check=`crontab -l | grep qs_cron | grep -v "^#"`;
 if [ ! "$check" = "" ]; then
 		echo "#skipping for qs";
 		exit;

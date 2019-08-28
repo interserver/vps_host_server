@@ -36,7 +36,7 @@ else
 		max=4;
 fi
 
-qscheck=$(crontab -l | grep qs_cron);
+qscheck=$(crontab -l | grep qs_cron | grep -v "^#");
 if [ ! "$qscheck" = "" ]; then
 	echo "skipping for qs";
 		if [ -e /sys/kernel/mm/ksm/run ]; then echo 0 > /sys/kernel/mm/ksm/run; fi
