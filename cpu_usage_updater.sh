@@ -25,7 +25,7 @@ while [ ${spent} -lt ${maxtime} ]; do
 	lastspent=$((${new} - ${prev}));
 	prev=$new;
 	echo -n "(${lastspent}s),Sending";
-	curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage=${cpu_usage}" "https://myvps2.interserver.net/vps_queue.php" 2>/dev/null;
+	curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage=${cpu_usage}" "https://mynew.interserver.net/vps_queue.php" 2>/dev/null;
 	new=$(date +%s);
 	lastspent=$((${new} - ${prev}));
 	prev=$new;

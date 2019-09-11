@@ -11,7 +11,7 @@ require_once(dirname(__FILE__).'/xml2array.php');
 function get_qs_list()
 {
 	$dir = __DIR__;
-	$url = 'https://myquickserver2.interserver.net/qs_queue.php';
+	$url = 'https://mynew.interserver.net/qs_queue.php';
 	if (!file_exists('/usr/sbin/vzctl')) {
 		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
 		$lines = explode("\n", $out);

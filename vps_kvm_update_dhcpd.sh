@@ -21,9 +21,9 @@ function valid_ip(){
 }
 
 if [ "$(crontab -l | grep qs_cron | grep -v "^#")" != "" ]; then
-	url="https://myquickserver2.interserver.net/qs_queue.php"
+	url="https://mynew.interserver.net/qs_queue.php"
 else
-	url="https://myvps2.interserver.net/vps_queue.php";
+	url="https://mynew.interserver.net/vps_queue.php";
 fi
 curl --connect-timeout 300 --max-time 600 -k -d action=get_vps_main_ips "$url" 2>/dev/null | sh;
 if [ -e ${base}/vps.mainips ]; then

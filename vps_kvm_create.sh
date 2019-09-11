@@ -70,9 +70,9 @@ else
     module="vps"
 fi
 if [ "$module" = "quickservers" ]; then
-    url="https://myquickserver2.interserver.net/qs_queue.php"
+    url="https://mynew.interserver.net/qs_queue.php"
 else
-    url="https://myvps2.interserver.net/vps_queue.php"
+    url="https://mynew.interserver.net/vps_queue.php"
 fi
 error=0
 adjust_partitions=1

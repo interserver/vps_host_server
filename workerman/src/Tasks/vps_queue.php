@@ -15,7 +15,7 @@ return function ($stdObject, $cmds) {
 				$react_factory = new React\HttpClient\Factory();
 				$react_client = $react_factory->create($loop, $react_dns);
 			}
-			$request = $client->request('GET', 'https://myvps2.interserver.net/vps_queue.php?action='.$cmd);
+			$request = $client->request('GET', 'https://mynew.interserver.net/vps_queue.php?action='.$cmd);
 			$request->on('error', function (Exception $e) use ($cmd) {
 				Worker::safeEcho("CMD {$cmd} Exception Error {$e->getMessage()}\n");
 			});

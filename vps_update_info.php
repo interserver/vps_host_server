@@ -28,7 +28,7 @@ function update_vps_info()
 		$hostname = trim(`hostname;`);
 		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	}
-	$url = 'https://myvps2.interserver.net/vps_queue.php';
+	$url = 'https://mynew.interserver.net/vps_queue.php';
     $server = array();
 	$uname = posix_uname();
 	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;

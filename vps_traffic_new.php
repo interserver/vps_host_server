@@ -234,7 +234,7 @@ function get_vps_iptables_traffic($ips)
 	return $totals;
 }
 
-$url = 'https://myvps2.interserver.net/vps_queue.php';
+$url = 'https://mynew.interserver.net/vps_queue.php';
 $ips = get_vps_ipmap();
 $totals = get_vps_iptables_traffic($ips);
 if (sizeof($totals) > 0) {

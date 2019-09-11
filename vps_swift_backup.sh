@@ -7,7 +7,7 @@ if [ $# -lt 2 ]; then
 fi
 export TERM=linux;
 #set -x
-url="https://myvps2.interserver.net/vps_queue.php"
+url="https://mynew.interserver.net/vps_queue.php"
 id=$1
 vzid=$2
 if [ "$3" = "" ]; then

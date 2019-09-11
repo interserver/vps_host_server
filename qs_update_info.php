@@ -28,7 +28,7 @@ function update_qs_info()
 		$hostname = trim(`hostname;`);
 		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	}
-	$url = 'https://myquickserver2.interserver.net/qs_queue.php';
+	$url = 'https://mynew.interserver.net/qs_queue.php';
 	$server = array();
 	$uname = posix_uname();
 	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;

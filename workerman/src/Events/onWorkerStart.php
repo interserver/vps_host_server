@@ -32,10 +32,10 @@ return function ($stdObject, Worker $worker) {
 	$global->lastMessageTime = 0;
 	$stdObject->config = array_merge(parse_ini_file(__DIR__.'/../../config.ini.dist', true), file_exists(__DIR__.'/../../config.ini') ? parse_ini_file(__DIR__.'/../../config.ini', true) : []);
 	if ($stdObject->config['options']['use_ssl'] == 1) {
-		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7272', $stdObject->getSslContext());
+		$ws_connection= new AsyncTcpConnection('ws://mynew.interserver.net:7272', $stdObject->getSslContext());
 		$ws_connection->transport = 'ssl';
 	} else {
-		$ws_connection= new AsyncTcpConnection('ws://my3.interserver.net:7271');
+		$ws_connection= new AsyncTcpConnection('ws://mynew.interserver.net:7271');
 	}
 	$ws_connection->onConnect = array($stdObject, 'onConnect');
 	$ws_connection->onMessage = array($stdObject, 'onMessage');
