@@ -403,6 +403,7 @@ done
 echo "$template Found $found after $c" | tee -a test.log
 if [ $found -eq 1 ]; then
                 ssh-keygen -f ~/.ssh/known_hosts -R ${ip}
+	sleep 10s
                 if /root/cpaneldirect/templates/test-ssh.expect ${ip} root "${root}"; then
                         echo "$template Good Login" | tee -a test.log
                 else
