@@ -61,14 +61,14 @@ done
 #for template in `ls /root | grep qcow2`; do mv -v $template /var/www/html/$template; done
 
 if [ "$format" = "qcow2" ]; then
-        for i in ubuntu-16.04 ubuntu-18.04 debian-9; do
+        for i in ubuntu-16.04 ubuntu-18.04 debian-9 debian-8 debian-7; do
                 guestmount -i -w -a ${i}.qcow2 /mnt;
                 sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
                 sed s#ens2#ens3#g -i /mnt/etc/netplan/01-netcfg.yaml;
                 guestunmount /mnt;
         done
 else
-        for i in ubuntu-16.04 ubuntu-18.04 debian-9; do
+        for i in ubuntu-16.04 ubuntu-18.04 debian-9 debian-8 debian-7; do
                 rm -f /var/www/html/raw/all/${i}.img.gz;
                 gunzip ${i}.img.gz;
                 guestmount -i -w -a ${i}.img /mnt;
