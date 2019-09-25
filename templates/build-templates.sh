@@ -46,7 +46,10 @@ for i in ${templates}; do
         "scientificlinux")
                 h=ftp.scientificlinux.org cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --update";;
         "debian" | "ubuntu")
-                cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server' --update";;
+                cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
+		if [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
+	                cmd="${cmd} --update";
+		fi;;
         esac;
         #echo "Building/Updating Tag: ${tag}  Arch: ${arch}  Label: ${label}  With:"
         echo -e "$(echo "${cmd}"|sed s#" --"#" \\\\\n    --"#g)";
@@ -55,7 +58,6 @@ for i in ${templates}; do
                 echo $tag >> errors.txt
         fi
 done
-
 
 # move templates to nginx system
 #for template in `ls /root | grep qcow2`; do mv -v $template /var/www/html/$template; done
@@ -69,13 +71,11 @@ if [ "$format" = "qcow2" ]; then
         done
 else
         for i in ubuntu-16.04 ubuntu-18.04 debian-9 debian-8 debian-7; do
-                rm -f /var/www/html/raw/all/${i}.img.gz;
-                gunzip ${i}.img.gz;
+#                gunzip ${i}.img.gz;
                 guestmount -i -w -a ${i}.img /mnt;
                 sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
                 sed s#ens2#ens3#g -i /mnt/etc/netplan/01-netcfg.yaml;
                 guestunmount /mnt;
                 gzip -9 ${i}.img;
-                ln -vP /var/www/html/raw/linux/${i}.img.gz /var/www/html/raw/all/${i}.img.gz;
         done
 fi
