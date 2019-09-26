@@ -27,8 +27,8 @@ lxc exec ${vps} -- bash -c "echo ALL: ALL >> /etc/hosts.allow;"
 lxc exec ${vps} -- apt update;
 lxc exec ${vps} -- apt install openssh-server -y ;
 lxc exec ${vps} -- sed s#"^\#*PermitRootLogin .*$"#"PermitRootLogin yes"#g -i /etc/ssh/sshd_config;
-lxc exec ${vps} -- systemctl restart sshd;"
-lxc exec ${vps} -- echo root:'${root}' | chpasswd;
-lxc exec ${vps} -- locale-gen --purge en_US.UTF-8 && \
+lxc exec ${vps} -- systemctl restart sshd;
+lxc exec ${vps} -- bash -c "echo root:'${root}' | chpasswd"
+lxc exec ${vps} -- locale-gen --purge en_US.UTF-8
 lxc exec ${vps} -- bash -c "echo -e 'LANG=\"en_US.UTF-8\"\nLANGUAGE=\"en_US:en\"\n' > /etc/default/locale"
 
