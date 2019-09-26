@@ -23,6 +23,7 @@ lxc config device set ${vps} eth0 ipv4.address ${ip}
 lxc config device set ${vps} eth0 security.mac_filtering true
 lxc config device add ${vps} root disk path=/ pool=lxd size=30720GB;
 lxc start ${vps}
+lxc exec ${vps} -- bash -c 'x=0; while [ 0 ]; do x=$(($x + 1)); ping -c 2 4.2.2.2; if [ $? -eq 0 ] || [ "$x" = "20" ]; then break; else sleep 1s; fi; done'
 lxc exec ${vps} -- bash -c "echo ALL: ALL >> /etc/hosts.allow;"
 lxc exec ${vps} -- apt update;
 lxc exec ${vps} -- apt install openssh-server -y ;
@@ -31,4 +32,21 @@ lxc exec ${vps} -- systemctl restart sshd;
 lxc exec ${vps} -- bash -c "echo root:'${root}' | chpasswd"
 lxc exec ${vps} -- locale-gen --purge en_US.UTF-8
 lxc exec ${vps} -- bash -c "echo -e 'LANG=\"en_US.UTF-8\"\nLANGUAGE=\"en_US:en\"\n' > /etc/default/locale"
+
+found=0
+c=0
+while [ $found -eq 0 ] && [ $c -le 100 ]; do
+        ping ${ip} -c 1 && found=1
+        c=$(($c + 1))
+done
+echo "$template Found $found after $c" | tee -a test.log
+if [ $found -eq 1 ]; then
+    ssh-keygen -f ~/.ssh/known_hosts -R ${ip}
+    sleep 10s
+    if /root/cpaneldirect/templates/test-ssh.expect ${ip} root "${root}"; then
+        echo "$template Good Login" | tee -a test.log
+    else
+        echo "$template Failed Login" | tee -a test.log
+    fi
+fi
 
