@@ -20,5 +20,8 @@ centos/7/amd64"
 IFS="
 "
 for i in $templates; do
-
+    echo -e "\n\t\t\t---------------------------------"
+    echo -e "\t\t\t           $i"
+    echo -e "\t\t\t-----------------------------------"
+    ~/cpaneldirect/templates/install_lxd.sh $i "$1";
 done
