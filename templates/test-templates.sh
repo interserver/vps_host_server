@@ -43,7 +43,7 @@ for i in *.qcow2; do
 		sleep 30s;
 		echo "Testing SSH Login"
 		ssh-keygen -f ~/.ssh/known_hosts -R ${ip}
-		if ~/test-ssh.expect ${ip} root interserver123; then
+		if ~/test_ssh.expect ${ip} root interserver123; then
 			echo "Good Login"
 			echo "${i}" >> /var/www/html/good.txt
 		else

@@ -7,6 +7,6 @@ for i in /vz/build/*.qcow2; do
     echo -e "\n\t\t\t---------------------------------"
     echo -e "\t\t\t           $i"
     echo -e "\t\t\t-----------------------------------"
-    ~/cpaneldirect/templates/install_template.sh $i "$1";
+    ~/cpaneldirect/templates/install_kvm.sh $i "$1";
 done
 set +x
