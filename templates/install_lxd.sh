@@ -16,7 +16,7 @@ echo "dhcp-host=${mac},${ip}" >> /etc/lxc/dnsmasq.conf;
 killall -HUP dnsmasq
 lxc init "images:$template" ${vps}
 lxc config set ${vps} limits.memory 2048MB;
-lxc config set ${vps} limits.cpu 1;
+lxc config set ${vps} limits.cpu 2;
 lxc config set ${vps} volatile.eth0.hwaddr ${mac};
 lxc network attach br0 ${vps} eth0
 lxc config device set ${vps} eth0 ipv4.address ${ip}
@@ -35,7 +35,9 @@ lxc exec ${vps} -- bash -c "echo -e 'LANG=\"en_US.UTF-8\"\nLANGUAGE=\"en_US:en\"
 
 found=0
 c=0
-while [ $found -eq 0 ] && [ $c -le 100 ]; do
+cMax=20;
+while [ $found -eq 0 ] && [ $c -le ${cMax} ]; do
+	echo "[${c}/${cMax}] "
         ping ${ip} -c 1 && found=1
         c=$(($c + 1))
 done
