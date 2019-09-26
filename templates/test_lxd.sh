@@ -19,6 +19,10 @@ centos/6/amd64
 centos/7/amd64"
 IFS="
 "
+if [ "$1" = "" ]; then
+	echo "Missing Password Parameter"
+	exit;
+fi
 for i in $templates; do
     echo -e "\n\t\t\t---------------------------------"
     echo -e "\t\t\t           $i"

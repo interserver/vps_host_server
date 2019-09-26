@@ -2,6 +2,10 @@
 IFS="
 "
 set -x
+if [ "$1" = "" ]; then
+	echo "Missing Password Parameter"
+	exit;
+fi
 for i in /vz/build/*.qcow2; do
     i="$(echo "$i"|sed s#"\.qcow2"#""#g)";
     echo -e "\n\t\t\t---------------------------------"
