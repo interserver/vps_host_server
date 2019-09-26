@@ -25,8 +25,8 @@ lxc config device add ${vps} root disk path=/ pool=lxd size=30720GB;
 lxc start ${vps}
 lxc exec ${vps} -- bash -c 'x=0; while [ 0 ]; do x=$(($x + 1)); ping -c 2 4.2.2.2; if [ $? -eq 0 ] || [ "$x" = "20" ]; then break; else sleep 1s; fi; done'
 lxc exec ${vps} -- bash -c "echo ALL: ALL >> /etc/hosts.allow;"
-lxc exec ${vps} -- apt update;
-lxc exec ${vps} -- apt install openssh-server -y ;
+lxc exec ${vps} -- bash -c "if [ -e /etc/apt ]; then apt update; apt install openssh-server -y; fi;"
+lxc exec ${vps} -- bash -c "if [ -e /etc/yum ]; then yum install openssh-server -y; fi;"
 lxc exec ${vps} -- sed s#"^\#*PermitRootLogin .*$"#"PermitRootLogin yes"#g -i /etc/ssh/sshd_config;
 lxc exec ${vps} -- bash -c "echo root:\"${root}\" | chpasswd"
 lxc exec ${vps} -- /etc/init.d/ssh restart;
