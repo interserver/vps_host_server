@@ -15,6 +15,6 @@ return function ($stdObject, $name, $interval = false, $callable = false) {
         Worker::safeEcho("addTimer deleting timer {$name} id {$stdObject->timers[$name]}\n");
 		Timer::del($stdObject->timers[$name]);
 	}
-	$stdObject->timers[$name] = Timer::add($interval, $callable);
+	$stdObject->timers[$name] = Timer::add($interval, $callable, []);
     Worker::safeEcho("addTimer adding timer {$name} every {$interval} got timer id {$stdObject->timers[$name]}\n");
 };
