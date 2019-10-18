@@ -50,14 +50,15 @@ function update_vps_info()
 	preg_match('/MemTotal\s*\:\s*(\d+)/i', file_get_contents('/proc/meminfo'), $matches);
 	$server['ram'] = (int)$matches[1];
 	$badDir = '/vz/root/';
+	$badDevs = ['proc', 'sysfs', 'devtmpfs', 'devpts', 'tmpfs', 'beancounter', 'fairsched', 'mqueue', 'cgroup', 'none'];
 	$badLen = strlen($badDir);
 	preg_match_all('/^(?P<dev>\S+)\s+(?P<dir>\S+)\s+(?P<fs>\S+)\s+.*$/m', file_get_contents('/proc/mounts'), $matches);
 	foreach ($matches[0] as $idx => $line) {
 		$dev = $matches['dev'][$idx];
-		$dir = $matches['dir'][$idx];
+		$mountPoint = $matches['dir'][$idx];
 		$fs = $matches['fs'][$idx];
 		$matchDir = $matches[2][$idx];
-		if (substr($dir, 0, $badLen) != $badDir && file_exists($matchDir)) {
+		if (!in_array($dev, $badDevs) && substr($mountPoint, 0, $badLen) != $badDir && file_exists($matchDir)) {
 			$total = floor(disk_total_space($matchDir) / 1073741824);
 			$free = floor(disk_free_space($matchDir) / 1073741824);
 			$used = $total - $free;
@@ -75,7 +76,9 @@ function update_vps_info()
 	}
 	$server['mounts'] = implode(',', $mounts);
 	$server['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
-	$server['raid_status'] = trim(`{$dir}/check_raid.sh --check=WARNING 2>/dev/null`);
+	$cmd = "{$dir}/check_raid.sh --check=WARNING 2>/dev/null";
+	echo "Running {$cmd}\n";
+	$server['raid_status'] = trim(`{$cmd}`);
 	if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
 		$server['raid_status'] = 'OK: none:No Raid found';
 	}
