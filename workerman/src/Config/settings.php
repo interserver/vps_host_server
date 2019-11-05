@@ -12,6 +12,7 @@ $settings = array(
 		'vps_update_info' => 600,
 		'vps_queue' => 60,
 		'get_new_vps' => 60,
+		'vps_get_traffic' => 60,
 		'vps_traffic_new' => 60,
 		'get_slice_map' => 60,
 		'get_ip_map' => 60,
