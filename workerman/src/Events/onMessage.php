@@ -8,10 +8,10 @@ use Workerman\Connection\AsyncTcpConnection;
 return function ($stdObject, AsyncTcpConnection $conn, $data) {
 	$stdObject->conn = $conn;
 	Worker::safeEcho("onMessage Got: ".$data.PHP_EOL);
-    /**
-    * @var \GlobalData\Client
-    */
-    global $global;
+	/**
+	* @var \GlobalData\Client
+	*/
+	global $global;
 	$global->lastMessageTime = time();
 	$data = json_decode($data, true);
 	switch ($data['type']) {
@@ -47,6 +47,12 @@ return function ($stdObject, AsyncTcpConnection $conn, $data) {
 			break;
 		case 'run':
 			$run_id = $data['id'];
+			$lines = explode("\n", trim($data['command']));
+			if (count($lines) > 1) {
+				$fileName = tempnam('/tmp', 'command');
+				file_put_contents($fileName, $data['command']);
+				$data['command'] = 'bash -l '.$fileName;
+			}
 			$stdObject->running[$data['id']] = array(
 				'command' => $data['command'],
 				'id' => $data['id'],
