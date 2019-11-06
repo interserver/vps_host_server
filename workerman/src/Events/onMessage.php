@@ -48,6 +48,7 @@ return function ($stdObject, AsyncTcpConnection $conn, $data) {
 		case 'run':
 			$run_id = $data['id'];
 			$lines = explode("\n", trim($data['command']));
+			$fileName = false;
 			if (count($lines) > 1) {
 				$fileName = tempnam('/tmp', 'command');
 				file_put_contents($fileName, $data['command']);
@@ -70,7 +71,7 @@ return function ($stdObject, AsyncTcpConnection $conn, $data) {
 			unset($env['argv']);
 			$stdObject->running[$data['id']]['process'] = new React\ChildProcess\Process($data['command'], __DIR__.'/../../../', $env);
 			$stdObject->running[$data['id']]['process']->start($loop);
-			$stdObject->running[$data['id']]['process']->on('exit', function ($exitCode, $termSignal) use ($data, $conn, &$stdObject) {
+			$stdObject->running[$data['id']]['process']->on('exit', function ($exitCode, $termSignal) use ($data, $conn, &$stdObject, $fileName) {
 				if (is_null($termSignal)) {
 					Worker::safeEcho("command '{$data['command']}' completed with exit code {$exitCode}\n");
 				} else {
@@ -83,11 +84,14 @@ return function ($stdObject, AsyncTcpConnection $conn, $data) {
 					'term' => $termSignal,
 				);
 				$conn->send(json_encode($json));
-				if ($stdObject->running[$data['id']]['update_after'] == true) {
+				if ($data['update_after'] !== false) {
 					$stdObject->vps_update_info();
 					$stdObject->get_map_timer();
 				}
 				unset($stdObject->running[$data['id']]);
+				if ($fileName !== false) {
+					unlink($fileName);
+				}
 			});
 			$stdObject->running[$data['id']]['process']->stdout->on('data', function ($output) use ($data, $conn) {
 				$json = array(
