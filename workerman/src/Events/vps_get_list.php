@@ -24,8 +24,12 @@ return function ($stdObject) {
 		if ($stdObject->debug === true) {
 			Worker::safeEcho('vps_get_list Got Task Processor Result, Closing Task Connection'.PHP_EOL);
 		}
-		//var_dump($task_result);
+		//Worker::safeEcho(var_dump($task_result,true));
 		$task_connection->close();
+		//Worker::safeEcho('Get List Got Result, Forwarding It'.PHP_EOL);
+		$conn->send($task_result);
+		//Worker::safeEcho('Get List Timer End'.PHP_EOL);
+		
 	};
 	$task_connection->connect();
 };
