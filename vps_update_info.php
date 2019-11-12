@@ -50,7 +50,7 @@ function update_vps_info()
 	preg_match('/MemTotal\s*\:\s*(\d+)/i', file_get_contents('/proc/meminfo'), $matches);
 	$server['ram'] = (int)$matches[1];
 	$badDir = '/vz/root/';
-	$badDevs = ['proc', 'sysfs', 'devtmpfs', 'devpts', 'tmpfs', 'beancounter', 'fairsched', 'mqueue', 'cgroup', 'none'];
+	$badDevs = array('proc', 'sysfs', 'devtmpfs', 'devpts', 'tmpfs', 'beancounter', 'fairsched', 'mqueue', 'cgroup', 'none');
 	$badLen = strlen($badDir);
 	preg_match_all('/^(?P<dev>\S+)\s+(?P<dir>\S+)\s+(?P<fs>\S+)\s+.*$/m', file_get_contents('/proc/mounts'), $matches);
 	foreach ($matches[0] as $idx => $line) {
