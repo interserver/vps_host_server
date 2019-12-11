@@ -110,7 +110,8 @@ function get_vps_iptables_traffic($ips)
 	return $totals;
 }
 
-$url = 'https://mynew.interserver.net/vps_queue.php';
+//$url = 'https://mynew.interserver.net/vps_queue.php';
+$url = 'http://mynew.interserver.net:55151/queue.php';
 //if (file_exists('/usr/sbin/vzctl'))
 //{
 $ch = curl_init();
@@ -134,7 +135,7 @@ while (!$exit) {
 	$totals = get_vps_iptables_traffic($ips);
 //	echo "get_vps_iptables_traffic() took " . (time() - $GLOBALS['time']) . " seconds\n"; $GLOBALS['time'] = time();
 	//print_r($totals);
-	$fieldstring = "action=bandwidth&servers=" . urlencode(base64_encode(gzcompress(serialize($ips)))) . "&bandwidth=" . urlencode(base64_encode(gzcompress(serialize($totals))));
+	$fieldstring = "module=vps&action=bandwidth&servers=" . urlencode(base64_encode(gzcompress(json_encode($ips)))) . "&bandwidth=" . urlencode(base64_encode(gzcompress(json_encode($totals))));
 	curl_setopt($ch, CURLOPT_POSTFIELDS, $fieldstring);
 	$retval = curl_exec($ch);
 	if (curl_errno($ch)) {
