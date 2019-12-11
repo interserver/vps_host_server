@@ -154,7 +154,7 @@ IFS="
 				if [ "${cpu}" != "cpu" ]; then
 					echo -n ",";
 				fi;
-				echo -n "\"${cpu}\":\"${usage}\"";
+				echo -n "\"${cpu}\":${usage}";
 			elif [ "$out" = "serialize" ]; then
 				coreout="${coreout}s:${#cpu}:\"${cpu}\";s:${#usage}:\"${usage}\";";
 				coreidx=$(($coreidx + 1));
