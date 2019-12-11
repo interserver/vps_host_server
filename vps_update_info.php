@@ -28,7 +28,8 @@ function update_vps_info()
 		$hostname = trim(`hostname;`);
 		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	}
-	$url = 'https://mynew.interserver.net/vps_queue.php';
+	//$url = 'https://mynew.interserver.net/vps_queue.php';
+	$url = 'http://mynew.interserver.net:55151/queue.php';
 	$server = array();
 	$uname = posix_uname();
 	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;
@@ -163,7 +164,7 @@ function update_vps_info()
 			mail('hardware@interserver.net', 'OpenVZ server does not appear to be booted properly', 'This server does not have /proc/user_beancounters, was it booted into the wrong kernel?', $headers);
 		}
 	}
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=server_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 30 --max-time 60 -k -d module=vps -d action=server_info -d servers="'.urlencode(base64_encode(json_encode($server))).'" "'.$url.'" 2>/dev/null;';
 	// echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }

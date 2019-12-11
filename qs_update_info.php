@@ -28,7 +28,8 @@ function update_qs_info()
 		$hostname = trim(`hostname;`);
 		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	}
-	$url = 'https://mynew.interserver.net/qs_queue.php';
+	//$url = 'https://mynew.interserver.net/qs_queue.php';
+	$url = 'http://mynew.interserver.net:55151/queue.php';
 	$server = array();
 	$uname = posix_uname();
 	$server['bits'] = $uname['machine'] == 'x86_64' ? 64 : 32;
@@ -72,25 +73,25 @@ function update_qs_info()
 	$server['mounts'] = implode(',', $mounts);
 	$server['drive_type'] = trim(`if [ "$(smartctl -i /dev/sda |grep "SSD")" != "" ]; then echo SSD; else echo SATA; fi`);
 	$server['raid_status'] = trim(`{$dir}/check_raid.sh --check=WARNING 2>/dev/null`);
-    if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
-        $server['raid_status'] = 'OK: none:No Raid found';
-    }
-    if (file_exists('/sbin/zpool')) {
-        preg_match('/^([^:]*): (.*)$/', $server['raid_status'], $matches);
-        if (!isset($matches[2]) || trim($matches[2]) == '') {
-            $parts = array();
-        } else {
-            $parts = explode('; ', $matches[2]);
-        }
-        $zfs_status = trim(`/sbin/zpool status -x`);
-        if ($matches[1] == 'OK') {
-            if ($zfs_status != 'all pools are healthy') {
-                $matches[1] = 'WARNING';
-            }
-        }
-        $parts[] = 'zfs:'.$zfs_status;
-        $server['raid_status'] = $matches[1].': '.implode('; ', $parts);
-    }
+	if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
+		$server['raid_status'] = 'OK: none:No Raid found';
+	}
+	if (file_exists('/sbin/zpool')) {
+		preg_match('/^([^:]*): (.*)$/', $server['raid_status'], $matches);
+		if (!isset($matches[2]) || trim($matches[2]) == '') {
+			$parts = array();
+		} else {
+			$parts = explode('; ', $matches[2]);
+		}
+		$zfs_status = trim(`/sbin/zpool status -x`);
+		if ($matches[1] == 'OK') {
+			if ($zfs_status != 'all pools are healthy') {
+				$matches[1] = 'WARNING';
+			}
+		}
+		$parts[] = 'zfs:'.$zfs_status;
+		$server['raid_status'] = $matches[1].': '.implode('; ', $parts);
+	}
 	if (file_exists('/usr/bin/iostat')) {
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
@@ -150,7 +151,7 @@ function update_qs_info()
 			$server['hdfree'] = $parts[1];
 		}
 	}
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=server_info -d servers="'.urlencode(base64_encode(serialize($server))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d module=quickservers -d action=server_info -d servers="'.urlencode(base64_encode(json_encode($server))).'" "'.$url.'" 2>/dev/null;';
 	// echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }
