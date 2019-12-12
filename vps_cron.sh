@@ -60,20 +60,7 @@ if [ $old_cron -eq 1 ]; then
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
 		$dir/vps_traffic_new.php >> $log 2>&1
-		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_slice_map $url 2>/dev/null > $dir/cron.cmd;
-		if [ "$(cat $dir/cron.cmd)" != "" ]; then
-			. $dir/cron.cmd >> $log 2>&1;
-		fi;
-		if [ ! -e /usr/sbin/vzctl ]; then
-			curl -s --connect-timeout 60 --max-time 600 -k -d action=get_ip_map $url 2>/dev/null > $dir/cron.cmd;
-			if [ "$(cat $dir/cron.cmd)" != "" ]; then
-				. $dir/cron.cmd >> $log 2>&1;
-			fi;
-			curl -s --connect-timeout 60 --max-time 600 -k -d action=get_vnc_map $url 2>/dev/null > $dir/cron.cmd;
-			if [ "$(cat $dir/cron.cmd)" != "" ]; then
-				. $dir/cron.cmd >> $log 2>&1;
-			fi;
-		fi;
+		curl -s --connect-timeout 10 --max-time 15 -d action=map http://mynew.interserver.net:55151/queue.php | bash
 		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			echo "Get Queue Running:	$(cat $dir/cron.cmd)" >> $log;
