@@ -24,10 +24,10 @@ function update_vps_info()
 {
 	$dir = __DIR__;
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
-	if ($root_used > 90) {
-		$hostname = trim(`hostname;`);
-		mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
-	}
+	//if ($root_used > 90) {
+		//$hostname = trim(`hostname;`);
+		//mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
+	//}
 	//$url = 'https://mynew.interserver.net/vps_queue.php';
 	$url = 'http://mynew.interserver.net:55151/queue.php';
 	$server = array();
