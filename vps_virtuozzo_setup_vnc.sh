@@ -15,6 +15,10 @@ elif ! prlctl status $name >/dev/null 2>&1; then
 else
  name="$(prlctl list $name -i |grep EnvID|cut -d" " -f2)"
  port="$(prlctl list $name -i |grep "Remote display.*port=" | sed s#"^.*port=\([0-9]*\) .*$"#"\1"#g)"
+ if [ "$(grep "127.0.0.1 $port" /etc/xinetd.d/* -l)" != "" ]; then
+   echo "Removing old xinetd files"
+   rm -fv $(grep "127.0.0.1 $port" /etc/xinetd.d/* -l)
+ fi 
  if [ "$port" != "" ]; then
   cat ${base}/vps_kvm_xinetd.template | \
   sed s#"NAME"#"$name"#g | \
@@ -25,6 +29,7 @@ else
  else
   echo "no vnc port found for $myip"
  fi
+ killall -HUP xinetd
  service xinetd restart
 fi
 
