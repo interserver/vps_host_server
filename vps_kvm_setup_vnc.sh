@@ -1,5 +1,7 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin"
+IFS="
+"
 export base="$(readlink -f "$(dirname "$0")")";
 name=$1
 myip="$(ifconfig $(ip route list | grep "^default" | sed s#"^default.*dev "#""#g | head -n 1 | cut -d" " -f1)  |grep inet |grep -v inet6 | awk '{ print $2 }' | cut -d: -f2)"
@@ -16,6 +18,10 @@ elif [ "$(which virsh)" != "" ];then
   else
 	port="$(virsh dumpxml $name | grep vnc |grep port= | cut -d\' -f4)"
 	if [ "$port" != "" ]; then
+	  if [ "$(grep "127.0.0.1 $port" /etc/xinetd.d/* -l)" != "" ]; then
+		echo "Removing old xinetd files"
+		rm -fv $(grep "127.0.0.1 $port" /etc/xinetd.d/* -l)
+	  fi 
 	  cat ${base}/vps_kvm_xinetd.template | \
 	  sed s#"NAME"#"$name"#g | \
 	  sed s#"MYIP"#"$myip"#g | \
@@ -27,6 +33,10 @@ elif [ "$(which virsh)" != "" ];then
 	fi
 	port="$(virsh dumpxml $name | grep spice |grep port= | cut -d\' -f4)"
 	if [ "$port" != "" ]; then
+	  if [ "$(grep "127.0.0.1 $port" /etc/xinetd.d/* -l)" != "" ]; then
+		echo "Removing old xinetd files"
+		rm -fv $(grep "127.0.0.1 $port" /etc/xinetd.d/* -l)
+	  fi 
 	  cat ${base}/vps_kvm_xinetd.template | \
 	  sed s#"NAME"#"$name"#g | \
 	  sed s#"MYIP"#"$myip"#g | \
