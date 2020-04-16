@@ -154,7 +154,7 @@ $url = 'http://mynew.interserver.net:55151/queue.php';
 	$ips = get_qs_ipmap();
 	$totals = get_qs_iptables_traffic($ips);
 	//print_r($totals);
-	$cmd = 'curl --connect-timeout 30 --max-time 60 -k -d module=quickservers -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(serialize($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(serialize($totals)))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 30 --max-time 60 -k -d module=quickservers -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(json_encode($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(json_encode($totals)))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 //}
