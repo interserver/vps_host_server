@@ -238,9 +238,14 @@ function get_vps_iptables_traffic($ips)
 $url = 'http://mynew.interserver.net:55151/queue.php';
 $ips = get_vps_ipmap();
 $totals = get_vps_iptables_traffic($ips);
+if (isset($_SERVER['argv'][1])) {
+	$module = $_SERVER['argv'][1];
+} else {
+	$module = 'vps';
+}
 if (sizeof($totals) > 0) {
 	//print_r($ips);print_r($totals);
-	$cmd = 'curl --connect-timeout 30 --max-time 60 -k -d module=vps -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(json_encode($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(json_encode($totals)))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 30 --max-time 60 -k -d module='.$module.' -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(json_encode($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(json_encode($totals)))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }

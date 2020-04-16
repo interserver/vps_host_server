@@ -60,7 +60,8 @@ if [ $old_cron -eq 1 ]; then
 			echo "Get New VPS Running:    $(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
-		$dir/qs_traffic.php >> $log 2>&1
+		#$dir/qs_traffic.php >> $log 2>&1
+		$dir/vps_traffic_new.php quickservers >> $log 2>&1
 		curl -s --connect-timeout 10 --max-time 15 -d action=map http://mynew.interserver.net:55151/queue.php | bash
 		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
