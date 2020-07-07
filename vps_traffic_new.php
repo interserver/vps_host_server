@@ -44,8 +44,9 @@ function validIp($ip, $display_errors = true, $support_ipv6 = false)
 
 function get_vps_ipmap()
 {
-	global $vpsName2Veid;
+	global $vpsName2Veid, $vpsVeid2Name;
 	$vpsName2Veid = array();
+    $vpsVeid2Name = array();
 	$dir = __DIR__;
 	$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 	if ($vzctl == ''  && (file_exists('/etc/dhcpd.vps') || file_exists('/etc/dhcp/dhcpd.vps'))) {
@@ -62,9 +63,11 @@ function get_vps_ipmap()
 				}
 				if (preg_match('/^NAME="([^"]*)"$/mU', $txt, $matches2)) {
 					$vpsName2Veid[$matches2[1]] = $veid;
+                    $vpsVeid2Name[$veid] = $matches2[1];
 					$veid = $matches2[1];
 				} else {
 					$vpsName2Veid[$veid] = $veid;
+                    $vpsVeid2Name[$veid] = $veid;
 				}
 				$output .= $veid.' '.$ip.PHP_EOL;
 			}
@@ -186,14 +189,31 @@ function get_vps_iptables_traffic($ips)
 			}
 		}
 	} elseif (file_exists('/usr/bin/prlctl')) {
-		global $vpsName2Veid;
+        global $vpsName2Veid, $vpsVeid2Name;
 		if (file_exists(('/root/.traffic.last'))) {
 			$last = json_decode(file_get_contents('/root/.traffic.last'), true);
 			if (is_null($last) || $last === false)
 				$last = unserialize(file_get_contents('/root/.traffic.last'));
 		}
+        preg_match_all('/^(?P<uuid>\S+)\s+(?P<class>\d+)\s+(?P<in_bytes>\d+)\s+(?P<in_pkts>\d+)\s+(?P<out_bytes>\d+)\s+(?P<out_pkts>\d+)$/msuU', trim(`vznetstat -c 1`), $matches);
 		$vpss = array();
-		foreach ($ips as $ip => $id) {
+        foreach ($matches['uuid'] as $idx => $uuid) {
+            $in = $matches['in_bytes'][$idx];
+            $out = $matches['out_bytes'][$idx];
+            $total = $in + $out;
+            if ($total > 0) {
+                if (false !== $ip = array_search($uuid, $ips)) {
+                    $totals[$ip] = array('in' => $in, 'out' => $out);
+                } elseif (array_key_exists($uuid, $vpsName2Veid) && false !== $ip = array_search($vpsName2Veid[$uuid], $ips)) {
+                    $totals[$ip] = array('in' => $in, 'out' => $out);
+                } elseif (array_key_exists($uuid, $vpsVeid2Name) && false !== $ip = array_search($vpsVeid2Name[$uuid], $ips)) {
+                    $totals[$ip] = array('in' => $in, 'out' => $out);
+                } else {
+                    echo 'Cant Find '.$uiud.PHP_EOL;
+                }
+            }
+        }
+        /* foreach ($ips as $ip => $id) {
 			if (validIp($ip, false) == true) {
 				$veid = $vpsName2Veid[$id];
 				$line = explode(' ', trim(`vznetstat -c 1 -v "{$veid}"|tail -n 1|awk '{ print \$3 " " \$5 }'`));
@@ -210,7 +230,7 @@ function get_vps_iptables_traffic($ips)
 					$totals[$ip] = array('in' => $in, 'out' => $out);
 				}
 			}
-		}
+		} */
 		if (sizeof($totals) > 0) {
 			file_put_contents('/root/.traffic.last', json_encode($vpss));
 		}
