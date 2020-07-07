@@ -198,18 +198,18 @@ function get_vps_iptables_traffic($ips)
         preg_match_all('/^(?P<uuid>\S+)\s+(?P<class>\d+)\s+(?P<in_bytes>\d+)\s+(?P<in_pkts>\d+)\s+(?P<out_bytes>\d+)\s+(?P<out_pkts>\d+)$/msuU', trim(`vznetstat -c 1`), $matches);
 		$vpss = array();
         foreach ($matches['uuid'] as $idx => $uuid) {
-            $in = $matches['in_bytes'][$idx];
-            $out = $matches['out_bytes'][$idx];
-            $total = $in + $out;
-            if ($total > 0) {
-                if (false !== $ip = array_search($uuid, $ips)) {
-                    $totals[$ip] = array('in' => $in, 'out' => $out);
-                } elseif (array_key_exists($uuid, $vpsName2Veid) && false !== $ip = array_search($vpsName2Veid[$uuid], $ips)) {
-                    $totals[$ip] = array('in' => $in, 'out' => $out);
-                } elseif (array_key_exists($uuid, $vpsVeid2Name) && false !== $ip = array_search($vpsVeid2Name[$uuid], $ips)) {
-                    $totals[$ip] = array('in' => $in, 'out' => $out);
-                } else {
-                    echo 'Cant Find '.$uuid.PHP_EOL;
+            if ($uuid != '0') {
+                $in = $matches['in_bytes'][$idx];
+                $out = $matches['out_bytes'][$idx];
+                $total = $in + $out;
+                if ($total > 0) {
+                    if (false !== $ip = array_search($uuid, $ips)) {
+                        $totals[$ip] = array('in' => $in, 'out' => $out);
+                    } elseif (array_key_exists($uuid, $vpsName2Veid) && false !== $ip = array_search($vpsName2Veid[$uuid], $ips)) {
+                        $totals[$ip] = array('in' => $in, 'out' => $out);
+                    } elseif (array_key_exists($uuid, $vpsVeid2Name) && false !== $ip = array_search($vpsVeid2Name[$uuid], $ips)) {
+                        $totals[$ip] = array('in' => $in, 'out' => $out);
+                    }
                 }
             }
         }
