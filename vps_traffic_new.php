@@ -209,7 +209,7 @@ function get_vps_iptables_traffic($ips)
                 } elseif (array_key_exists($uuid, $vpsVeid2Name) && false !== $ip = array_search($vpsVeid2Name[$uuid], $ips)) {
                     $totals[$ip] = array('in' => $in, 'out' => $out);
                 } else {
-                    echo 'Cant Find '.$uiud.PHP_EOL;
+                    echo 'Cant Find '.$uuid.PHP_EOL;
                 }
             }
         }
