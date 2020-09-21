@@ -13,8 +13,13 @@ if [ -x /admin/resolvconf ]; then
 	/admin/resolvconf > /dev/null 2>&1
 fi
 
+if [ -e /usr/sbin/vzctl ]; then
+	exit;
+fi
+
 if [ ! -x /usr/local/sbin/ebtables ] && [ ! -x /sbin/ebtables ]; then
 	   echo 'neither /usr/local/sbin/ebtables nor /sbin/ebtables exist or is not executable';
+	   exit;
 fi
 
 #debug
