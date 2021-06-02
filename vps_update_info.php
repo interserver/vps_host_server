@@ -83,14 +83,14 @@ function update_vps_info()
 	if ($server['raid_status'] == 'check_raid UNKNOWN - No active plugins (No RAID found)') {
 		$server['raid_status'] = 'OK: none:No Raid found';
 	}
-	if (file_exists('/sbin/zpool')) {
+	if (file_exists('/sbin/zpool') || file_exists('/usr/sbin/zpool')) {
 		preg_match('/^([^:]*): (.*)$/', $server['raid_status'], $matches);
 		if (!isset($matches[2]) || trim($matches[2]) == '') {
 			$parts = array();
 		} else {
 			$parts = explode('; ', $matches[2]);
 		}
-		$zfs_status = trim(`/sbin/zpool status -x`);
+		$zfs_status = trim(file_exists('/sbin/zpool') ? `/sbin/zpool status -x` : `/usr/sbin/zpool status -x`);
 		if ($matches[1] == 'OK') {
 			if ($zfs_status != 'all pools are healthy') {
 				$matches[1] = 'WARNING';
