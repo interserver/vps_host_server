@@ -1,5 +1,9 @@
 #!/bin/bash
 
+export HOME=/root
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/games:/usr/local/sbin:/usr/local/bin:/usr/X11R6/bin
+
+
 function age() {
    local filename=$1
    local changed=`stat -c %Y "$filename"`
@@ -10,7 +14,8 @@ function age() {
    echo $elapsed
 }
 
-yum upgrade -y;
+#yum upgrade -y;
+/usr/bin/hostname && /usr/bin/hsotname -i
 if [ "$(which vzpkg)" = "" ]; then
   echo "Cannot find vzpkg package for update_virtuozzo.sh script on $HOSTNAME" | mail support@interserver.net
 else
