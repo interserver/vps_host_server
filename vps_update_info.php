@@ -109,15 +109,30 @@ function update_vps_info()
 	fi;
 	ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 	$server['ioping'] = trim(`$cmd`);
-	if (file_exists('/usr/sbin/vzctl')) {
+    if (file_exists('/sbin/zpool') || file_exists('/usr/sbin/zpool')) {
+        $out = trim(`zpool list -Hp vz 2>/dev/null`);
+        if ($out != '') {
+            $parts = explode('  ', $out);
+            $totalb = $parts[1];
+            $usedb = $parts[2];
+            $freeb = $parts[3];
+            $totalg = ceil($totalb / 1073741824);
+            $freeg = ceil($freeb / 1073741824);
+            $usedg = ceil($usedb / 1073741824);
+            $out = $totalg.' '.$freeg;
+        } else {
+            unset($out);
+        }
+    }
+	if (!isset($out) && file_exists('/usr/sbin/vzctl')) {
 		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
-	} elseif (file_exists('/usr/bin/lxc')) {
+	} elseif (!isset($out) && file_exists('/usr/bin/lxc')) {
 		$parts = explode("\n", trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
 		$used = ceil($parts[0]/1073741824);
 		$total = ceil($parts[1]/1073741824);
 		$free = $total - $used;
 		$out = $total.' '.$free;
-	} elseif (file_exists('/usr/bin/virsh')) {
+	} elseif (!isset($out) && file_exists('/usr/bin/virsh')) {
 		if (file_exists('/etc/redhat-release') && strpos(file_get_contents('/etc/redhat-release'), 'CentOS release 6') !== false) {
 			$out = '';
 		} else {
