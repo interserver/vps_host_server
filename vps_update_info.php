@@ -112,7 +112,8 @@ function update_vps_info()
     if (file_exists('/sbin/zpool') || file_exists('/usr/sbin/zpool')) {
         $out = trim(`zpool list -Hp vz 2>/dev/null`);
         if ($out != '') {
-            $parts = explode('  ', $out);
+            $parts = explode('	', $out);
+
             $totalb = $parts[1];
             $usedb = $parts[2];
             $freeb = $parts[3];
