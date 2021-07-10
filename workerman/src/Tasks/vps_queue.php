@@ -8,23 +8,14 @@ return function ($stdObject, $cmds) {
 		} elseif (preg_match('/(\/[^ ]+).*$/m', $cmd, $matches)) {
 			Worker::safeEcho(`$cmd`);
 		} else {
-			if (!isset($react_client)) {
+			if (!isset($browser)) {
 				$loop = Worker::getEventLoop();
-				$react_factory = new React\Dns\Resolver\Factory();
-				$react_dns = $react_factory->createCached('8.8.8.8', $loop);
-				$react_factory = new React\HttpClient\Factory();
-				$react_client = $react_factory->create($loop, $react_dns);
+				$browser = new React\Http\Browser($loop);
 			}
-			$request = $client->request('GET', 'https://mynew.interserver.net/vps_queue.php?action='.$cmd);
-			$request->on('error', function (Exception $e) use ($cmd) {
-				Worker::safeEcho("CMD {$cmd} Exception Error {$e->getMessage()}\n");
+			$browser->get('https://mynew.interserver.net/vps_queue.php?action='.$cmd)->then(function (Psr\Http\Message\ResponseInterface $response) {
+				$data = $response->getBody();
+				Worker::safeEcho(`$data`);
 			});
-			$request->on('response', function ($response) {
-				$response->on('data', function ($data, $response) {
-					Worker::safeEcho(`$data`);
-				});
-			});
-			$request->end();
 		}
 	}
 };
