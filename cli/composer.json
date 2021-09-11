@@ -1,0 +1,26 @@
+{
+	"name": "detain/vps-host-service",
+	"description": "Service providing virtualization management",
+	"type": "project",
+	"keywords": [
+		"server",
+		"administration",
+		"vps"
+	],
+	"license": "LGPL-2.1-or-later",
+	"authors": [
+		{
+			"name": "Joe Huss",
+			"email": "detain@interserver.net"
+		}
+	],
+	"require": {
+		"corneltek/cliframework": "*"
+	},
+	"autoload": {
+		"psr-4": {
+			"App\\": "app/"
+		}
+	},
+	"minimum-stability": "dev"
+}
