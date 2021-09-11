@@ -58,20 +58,13 @@ class CreateCommand extends Command {
         $ip = array_shift($extraips);
         $maxCpu = $cpu > 8 ? $cpu : 8;
     	$maxMemory = $memory > 16384000 ? $memory : 16384000;
-/*
-if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release |sed s#"^[^0-9]* "#""#g|cut -c1) -le 6 ]; then
-	if [ $(echo "$(e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2) * 100" | bc | cut -d"." -f1) -le 141 ]; then
-		if [ ! -e /opt/e2fsprogs/sbin/e2fsck ]; then
-			pushd $PWD;
-			cd /admin/ports
-			./install e2fsprogs
-			popd;
-		fi;
-		export PREPATH="/opt/e2fsprogs/sbin:";
-		export PATH="$PREPATH$PATH";
-	fi;
-fi;
-*/
+    	if (file_exists('/etc/redhat-release') && intval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* "#""#g|cut -c1`)) <= 6) {
+			if (floatval(trim(`e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2`)) <= 1.41) {
+				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
+					echo `/admin/ports/install e2fsprogs;`;
+				}
+			}
+    	}
 		$this->progress(3);
 		$device = '/dev/vz/'.$vzid;
 		$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
@@ -116,9 +109,7 @@ else
 fi
 */
 		if ($module == 'quickservers') {
-/*
-sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$vzid}.xml
-*/
+			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$vzid}.xml`;
 		} else {
 /*
 	repl="<parameter name='IP' value='$ip'/>";
@@ -128,7 +119,7 @@ sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$vzid
 		done
 	fi
 */
-//	sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i {$vzid}.xml;
+			echo `sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i {$vzid}.xml;`;
 		}
 		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $vzid);
 		if ($id == $vzid) {
@@ -147,25 +138,19 @@ sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i {$vzid}.xml;
 sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i {$vzid}.xml;
 */
 //sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i {$vzid}.xml;
-/*
-if [ "$(grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo)" != "" ]; then
-	sed s#"<features>"#"<features>\n    <hap/>"#g -i {$vzid}.xml;
-fi
-if [ "$(date "+%Z")" = "PDT" ]; then
-	sed s#"America/New_York"#"America/Los_Angeles"#g -i {$vzid}.xml;
-fi
-if [ -e /etc/lsb-release ]; then
-	if [ "$(echo "{$vps_os}"|cut -c1-7)" = "windows" ]; then
-		sed -e s#"</features>"#"  <hyperv>\n      <relaxed state='on'/>\n      <vapic state='on'/>\n      <spinlocks state='on' retries='8191'/>\n    </hyperv>\n  </features>"#g -i {$vzid}.xml;
-		sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$vzid}.xml;
-	fi;
-	. /etc/lsb-release;
-	if [ $(echo $DISTRIB_RELEASE|cut -d\. -f1) -ge 18 ]; then
-		sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='$vcpu'/>"#g -i  {$vzid}.xml;
-	fi;
-fi;
-
-*/
+		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
+			echo `sed s#"<features>"#"<features>\n    <hap/>"#g -i {$vzid}.xml;`;
+		}
+		if (trim(`date "+%Z"`) == 'PDT') {
+			echo `sed s#"America/New_York"#"America/Los_Angeles"#g -i {$vzid}.xml;`;
+		}
+		if (file_exists('/etc/lsb-release')) {
+			if (substr($vps_os, 0, 7) == 'windows') {
+				echo `sed -e s#"</features>"#"  <hyperv>\n      <relaxed state='on'/>\n      <vapic state='on'/>\n      <spinlocks state='on' retries='8191'/>\n    </hyperv>\n  </features>"#g -i {$vzid}.xml;`;
+				echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$vzid}.xml;`;
+			}
+			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='$vcpu'/>"#g -i  {$vzid}.xml;`;
+		}
 		echo `/usr/bin/virsh define {$vzid}.xml;`;
 		//echo `/usr/bin/virsh setmaxmem {$vzid} $memory;`;
 		//echo `/usr/bin/virsh setmem {$vzid} $memory;`;
