@@ -88,56 +88,45 @@ class CreateCommand extends Command {
 		}
 		$this->progress(1);
 		echo "{$pool} pool device {$device} created\n";
-/*
-cd /etc/libvirt/qemu
-if /usr/bin/virsh dominfo {$vzid} >/dev/null 2>&1; then
-	/usr/bin/virsh destroy {$vzid}
-	cp {$vzid}.xml {$vzid}.xml.backup
-	/usr/bin/virsh undefine {$vzid}
-	mv -f {$vzid}.xml.backup {$vzid}.xml
-else
-	echo "Generating XML Config"
-	if [ "$pool" != "zfs" ]; then
-		grep -v -e uuid -e filterref -e "<parameter name='IP'" {$base}/windows.xml | sed s#"windows"#"{$vzid}"#g > {$vzid}.xml
-	else
-		grep -v -e uuid {$base}/windows.xml | sed -e s#"windows"#"{$vzid}"#g -e s#"/dev/vz/{$vzid}"#"$device"#g > {$vzid}.xml
-	fi
-	echo "Defining Config As VPS"
-	if [ ! -e /usr/libexec/qemu-kvm ] && [ -e /usr/bin/kvm ]; then
-	  sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i {$vzid}.xml
-	fi;
-fi
-*/
+		passthru('/usr/bin/virsh dominfo '.$vzid.' >/dev/null 2>&1', $return);
+		if ($return > 0) {
+			echo `/usr/bin/virsh destroy {$vzid}`;
+			echo `cp {$vzid}.xml {$vzid}.xml.backup`;
+			echo `/usr/bin/virsh undefine {$vzid}`;
+			echo `mv -f {$vzid}.xml.backup {$vzid}.xml`;
+		} else {
+			echo "Generating XML Config\n";
+			if ($pool != 'zfs') {
+				echo `grep -v -e uuid -e filterref -e "<parameter name='IP'" {$base}/windows.xml | sed s#"windows"#"{$vzid}"#g > {$vzid}.xml`;
+			} else {
+				echo `grep -v -e uuid {$base}/windows.xml | sed -e s#"windows"#"{$vzid}"#g -e s#"/dev/vz/{$vzid}"#"$device"#g > {$vzid}.xml`;
+			}
+			echo "Defining Config As VPS\n";
+			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
+				echo `sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i {$vzid}.xml`;
+			}
+		}
 		if ($module == 'quickservers') {
 			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$vzid}.xml`;
 		} else {
-/*
-	repl="<parameter name='IP' value='$ip'/>";
-	if [ "$extraips" != "" ]; then
-		for i in $extraips; do
-			repl="$repl\n        <parameter name='IP' value='$i'/>";
-		done
-	fi
-*/
+			$repl = "<parameter name='IP' value='$ip'/>";
+			if (count($extraips) > 0) {
+				foreach ($extraips as $i) {
+					$repl = "{$repl}\n        <parameter name='IP' value='{$i}'/>";
+				}
+			}
 			echo `sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i {$vzid}.xml;`;
 		}
 		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $vzid);
 		if ($id == $vzid) {
 			$mac = $this->convert_id_to_mac($id, $module);
-/*
-	sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i {$vzid}.xml
-*/
+			echo `sed s#"<mac address='.*'"#"<mac address='$mac'"#g -i {$vzid}.xml`;
 		} else {
-/*
-	sed s#"^.*<mac address.*$"#""#g -i {$vzid}.xml
-*/
+			echo `sed s#"^.*<mac address.*$"#""#g -i {$vzid}.xml`;
 		}
-/*
-sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i {$vzid}.xml;
-sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i {$vzid}.xml;
-sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i {$vzid}.xml;
-*/
-//sed s#"<parameter name='IP' value.*/>"#"$repl"#g -i {$vzid}.xml;
+		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='$vcpu'>$max_cpu</vcpu>"#g -i {$vzid}.xml;`;
+		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>$memory</memory>"#g -i {$vzid}.xml;`;
+		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</currentMemory>"#g -i {$vzid}.xml;`;
 		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
 			echo `sed s#"<features>"#"<features>\n    <hap/>"#g -i {$vzid}.xml;`;
 		}
@@ -252,52 +241,40 @@ sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</curre
 		}
 		echo "Errors: {$error}  Adjust Partitions: {$adjust_partitions}\n";
 		if ($error == 0) {
-/*
-	if [ "$adjust_partitions" = "1" ]; then
-		iprogress resizing &
-		sects="$(fdisk -l -u $device  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g)"
-		t="$(fdisk -l -u $device | sed s#"\*"#""#g | grep "^$device" | tail -n 1)"
-		p="$(echo $t | awk '{ print $1 }')"
-		fs="$(echo $t | awk '{ print $5 }')"
-		if [ "$(echo "$fs" | grep "[A-Z]")" != "" ]; then
-			fs="$(echo $t | awk '{ print $6 }')"
-		fi;
-		pn="$(echo "$p" | sed s#"$device[p]*"#""#g)"
-		if [ $pn -gt 4 ]; then
-			pt=l
-		else
-			pt=p
-		fi
-		start="$(echo $t | awk '{ print $2 }')"
-		if [ "$fs" = "83" ]; then
-			echo "Resizing Last Partition To Use All Free Space (Sect $sects P $p FS $fs PN $pn PT $pt Start $start"
-			echo -e "d\n$pn\nn\n$pt\n$pn\n$start\n\n\nw\nprint\nq\n" | fdisk -u $device
-			kpartx $kpartxopts -av $device
-			pname="$(ls /dev/mapper/vz-"{$vzid}"p$pn /dev/mapper/vz-{$vzid}$pn /dev/mapper/"{$vzid}"p$pn /dev/mapper/{$vzid}$pn 2>/dev/null | cut -d/ -f4 | sed s#"$pn$"#""#g)"
-			e2fsck -p -f /dev/mapper/$pname$pn
-			if [ -f "$(which resize4fs 2>/dev/null)" ]; then
-				resizefs="resize4fs"
-			else
-				resizefs="resize2fs"
-			fi
-			$resizefs -p /dev/mapper/$pname$pn
-			mkdir -p /vz/mounts/{$vzid}$pn
-			mount /dev/mapper/$pname$pn /vz/mounts/{$vzid}$pn;
-			PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
-			echo root:{$rootpass} | chroot /vz/mounts/{$vzid}$pn chpasswd || \
-			php {$base}/vps_kvm_password_manual.php {$rootpass} "/vz/mounts/{$vzid}$pn"
-			if [ -e /vz/mounts/{$vzid}$pn/home/kvm ]; then
-				echo kvm:{$rootpass} | chroot /vz/mounts/{$vzid}$pn chpasswd
-			fi;
-			umount /dev/mapper/$pname$pn
-			kpartx $kpartxopts -d $device
-		else
-			echo "Skipping Resizing Last Partition FS is not 83. Space (Sect $sects P $p FS $fs PN $pn PT $pt Start $start"
-		fi
-	fi
-	touch /tmp/_securexinetd;
-	/usr/bin/virsh autostart {$vzid};
-	*/
+			if ($adjust_partitions == 1) {
+				$this->progress('resizing');
+				$sects = trim(`fdisk -l -u $device  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g`);
+				$t = trim(`fdisk -l -u $device | sed s#"\*"#""#g | grep "^$device" | tail -n 1`);
+				$p = trim(`echo $t | awk '{ print $1 }'`);
+				$fs = trim(`echo $t | awk '{ print $5 }'`);
+				if (trim(`echo "$fs" | grep "[A-Z]")`) != '') {
+					$fs = trim(`echo $t | awk '{ print $6 }'`);
+				}
+				$pn = trim(`echo "$p" | sed s#"$device[p]*"#""#g`);
+				$pt = $pn > 4 ? 'l' : 'p';
+				$start = trim(`echo $t | awk '{ print $2 }'`);
+				if ($fs == 83) {
+					echo "Resizing Last Partition To Use All Free Space (Sect $sects P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
+					echo `echo -e "d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n" | fdisk -u {$device}`;
+					echo `kpartx $kpartxopts -av {$device}`;
+					$pname = trim(`ls /dev/mapper/vz-"{$vzid}"p{$pn} /dev/mapper/vz-{$vzid}{$pn} /dev/mapper/"{$vzid}"p{$pn} /dev/mapper/{$vzid}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#"{$pn}$"#""#g`);
+					echo `e2fsck -p -f /dev/mapper/{$pname}{$pn}`;
+					$resizefs = trim(`which resize4fs 2>/dev/null`) != '' ? 'resize4fs' : 'resize2fs';
+					echo `$resizefs -p /dev/mapper/{$pname}{$pn}`;
+					mkdir('/vz/mounts/'.$vzid.$pn, 0777, true);
+					echo `mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$vzid}{$pn};`;
+					echo `echo root:{$rootpass} | chroot /vz/mounts/{$vzid}{$pn} chpasswd || php {$base}/vps_kvm_password_manual.php {$rootpass} "/vz/mounts/{$vzid}{$pn}"`;
+					if (file_exists('/vz/mounts/'.$vzid.$pn.'/home/kvm')) {
+						echo `echo kvm:{$rootpass} | chroot /vz/mounts/{$vzid}{$pn} chpasswd`;
+					}
+					echo `umount /dev/mapper/{$pname}{$pn}`;
+					echo `kpartx $kpartxopts -d {$device}`;
+				} else {
+					echo "Skipping Resizing Last Partition FS is not 83. Space (Sect $sects P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
+				}
+			}
+			touch('/tmp/_securexinetd');
+			echo `/usr/bin/virsh autostart {$vzid};`;
 			$this->progress('starting');
 			echo `/usr/bin/virsh start {$vzid};`;
 			if ($pool != 'zfs') {
@@ -321,22 +298,26 @@ sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</curre
 				echo `{$base}/vps_kvm_setup_vnc.sh {$vzid} {$clientip};`;
 			}
 			echo `{$base}/vps_refresh_vnc.sh {$vzid};`;
-	/*
-	vnc="$((5900 + $(virsh vncdisplay {$vzid} | cut -d: -f2 | head -n 1)))";
-	if [ "$vnc" == "" ]; then
-		sleep 2s;
-		vnc="$((5900 + $(virsh vncdisplay {$vzid} | cut -d: -f2 | head -n 1)))";
-		if [ "$vnc" == "" ]; then
-			sleep 2s;
-			vnc="$(virsh dumpxml {$vzid} |grep -i "graphics type='vnc'" | cut -d\' -f4)";
-		fi;
-	fi;
-	{$base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name={$vzid}";
-	sleep 1s;
-	{$base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name={$vzid}";
-	sleep 1s;
-	{$base}/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name={$vzid}";
-*/
+			$vnc = trim(`virsh vncdisplay {$vzid} | cut -d: -f2 | head -n 1`);
+			if ($vnc == '') {
+				sleep(2);
+				$vnc = trim(`virsh vncdisplay {$vzid} | cut -d: -f2 | head -n 1`);
+				if ($vnc == '') {
+					sleep(2);
+					$vnc = trim(`virsh dumpxml {$vzid} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+				} else {
+					$vnc += 5900;
+				}
+			} else {
+				$vnc += 5900;
+			}
+			$vnc -= 5900;
+			echo `{$base}/vps_kvm_screenshot.sh "{$vnc}" "$url?action=screenshot&name={$vzid}";`;
+			sleep(1);
+			echo `{$base}/vps_kvm_screenshot.sh "{$vnc}" "$url?action=screenshot&name={$vzid}";`;
+			sleep(1);
+			echo `{$base}/vps_kvm_screenshot.sh "{$vnc}" "$url?action=screenshot&name={$vzid}";`;
+			$vnc += 5900;
 			echo `/admin/kvmenable blocksmtp {$vzid};`;
 			echo `rm -f /tmp/_securexinetd;`;
 			if ($module == 'vps') {
@@ -363,28 +344,18 @@ sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</curre
     }
 
     public function setupDhcpd($vzid, $ip, $mac) {
-/*
-    if [ -e /etc/dhcp/dhcpd.vps ]; then
-    	DHCPVPS=/etc/dhcp/dhcpd.vps
-    else
-    	DHCPVPS=/etc/dhcpd.vps
-    fi
-    if [ -e /etc/apt ]; then
-        DHCPSERVICE=isc-dhcp-server
-    else
-        DHCPSERVICE=dhcpd
-    fi
-    /bin/cp -f $DHCPVPS $DHCPVPS.backup;
-    grep -v -e "host {$vzid} " -e "fixed-address $ip;" $DHCPVPS.backup > $DHCPVPS
-    echo "host {$vzid} { hardware ethernet $mac; fixed-address $ip; }" >> $DHCPVPS
-    rm -f $DHCPVPS.backup;
-    systemctl restart $DHCPSERVICE 2>/dev/null || service $DHCPSERVICE restart 2>/dev/null || /etc/init.d/$DHCPSERVICE restart 2>/dev/null
-*/
+		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
+		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
+		echo `/bin/cp -f {$dhcpvps} {$dhcpvps}.backup;`;
+    	echo `grep -v -e "host {$vzid} " -e "fixed-address {$ip};" {$dhcpvps}.backup > {$dhcpvps}`;
+    	echo `echo "host {$vzid} { hardware ethernet {$mac}; fixed-address {$ip}; }" >> {$dhcpvps}`;
+    	echo `rm -f {$dhcpvps}.backup;`;
+    	echo `systemctl restart {$dhcpservice} 2>/dev/null || service {$dhcpservice} restart 2>/dev/null || /etc/init.d/{$dhcpservice} restart 2>/dev/null`;
     }
 
     public function install_gz_image($source, $device) {
+    	echo "Copying {$source} Image\n";
     	/*
-	echo "Copying $source Image"
 	tsize=$(stat -c%s "$source")
 	gzip -dc "/$source"  | dd of=$device 2>&1 &
 	pid=$!
@@ -421,9 +392,9 @@ sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</curre
 	}
 
 	public function install_image($source, $device) {
+		echo "Copying Image\n";
+		$tsize = trim(`stat -c%s "{$source}"`);
 		/*
-	echo "Copying Image";
-	tsize=$(stat -c%s "$source");
 	dd "if=$source" "of=$device" >dd.progress 2>&1 &
 	pid=$!
 	while [ -d /proc/$pid ]; do
@@ -444,8 +415,8 @@ sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>$memory</curre
 			echo "$completed%";
 		fi;
 	done;
-	rm -f dd.progress;
 	*/
+		echo `rm -f dd.progress;`;
 	}
 
 	public function convert_id_to_mac($id, $module) {
