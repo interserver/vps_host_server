@@ -33,7 +33,32 @@ class CreateCommand extends Command {
 		return "Creates a Virtual Machine.";
 	}
 
+	public function options($opts) {
+        $opts->add('h|hostname:', 'Hostname for the vps')
+        	->isa('string');
+        $opts->add('m|mac:', 'MAC Address')
+        	->isa('string');
+        $opts->add('slices:', 'Number of Slices for the vps')
+        	->isa('number');
+        $opts->add('slice-hd:', 'Amount of HD Space in GB per Slice')
+        	->isa('number')
+        	->defaultValue(25);
+        $opts->add('slice-ram:', 'Amount of RAM in MB per Slice')
+        	->isa('number')
+        	->defaultValue(1024);
+        $opts->add('i|ip:', 'IP Address for the vps')
+        	->isa('Ip');
+	}
+
 	public function execute() {
+		/**
+		* @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection}
+		*/
+		$opts = $this->getOptions();
+		print_r($opts);
+		echo "Slice HD:".$opts->sliceHd."\n";
+		print_r(array_keys($opts->keys));
+		exit;
 		$base = '/root/cpaneldirect';
 		$ram = $slices * $settings['slice_ram'] * 1024;
 		$hd = (($settings['slice_hd'] * $slices) + $settings['additional_hd']) * 1024;
@@ -355,8 +380,9 @@ class CreateCommand extends Command {
 
     public function install_gz_image($source, $device) {
     	echo "Copying {$source} Image\n";
+    	$tsize = trim(`stat -c%s "{$source}"`);
+    	echo `gzip -dc "/{$source}"  | dd of={$device} 2>&1`;
     	/*
-	tsize=$(stat -c%s "$source")
 	gzip -dc "/$source"  | dd of=$device 2>&1 &
 	pid=$!
 	echo "Got DD PID $pid";
@@ -394,6 +420,7 @@ class CreateCommand extends Command {
 	public function install_image($source, $device) {
 		echo "Copying Image\n";
 		$tsize = trim(`stat -c%s "{$source}"`);
+		echo `dd "if={$source}" "of={$device}" 2>&1`;
 		/*
 	dd "if=$source" "of=$device" >dd.progress 2>&1 &
 	pid=$!
