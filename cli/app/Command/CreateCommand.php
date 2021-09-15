@@ -39,6 +39,7 @@ class CreateCommand extends Command {
 	public $device = '';
 	public $pool = '';
 	public $ip = '';
+	public $mac = '';
 	public $extraips = [];
     public $softraid = [];
     public $error = 0;
@@ -116,19 +117,8 @@ HELP;
 			->isa('string');
 	}
 
-    public function getInstalledVirts() {
-		$found = [];
-		foreach ($this->virtBins as $virt => $virtBin) {
-			if (file_exists($virtBin)) {
-				$found[] = $virt;
-			}
-		}
-		return $found;
-    }
+    public function progress($progress) {
 
-    public function isVirtualHost() {
-		$virts = $this->getInstalledVirts();
-		return count($virts) > 0;
     }
 
 	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $pass = '') {
@@ -172,25 +162,11 @@ HELP;
 		print_r(array_keys($opts->keys));
 		$this->getLogger()->writeln("Got here");
 		return;
-		if ($this->pool == 'zfs') {
-			mkdir('/vz/'.$this->hostname, 0777, true);
-			echo `zfs create vz/{$this->hostname}`;
-			$this->device='/vz/'.$this->hostname.'/os.qcow2';
-			while (!file_exists('/vz/'.$this->hostname)) {
-				sleep(1);
-			}
-			//virsh vol-create-as --pool vz --name {$this->hostname}/os.qcow2 --capacity "$this->hd"M --format qcow2 --prealloc-metadata
-			//sleep 5s;
-			//device="$(virsh vol-list vz --details|grep " {$this->hostname}[/ ]"|awk '{ print $2 }')"
-		} else {
-			echo `{$this->base}/vps_kvm_lvmcreate.sh {$this->hostname} {$this->hd}`;
-			// exit here on failed exit status
-		}
-		$this->progress(1);
-		echo "{$this->pool} pool device {$this->device} created\n";
+		$this->setupStorage();
+		$this->progress(4);
 		$this->defineVps();
-		$mac = xml2array(`/usr/bin/virsh dumpxml {$this->hostname};`)['domain']['devices']['interface']['mac_attr']['address'];
-		$this->setupDhcpd($this->hostname, $this->ip, $mac);
+		$this->mac = $this->getVpsMac($this->hostname);
+		$this->setupDhcpd();
 		$this->progress(15);
 		echo "Custid is {$custid}\n";
 		if ($custid == 565600) {
@@ -374,16 +350,30 @@ HELP;
 		$this->progress(100);
 	}
 
-    public function progress($progress) {
-
-    }
+	public function setupStorage() {
+		if ($this->pool == 'zfs') {
+			mkdir('/vz/'.$this->hostname, 0777, true);
+			echo `zfs create vz/{$this->hostname}`;
+			$this->device='/vz/'.$this->hostname.'/os.qcow2';
+			while (!file_exists('/vz/'.$this->hostname)) {
+				sleep(1);
+			}
+			//virsh vol-create-as --pool vz --name {$this->hostname}/os.qcow2 --capacity "$this->hd"M --format qcow2 --prealloc-metadata
+			//sleep 5s;
+			//device="$(virsh vol-list vz --details|grep " {$this->hostname}[/ ]"|awk '{ print $2 }')"
+		} else {
+			echo `{$this->base}/vps_kvm_lvmcreate.sh {$this->hostname} {$this->hd}`;
+			// exit here on failed exit status
+		}
+		echo "{$this->pool} pool device {$this->device} created\n";
+	}
 
     public function setupDhcpd() {
 		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
 		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
 		echo `/bin/cp -f {$dhcpvps} {$dhcpvps}.backup;`;
     	echo `grep -v -e "host {$this->hostname} " -e "fixed-address {$this->ip};" {$dhcpvps}.backup > {$dhcpvps}`;
-    	echo `echo "host {$this->hostname} { hardware ethernet {$mac}; fixed-address {$this->ip}; }" >> {$dhcpvps}`;
+    	echo `echo "host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }" >> {$dhcpvps}`;
     	echo `rm -f {$dhcpvps}.backup;`;
     	echo `systemctl restart {$dhcpservice} 2>/dev/null || service {$dhcpservice} restart 2>/dev/null || /etc/init.d/{$dhcpservice} restart 2>/dev/null`;
     }
@@ -456,6 +446,21 @@ HELP;
 		echo `rm -f dd.progress;`;
 	}
 
+    public function getInstalledVirts() {
+		$found = [];
+		foreach ($this->virtBins as $virt => $virtBin) {
+			if (file_exists($virtBin)) {
+				$found[] = $virt;
+			}
+		}
+		return $found;
+    }
+
+    public function isVirtualHost() {
+		$virts = $this->getInstalledVirts();
+		return count($virts) > 0;
+    }
+
 	public function convert_id_to_mac($id, $useAll) {
 		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
 		$suffix = strtoupper(sprintf("%06s", dechex($id)));
@@ -493,8 +498,8 @@ HELP;
 		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
 		/* use id to generate mac address if we a numeric id or remove mac otherwise */
 		if (is_numeric($id)) {
-			$mac = $this->convert_id_to_mac($id, $this->useAll);
-			echo `sed s#"<mac address='.*'"#"<mac address='{$mac}'"#g -i {$this->hostname}.xml`;
+			$this->mac = $this->convert_id_to_mac($id, $this->useAll);
+			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
 		} else {
 			echo `sed s#"^.*<mac address.*$"#""#g -i {$this->hostname}.xml`;
 		}
@@ -575,4 +580,8 @@ HELP;
 		return intval($matches[1]);
 	}
 
+	public function getVpsMac($hostname) {
+		$mac = xml2array(`/usr/bin/virsh dumpxml {$this->hostname};`)['domain']['devices']['interface']['mac_attr']['address'];
+		return $mac;
+	}
 }
