@@ -46,8 +46,25 @@ class CreateCommand extends Command {
         $opts->add('slice-ram:', 'Amount of RAM in MB per Slice')
         	->isa('number')
         	->defaultValue(1024);
-        $opts->add('i|ip:', 'IP Address for the vps')
+        $opts->add('additional-hd:', 'Amount of additional HD space beyond the slice amount in GB')
+        	->isa('number')
+        	->defaultValue(0);
+        $opts->add('ip:', 'IP Address for the vps')
         	->isa('Ip');
+        $opts->add('id:', 'Order ID # for the vps')
+        	->isa('number');
+        $opts->add('vzid:', 'VZID')
+        	->isa('string');
+        $opts->add('ips:', 'Additional IPs')
+        	->isa('string');
+        $opts->add('e|email:', 'Email Address of the VPS owner')
+        	->isa('string');
+        $opts->add('custid:', 'Customer ID #')
+        	->isa('number');
+        $opts->add('clientip:', 'Client IP')
+        	->isa('ip');
+        $opts->add('p|password:', 'Root Password')
+        	->isa('string');
 	}
 
 	public function execute() {
