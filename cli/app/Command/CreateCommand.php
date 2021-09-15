@@ -33,6 +33,7 @@ class CreateCommand extends Command {
 	public $ram = 1024;
 	public $hd = 25;
 	public $maxCpu = 8;
+	public $maxRam = 16384000;
 	public $useAll = false;
 	public $hostname = '';
 	public $template = '';
@@ -44,6 +45,9 @@ class CreateCommand extends Command {
     public $softraid = [];
     public $error = 0;
     public $adjust_partitions = 1;
+    public $vncPort = '';
+    public $clientIp = '';
+    public $url = '';
 
 	public function brief() {
 		return "Creates a Virtual Machine.";
@@ -140,12 +144,13 @@ HELP;
 		*/
 		$opts = $this->getOptions();
         $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
+        $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
 		/* convert ram to kb */
 		$this->ram = $this->ram * 1024;
 		/* convert hd to mb */
 		$this->hd = $this->hd * 1024;
         $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
-    	$maxMemory = $this->ram > 16384000 ? $this->ram : 16384000;
+    	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
         if ($this->useAll == true) {
 			$this->hd = 'all';
 			$this->ram = $this->getUsableRam();
@@ -175,125 +180,9 @@ HELP;
 			}
 			$this->template = 'template.281311';
 		}
-		if ($this->pool == 'zfs') {
-			// kvmv2
-			if (file_exists('/vz/templates/'.$this->template.'.qcow2') || $this->template == 'empty') {
-				echo "Copy {$this->template}.qcow2 Image\n";
-				if ($this->hd == 'all') {
-					$this->hd = intval(`zfs list vz -o available -H -p`) / (1024 * 1024);
-					if ($this->hd > 2000000)
-						$this->hd = 2000000;
-				}
-				if (stripos($this->template, 'freebsd') !== false) {
-					echo `cp -f /vz/templates/{$this->template}.qcow2 {$this->device};`;
-					$this->progress(60);
-					echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
-				} else {
-					echo `qemu-img create -f qcow2 -o preallocation=metadata {$this->device} 25G;`;
-					$this->progress(40);
-					echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
-					$this->progress(70);
-					if ($this->template != 'empty') {
-						$part = `virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`;
-						$backuppart = `virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`;
-						if ($this->template != 'template.281311') {
-							echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} ;`;
-						} else {
-							echo `cp -fv /vz/templates/{$this->template}.qcow2 {$this->device};`;
-						}
-					}
-				}
-				$this->progress(90);
-				echo `virsh detach-disk {$this->hostname} vda --persistent;`;
-				echo `virsh attach-disk {$this->hostname} /vz/{$this->hostname}/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;`;
-				echo `virsh dumpxml {$this->hostname} > vps.xml`;
-				echo `sed s#"type='qcow2'/"#"type='qcow2' cache='writeback' discard='unmap'/"#g -i vps.xml`;
-				echo `virsh define vps.xml`;
-				echo `rm -f vps.xml`;
-				echo `virt-customize -d {$this->hostname} --root-password password:{$rootpass} --hostname "{$this->hostname}";`;
-				$this->adjust_partitions = 0;
-			}
-		} elseif (substr($this->template, 0, 7) == 'http://' || substr($this->template, 0, 8) == 'https://' || substr($this->template, 0, 6) == 'ftp://') {
-			// image from url
-			$this->adjust_partitions = 0;
-			echo "Downloading {$this->template} Image\n";
-			echo `{$this->base}/vps_get_image.sh "{$this->template}"`;
-			if (!file_exists('/image_storage/image.raw.img')) {
-				echo "There must have been a problem, the image does not exist\n";
-				$this->error++;
-			} else {
-				$this->install_image('/image_storage/image.raw.img', $this->device);
-				echo "Removing Downloaded Image\n";
-				echo `umount /image_storage;`;
-				echo `virsh vol-delete --pool vz image_storage;`;
-				echo `rmdir /image_storage;`;
-			}
-		} elseif ($this->template == 'empty') {
-			// kvmv1 install empty image
-			$this->adjust_partitions = 0;
-		} else {
-			// kvmv1 install
-			$found = 0;
-			foreach (['/vz/templates/', '/templates/', '/'] as $prefix) {
-				$source = $prefix.$this->template.'.img.gz';
-				if ($found == 0 && file_exists($source)) {
-					$found = 1;
-					$this->install_gz_image($source, $this->device);
-				}
-			}
-			foreach (['/vz/templates/', '/templates/', '/', '/dev/vz/'] as $prefix) {
-				foreach (['.img', ''] as $suffix) {
-					$source = $prefix.$this->template.$suffix;
-					if ($found == 0 && file_exists($source)) {
-						$found = 1;
-						$this->install_image($source, $this->device);
-					}
-				}
-			}
-			if ($found == 0) {
-				echo "Template does not exist\n";
-				$this->error++;
-			}
-		}
-		if (count($this->softraid) > 0) {
-			foreach ($this->softraid as $softfile) {
-				file_put_contents($softfile, 'check');
-			}
-		}
+		$this->installTemplate();
 		echo "Errors: {$this->error}  Adjust Partitions: {$this->adjust_partitions}\n";
 		if ($this->error == 0) {
-			if ($this->adjust_partitions == 1) {
-				$this->progress('resizing');
-				$sects = trim(`fdisk -l -u $this->device  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g`);
-				$t = trim(`fdisk -l -u $this->device | sed s#"\*"#""#g | grep "^$this->device" | tail -n 1`);
-				$p = trim(`echo $t | awk '{ print $1 }'`);
-				$fs = trim(`echo $t | awk '{ print $5 }'`);
-				if (trim(`echo "$fs" | grep "[A-Z]")`) != '') {
-					$fs = trim(`echo $t | awk '{ print $6 }'`);
-				}
-				$pn = trim(`echo "$p" | sed s#"$this->device[p]*"#""#g`);
-				$pt = $pn > 4 ? 'l' : 'p';
-				$start = trim(`echo $t | awk '{ print $2 }'`);
-				if ($fs == 83) {
-					echo "Resizing Last Partition To Use All Free Space (Sect $sects P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
-					echo `echo -e "d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n" | fdisk -u {$this->device}`;
-					echo `kpartx $kpartxopts -av {$this->device}`;
-					$pname = trim(`ls /dev/mapper/vz-"{$this->hostname}"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/"{$this->hostname}"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#"{$pn}$"#""#g`);
-					echo `e2fsck -p -f /dev/mapper/{$pname}{$pn}`;
-					$resizefs = trim(`which resize4fs 2>/dev/null`) != '' ? 'resize4fs' : 'resize2fs';
-					echo `$resizefs -p /dev/mapper/{$pname}{$pn}`;
-					mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
-					echo `mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};`;
-					echo `echo root:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$rootpass} "/vz/mounts/{$this->hostname}{$pn}"`;
-					if (file_exists('/vz/mounts/'.$this->hostname.$pn.'/home/kvm')) {
-						echo `echo kvm:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd`;
-					}
-					echo `umount /dev/mapper/{$pname}{$pn}`;
-					echo `kpartx $kpartxopts -d {$this->device}`;
-				} else {
-					echo "Skipping Resizing Last Partition FS is not 83. Space (Sect $sects P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
-				}
-			}
 			touch('/tmp/_securexinetd');
 			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			$this->progress('starting');
@@ -301,53 +190,53 @@ HELP;
 			if ($this->pool != 'zfs') {
 				echo `bash {$this->base}/run_buildebtables.sh;`;
 			}
-			if ($this->useAll == false) {
-				if (!file_exists('/cgroup/blkio/libvirt/qemu')) {
-					echo "CGroups not detected\n";
-				} else {
-					$cpushares = $slices * 512;
-					$ioweight = 400 + (37 * $slices);
-					echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-					echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-					echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-					echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
-				}
+			if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
+				$cpushares = $slices * 512;
+				$ioweight = 400 + (37 * $slices);
+				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
+				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
+				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
+				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
 			}
 			echo `{$this->base}/tclimit {$this->ip};`;
-			if ($clientip != '') {
-				$clientip = escapeshellarg($clientip);
-				echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$clientip};`;
-			}
-			echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
-			$vnc = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-			if ($vnc == '') {
-				sleep(2);
-				$vnc = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-				if ($vnc == '') {
-					sleep(2);
-					$vnc = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
-				} else {
-					$vnc += 5900;
-				}
-			} else {
-				$vnc += 5900;
-			}
-			$vnc -= 5900;
-			echo `{$this->base}/vps_kvm_screenshot.sh "{$vnc}" "$url?action=screenshot&name={$this->hostname}";`;
-			sleep(1);
-			echo `{$this->base}/vps_kvm_screenshot.sh "{$vnc}" "$url?action=screenshot&name={$this->hostname}";`;
-			sleep(1);
-			echo `{$this->base}/vps_kvm_screenshot.sh "{$vnc}" "$url?action=screenshot&name={$this->hostname}";`;
-			$vnc += 5900;
+			$this->setupVnc();
 			echo `/admin/kvmenable blocksmtp {$this->hostname};`;
 			echo `rm -f /tmp/_securexinetd;`;
 			if ($this->useAll == false) {
 				echo `/admin/kvmenable ebflush;`;
 				echo `{$this->base}/buildebtablesrules | sh;`;
 			}
-			echo `service xinetd restart`;
 		}
 		$this->progress(100);
+	}
+
+	public function setupVnc() {
+		if ($this->clientIp != '') {
+			$this->clientIp = escapeshellarg($this->clientIp);
+			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
+		}
+		echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
+		$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+		if ($this->vncPort == '') {
+			sleep(2);
+			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+			if ($this->vncPort == '') {
+				sleep(2);
+				$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+			} else {
+				$this->vncPort += 5900;
+			}
+		} else {
+			$this->vncPort += 5900;
+		}
+		$this->vncPort -= 5900;
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		sleep(1);
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		sleep(1);
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		$this->vncPort += 5900;
+		echo `service xinetd restart`;
 	}
 
 	public function setupStorage() {
@@ -468,6 +357,139 @@ HELP;
 		return $mac;
 	}
 
+	public function installTemplate() {
+		if ($this->pool == 'zfs') {
+			$this->installTemplateV2();
+		} else {
+			$this->installTemplateV1();
+		}
+	}
+
+	public function installTemplateV2() {
+		// kvmv2
+		if (file_exists('/vz/templates/'.$this->template.'.qcow2') || $this->template == 'empty') {
+			echo "Copy {$this->template}.qcow2 Image\n";
+			if ($this->hd == 'all') {
+				$this->hd = intval(`zfs list vz -o available -H -p`) / (1024 * 1024);
+				if ($this->hd > 2000000)
+					$this->hd = 2000000;
+			}
+			if (stripos($this->template, 'freebsd') !== false) {
+				echo `cp -f /vz/templates/{$this->template}.qcow2 {$this->device};`;
+				$this->progress(60);
+				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
+			} else {
+				echo `qemu-img create -f qcow2 -o preallocation=metadata {$this->device} 25G;`;
+				$this->progress(40);
+				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
+				$this->progress(70);
+				if ($this->template != 'empty') {
+					$part = `virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`;
+					$backuppart = `virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`;
+					if ($this->template != 'template.281311') {
+						echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} ;`;
+					} else {
+						echo `cp -fv /vz/templates/{$this->template}.qcow2 {$this->device};`;
+					}
+				}
+			}
+			$this->progress(90);
+			echo `virsh detach-disk {$this->hostname} vda --persistent;`;
+			echo `virsh attach-disk {$this->hostname} /vz/{$this->hostname}/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;`;
+			echo `virsh dumpxml {$this->hostname} > {$this->hostname}.xml`;
+			echo `sed s#"type='qcow2'/"#"type='qcow2' cache='writeback' discard='unmap'/"#g -i {$this->hostname}.xml`;
+			echo `virsh define {$this->hostname}.xml`;
+			echo `rm -f {$this->hostname}.xml`;
+			echo `virt-customize -d {$this->hostname} --root-password password:{$rootpass} --hostname "{$this->hostname}";`;
+			$this->adjust_partitions = 0;
+		}
+
+	}
+
+	public function installTemplateV1() {
+		if (substr($this->template, 0, 7) == 'http://' || substr($this->template, 0, 8) == 'https://' || substr($this->template, 0, 6) == 'ftp://') {
+			// image from url
+			$this->adjust_partitions = 0;
+			echo "Downloading {$this->template} Image\n";
+			echo `{$this->base}/vps_get_image.sh "{$this->template}"`;
+			if (!file_exists('/image_storage/image.raw.img')) {
+				echo "There must have been a problem, the image does not exist\n";
+				$this->error++;
+			} else {
+				$this->install_image('/image_storage/image.raw.img', $this->device);
+				echo "Removing Downloaded Image\n";
+				echo `umount /image_storage;`;
+				echo `virsh vol-delete --pool vz image_storage;`;
+				echo `rmdir /image_storage;`;
+			}
+		} elseif ($this->template == 'empty') {
+			// kvmv1 install empty image
+			$this->adjust_partitions = 0;
+		} else {
+			// kvmv1 install
+			$found = 0;
+			foreach (['/vz/templates/', '/templates/', '/'] as $prefix) {
+				$source = $prefix.$this->template.'.img.gz';
+				if ($found == 0 && file_exists($source)) {
+					$found = 1;
+					$this->install_gz_image($source, $this->device);
+				}
+			}
+			foreach (['/vz/templates/', '/templates/', '/', '/dev/vz/'] as $prefix) {
+				foreach (['.img', ''] as $suffix) {
+					$source = $prefix.$this->template.$suffix;
+					if ($found == 0 && file_exists($source)) {
+						$found = 1;
+						$this->install_image($source, $this->device);
+					}
+				}
+			}
+			if ($found == 0) {
+				echo "Template does not exist\n";
+				$this->error++;
+			}
+		}
+		if (count($this->softraid) > 0) {
+			foreach ($this->softraid as $softfile) {
+				file_put_contents($softfile, 'check');
+			}
+		}
+		if ($this->error == 0) {
+			if ($this->adjust_partitions == 1) {
+				$this->progress('resizing');
+				$sects = trim(`fdisk -l -u {$this->device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g`);
+				$t = trim(`fdisk -l -u {$this->device} | sed s#"\*"#""#g | grep "^{$this->device}" | tail -n 1`);
+				$p = trim(`echo {$t} | awk '{ print $1 }'`);
+				$fs = trim(`echo {$t} | awk '{ print $5 }'`);
+				if (trim(`echo "{$fs}" | grep "[A-Z]")`) != '') {
+					$fs = trim(`echo {$t} | awk '{ print $6 }'`);
+				}
+				$pn = trim(`echo "{$p}" | sed s#"{$this->device}[p]*"#""#g`);
+				$pt = $pn > 4 ? 'l' : 'p';
+				$start = trim(`echo {$t} | awk '{ print $2 }'`);
+				if ($fs == 83) {
+					echo "Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
+					echo `echo -e "d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n" | fdisk -u {$this->device}`;
+					echo `kpartx {$kpartxopts} -av {$this->device}`;
+					$pname = trim(`ls /dev/mapper/vz-"{$this->hostname}"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/"{$this->hostname}"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#"{$pn}$"#""#g`);
+					echo `e2fsck -p -f /dev/mapper/{$pname}{$pn}`;
+					$resizefs = trim(`which resize4fs 2>/dev/null`) != '' ? 'resize4fs' : 'resize2fs';
+					echo `$resizefs -p /dev/mapper/{$pname}{$pn}`;
+					mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
+					echo `mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};`;
+					echo `echo root:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$rootpass} "/vz/mounts/{$this->hostname}{$pn}"`;
+					if (file_exists('/vz/mounts/'.$this->hostname.$pn.'/home/kvm')) {
+						echo `echo kvm:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd`;
+					}
+					echo `umount /dev/mapper/{$pname}{$pn}`;
+					echo `kpartx {$kpartxopts} -d {$this->device}`;
+				} else {
+					echo "Skipping Resizing Last Partition FS is not 83. Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
+				}
+			}
+		}
+	}
+
 	public function defineVps() {
 		if ($this->vpsExists($this->hostname)) {
 			echo `/usr/bin/virsh destroy {$this->hostname}`;
@@ -520,6 +542,7 @@ HELP;
 			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
 		}
 		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
+		echo `rm -f {$this->hostname}.xml`;
 		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
