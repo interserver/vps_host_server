@@ -11,5 +11,6 @@ class Console extends Application
     public function init() {
     	$this->enableCommandAutoload();
         parent::init();
+    	$this->topic('basic');
     }
 }

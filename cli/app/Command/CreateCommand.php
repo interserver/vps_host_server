@@ -33,24 +33,27 @@ class CreateCommand extends Command {
 		return "Creates a Virtual Machine.";
 	}
 
+    public function usage()
+    {
+        return <<<HELP
+Creates a new VPS with the given <hostname> and primary IP address <ip>.  The <template> file/url is used as the source image to copy to the VPS.
+HELP;
+    }
+
+    public function help()
+    {
+        return <<<HELP
+<bold>bold text</bold>
+<underline>underlined text</underline>
+HELP;
+    }
+
 	public function options($opts) {
-        $opts->add('h|hostname:', 'Hostname for the vps')
-        	->isa('string');
+		parent::options($opts);
         $opts->add('m|mac:', 'MAC Address')
         	->isa('string');
         $opts->add('slices:', 'Number of Slices for the vps')
         	->isa('number');
-        $opts->add('slice-hd:', 'Amount of HD Space in GB per Slice')
-        	->isa('number')
-        	->defaultValue(25);
-        $opts->add('slice-ram:', 'Amount of RAM in MB per Slice')
-        	->isa('number')
-        	->defaultValue(1024);
-        $opts->add('additional-hd:', 'Amount of additional HD space beyond the slice amount in GB')
-        	->isa('number')
-        	->defaultValue(0);
-        $opts->add('ip:', 'IP Address for the vps')
-        	->isa('Ip');
         $opts->add('id:', 'Order ID # for the vps')
         	->isa('number');
         $opts->add('vzid:', 'VZID')
@@ -63,11 +66,38 @@ class CreateCommand extends Command {
         	->isa('number');
         $opts->add('clientip:', 'Client IP')
         	->isa('ip');
-        $opts->add('p|password:', 'Root Password')
-        	->isa('string');
 	}
 
-	public function execute() {
+	public function arguments($args) {
+		$args->add('hostname')
+			->desc('Hostname to use')
+			->isa('string');
+		$args->add('ip')
+			->desc('IP Address')
+			->isa('ip');
+		$args->add('template')
+			->desc('Install Image To Use')
+			->isa('string');
+		$args->add('hd')
+			->desc('HD Size in GB')
+			->optional()
+			->isa('number');
+		$args->add('ram')
+			->desc('Ram In MB')
+			->optional()
+			->isa('number');
+		$args->add('cpu')
+			->desc('Number of CPUs/Cores')
+			->optional()
+			->isa('number');
+		$args->add('pass')
+			->desc('Root/Administrator password')
+			->optional()
+			->isa('string');
+
+	}
+
+	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $pass = '') {
 		/**
 		* @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection}
 		*/
@@ -75,7 +105,8 @@ class CreateCommand extends Command {
 		print_r($opts);
 		echo "Slice HD:".$opts->sliceHd."\n";
 		print_r(array_keys($opts->keys));
-		exit;
+		$this->getLogger()->writeln("Got here");
+		return;
 		$base = '/root/cpaneldirect';
 		$ram = $slices * $settings['slice_ram'] * 1024;
 		$hd = (($settings['slice_hd'] * $slices) + $settings['additional_hd']) * 1024;
