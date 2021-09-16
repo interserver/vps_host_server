@@ -465,12 +465,11 @@ HELP;
 				$this->progress(70);
 				if ($this->template != 'empty') {
 					$part = `virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`;
+					$this->getLogger()->debug('List Partitions got part '.$part);
 					$backuppart = `virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`;
-					if ($this->template != 'template.281311') {
-						echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} ;`;
-					} else {
-						echo `cp -fv /vz/templates/{$this->template}.qcow2 {$this->device};`;
-					}
+					$this->getLogger()->debug('List Partitions got backup part '.$backuppart);
+					echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}`;
+					$this->getLogger()->debug('Template Copied and Resized');
 				}
 			}
 			$this->progress(90);
