@@ -37,7 +37,7 @@ class StopCommand extends Command {
 		$this->getLogger()->info2('Stopping the VPS');
 		$this->getLogger()->indent();
 		$this->getLogger()->info2('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh stop {$hostname};`;
+		echo `/usr/bin/virsh shutdown {$hostname};`;
 		$stopped = false;
 		$waited = 0;
 		$maxWait = 240;
