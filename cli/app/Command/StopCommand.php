@@ -30,6 +30,10 @@ class StopCommand extends Command {
 			$this->getLogger()->writeln("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
+		if (!Vps::isVpsRunning($hostname)) {
+			$this->getLogger()->writeln("The VPS '{$hostname}' you specified does not appear to be currently running (It is powered down).");
+			return 1;
+		}
 		$this->stopVps($hostname);
 	}
 
