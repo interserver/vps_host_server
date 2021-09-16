@@ -36,7 +36,7 @@ class StopCommand extends Command {
 	public function stopVps($hostname) {
 		$this->getLogger()->info2('Stopping the VPS');
 		$this->getLogger()->indent();
-		$this->getLogger()->info2('Sending Softwawre Power-Off');
+		$this->getLogger()->info('Sending Softwawre Power-Off');
 		echo `/usr/bin/virsh shutdown {$hostname}`;
 		$stopped = false;
 		$waited = 0;
@@ -45,7 +45,7 @@ class StopCommand extends Command {
 		$continue = true;
 		while ($waited <= $maxWait && $stopped == false) {
 			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info2('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
+				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
 				sleep($sleepTime);
 				$waited += $sleepTime;
 			} else {
@@ -53,7 +53,7 @@ class StopCommand extends Command {
 			}
 		}
 		if ($stopped === false) {
-			$this->getLogger()->info2('Sending Hardware Power-Off');
+			$this->getLogger()->info('Sending Hardware Power-Off');
 			echo `/usr/bin/virsh destroy {$hostname};`;
 		}
 		$this->getLogger()->unIndent();
