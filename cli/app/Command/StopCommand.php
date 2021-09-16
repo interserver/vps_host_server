@@ -25,6 +25,10 @@ class StopCommand extends Command {
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
+		if (!$this->vpsExists($hostname)) {
+			$this->getLogger()->writeln("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+			return 1;
+		}
 		$this->stopVps($hostname);
 	}
 
