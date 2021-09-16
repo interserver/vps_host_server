@@ -253,6 +253,7 @@ HELP;
 
 	public function defineVps() {
 		$this->getLogger()->info2('Creating VPS Definition');
+		$this->getLogger()->indent();
 		if ($this->vpsExists($this->hostname)) {
 			echo `/usr/bin/virsh destroy {$this->hostname}`;
 			echo `cp {$this->hostname}.xml {$this->hostname}.xml.backup`;
@@ -325,6 +326,7 @@ HELP;
 		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
+		$this->getLogger()->unIndent();
 		$this->progress(20);
 	}
 
