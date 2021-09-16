@@ -469,7 +469,7 @@ HELP;
 					$backuppart = `virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`;
 					$this->getLogger()->debug('List Partitions got backup part '.$backuppart);
 					$cmd = "virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}";
-					echo "Running:$cmd\n";
+					$this->getLogger()->debug($cmd);
 					echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}`;
 					$this->getLogger()->debug('Template Copied and Resized');
 				}
