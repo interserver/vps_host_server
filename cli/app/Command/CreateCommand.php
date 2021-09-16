@@ -216,7 +216,7 @@ HELP;
 	}
 
 	public function getRedhatVersion() {
-		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\1"#g`));
+		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\\1"#g`));
 	}
 
 	public function getE2fsprogsVersion() {
@@ -356,10 +356,10 @@ HELP;
 				$this->getLogger()->debug('Adding HyperV block');
 				echo `sed -e s#"</features>"#"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>"#g -i {$this->hostname}.xml;`;
 			$this->getLogger()->debug('Adding HyperV timer');
-					echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>"#g -i {$this->hostname}.xml;`;
+					echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>"#g -i {$this->hostname}.xml;`;
 			}
 			$this->getLogger()->debug('Customizing SCSI controller');
-			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
+			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
 		}
 		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
 		echo `rm -f {$this->hostname}.xml`;
@@ -478,7 +478,7 @@ HELP;
 		if ($this->error == 0) {
 			if ($this->adjust_partitions == 1) {
 				$this->progress('resizing');
-				$sects = trim(`fdisk -l -u {$this->device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\1"#g`);
+				$sects = trim(`fdisk -l -u {$this->device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\\1"#g`);
 				$t = trim(`fdisk -l -u {$this->device} | sed s#"\*"#""#g | grep "^{$this->device}" | tail -n 1`);
 				$p = trim(`echo {$t} | awk '{ print $1 }'`);
 				$fs = trim(`echo {$t} | awk '{ print $5 }'`);
