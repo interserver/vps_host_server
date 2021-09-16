@@ -235,7 +235,7 @@ HELP;
 
 	public function vpsExists($hostname) {
 		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
-		return $return > 0;
+		return $return == 0;
 	}
 
 	public function getPoolType() {
