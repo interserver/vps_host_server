@@ -170,7 +170,7 @@ HELP;
 	public function defineVps() {
 		$this->getLogger()->info('Creating VPS Definition');
 		$this->getLogger()->indent();
-		if ($this->vpsExists($this->hostname)) {
+		if (Vps::vpsExists($this->hostname)) {
 			echo `/usr/bin/virsh destroy {$this->hostname}`;
 			echo `cp {$this->hostname}.xml {$this->hostname}.xml.backup`;
 			echo `/usr/bin/virsh undefine {$this->hostname}`;
