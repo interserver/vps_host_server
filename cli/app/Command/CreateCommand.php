@@ -45,6 +45,7 @@ class CreateCommand extends Command {
 	public $pool = '';
 	public $ip = '';
 	public $mac = '';
+	public $password = '';
 	public $extraIps = [];
     public $softraid = [];
     public $error = 0;
@@ -113,19 +114,19 @@ HELP;
 			->desc('Number of CPUs/Cores')
 			->optional()
 			->isa('number');
-		$args->add('pass')
+		$args->add('password')
 			->desc('Root/Administrator password')
 			->optional()
 			->isa('string');
 	}
 
-	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $pass = '') {
+	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
 		if (!$this->isVirtualHost()) {
 			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		$this->initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $pass);
+		$this->initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password);
         $this->progress(5);
     	$this->checkDeps();
 		$this->progress(10);
@@ -153,7 +154,7 @@ HELP;
 		$this->progress(100);
 	}
 
-    public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $pass) {
+    public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
 		/* Initialize Variables and process Options and Arguments */
 		$this->hostname = $hostname;
 		$this->ip = $ip;
@@ -161,7 +162,7 @@ HELP;
 		$this->hd = $hd;
 		$this->ram = $ram;
 		$this->cpu = $cpu;
-		$this->pass = $pass;
+		$this->password = $password;
 		/**
 		* @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection}
 		*/
@@ -483,7 +484,7 @@ HELP;
 			echo `sed s#"type='qcow2'/"#"type='qcow2' cache='writeback' discard='unmap'/"#g -i {$this->hostname}.xml`;
 			echo `virsh define {$this->hostname}.xml`;
 			echo `rm -f {$this->hostname}.xml`;
-			echo `virt-customize -d {$this->hostname} --root-password password:{$rootpass} --hostname "{$this->hostname}";`;
+			echo `virt-customize -d {$this->hostname} --root-password password:{$this->password} --hostname "{$this->hostname}";`;
 			$this->adjust_partitions = 0;
 		}
 	}
@@ -561,9 +562,9 @@ HELP;
 					echo `$resizefs -p /dev/mapper/{$pname}{$pn}`;
 					mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
 					echo `mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};`;
-					echo `echo root:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$rootpass} "/vz/mounts/{$this->hostname}{$pn}"`;
+					echo `echo root:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$this->password} "/vz/mounts/{$this->hostname}{$pn}"`;
 					if (file_exists('/vz/mounts/'.$this->hostname.$pn.'/home/kvm')) {
-						echo `echo kvm:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd`;
+						echo `echo kvm:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd`;
 					}
 					echo `umount /dev/mapper/{$pname}{$pn}`;
 					echo `kpartx {$this->kpartsOpts} -d {$this->device}`;
