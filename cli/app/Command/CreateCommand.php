@@ -79,13 +79,9 @@ HELP;
     */
 	public function options($opts) {
 		parent::options($opts);
-        $opts->add('m|mac:', 'MAC Address')
-        	->isa('string');
-        $opts->add('i|add-ip+', 'Additional IPs')
-        	->multiple()
-        	->isa('string');
-        $opts->add('c|client-ip:', 'Client IP')
-        	->isa('ip');
+        $opts->add('m|mac:', 'MAC Address')->isa('string');
+        $opts->add('i|add-ip+', 'Additional IPs')->multiple()->isa('string');
+        $opts->add('c|client-ip:', 'Client IP')->isa('ip');
 		$opts->add('a|all', 'Use All Available HD, CPU Cores, and 70% RAM');
 	}
 
@@ -93,31 +89,13 @@ HELP;
     * @param \CLIFramework\ArgInfoList $args
     */
 	public function arguments($args) {
-		$args->add('hostname')
-			->desc('Hostname to use')
-			->isa('string');
-		$args->add('ip')
-			->desc('IP Address')
-			->isa('ip');
-		$args->add('template')
-			->desc('Install Image To Use')
-			->isa('string');
-		$args->add('hd')
-			->desc('HD Size in GB')
-			->optional()
-			->isa('number');
-		$args->add('ram')
-			->desc('Ram In MB')
-			->optional()
-			->isa('number');
-		$args->add('cpu')
-			->desc('Number of CPUs/Cores')
-			->optional()
-			->isa('number');
-		$args->add('password')
-			->desc('Root/Administrator password')
-			->optional()
-			->isa('string');
+		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('ip')->desc('IP Address')->isa('ip');
+		$args->add('template')->desc('Install Image To Use')->isa('string');
+		$args->add('hd')->desc('HD Size in GB')->optional()->isa('number');
+		$args->add('ram')->desc('Ram In MB')->optional()->isa('number');
+		$args->add('cpu')->desc('Number of CPUs/Cores')->optional()->isa('number');
+		$args->add('password')->desc('Root/Administrator password')->optional()->isa('string');
 	}
 
 	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
@@ -127,29 +105,15 @@ HELP;
 			return 1;
 		}
 		$this->initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password);
-        $this->progress(5);
     	$this->checkDeps();
-		$this->progress(10);
 		$this->setupStorage();
-		$this->progress(15);
 		$this->defineVps();
-		$this->progress(20);
-		$this->mac = $this->getVpsMac($this->hostname);
 		$this->setupDhcpd();
-		$this->progress(25);
 		$this->installTemplate();
-		$this->progress(80);
-		if ($this->error == 0) {
-			echo `/usr/bin/virsh autostart {$this->hostname};`;
-			echo `/usr/bin/virsh start {$this->hostname};`;
-			$this->progress(85);
-			$this->setupCgroups();
-			$this->progress(90);
-			$this->setupRouting();
-			$this->progress(95);
-			$this->setupVnc();
-		}
-		$this->progress(100);
+		$this->startupVps();
+		$this->setupCgroups();
+		$this->setupRouting();
+		$this->setupVnc();
 	}
 
     public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
@@ -185,6 +149,7 @@ HELP;
 			$this->cpu = $this->getCpuCount();
         }
 		//$this->getLogger()->info2(print_r($opts, true));
+        $this->progress(5);
     }
 
     public function progress($progress) {
@@ -226,6 +191,7 @@ HELP;
 				}
 			}
     	}
+		$this->progress(10);
 	}
 
 	public function vpsExists($hostname) {
@@ -273,6 +239,14 @@ HELP;
 		return $mac;
 	}
 
+	public function startupVps() {
+		if ($this->error == 0) {
+			echo `/usr/bin/virsh autostart {$this->hostname};`;
+			echo `/usr/bin/virsh start {$this->hostname};`;
+			$this->progress(85);
+		}
+	}
+
 	public function setupStorage() {
 		if ($this->pool == 'zfs') {
 			echo `zfs create vz/{$this->hostname}`;
@@ -288,6 +262,7 @@ HELP;
 			// exit here on failed exit status
 		}
 		echo "{$this->pool} pool device {$this->device} created\n";
+		$this->progress(15);
 	}
 
 	public function defineVps() {
@@ -323,9 +298,11 @@ HELP;
 		}
 		/* convert hostname to id */
 		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
-		/* use id to generate mac address if we a numeric id or remove mac otherwise */
-		if (is_numeric($id)) {
+		if ($this->mac == '' && is_numeric($id)) {
+			/* use id to generate mac address if we a numeric id or remove mac otherwise */
 			$this->mac = $this->convert_id_to_mac($id, $this->useAll);
+		}
+		if ($this->mac != '') {
 			$this->getLogger()->debug('Replacing MAC addresss');
 			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
 		} else {
@@ -361,9 +338,11 @@ HELP;
 		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
+		$this->progress(20);
 	}
 
     public function setupDhcpd() {
+		$this->mac = $this->getVpsMac($this->hostname);
 		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
 		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
 		echo `/bin/cp -f {$dhcpvps} {$dhcpvps}.backup;`;
@@ -371,6 +350,7 @@ HELP;
     	echo `echo "host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }" >> {$dhcpvps}`;
     	echo `rm -f {$dhcpvps}.backup;`;
     	echo `systemctl restart {$dhcpservice} 2>/dev/null || service {$dhcpservice} restart 2>/dev/null || /etc/init.d/{$dhcpservice} restart 2>/dev/null`;
+		$this->progress(25);
     }
 
 	public function installTemplate() {
@@ -379,58 +359,67 @@ HELP;
 
 
 	public function setupCgroups() {
-		if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
-			$slices = $this->cpu;
-			$cpushares = $slices * 512;
-			$ioweight = 400 + (37 * $slices);
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+		if ($this->error == 0) {
+			if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
+				$slices = $this->cpu;
+				$cpushares = $slices * 512;
+				$ioweight = 400 + (37 * $slices);
+				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
+				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
+				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
+				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+			}
+			$this->progress(90);
 		}
 	}
 
 	public function setupRouting() {
-		if ($this->pool != 'zfs' && $this->useAll == false) {
-			echo `bash {$this->base}/run_buildebtables.sh;`;
-		}
-		echo `{$this->base}/tclimit {$this->ip};`;
-		echo `/admin/kvmenable blocksmtp {$this->hostname};`;
-		if ($this->pool != 'zfs' && $this->useAll == false) {
-			echo `/admin/kvmenable ebflush;`;
-			echo `{$this->base}/buildebtablesrules | sh;`;
+		if ($this->error == 0) {
+			if ($this->pool != 'zfs' && $this->useAll == false) {
+				echo `bash {$this->base}/run_buildebtables.sh;`;
+			}
+			echo `{$this->base}/tclimit {$this->ip};`;
+			echo `/admin/kvmenable blocksmtp {$this->hostname};`;
+			if ($this->pool != 'zfs' && $this->useAll == false) {
+				echo `/admin/kvmenable ebflush;`;
+				echo `{$this->base}/buildebtablesrules | sh;`;
+			}
+			$this->progress(95);
 		}
 	}
 
 	public function setupVnc() {
-		touch('/tmp/_securexinetd');
-		if ($this->clientIp != '') {
-			$this->clientIp = escapeshellarg($this->clientIp);
-			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
-		}
-		echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
-		$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-		if ($this->vncPort == '') {
-			sleep(2);
+		if ($this->error == 0) {
+			touch('/tmp/_securexinetd');
+			if ($this->clientIp != '') {
+				$this->clientIp = escapeshellarg($this->clientIp);
+				echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
+			}
+			echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
 			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
 			if ($this->vncPort == '') {
 				sleep(2);
-				$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+				$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+				if ($this->vncPort == '') {
+					sleep(2);
+					$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+				} else {
+					$this->vncPort += 5900;
+				}
 			} else {
 				$this->vncPort += 5900;
 			}
-		} else {
+			$this->vncPort -= 5900;
+			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+			sleep(1);
+			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+			sleep(1);
+			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
 			$this->vncPort += 5900;
+			echo `rm -f /tmp/_securexinetd;`;
+			echo `service xinetd restart`;
+			$this->progress(100);
 		}
-		$this->vncPort -= 5900;
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		sleep(1);
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		sleep(1);
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		$this->vncPort += 5900;
-		echo `rm -f /tmp/_securexinetd;`;
-		echo `service xinetd restart`;
 	}
 
 	public function installTemplateV2() {
@@ -484,6 +473,7 @@ HELP;
 			echo `virt-customize -d {$this->hostname} --root-password password:{$this->password} --hostname "{$this->hostname}";`;
 			$this->adjust_partitions = 0;
 		}
+		$this->progress(80);
 	}
 
 	public function installTemplateV1() {
@@ -570,6 +560,7 @@ HELP;
 				}
 			}
 		}
+		$this->progress(80);
 	}
 
     public function installGzImage($source, $device) {
