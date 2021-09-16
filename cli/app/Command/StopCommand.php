@@ -49,6 +49,7 @@ class StopCommand extends Command {
 				sleep($sleepTime);
 				$waited += $sleepTime;
 			} else {
+				$this->getLogger()->info('appears to have cleanly shutdown');
 				$stopped = true;
 			}
 		}
