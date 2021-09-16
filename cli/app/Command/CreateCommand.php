@@ -126,9 +126,9 @@ HELP;
         $this->progress(5);
     	$this->checkDeps();
 		$this->progress(10);
-		return;
 		$this->setupStorage();
 		$this->progress(15);
+		return;
 		$this->defineVps();
 		$this->progress(20);
 		$this->mac = $this->getVpsMac($this->hostname);
@@ -173,8 +173,8 @@ HELP;
         $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
         $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
         $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
-		$this->device = '/dev/vz/'.$this->hostname;
 		$this->pool = $this->getPoolType();
+		$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
 		/* convert ram to kb */
 		$this->ram = $this->ram * 1024;
 		/* convert hd to mb */
@@ -193,7 +193,7 @@ HELP;
     }
 
     public function progress($progress) {
-
+		$this->getLogger()->writeln($progress.'% done');
     }
 
     public function getInstalledVirts() {
@@ -280,9 +280,8 @@ HELP;
 
 	public function setupStorage() {
 		if ($this->pool == 'zfs') {
-			mkdir('/vz/'.$this->hostname, 0777, true);
 			echo `zfs create vz/{$this->hostname}`;
-			$this->device='/vz/'.$this->hostname.'/os.qcow2';
+			mkdir('/vz/'.$this->hostname, 0777, true);
 			while (!file_exists('/vz/'.$this->hostname)) {
 				sleep(1);
 			}
