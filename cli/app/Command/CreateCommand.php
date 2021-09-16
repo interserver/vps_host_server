@@ -7,12 +7,6 @@ use CLIFramework\Logger\ActionLogger;
 use CLIFramework\Debug\LineIndicator;
 use CLIFramework\Debug\ConsoleDebug;
 use CLIFramework\Component\Progress\ProgressBar;
-use CLIFramework\Component\Table\Table;
-use CLIFramework\Component\Table\TableStyle;
-use CLIFramework\Component\Table\CompactTableStyle;
-use CLIFramework\Component\Table\CellAttribute;
-use CLIFramework\Component\Table\CurrencyFormatCell;
-use CLIFramework\Component\Table\MarkdownTableStyle;
 
 class CreateCommand extends Command {
 	public $virtBins = [
@@ -129,16 +123,17 @@ HELP;
 			return 1;
 		}
 		$this->initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $pass);
-        $this->progress(1);
+        $this->progress(5);
     	$this->checkDeps();
-		$this->progress(2);
+		$this->progress(10);
 		return;
 		$this->setupStorage();
-		$this->progress(4);
+		$this->progress(15);
 		$this->defineVps();
+		$this->progress(20);
 		$this->mac = $this->getVpsMac($this->hostname);
 		$this->setupDhcpd();
-		$this->progress(15);
+		$this->progress(25);
 		echo "Custid is {$custid}\n";
 		if ($custid == 565600) {
 			if (!file_exists('/vz/templates/template.281311.qcow2')) {
@@ -147,13 +142,16 @@ HELP;
 			$this->template = 'template.281311';
 		}
 		$this->installTemplate();
+		$this->progress(80);
 		echo "Errors: {$this->error}  Adjust Partitions: {$this->adjust_partitions}\n";
 		if ($this->error == 0) {
-			$this->progress('starting');
 			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			echo `/usr/bin/virsh start {$this->hostname};`;
+			$this->progress(85);
 			$this->setupCgroups();
+			$this->progress(90);
 			$this->setupRouting();
+			$this->progress(95);
 			$this->setupVnc();
 		}
 		$this->progress(100);
