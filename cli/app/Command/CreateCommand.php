@@ -48,6 +48,7 @@ class CreateCommand extends Command {
     public $vncPort = '';
     public $clientIp = '';
     public $url = '';
+    public $kpartxOpts = '';
 
 	public function brief() {
 		return "Creates a Virtual Machine.";
@@ -131,41 +132,10 @@ HELP;
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		/* Initialize Variables and process Options and Arguments */
-		$this->hostname = $hostname;
-		$this->ip = $ip;
-		$this->template = $template;
-		$this->hd = $hd;
-		$this->ram = $ram;
-		$this->cpu = $cpu;
-		$this->pass = $pass;
-		/**
-		* @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection}
-		*/
-		$opts = $this->getOptions();
-        $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
-        $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
-		/* convert ram to kb */
-		$this->ram = $this->ram * 1024;
-		/* convert hd to mb */
-		$this->hd = $this->hd * 1024;
-        $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
-    	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
-        if ($this->useAll == true) {
-			$this->hd = 'all';
-			$this->ram = $this->getUsableRam();
-			$this->cpu = $this->getCpuCount();
-        }
-        $kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
+		$this->initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $pass);
         $this->progress(1);
     	$this->checkDeps();
-		$this->progress(3);
-		$this->device = '/dev/vz/'.$this->hostname;
-		$this->pool = $this->getPoolType();
-		print_r($opts);
-		echo "Slice HD:".$opts->sliceHd."\n";
-		print_r(array_keys($opts->keys));
-		$this->getLogger()->writeln("Got here");
+		$this->progress(2);
 		return;
 		$this->setupStorage();
 		$this->progress(4);
@@ -183,34 +153,77 @@ HELP;
 		$this->installTemplate();
 		echo "Errors: {$this->error}  Adjust Partitions: {$this->adjust_partitions}\n";
 		if ($this->error == 0) {
-			touch('/tmp/_securexinetd');
-			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			$this->progress('starting');
+			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			echo `/usr/bin/virsh start {$this->hostname};`;
-			if ($this->pool != 'zfs') {
-				echo `bash {$this->base}/run_buildebtables.sh;`;
-			}
-			if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
-				$cpushares = $slices * 512;
-				$ioweight = 400 + (37 * $slices);
-				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
-			}
-			echo `{$this->base}/tclimit {$this->ip};`;
+			$this->setupCgroups();
+			$this->setupRouting();
 			$this->setupVnc();
-			echo `/admin/kvmenable blocksmtp {$this->hostname};`;
-			echo `rm -f /tmp/_securexinetd;`;
-			if ($this->useAll == false) {
-				echo `/admin/kvmenable ebflush;`;
-				echo `{$this->base}/buildebtablesrules | sh;`;
-			}
 		}
 		$this->progress(100);
 	}
 
+    public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $pass) {
+		/* Initialize Variables and process Options and Arguments */
+		$this->hostname = $hostname;
+		$this->ip = $ip;
+		$this->template = $template;
+		$this->hd = $hd;
+		$this->ram = $ram;
+		$this->cpu = $cpu;
+		$this->pass = $pass;
+		/**
+		* @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection}
+		*/
+		$opts = $this->getOptions();
+        $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
+        $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
+        $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
+		$this->device = '/dev/vz/'.$this->hostname;
+		$this->pool = $this->getPoolType();
+		/* convert ram to kb */
+		$this->ram = $this->ram * 1024;
+		/* convert hd to mb */
+		$this->hd = $this->hd * 1024;
+        $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
+    	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
+        if ($this->useAll == true) {
+			$this->hd = 'all';
+			$this->ram = $this->getUsableRam();
+			$this->cpu = $this->getCpuCount();
+        }
+		print_r($opts);
+		echo "Slice HD:".$opts->sliceHd."\n";
+		print_r(array_keys($opts->keys));
+		$this->getLogger()->writeln("Got here");
+    }
+
+	public function setupRouting() {
+		if ($this->pool != 'zfs' && $this->useAll == false) {
+			echo `bash {$this->base}/run_buildebtables.sh;`;
+		}
+		echo `{$this->base}/tclimit {$this->ip};`;
+		echo `/admin/kvmenable blocksmtp {$this->hostname};`;
+		if ($this->pool != 'zfs' && $this->useAll == false) {
+			echo `/admin/kvmenable ebflush;`;
+			echo `{$this->base}/buildebtablesrules | sh;`;
+		}
+	}
+
+	public function setupCgroups() {
+		if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
+			$slices = $this->cpu;
+			$cpushares = $slices * 512;
+			$ioweight = 400 + (37 * $slices);
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+		}
+	}
+
 	public function setupVnc() {
+		touch('/tmp/_securexinetd');
 		if ($this->clientIp != '') {
 			$this->clientIp = escapeshellarg($this->clientIp);
 			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
@@ -236,6 +249,7 @@ HELP;
 		sleep(1);
 		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
 		$this->vncPort += 5900;
+		echo `rm -f /tmp/_securexinetd;`;
 		echo `service xinetd restart`;
 	}
 
@@ -470,7 +484,7 @@ HELP;
 				if ($fs == 83) {
 					echo "Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
 					echo `echo -e "d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n" | fdisk -u {$this->device}`;
-					echo `kpartx {$kpartxopts} -av {$this->device}`;
+					echo `kpartx {$this->kpartsOpts} -av {$this->device}`;
 					$pname = trim(`ls /dev/mapper/vz-"{$this->hostname}"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/"{$this->hostname}"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#"{$pn}$"#""#g`);
 					echo `e2fsck -p -f /dev/mapper/{$pname}{$pn}`;
 					$resizefs = trim(`which resize4fs 2>/dev/null`) != '' ? 'resize4fs' : 'resize2fs';
@@ -482,7 +496,7 @@ HELP;
 						echo `echo kvm:{$rootpass} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd`;
 					}
 					echo `umount /dev/mapper/{$pname}{$pn}`;
-					echo `kpartx {$kpartxopts} -d {$this->device}`;
+					echo `kpartx {$this->kpartsOpts} -d {$this->device}`;
 				} else {
 					echo "Skipping Resizing Last Partition FS is not 83. Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
 				}
