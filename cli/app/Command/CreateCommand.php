@@ -9,6 +9,16 @@ use CLIFramework\Debug\ConsoleDebug;
 use CLIFramework\Component\Progress\ProgressBar;
 
 class CreateCommand extends Command {
+    /* log levels
+     *
+     * critical = 1
+     * error    = 2
+     * warn     = 3
+     * info     = 4 default, anything lower is shown
+     * info2    = 5
+     * debug    = 6
+     * debug2   = 7
+     */
 	public $virtBins = [
 		'kvm' => '/usr/bin/virsh',
 		'virtuozzo' => '/usr/bin/prlctl',
@@ -70,11 +80,12 @@ HELP;
 		parent::options($opts);
         $opts->add('m|mac:', 'MAC Address')
         	->isa('string');
-        $opts->add('ips:', 'Additional IPs')
+        $opts->add('i|add-ip+', 'Additional IPs')
+        	->multiple()
         	->isa('string');
-        $opts->add('clientip:', 'Client IP')
+        $opts->add('c|client-ip:', 'Client IP')
         	->isa('ip');
-		$opts->add('all', 'Use All Available HD, CPU Cores, and 70% RAM');
+		$opts->add('a|all', 'Use All Available HD, CPU Cores, and 70% RAM');
 	}
 
     /**
@@ -156,6 +167,9 @@ HELP;
 		*/
 		$opts = $this->getOptions();
         $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
+        $this->extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
+        $this->clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
+        $this->mac = array_key_exists('mac', $opts->keys) ? $opts->keys['mac']->value : '';
         $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
         $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
 		$this->pool = $this->getPoolType();
@@ -171,10 +185,7 @@ HELP;
 			$this->ram = $this->getUsableRam();
 			$this->cpu = $this->getCpuCount();
         }
-		print_r($opts);
-		echo "Slice HD:".$opts->sliceHd."\n";
-		print_r(array_keys($opts->keys));
-		$this->getLogger()->writeln("Got here");
+		$this->getLogger()->info2(print_r($opts, true));
     }
 
     public function progress($progress) {
