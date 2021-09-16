@@ -239,10 +239,10 @@ HELP;
 	}
 
 	public function getPoolType() {
-		$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
+		$pool = \xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
 		if ($pool == '') {
 			echo `{$this->base}/create_libvirt_storage_pools.sh`;
-			$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
+			$pool = \xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
 		}
 		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
 			echo `virsh pool-start vz;`;
@@ -267,7 +267,7 @@ HELP;
 	}
 
 	public function getVpsMac($hostname) {
-		$mac = xml2array(`/usr/bin/virsh dumpxml {$this->hostname};`)['domain']['devices']['interface']['mac_attr']['address'];
+		$mac = \xml2array(`/usr/bin/virsh dumpxml {$this->hostname};`)['domain']['devices']['interface']['mac_attr']['address'];
 		return $mac;
 	}
 
