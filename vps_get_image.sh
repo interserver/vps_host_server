@@ -4,6 +4,7 @@ img="$1"
 showhelp=0
 outformat="uncompressed"
 uselvm=1
+usezfs=0
 if [ $# -gt 1 ]; then
     idx=1;
 	while [ $idx -lt $# ]; do
@@ -12,8 +13,13 @@ if [ $# -gt 1 ]; then
 		echo "Arg: $arg"
 		if [ "$arg" = "lvm" ]; then
 			uselvm=1
+			usezfs=0
 		elif [ "$arg" = "nolvm" ]; then
 			uselvm=0
+			usezfs=0
+		elif [ "$arg" = "zfs" ]; then
+			uselvm=0
+			usezfs=1
 		elif [ "$arg" = "gzip" ]; then
 			outformat="$arg"
 		elif [ "$arg" = "uncompressed" ]; then
@@ -30,12 +36,13 @@ fi
 if [ $showhelp -eq 1 ]; then
 	echo "Downloads a custom image to a temp LVM directory"
 	echo ""
-	echo "Syntax $0 <url> [outformat] [lvm|nolvm]"
+	echo "Syntax $0 <url> [outformat] [lvm|nolvm|zfs]"
 	echo "  [outformat] optional, specifies output format, can be 'uncompressed', 'gzip'"
 	echo "    defaults to uncompressed"
 	echo "  [lvm] optional, enables creation of an LVM partiion and storing on the LVM partition"
 	echo "    enabled by default"
 	echo "  [nolvm] optional, disable creation of an LVM partiion, instead stores in /"
+	echo "  [zfs] optional, stores in /vz/templates"
 	echo " ie $0 http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img"
 	echo "  or"
 	echo " ie $0 http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img [gzip]"
@@ -81,6 +88,8 @@ if [ $uselvm -eq 1 ]; then
 	mkdir -p /image_storage
 	mount /dev/vz/image_storage /image_storage
 	image_name="/image_storage/image.img"
+elif [ $usezfs -eq 1 ]; then
+	image_name="/vz/templates/image.qcow2"
 else
 	image_name="/image.img"
 fi
@@ -88,27 +97,31 @@ curl -L -o ${image_name} "$img"
 if [ "$(file ${image_name}|grep ":.*bzip2")" != "" ]; then
  echo "BZIP2 Image detected, uncompressing"
  mv -f ${image_name} ${image_name}.bz2
- bunzip2 ${image_name}.bz2 
+ bunzip2 ${image_name}.bz2
 elif [ "$(file ${image_name}|grep ":.*gzip")" != "" ]; then
  echo "GZIP Image detected, uncompressing"
  mv -f ${image_name} ${image_name}.gz
  if [ "$outformat" != "gzip" ]; then
-  gunzip ${image_name}.gz 
+  gunzip ${image_name}.gz
  fi
 elif [ "$(file ${image_name}|grep ":.*XZ")" != "" ]; then
  echo "XZ Image detected, uncompressing"
  mv -f ${image_name} ${image_name}.xz
- xz -d ${image_name}.xz 
-fi 
+ xz -d ${image_name}.xz
+fi
 if [ "$outformat" != "gzip" ]; then
 	format="$(qemu-img info ${image_name} |grep "file format:" | awk '{ print $3 }')"
 	echo "Image Format Is $format"
+	if [ $usezfs -eq 1 ] && [ "$format" != "qcow2" ]; then
+		echo "Converting to qcow2"
+		mv -f ${image_name} ${image_name}.img
+		qemu-img convert -p ${image_name}.img -O qcow2 ${image_name}.qcow2
+		rm -f ${image_name}.img
 	if [ "$format" != "raw" ] ; then
 		echo "Converting to Raw"
-		qemu-img convert -p ${image_name} -O raw /image_storage/image.raw.img
-		rm -f ${image_name}
-	else
-		mv -f ${image_name} /image_storage/image.raw.img
+		mv -f ${image_name} ${image_name}.img
+		qemu-img convert -p ${image_name}.img -O raw ${image_name}
+		rm -f ${image_name}.img
 	fi
 fi
 rm -f curl_headers.txt

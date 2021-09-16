@@ -131,7 +131,6 @@ HELP;
 		$this->defineVps();
 		$this->progress(20);
 		$this->mac = $this->getVpsMac($this->hostname);
-		return;
 		$this->setupDhcpd();
 		$this->progress(25);
 		echo "Custid is {$custid}\n";
@@ -141,6 +140,7 @@ HELP;
 			}
 			$this->template = 'template.281311';
 		}
+		return;
 		$this->installTemplate();
 		$this->progress(80);
 		echo "Errors: {$this->error}  Adjust Partitions: {$this->adjust_partitions}\n";
@@ -444,7 +444,17 @@ HELP;
 
 	public function installTemplateV2() {
 		// kvmv2
-		if (file_exists('/vz/templates/'.$this->template.'.qcow2') || $this->template == 'empty') {
+		$downloadedTemplate = substr($this->template, 0, 7) == 'http://' || substr($this->template, 0, 8) == 'https://' || substr($this->template, 0, 6) == 'ftp://';
+		if ($downloadedTemplate == true) {
+			echo "Downloading {$this->template} Image\n";
+			echo `{$this->base}/vps_get_image.sh "{$this->template} zfs"`;
+			$this->template = 'image';
+		}
+		if (!file_exists('/vz/templates/'.$this->template.'.qcow2') && $this->template != 'empty') {
+			echo "There must have been a problem, the image does not exist\n";
+			$this->error++;
+			return false;
+		} else {
 			echo "Copy {$this->template}.qcow2 Image\n";
 			if ($this->hd == 'all') {
 				$this->hd = intval(`zfs list vz -o available -H -p`) / (1024 * 1024);
@@ -471,6 +481,10 @@ HELP;
 				}
 			}
 			$this->progress(90);
+			if ($downloadedTemplate === true) {
+				echo "Removing Downloaded Image\n";
+				echo `rm -f /vz/templates/{$this->template}.qcow2`;
+			}
 			echo `virsh detach-disk {$this->hostname} vda --persistent;`;
 			echo `virsh attach-disk {$this->hostname} /vz/{$this->hostname}/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;`;
 			echo `virsh dumpxml {$this->hostname} > {$this->hostname}.xml`;
@@ -480,7 +494,6 @@ HELP;
 			echo `virt-customize -d {$this->hostname} --root-password password:{$rootpass} --hostname "{$this->hostname}";`;
 			$this->adjust_partitions = 0;
 		}
-
 	}
 
 	public function installTemplateV1() {
@@ -489,16 +502,17 @@ HELP;
 			$this->adjust_partitions = 0;
 			echo "Downloading {$this->template} Image\n";
 			echo `{$this->base}/vps_get_image.sh "{$this->template}"`;
-			if (!file_exists('/image_storage/image.raw.img')) {
+			if (!file_exists('/image_storage/image.img')) {
 				echo "There must have been a problem, the image does not exist\n";
 				$this->error++;
+				return false;
 			} else {
-				$this->installImage('/image_storage/image.raw.img', $this->device);
+				$this->installImage('/image_storage/image.img', $this->device);
 				echo "Removing Downloaded Image\n";
-				echo `umount /image_storage;`;
-				echo `virsh vol-delete --pool vz image_storage;`;
-				echo `rmdir /image_storage;`;
 			}
+			echo `umount /image_storage;`;
+			echo `virsh vol-delete --pool vz image_storage;`;
+			echo `rmdir /image_storage;`;
 		} elseif ($this->template == 'empty') {
 			// kvmv1 install empty image
 			$this->adjust_partitions = 0;
@@ -524,6 +538,7 @@ HELP;
 			if ($found == 0) {
 				echo "Template does not exist\n";
 				$this->error++;
+				return false;
 			}
 		}
 		if (count($this->softraid) > 0) {
