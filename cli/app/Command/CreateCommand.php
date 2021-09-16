@@ -184,7 +184,7 @@ HELP;
 			$this->ram = $this->getUsableRam();
 			$this->cpu = $this->getCpuCount();
         }
-		$this->getLogger()->info2(print_r($opts, true));
+		//$this->getLogger()->info2(print_r($opts, true));
     }
 
     public function progress($progress) {
