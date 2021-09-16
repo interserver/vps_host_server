@@ -44,7 +44,7 @@ class StopCommand extends Command {
 		$sleepTime = 10;
 		$continue = true;
 		while ($waited <= $maxWait && $stopped == false) {
-			if ($this->isVpsRunning($hostname)) {
+			if (Vps::isVpsRunning($hostname)) {
 				$this->getLogger()->info2('VPS is still running, waiting '.$sleepTime.' seconds (waited '.$waited.'/'.$maxWait.')');
 				sleep($sleepTime);
 				$waited += $sleepTime;

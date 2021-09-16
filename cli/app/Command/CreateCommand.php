@@ -442,7 +442,7 @@ HELP;
 				echo `qemu-img create -f qcow2 -o preallocation=metadata {$this->device} 25G;`;
 				$this->progress(40);
 				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
-				$this->progress(70);
+				$this->progress(60);
 				if ($this->template != 'empty') {
 					$this->getLogger()->debug('Listing Partitions in Template');
 					$part = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`);
