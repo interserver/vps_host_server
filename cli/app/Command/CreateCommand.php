@@ -193,7 +193,7 @@ HELP;
     }
 
     public function progress($progress) {
-		$this->getLogger()->writeln($progress.'% done');
+		$this->getLogger()->writeln($progress.'%');
     }
 
     public function getInstalledVirts() {
@@ -384,6 +384,62 @@ HELP;
 		} else {
 			$this->installTemplateV1();
 		}
+	}
+
+
+	public function setupCgroups() {
+		if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
+			$slices = $this->cpu;
+			$cpushares = $slices * 512;
+			$ioweight = 400 + (37 * $slices);
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+		}
+	}
+
+	public function setupRouting() {
+		if ($this->pool != 'zfs' && $this->useAll == false) {
+			echo `bash {$this->base}/run_buildebtables.sh;`;
+		}
+		echo `{$this->base}/tclimit {$this->ip};`;
+		echo `/admin/kvmenable blocksmtp {$this->hostname};`;
+		if ($this->pool != 'zfs' && $this->useAll == false) {
+			echo `/admin/kvmenable ebflush;`;
+			echo `{$this->base}/buildebtablesrules | sh;`;
+		}
+	}
+
+	public function setupVnc() {
+		touch('/tmp/_securexinetd');
+		if ($this->clientIp != '') {
+			$this->clientIp = escapeshellarg($this->clientIp);
+			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
+		}
+		echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
+		$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+		if ($this->vncPort == '') {
+			sleep(2);
+			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+			if ($this->vncPort == '') {
+				sleep(2);
+				$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+			} else {
+				$this->vncPort += 5900;
+			}
+		} else {
+			$this->vncPort += 5900;
+		}
+		$this->vncPort -= 5900;
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		sleep(1);
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		sleep(1);
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		$this->vncPort += 5900;
+		echo `rm -f /tmp/_securexinetd;`;
+		echo `service xinetd restart`;
 	}
 
 	public function installTemplateV2() {
@@ -577,60 +633,5 @@ HELP;
 	done;
 	*/
 		echo `rm -f dd.progress;`;
-	}
-
-	public function setupCgroups() {
-		if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
-			$slices = $this->cpu;
-			$cpushares = $slices * 512;
-			$ioweight = 400 + (37 * $slices);
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
-		}
-	}
-
-	public function setupRouting() {
-		if ($this->pool != 'zfs' && $this->useAll == false) {
-			echo `bash {$this->base}/run_buildebtables.sh;`;
-		}
-		echo `{$this->base}/tclimit {$this->ip};`;
-		echo `/admin/kvmenable blocksmtp {$this->hostname};`;
-		if ($this->pool != 'zfs' && $this->useAll == false) {
-			echo `/admin/kvmenable ebflush;`;
-			echo `{$this->base}/buildebtablesrules | sh;`;
-		}
-	}
-
-	public function setupVnc() {
-		touch('/tmp/_securexinetd');
-		if ($this->clientIp != '') {
-			$this->clientIp = escapeshellarg($this->clientIp);
-			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
-		}
-		echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
-		$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-		if ($this->vncPort == '') {
-			sleep(2);
-			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-			if ($this->vncPort == '') {
-				sleep(2);
-				$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
-			} else {
-				$this->vncPort += 5900;
-			}
-		} else {
-			$this->vncPort += 5900;
-		}
-		$this->vncPort -= 5900;
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		sleep(1);
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		sleep(1);
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		$this->vncPort += 5900;
-		echo `rm -f /tmp/_securexinetd;`;
-		echo `service xinetd restart`;
 	}
 }
