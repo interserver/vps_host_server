@@ -462,14 +462,12 @@ HELP;
 				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
 				$this->progress(70);
 				if ($this->template != 'empty') {
+					$this->getLogger()->debug('Listing Partitions in Template');
 					$part = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`);
-					$this->getLogger()->debug('List Partitions got part '.$part);
+					$this->getLogger()->debug('List Partitions got partition '.$part.' and backup partition '.$backuppart);
 					$backuppart = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`);
-					$this->getLogger()->debug('List Partitions got backup part '.$backuppart);
-					$cmd = "virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}";
-					$this->getLogger()->debug($cmd);
+					$this->getLogger()->debug('Copying and Resizing Template');
 					echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}`;
-					$this->getLogger()->debug('Template Copied and Resized');
 				}
 			}
 			$this->progress(90);
