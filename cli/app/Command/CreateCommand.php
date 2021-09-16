@@ -348,6 +348,7 @@ HELP;
 		}
 		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
 		echo `rm -f {$this->hostname}.xml`;
+		echo "Defined\n";
 		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
