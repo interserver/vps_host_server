@@ -9,8 +9,6 @@ use CLIFramework\Debug\ConsoleDebug;
 use App\Vps;
 
 class StopCommand extends Command {
-    public $error = 0;
-
 	public function brief() {
 		return "Stops a Virtual Machine.";
 	}
@@ -22,23 +20,23 @@ class StopCommand extends Command {
 
 	public function execute($hostname) {
 		if (!Vps::isVirtualHost()) {
-			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
-			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
+			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
+			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
 		if (!Vps::vpsExists($hostname)) {
-			$this->getLogger()->writeln("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
 		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->writeln("The VPS '{$hostname}' you specified does not appear to be currently running (It is powered down).");
+			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
 			return 1;
 		}
 		$this->stopVps($hostname);
 	}
 
 	public function stopVps($hostname) {
-		$this->getLogger()->info2('Stopping the VPS');
+		$this->getLogger()->info('Stopping the VPS');
 		$this->getLogger()->indent();
 		$this->getLogger()->info('Sending Softwawre Power-Off');
 		echo `/usr/bin/virsh shutdown {$hostname}`;
