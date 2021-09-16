@@ -304,17 +304,22 @@ HELP;
 		} else {
 			echo "Generating XML Config\n";
 			if ($this->pool != 'zfs') {
+				$this->getLogger()->debug('Removing UUID Filterref and IP information');
 				echo `grep -v -e uuid -e filterref -e "<parameter name='IP'" {$this->base}/windows.xml | sed s#"windows"#"{$this->hostname}"#g > {$this->hostname}.xml`;
 			} else {
+				$this->getLogger()->debug('Removing UUID information');
 				echo `grep -v -e uuid {$this->base}/windows.xml | sed -e s#"windows"#"{$this->hostname}"#g -e s#"/dev/vz/{$this->hostname}"#"{$this->device}"#g > {$this->hostname}.xml`;
 			}
 			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
+				$this->getLogger()->debug('Replacing KVM Binary Path');
 				echo `sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i {$this->hostname}.xml`;
 			}
 		}
 		if ($this->useAll == true) {
+			$this->getLogger()->debug('Removing IP information');
 			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$this->hostname}.xml`;
 		} else {
+			$this->getLogger()->debug('Replacing UUID Filterref and IP information');
 			$repl = "<parameter name='IP' value='{$this->ip}'/>";
 			if (count($this->extraIps) > 0)
 				foreach ($this->extraIps as $extraIp)
@@ -326,24 +331,34 @@ HELP;
 		/* use id to generate mac address if we a numeric id or remove mac otherwise */
 		if (is_numeric($id)) {
 			$this->mac = $this->convert_id_to_mac($id, $this->useAll);
+			$this->getLogger()->debug('Replacing MAC addresss');
 			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
 		} else {
+			$this->getLogger()->debug('Removing MAC address');
 			echo `sed s#"^.*<mac address.*$"#""#g -i {$this->hostname}.xml`;
 		}
+		$this->getLogger()->debug('Setting CPU limits');
 		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='{$this->cpu}'>{$this->maxCpu}</vcpu>"#g -i {$this->hostname}.xml;`;
+		$this->getLogger()->debug('Setting Max Memory limits');
 		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$this->ram}</memory>"#g -i {$this->hostname}.xml;`;
+		$this->getLogger()->debug('Setting Memory limits');
 		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$this->ram}</currentMemory>"#g -i {$this->hostname}.xml;`;
 		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
+			$this->getLogger()->debug('Adding HAP features flag');
 			echo `sed s#"<features>"#"<features>\n    <hap/>"#g -i {$this->hostname}.xml;`;
 		}
 		if (trim(`date "+%Z"`) == 'PDT') {
+			$this->getLogger()->debug('Setting Timezone to PST');
 			echo `sed s#"America/New_York"#"America/Los_Angeles"#g -i {$this->hostname}.xml;`;
 		}
 		if (file_exists('/etc/lsb-release')) {
 			if (substr($this->template, 0, 7) == 'windows') {
+				$this->getLogger()->debug('Adding HyperV block');
 				echo `sed -e s#"</features>"#"  <hyperv>\n      <relaxed state='on'/>\n      <vapic state='on'/>\n      <spinlocks state='on' retries='8191'/>\n    </hyperv>\n  </features>"#g -i {$this->hostname}.xml;`;
-				echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$this->hostname}.xml;`;
+			$this->getLogger()->debug('Adding HyperV timer');
+					echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$this->hostname}.xml;`;
 			}
+			$this->getLogger()->debug('Customizing SCSI controller');
 			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
 		}
 		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
