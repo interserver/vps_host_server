@@ -203,7 +203,7 @@ HELP;
 		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
 		if ($this->mac == '' && is_numeric($id)) {
 			/* use id to generate mac address if we a numeric id or remove mac otherwise */
-			$this->mac = $this->convert_id_to_mac($id, $this->useAll);
+			$this->mac = Vps::convert_id_to_mac($id, $this->useAll);
 		}
 		if ($this->mac != '') {
 			$this->getLogger()->debug('Replacing MAC addresss');
