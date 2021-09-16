@@ -70,16 +70,8 @@ HELP;
 		parent::options($opts);
         $opts->add('m|mac:', 'MAC Address')
         	->isa('string');
-        $opts->add('slices:', 'Number of Slices for the vps')
-        	->isa('number');
-        $opts->add('id:', 'Order ID # for the vps')
-        	->isa('number');
         $opts->add('ips:', 'Additional IPs')
         	->isa('string');
-        $opts->add('e|email:', 'Email Address of the VPS owner')
-        	->isa('string');
-        $opts->add('custid:', 'Customer ID #')
-        	->isa('number');
         $opts->add('clientip:', 'Client IP')
         	->isa('ip');
 		$opts->add('all', 'Use All Available HD, CPU Cores, and 70% RAM');
@@ -133,16 +125,9 @@ HELP;
 		$this->mac = $this->getVpsMac($this->hostname);
 		$this->setupDhcpd();
 		$this->progress(25);
-		echo "Custid is {$custid}\n";
-		if ($custid == 565600) {
-			if (!file_exists('/vz/templates/template.281311.qcow2')) {
-				echo `wget -O /vz/templates/template.281311.qcow2 http://kvmtemplates.is.cc/cl/template.281311.qcow2;`;
-			}
-			$this->template = 'template.281311';
-		}
-		return;
 		$this->installTemplate();
 		$this->progress(80);
+		return;
 		echo "Errors: {$this->error}  Adjust Partitions: {$this->adjust_partitions}\n";
 		if ($this->error == 0) {
 			echo `/usr/bin/virsh autostart {$this->hostname};`;
