@@ -37,15 +37,15 @@ class StopCommand extends Command {
 		$this->getLogger()->info2('Stopping the VPS');
 		$this->getLogger()->indent();
 		$this->getLogger()->info2('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname};`;
+		echo `/usr/bin/virsh shutdown {$hostname}`;
 		$stopped = false;
 		$waited = 0;
-		$maxWait = 240;
+		$maxWait = 120;
 		$sleepTime = 10;
 		$continue = true;
 		while ($waited <= $maxWait && $stopped == false) {
 			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info2('VPS is still running, waiting '.$sleepTime.' seconds (waited '.$waited.'/'.$maxWait.')');
+				$this->getLogger()->info2('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
 				sleep($sleepTime);
 				$waited += $sleepTime;
 			} else {
