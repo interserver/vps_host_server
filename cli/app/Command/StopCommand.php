@@ -10,7 +10,6 @@ use CLIFramework\Component\Progress\ProgressBar;
 
 class StopCommand extends Command {
 	public $base = '/root/cpaneldirect';
-	public $hostname = '';
 	public $device = '';
 	public $pool = '';
 	public $ip = '';
@@ -32,8 +31,7 @@ class StopCommand extends Command {
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		$this->hostname = $hostname;
-		$this->stopVps();
+		$this->stopVps($hostname);
 	}
 
     public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
@@ -58,6 +56,14 @@ class StopCommand extends Command {
 		return count($virts) > 0;
     }
 
+    public function getRunningVps() {
+		return explode("\n", trim(`virsh list --name`));
+    }
+
+    public function isVpsRunning($hostname) {
+		return in_array($hostname, $this->getRunningVps());
+    }
+
 	public function vpsExists($hostname) {
 		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
 		return $return == 0;
@@ -75,11 +81,31 @@ class StopCommand extends Command {
 		return $pool;
 	}
 
-	public function stopVps() {
+	public function stopVps($hostname) {
 		if ($this->error == 0) {
-			$this->getLogger()->info2('Stopping up the VPS');
-			echo `/usr/bin/virsh stop {$this->hostname};`;
-			echo `/usr/bin/virsh destroy {$this->hostname};`;
+			$this->getLogger()->info2('Stopping the VPS');
+			$this->getLogger()->indent();
+			$this->getLogger()->info2('Sending Softwawre Power-Off');
+			echo `/usr/bin/virsh stop {$hostname};`;
+			$stopped = false;
+			$waited = 0;
+			$maxWait = 240;
+			$sleepTime = 10;
+			$continue = true;
+			while ($waited <= $maxWait && $stopped == false) {
+				if ($this->isVpsRunning($hostname)) {
+					$this->getLogger()->info2('VPS is still running, waiting '.$sleepTime.' seconds (waited '.$waited.'/'.$maxWait.')');
+					sleep($sleepTime);
+					$waited += $sleepTime;
+				} else {
+					$stopped = true;
+				}
+			}
+			if ($stopped === false) {
+				$this->getLogger()->info2('Sending Hardware Power-Off');
+				echo `/usr/bin/virsh destroy {$hostname};`;
+			}
+			$this->getLogger()->unIndent();
 		}
 	}
 }
