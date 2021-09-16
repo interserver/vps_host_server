@@ -122,10 +122,6 @@ HELP;
 			->isa('string');
 	}
 
-    public function progress($progress) {
-
-    }
-
 	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $pass = '') {
 		if (!$this->isVirtualHost()) {
 			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
@@ -198,59 +194,90 @@ HELP;
 		$this->getLogger()->writeln("Got here");
     }
 
-	public function setupRouting() {
-		if ($this->pool != 'zfs' && $this->useAll == false) {
-			echo `bash {$this->base}/run_buildebtables.sh;`;
-		}
-		echo `{$this->base}/tclimit {$this->ip};`;
-		echo `/admin/kvmenable blocksmtp {$this->hostname};`;
-		if ($this->pool != 'zfs' && $this->useAll == false) {
-			echo `/admin/kvmenable ebflush;`;
-			echo `{$this->base}/buildebtablesrules | sh;`;
-		}
-	}
+    public function progress($progress) {
 
-	public function setupCgroups() {
-		if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
-			$slices = $this->cpu;
-			$cpushares = $slices * 512;
-			$ioweight = 400 + (37 * $slices);
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
-		}
-	}
+    }
 
-	public function setupVnc() {
-		touch('/tmp/_securexinetd');
-		if ($this->clientIp != '') {
-			$this->clientIp = escapeshellarg($this->clientIp);
-			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
-		}
-		echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
-		$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-		if ($this->vncPort == '') {
-			sleep(2);
-			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-			if ($this->vncPort == '') {
-				sleep(2);
-				$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
-			} else {
-				$this->vncPort += 5900;
+    public function getInstalledVirts() {
+		$found = [];
+		foreach ($this->virtBins as $virt => $virtBin) {
+			if (file_exists($virtBin)) {
+				$found[] = $virt;
 			}
-		} else {
-			$this->vncPort += 5900;
 		}
-		$this->vncPort -= 5900;
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		sleep(1);
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		sleep(1);
-		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
-		$this->vncPort += 5900;
-		echo `rm -f /tmp/_securexinetd;`;
-		echo `service xinetd restart`;
+		return $found;
+    }
+
+    public function isVirtualHost() {
+		$virts = $this->getInstalledVirts();
+		return count($virts) > 0;
+    }
+
+	public function isRedhatBased() {
+		return file_exists('/etc/redhat-release');
+	}
+
+	public function getRedhatVersion() {
+		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\1"#g`));
+	}
+
+	public function getE2fsprogsVersion() {
+		return floatval(trim(`e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2`));
+	}
+
+	public function checkDeps() {
+    	if ($this->isRedhatBased() && $this->getRedhatVersion() < 7) {
+			if ($this->getE2fsprogsVersion() <= 1.41) {
+				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
+					echo `/admin/ports/install e2fsprogs;`;
+				}
+			}
+    	}
+	}
+
+	public function vpsExists($hostname) {
+		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
+		return $return > 0;
+	}
+
+	public function getPoolType() {
+		$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
+		if ($pool == '') {
+			echo `{$this->base}/create_libvirt_storage_pools.sh`;
+			$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
+		}
+		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
+			echo `virsh pool-start vz;`;
+		}
+		return $pool;
+	}
+
+	public function getTotalRam() {
+		preg_match('/^MemTotal:\s+(\d+)\skB/', file_get_contents('/proc/meminfo'), $matches);
+		$ram = floatval($matches[1]);
+		return $ram;
+	}
+
+	public function getUsableRam() {
+		$ram = floor($this->getTotalRam() / 100 * 70);
+		return $ram;
+	}
+
+	public function getCpuCount() {
+		preg_match('/CPU\(s\):\s+(\d+)/', `lscpu`, $matches);
+		return intval($matches[1]);
+	}
+
+	public function getVpsMac($hostname) {
+		$mac = xml2array(`/usr/bin/virsh dumpxml {$this->hostname};`)['domain']['devices']['interface']['mac_attr']['address'];
+		return $mac;
+	}
+
+	public function convert_id_to_mac($id, $useAll) {
+		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
+		$suffix = strtoupper(sprintf("%06s", dechex($id)));
+		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
+		return $mac;
 	}
 
 	public function setupStorage() {
@@ -271,6 +298,64 @@ HELP;
 		echo "{$this->pool} pool device {$this->device} created\n";
 	}
 
+	public function defineVps() {
+		if ($this->vpsExists($this->hostname)) {
+			echo `/usr/bin/virsh destroy {$this->hostname}`;
+			echo `cp {$this->hostname}.xml {$this->hostname}.xml.backup`;
+			echo `/usr/bin/virsh undefine {$this->hostname}`;
+			echo `mv -f {$this->hostname}.xml.backup {$this->hostname}.xml`;
+		} else {
+			echo "Generating XML Config\n";
+			if ($this->pool != 'zfs') {
+				echo `grep -v -e uuid -e filterref -e "<parameter name='IP'" {$this->base}/windows.xml | sed s#"windows"#"{$this->hostname}"#g > {$this->hostname}.xml`;
+			} else {
+				echo `grep -v -e uuid {$this->base}/windows.xml | sed -e s#"windows"#"{$this->hostname}"#g -e s#"/dev/vz/{$this->hostname}"#"{$this->device}"#g > {$this->hostname}.xml`;
+			}
+			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
+				echo `sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i {$this->hostname}.xml`;
+			}
+		}
+		if ($this->useAll == true) {
+			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$this->hostname}.xml`;
+		} else {
+			$repl = "<parameter name='IP' value='{$this->ip}'/>";
+			if (count($this->extraips) > 0)
+				foreach ($this->extraips as $extraIp)
+					$repl = "{$repl}\n        <parameter name='IP' value='{$extraIp}'/>";
+			echo `sed s#"<parameter name='IP' value.*/>"#"{$repl}"#g -i {$this->hostname}.xml;`;
+		}
+		/* convert hostname to id */
+		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
+		/* use id to generate mac address if we a numeric id or remove mac otherwise */
+		if (is_numeric($id)) {
+			$this->mac = $this->convert_id_to_mac($id, $this->useAll);
+			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
+		} else {
+			echo `sed s#"^.*<mac address.*$"#""#g -i {$this->hostname}.xml`;
+		}
+		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='{$this->cpu}'>{$this->maxCpu}</vcpu>"#g -i {$this->hostname}.xml;`;
+		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$this->ram}</memory>"#g -i {$this->hostname}.xml;`;
+		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$this->ram}</currentMemory>"#g -i {$this->hostname}.xml;`;
+		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
+			echo `sed s#"<features>"#"<features>\n    <hap/>"#g -i {$this->hostname}.xml;`;
+		}
+		if (trim(`date "+%Z"`) == 'PDT') {
+			echo `sed s#"America/New_York"#"America/Los_Angeles"#g -i {$this->hostname}.xml;`;
+		}
+		if (file_exists('/etc/lsb-release')) {
+			if (substr($this->template, 0, 7) == 'windows') {
+				echo `sed -e s#"</features>"#"  <hyperv>\n      <relaxed state='on'/>\n      <vapic state='on'/>\n      <spinlocks state='on' retries='8191'/>\n    </hyperv>\n  </features>"#g -i {$this->hostname}.xml;`;
+				echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$this->hostname}.xml;`;
+			}
+			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
+		}
+		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
+		echo `rm -f {$this->hostname}.xml`;
+		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
+		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
+		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
+	}
+
     public function setupDhcpd() {
 		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
 		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
@@ -280,96 +365,6 @@ HELP;
     	echo `rm -f {$dhcpvps}.backup;`;
     	echo `systemctl restart {$dhcpservice} 2>/dev/null || service {$dhcpservice} restart 2>/dev/null || /etc/init.d/{$dhcpservice} restart 2>/dev/null`;
     }
-
-    public function install_gz_image($source, $device) {
-    	echo "Copying {$source} Image\n";
-    	$tsize = trim(`stat -c%s "{$source}"`);
-    	echo `gzip -dc "/{$source}"  | dd of={$device} 2>&1`;
-    	/*
-	gzip -dc "/$source"  | dd of=$this->device 2>&1 &
-	pid=$!
-	echo "Got DD PID $pid";
-	sleep 2s;
-	if [ "$(pidof gzip)" != "" ]; then
-		pid="$(pidof gzip)";
-		echo "Tried again, got gzip PID $pid";
-	fi;
-	if [ "$(echo "$pid" | grep " ")" != "" ]; then
-		pid=$(pgrep -f 'gzip -dc');
-		echo "Didn't like gzip pid (had a space?), going with gzip PID $pid";
-	fi;
-	tsize="$(stat -L /proc/$pid/fd/3 -c "%s")";
-	echo "Got Total Size $tsize";
-	if [ -z $tsize ]; then
-		tsize="$(stat -c%s "/$source")";
-		echo "Falling back to filesize check, got size $tsize";
-	fi;
-	while [ -d /proc/$pid ]; do
-		copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3);
-		completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)";
-		iprogress $completed &*/
-//		if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-//			export softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
-/*			for softfile in $this->softraid; do
-				echo idle > $softfile;
-			done;
-		fi;
-		echo "$completed%";
-		sleep 10s
-	done
-	*/
-	}
-
-	public function install_image($source, $device) {
-		echo "Copying Image\n";
-		$tsize = trim(`stat -c%s "{$source}"`);
-		echo `dd "if={$source}" "of={$device}" 2>&1`;
-		/*
-	dd "if=$source" "of=$this->device" >dd.progress 2>&1 &
-	pid=$!
-	while [ -d /proc/$pid ]; do
-		sleep 9s;
-		kill -SIGUSR1 $pid;
-		sleep 1s;
-		if [ -d /proc/$pid ]; then
-			copied=$(tail -n 1 dd.progress | cut -d" " -f1);
-			completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)";
-			iprogress $completed &
-			*/
-			//if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
-//				export softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
-/*				for softfile in $this->softraid; do
-					echo idle > $softfile;
-				done;
-			fi;
-			echo "$completed%";
-		fi;
-	done;
-	*/
-		echo `rm -f dd.progress;`;
-	}
-
-    public function getInstalledVirts() {
-		$found = [];
-		foreach ($this->virtBins as $virt => $virtBin) {
-			if (file_exists($virtBin)) {
-				$found[] = $virt;
-			}
-		}
-		return $found;
-    }
-
-    public function isVirtualHost() {
-		$virts = $this->getInstalledVirts();
-		return count($virts) > 0;
-    }
-
-	public function convert_id_to_mac($id, $useAll) {
-		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
-		$suffix = strtoupper(sprintf("%06s", dechex($id)));
-		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
-		return $mac;
-	}
 
 	public function installTemplate() {
 		if ($this->pool == 'zfs') {
@@ -504,121 +499,126 @@ HELP;
 		}
 	}
 
-	public function defineVps() {
-		if ($this->vpsExists($this->hostname)) {
-			echo `/usr/bin/virsh destroy {$this->hostname}`;
-			echo `cp {$this->hostname}.xml {$this->hostname}.xml.backup`;
-			echo `/usr/bin/virsh undefine {$this->hostname}`;
-			echo `mv -f {$this->hostname}.xml.backup {$this->hostname}.xml`;
-		} else {
-			echo "Generating XML Config\n";
-			if ($this->pool != 'zfs') {
-				echo `grep -v -e uuid -e filterref -e "<parameter name='IP'" {$this->base}/windows.xml | sed s#"windows"#"{$this->hostname}"#g > {$this->hostname}.xml`;
+    public function install_gz_image($source, $device) {
+    	echo "Copying {$source} Image\n";
+    	$tsize = trim(`stat -c%s "{$source}"`);
+    	echo `gzip -dc "/{$source}"  | dd of={$device} 2>&1`;
+    	/*
+	gzip -dc "/$source"  | dd of=$this->device 2>&1 &
+	pid=$!
+	echo "Got DD PID $pid";
+	sleep 2s;
+	if [ "$(pidof gzip)" != "" ]; then
+		pid="$(pidof gzip)";
+		echo "Tried again, got gzip PID $pid";
+	fi;
+	if [ "$(echo "$pid" | grep " ")" != "" ]; then
+		pid=$(pgrep -f 'gzip -dc');
+		echo "Didn't like gzip pid (had a space?), going with gzip PID $pid";
+	fi;
+	tsize="$(stat -L /proc/$pid/fd/3 -c "%s")";
+	echo "Got Total Size $tsize";
+	if [ -z $tsize ]; then
+		tsize="$(stat -c%s "/$source")";
+		echo "Falling back to filesize check, got size $tsize";
+	fi;
+	while [ -d /proc/$pid ]; do
+		copied=$(awk '/pos:/ { print $2 }' /proc/$pid/fdinfo/3);
+		completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)";
+		iprogress $completed &*/
+//		if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+//			export softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
+/*			for softfile in $this->softraid; do
+				echo idle > $softfile;
+			done;
+		fi;
+		echo "$completed%";
+		sleep 10s
+	done
+	*/
+	}
+
+	public function install_image($source, $device) {
+		echo "Copying Image\n";
+		$tsize = trim(`stat -c%s "{$source}"`);
+		echo `dd "if={$source}" "of={$device}" 2>&1`;
+		/*
+	dd "if=$source" "of=$this->device" >dd.progress 2>&1 &
+	pid=$!
+	while [ -d /proc/$pid ]; do
+		sleep 9s;
+		kill -SIGUSR1 $pid;
+		sleep 1s;
+		if [ -d /proc/$pid ]; then
+			copied=$(tail -n 1 dd.progress | cut -d" " -f1);
+			completed="$(echo "$copied/$tsize*100" |bc -l | cut -d\. -f1)";
+			iprogress $completed &
+			*/
+			//if [ "$(ls /sys/block/md*/md/sync_action 2>/dev/null)" != "" ] && [ "$(grep -v idle /sys/block/md*/md/sync_action 2>/dev/null)" != "" ]; then
+//				export softraid="$(grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null)";
+/*				for softfile in $this->softraid; do
+					echo idle > $softfile;
+				done;
+			fi;
+			echo "$completed%";
+		fi;
+	done;
+	*/
+		echo `rm -f dd.progress;`;
+	}
+
+	public function setupCgroups() {
+		if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
+			$slices = $this->cpu;
+			$cpushares = $slices * 512;
+			$ioweight = 400 + (37 * $slices);
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+		}
+	}
+
+	public function setupRouting() {
+		if ($this->pool != 'zfs' && $this->useAll == false) {
+			echo `bash {$this->base}/run_buildebtables.sh;`;
+		}
+		echo `{$this->base}/tclimit {$this->ip};`;
+		echo `/admin/kvmenable blocksmtp {$this->hostname};`;
+		if ($this->pool != 'zfs' && $this->useAll == false) {
+			echo `/admin/kvmenable ebflush;`;
+			echo `{$this->base}/buildebtablesrules | sh;`;
+		}
+	}
+
+	public function setupVnc() {
+		touch('/tmp/_securexinetd');
+		if ($this->clientIp != '') {
+			$this->clientIp = escapeshellarg($this->clientIp);
+			echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
+		}
+		echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
+		$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+		if ($this->vncPort == '') {
+			sleep(2);
+			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
+			if ($this->vncPort == '') {
+				sleep(2);
+				$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
 			} else {
-				echo `grep -v -e uuid {$this->base}/windows.xml | sed -e s#"windows"#"{$this->hostname}"#g -e s#"/dev/vz/{$this->hostname}"#"{$this->device}"#g > {$this->hostname}.xml`;
+				$this->vncPort += 5900;
 			}
-			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
-				echo `sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i {$this->hostname}.xml`;
-			}
-		}
-		if ($this->useAll == true) {
-			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$this->hostname}.xml`;
 		} else {
-			$repl = "<parameter name='IP' value='{$this->ip}'/>";
-			if (count($this->extraips) > 0)
-				foreach ($this->extraips as $extraIp)
-					$repl = "{$repl}\n        <parameter name='IP' value='{$extraIp}'/>";
-			echo `sed s#"<parameter name='IP' value.*/>"#"{$repl}"#g -i {$this->hostname}.xml;`;
+			$this->vncPort += 5900;
 		}
-		/* convert hostname to id */
-		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
-		/* use id to generate mac address if we a numeric id or remove mac otherwise */
-		if (is_numeric($id)) {
-			$this->mac = $this->convert_id_to_mac($id, $this->useAll);
-			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
-		} else {
-			echo `sed s#"^.*<mac address.*$"#""#g -i {$this->hostname}.xml`;
-		}
-		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='{$this->cpu}'>{$this->maxCpu}</vcpu>"#g -i {$this->hostname}.xml;`;
-		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$this->ram}</memory>"#g -i {$this->hostname}.xml;`;
-		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$this->ram}</currentMemory>"#g -i {$this->hostname}.xml;`;
-		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
-			echo `sed s#"<features>"#"<features>\n    <hap/>"#g -i {$this->hostname}.xml;`;
-		}
-		if (trim(`date "+%Z"`) == 'PDT') {
-			echo `sed s#"America/New_York"#"America/Los_Angeles"#g -i {$this->hostname}.xml;`;
-		}
-		if (file_exists('/etc/lsb-release')) {
-			if (substr($this->template, 0, 7) == 'windows') {
-				echo `sed -e s#"</features>"#"  <hyperv>\n      <relaxed state='on'/>\n      <vapic state='on'/>\n      <spinlocks state='on' retries='8191'/>\n    </hyperv>\n  </features>"#g -i {$this->hostname}.xml;`;
-				echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$this->hostname}.xml;`;
-			}
-			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
-		}
-		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
-		echo `rm -f {$this->hostname}.xml`;
-		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
-		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
-		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
-	}
-
-	public function vpsExists($hostname) {
-		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
-		return $return > 0;
-	}
-
-	public function checkDeps() {
-    	if ($this->isRedhatBased() && $this->getRedhatVersion() < 7) {
-			if ($this->getE2fsprogsVersion() <= 1.41) {
-				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
-					echo `/admin/ports/install e2fsprogs;`;
-				}
-			}
-    	}
-	}
-
-	public function getE2fsprogsVersion() {
-		return floatval(trim(`e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2`));
-	}
-
-	public function getRedhatVersion() {
-		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\1"#g`));
-	}
-
-	public function isRedhatBased() {
-		return file_exists('/etc/redhat-release');
-	}
-
-	public function getPoolType() {
-		$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		if ($pool == '') {
-			echo `{$this->base}/create_libvirt_storage_pools.sh`;
-			$pool = xml2array(file_get_contents(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		}
-		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
-			echo `virsh pool-start vz;`;
-		}
-		return $pool;
-	}
-
-	public function getTotalRam() {
-		preg_match('/^MemTotal:\s+(\d+)\skB/', file_get_contents('/proc/meminfo'), $matches);
-		$ram = floatval($matches[1]);
-		return $ram;
-	}
-
-	public function getUsableRam() {
-		$ram = floor($this->getTotalRam() / 100 * 70);
-		return $ram;
-	}
-
-	public function getCpuCount() {
-		preg_match('/CPU\(s\):\s+(\d+)/', `lscpu`, $matches);
-		return intval($matches[1]);
-	}
-
-	public function getVpsMac($hostname) {
-		$mac = xml2array(`/usr/bin/virsh dumpxml {$this->hostname};`)['domain']['devices']['interface']['mac_attr']['address'];
-		return $mac;
+		$this->vncPort -= 5900;
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		sleep(1);
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		sleep(1);
+		echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+		$this->vncPort += 5900;
+		echo `rm -f /tmp/_securexinetd;`;
+		echo `service xinetd restart`;
 	}
 }
