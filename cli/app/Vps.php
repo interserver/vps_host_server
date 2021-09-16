@@ -95,7 +95,7 @@ class Vps
 		return $mac;
 	}
 
-	public function convert_id_to_mac($id, $useAll) {
+	public function convertIdToMac($id, $useAll) {
 		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
 		$suffix = strtoupper(sprintf("%06s", dechex($id)));
 		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
