@@ -19,7 +19,6 @@ class Vps
 		'virt-host-validate'
 	];
 
-
     public static function getInstalledVirts() {
 		$found = [];
 		foreach (self::$virtBins as $virt => $virtBin) {
@@ -48,21 +47,19 @@ class Vps
 		return $return == 0;
 	}
 
-
-	public function isRedhatBased() {
+	public static function isRedhatBased() {
 		return file_exists('/etc/redhat-release');
 	}
 
-	public function getRedhatVersion() {
+	public static function getRedhatVersion() {
 		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\\1"#g`));
 	}
 
-	public function getE2fsprogsVersion() {
+	public static function getE2fsprogsVersion() {
 		return floatval(trim(`e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2`));
 	}
 
-
-	public function getPoolType() {
+	public static function getPoolType() {
 		$pool = XmlToArray::go(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
 		if ($pool == '') {
 			echo `{self::$base}/create_libvirt_storage_pools.sh`;
@@ -74,35 +71,31 @@ class Vps
 		return $pool;
 	}
 
-	public function getTotalRam() {
+	public static function getTotalRam() {
 		preg_match('/^MemTotal:\s+(\d+)\skB/', file_get_contents('/proc/meminfo'), $matches);
 		$ram = floatval($matches[1]);
 		return $ram;
 	}
 
-	public function getUsableRam() {
+	public static function getUsableRam() {
 		$ram = floor(self::getTotalRam() / 100 * 70);
 		return $ram;
 	}
 
-	public function getCpuCount() {
+	public static function getCpuCount() {
 		preg_match('/CPU\(s\):\s+(\d+)/', `lscpu`, $matches);
 		return intval($matches[1]);
 	}
 
-	public function getVpsMac($hostname) {
+	public static function getVpsMac($hostname) {
 		$mac = XmlToArray::go(trim(`/usr/bin/virsh dumpxml {$hostname};`))['domain']['devices']['interface']['mac_attr']['address'];
 		return $mac;
 	}
 
-	public function convertIdToMac($id, $useAll) {
+	public static function convertIdToMac($id, $useAll) {
 		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
 		$suffix = strtoupper(sprintf("%06s", dechex($id)));
 		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
 		return $mac;
 	}
-
-
-
-
 }
