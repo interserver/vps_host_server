@@ -6,15 +6,9 @@ use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
 use CLIFramework\Debug\LineIndicator;
 use CLIFramework\Debug\ConsoleDebug;
-use CLIFramework\Component\Progress\ProgressBar;
 
 class StopCommand extends Command {
-	public $base = '/root/cpaneldirect';
-	public $device = '';
-	public $pool = '';
-	public $ip = '';
     public $error = 0;
-    public $kpartxOpts = '';
 
 	public function brief() {
 		return "Stops a Virtual Machine.";
@@ -33,13 +27,6 @@ class StopCommand extends Command {
 		}
 		$this->stopVps($hostname);
 	}
-
-    public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
-        $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
-        $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
-		$this->pool = $this->getPoolType();
-		$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
-    }
 
     public function getInstalledVirts() {
 		$found = [];
@@ -67,18 +54,6 @@ class StopCommand extends Command {
 	public function vpsExists($hostname) {
 		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
 		return $return == 0;
-	}
-
-	public function getPoolType() {
-		$pool = \xml2array(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		if ($pool == '') {
-			echo `{$this->base}/create_libvirt_storage_pools.sh`;
-			$pool = \xml2array(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		}
-		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
-			echo `virsh pool-start vz;`;
-		}
-		return $pool;
 	}
 
 	public function stopVps($hostname) {
