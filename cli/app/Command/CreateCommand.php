@@ -260,7 +260,6 @@ HELP;
 			echo `/usr/bin/virsh undefine {$this->hostname}`;
 			echo `mv -f {$this->hostname}.xml.backup {$this->hostname}.xml`;
 		} else {
-			echo "Generating XML Config\n";
 			if ($this->pool != 'zfs') {
 				$this->getLogger()->debug('Removing UUID Filterref and IP information');
 				echo `grep -v -e uuid -e filterref -e "<parameter name='IP'" {$this->base}/windows.xml | sed s#"windows"#"{$this->hostname}"#g > {$this->hostname}.xml`;
