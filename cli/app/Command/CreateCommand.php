@@ -450,7 +450,7 @@ HELP;
 		} else {
 			echo "Copy {$this->template}.qcow2 Image\n";
 			if ($this->hd == 'all') {
-				$this->hd = intval(`zfs list vz -o available -H -p`) / (1024 * 1024);
+				$this->hd = intval(trim(`zfs list vz -o available -H -p`)) / (1024 * 1024);
 				if ($this->hd > 2000000)
 					$this->hd = 2000000;
 			}
@@ -464,9 +464,9 @@ HELP;
 				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
 				$this->progress(70);
 				if ($this->template != 'empty') {
-					$part = `virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`;
+					$part = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`);
 					$this->getLogger()->debug('List Partitions got part '.$part);
-					$backuppart = `virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`;
+					$backuppart = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`);
 					$this->getLogger()->debug('List Partitions got backup part '.$backuppart);
 					$cmd = "virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}";
 					$this->getLogger()->debug($cmd);
