@@ -128,10 +128,10 @@ HELP;
 		$this->progress(10);
 		$this->setupStorage();
 		$this->progress(15);
-		return;
 		$this->defineVps();
 		$this->progress(20);
 		$this->mac = $this->getVpsMac($this->hostname);
+		return;
 		$this->setupDhcpd();
 		$this->progress(25);
 		echo "Custid is {$custid}\n";
@@ -281,7 +281,7 @@ HELP;
 	public function setupStorage() {
 		if ($this->pool == 'zfs') {
 			echo `zfs create vz/{$this->hostname}`;
-			mkdir('/vz/'.$this->hostname, 0777, true);
+			@mkdir('/vz/'.$this->hostname, 0777, true);
 			while (!file_exists('/vz/'.$this->hostname)) {
 				sleep(1);
 			}
