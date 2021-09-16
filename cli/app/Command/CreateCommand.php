@@ -364,11 +364,7 @@ HELP;
     }
 
 	public function installTemplate() {
-		if ($this->pool == 'zfs') {
-			$this->installTemplateV2();
-		} else {
-			$this->installTemplateV1();
-		}
+		return $this->pool == 'zfs' ? $this->installTemplateV2() : $this->installTemplateV1();
 	}
 
 
