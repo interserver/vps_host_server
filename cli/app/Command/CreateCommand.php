@@ -323,7 +323,7 @@ HELP;
 			$repl = "<parameter name='IP' value='{$this->ip}'/>";
 			if (count($this->extraIps) > 0)
 				foreach ($this->extraIps as $extraIp)
-					$repl = "{$repl}\n        <parameter name='IP' value='{$extraIp}'/>";
+					$repl = "{$repl}\\n        <parameter name='IP' value='{$extraIp}'/>";
 			echo `sed s#"<parameter name='IP' value.*/>"#"{$repl}"#g -i {$this->hostname}.xml;`;
 		}
 		/* convert hostname to id */
@@ -345,7 +345,7 @@ HELP;
 		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$this->ram}</currentMemory>"#g -i {$this->hostname}.xml;`;
 		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
 			$this->getLogger()->debug('Adding HAP features flag');
-			echo `sed s#"<features>"#"<features>\n    <hap/>"#g -i {$this->hostname}.xml;`;
+			echo `sed s#"<features>"#"<features>\\n    <hap/>"#g -i {$this->hostname}.xml;`;
 		}
 		if (trim(`date "+%Z"`) == 'PDT') {
 			$this->getLogger()->debug('Setting Timezone to PST');
@@ -354,12 +354,12 @@ HELP;
 		if (file_exists('/etc/lsb-release')) {
 			if (substr($this->template, 0, 7) == 'windows') {
 				$this->getLogger()->debug('Adding HyperV block');
-				echo `sed -e s#"</features>"#"  <hyperv>\n      <relaxed state='on'/>\n      <vapic state='on'/>\n      <spinlocks state='on' retries='8191'/>\n    </hyperv>\n  </features>"#g -i {$this->hostname}.xml;`;
+				echo `sed -e s#"</features>"#"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>"#g -i {$this->hostname}.xml;`;
 			$this->getLogger()->debug('Adding HyperV timer');
-					echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\n    <timer name='hypervclock' present='yes'/>\n  </clock>"#g -i {$this->hostname}.xml;`;
+					echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>"#g -i {$this->hostname}.xml;`;
 			}
 			$this->getLogger()->debug('Customizing SCSI controller');
-			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
+			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
 		}
 		echo `/usr/bin/virsh define {$this->hostname}.xml;`;
 		echo `rm -f {$this->hostname}.xml`;
