@@ -9,16 +9,7 @@ use CLIFramework\Debug\ConsoleDebug;
 use CLIFramework\Component\Progress\ProgressBar;
 
 class CreateCommand extends Command {
-    /* log levels
-     *
-     * critical = 1
-     * error    = 2
-     * warn     = 3
-     * info     = 4 default, anything lower is shown
-     * info2    = 5
-     * debug    = 6
-     * debug2   = 7
-     */
+    /* log levels: critical[1] error[2] warn[3] info[4] info2[5] debug[6] debug2[7] (default: 4, below current shown) */
 	public $virtBins = [
 		'kvm' => '/usr/bin/virsh',
 		'virtuozzo' => '/usr/bin/prlctl',
@@ -74,9 +65,7 @@ HELP;
 HELP;
     }
 
-    /**
-    * @param \GetOptionKit\OptionCollection $opts
-    */
+    /** @param \GetOptionKit\OptionCollection $opts */
 	public function options($opts) {
 		parent::options($opts);
         $opts->add('m|mac:', 'MAC Address')->isa('string');
@@ -85,9 +74,7 @@ HELP;
 		$opts->add('a|all', 'Use All Available HD, CPU Cores, and 70% RAM');
 	}
 
-    /**
-    * @param \CLIFramework\ArgInfoList $args
-    */
+    /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
 		$args->add('ip')->desc('IP Address')->isa('ip');
@@ -117,7 +104,7 @@ HELP;
 	}
 
     public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
-		/* Initialize Variables and process Options and Arguments */
+		$this->getLogger()->info2('Initializing Variables and process Options and Arguments');
 		$this->hostname = $hostname;
 		$this->ip = $ip;
 		$this->template = $template;
@@ -125,9 +112,7 @@ HELP;
 		$this->ram = $ram;
 		$this->cpu = $cpu;
 		$this->password = $password;
-		/**
-		* @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection}
-		*/
+		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
 		$opts = $this->getOptions();
         $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
         $this->extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
@@ -137,17 +122,15 @@ HELP;
         $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
 		$this->pool = $this->getPoolType();
 		$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
-		/* convert ram to kb */
-		$this->ram = $this->ram * 1024;
-		/* convert hd to mb */
-		$this->hd = $this->hd * 1024;
-        $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
-    	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
+		$this->ram = $this->ram * 1024; // convert ram to kb
+		$this->hd = $this->hd * 1024; // convert hd to mb
         if ($this->useAll == true) {
 			$this->hd = 'all';
 			$this->ram = $this->getUsableRam();
 			$this->cpu = $this->getCpuCount();
         }
+        $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
+    	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
 		//$this->getLogger()->info2(print_r($opts, true));
         $this->progress(5);
     }
@@ -184,6 +167,7 @@ HELP;
 	}
 
 	public function checkDeps() {
+		$this->getLogger()->info2('Checking for dependancy failures and fixing them');
     	if ($this->isRedhatBased() && $this->getRedhatVersion() < 7) {
 			if ($this->getE2fsprogsVersion() <= 1.41) {
 				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
@@ -241,6 +225,7 @@ HELP;
 
 	public function startupVps() {
 		if ($this->error == 0) {
+			$this->getLogger()->info2('Enabling and Starting up the VPS');
 			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			echo `/usr/bin/virsh start {$this->hostname};`;
 			$this->progress(85);
@@ -248,6 +233,7 @@ HELP;
 	}
 
 	public function setupStorage() {
+		$this->getLogger()->info2('Creating Storage Pool');
 		if ($this->pool == 'zfs') {
 			echo `zfs create vz/{$this->hostname}`;
 			@mkdir('/vz/'.$this->hostname, 0777, true);
@@ -266,6 +252,7 @@ HELP;
 	}
 
 	public function defineVps() {
+		$this->getLogger()->info2('Creating VPS Definition');
 		if ($this->vpsExists($this->hostname)) {
 			echo `/usr/bin/virsh destroy {$this->hostname}`;
 			echo `cp {$this->hostname}.xml {$this->hostname}.xml.backup`;
@@ -342,6 +329,7 @@ HELP;
 	}
 
     public function setupDhcpd() {
+		$this->getLogger()->info2('Setting up DHCPD');
 		$this->mac = $this->getVpsMac($this->hostname);
 		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
 		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
@@ -354,12 +342,14 @@ HELP;
     }
 
 	public function installTemplate() {
+		$this->getLogger()->info2('Installing OS Template');
 		return $this->pool == 'zfs' ? $this->installTemplateV2() : $this->installTemplateV1();
 	}
 
 
 	public function setupCgroups() {
 		if ($this->error == 0) {
+			$this->getLogger()->info2('Setting up CGroups');
 			if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
 				$slices = $this->cpu;
 				$cpushares = $slices * 512;
@@ -375,6 +365,7 @@ HELP;
 
 	public function setupRouting() {
 		if ($this->error == 0) {
+			$this->getLogger()->info2('Setting up Routing');
 			if ($this->pool != 'zfs' && $this->useAll == false) {
 				echo `bash {$this->base}/run_buildebtables.sh;`;
 			}
@@ -390,6 +381,7 @@ HELP;
 
 	public function setupVnc() {
 		if ($this->error == 0) {
+			$this->getLogger()->info2('Setting up VNC');
 			touch('/tmp/_securexinetd');
 			if ($this->clientIp != '') {
 				$this->clientIp = escapeshellarg($this->clientIp);
