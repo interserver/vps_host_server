@@ -41,7 +41,7 @@ class CreateCommand extends Command {
 	public $pool = '';
 	public $ip = '';
 	public $mac = '';
-	public $extraips = [];
+	public $extraIps = [];
     public $softraid = [];
     public $error = 0;
     public $adjust_partitions = 1;
@@ -319,8 +319,8 @@ HELP;
 			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$this->hostname}.xml`;
 		} else {
 			$repl = "<parameter name='IP' value='{$this->ip}'/>";
-			if (count($this->extraips) > 0)
-				foreach ($this->extraips as $extraIp)
+			if (count($this->extraIps) > 0)
+				foreach ($this->extraIps as $extraIp)
 					$repl = "{$repl}\n        <parameter name='IP' value='{$extraIp}'/>";
 			echo `sed s#"<parameter name='IP' value.*/>"#"{$repl}"#g -i {$this->hostname}.xml;`;
 		}
@@ -425,7 +425,7 @@ HELP;
 				echo "There must have been a problem, the image does not exist\n";
 				$this->error++;
 			} else {
-				$this->install_image('/image_storage/image.raw.img', $this->device);
+				$this->installImage('/image_storage/image.raw.img', $this->device);
 				echo "Removing Downloaded Image\n";
 				echo `umount /image_storage;`;
 				echo `virsh vol-delete --pool vz image_storage;`;
@@ -441,7 +441,7 @@ HELP;
 				$source = $prefix.$this->template.'.img.gz';
 				if ($found == 0 && file_exists($source)) {
 					$found = 1;
-					$this->install_gz_image($source, $this->device);
+					$this->installGzImage($source, $this->device);
 				}
 			}
 			foreach (['/vz/templates/', '/templates/', '/', '/dev/vz/'] as $prefix) {
@@ -449,7 +449,7 @@ HELP;
 					$source = $prefix.$this->template.$suffix;
 					if ($found == 0 && file_exists($source)) {
 						$found = 1;
-						$this->install_image($source, $this->device);
+						$this->installImage($source, $this->device);
 					}
 				}
 			}
@@ -499,7 +499,7 @@ HELP;
 		}
 	}
 
-    public function install_gz_image($source, $device) {
+    public function installGzImage($source, $device) {
     	echo "Copying {$source} Image\n";
     	$tsize = trim(`stat -c%s "{$source}"`);
     	echo `gzip -dc "/{$source}"  | dd of={$device} 2>&1`;
@@ -538,7 +538,7 @@ HELP;
 	*/
 	}
 
-	public function install_image($source, $device) {
+	public function installImage($source, $device) {
 		echo "Copying Image\n";
 		$tsize = trim(`stat -c%s "{$source}"`);
 		echo `dd "if={$source}" "of={$device}" 2>&1`;
