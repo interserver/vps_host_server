@@ -139,8 +139,6 @@ HELP;
 		$this->progress(25);
 		$this->installTemplate();
 		$this->progress(80);
-		return;
-		echo "Errors: {$this->error}  Adjust Partitions: {$this->adjust_partitions}\n";
 		if ($this->error == 0) {
 			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			echo `/usr/bin/virsh start {$this->hostname};`;
