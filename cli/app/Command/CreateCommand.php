@@ -464,13 +464,13 @@ HELP;
 				if ($this->template != 'empty') {
 					$this->getLogger()->debug('Listing Partitions in Template');
 					$part = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`);
-					$this->getLogger()->debug('List Partitions got partition '.$part.' and backup partition '.$backuppart);
 					$backuppart = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`);
+					$this->getLogger()->debug('List Partitions got partition '.$part.' and backup partition '.$backuppart);
 					$this->getLogger()->debug('Copying and Resizing Template');
 					echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}`;
 				}
 			}
-			$this->progress(90);
+			$this->progress(75);
 			if ($downloadedTemplate === true) {
 				echo "Removing Downloaded Image\n";
 				echo `rm -f /vz/templates/{$this->template}.qcow2`;
