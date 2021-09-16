@@ -299,7 +299,7 @@ HELP;
 	public function setupVnc() {
 		if ($this->error == 0) {
 			$this->getLogger()->info('Setting up VNC');
-			touch('/tmp/_securexinetd');
+			Vps::lockXinetd();
 			if ($this->clientIp != '') {
 				$this->clientIp = escapeshellarg($this->clientIp);
 				echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
@@ -325,8 +325,8 @@ HELP;
 			sleep(1);
 			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
 			$this->vncPort += 5900;
-			echo `rm -f /tmp/_securexinetd;`;
-			echo `service xinetd restart`;
+			Vps::unlockXinetd();
+			Vps::restartXinetd();
 			$this->progress(100);
 		}
 	}

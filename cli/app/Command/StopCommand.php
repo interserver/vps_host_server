@@ -59,6 +59,8 @@ class StopCommand extends Command {
 			$this->getLogger()->info('Sending Hardware Power-Off');
 			echo `/usr/bin/virsh destroy {$hostname};`;
 		}
+		Vps::removeXinetd($hostname);
+		Vps::restartXinetd();
 		$this->getLogger()->unIndent();
 	}
 }

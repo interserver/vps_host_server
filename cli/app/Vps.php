@@ -43,6 +43,7 @@ class Vps
     }
 
 	public static function vpsExists($hostname) {
+		$hostname = escapeshellarg($hostname);
 		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
 		return $return == 0;
 	}
@@ -88,6 +89,7 @@ class Vps
 	}
 
 	public static function getVpsMac($hostname) {
+		$hostname = escapeshellarg($hostname);
 		$mac = XmlToArray::go(trim(`/usr/bin/virsh dumpxml {$hostname};`))['domain']['devices']['interface']['mac_attr']['address'];
 		return $mac;
 	}
@@ -97,5 +99,22 @@ class Vps
 		$suffix = strtoupper(sprintf("%06s", dechex($id)));
 		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
 		return $mac;
+	}
+
+	public static function lockXinetd() {
+		touch('/tmp/_securexinetd');
+	}
+
+	public static function unlockXinetd() {
+		echo `rm -f /tmp/_securexinetd;`;
+	}
+
+	public static function removeXinetd($hostname) {
+		$hostname = escapeshellarg($hostname);
+		echo `rm -f /etc/xinetd.d/{$hostname}`;
+	}
+
+	public static function restartXinetd() {
+		echo `service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null`;
 	}
 }
