@@ -1,6 +1,7 @@
 <?php
 namespace App\Command;
 
+use App\Vps;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -10,19 +11,6 @@ use CLIFramework\Component\Progress\ProgressBar;
 
 class CreateCommand extends Command {
     /* log levels: critical[1] error[2] warn[3] info[4] info2[5] debug[6] debug2[7] (default: 4, below current shown) */
-	public $virtBins = [
-		'kvm' => '/usr/bin/virsh',
-		'virtuozzo' => '/usr/bin/prlctl',
-		'openvz' => '/usr/bin/vzctl',
-		'lxc' => '/usr/bin/lxc',
-	];
-	public $virtValidations = [
-		'kvm-ok',
-		'lscpu',
-		'/proc/cpuinfo' => 'egrep "svm|vmx" /proc/cpuinfo',
-		'virt-host-validate'
-	];
-	public $virts = [];
 	public $base = '/root/cpaneldirect';
 	public $cpu = 1;
 	public $ram = 1024;
@@ -86,7 +74,7 @@ HELP;
 	}
 
 	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
-		if (!$this->isVirtualHost()) {
+		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
 			return 1;
@@ -104,7 +92,7 @@ HELP;
 	}
 
     public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
-		$this->getLogger()->info2('Initializing Variables and process Options and Arguments');
+		$this->getLogger()->info('Initializing Variables and process Options and Arguments');
 		$this->hostname = $hostname;
 		$this->ip = $ip;
 		$this->template = $template;
@@ -120,14 +108,14 @@ HELP;
         $this->mac = array_key_exists('mac', $opts->keys) ? $opts->keys['mac']->value : '';
         $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
         $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
-		$this->pool = $this->getPoolType();
+		$this->pool = Vps::getPoolType();
 		$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
 		$this->ram = $this->ram * 1024; // convert ram to kb
 		$this->hd = $this->hd * 1024; // convert hd to mb
         if ($this->useAll == true) {
 			$this->hd = 'all';
-			$this->ram = $this->getUsableRam();
-			$this->cpu = $this->getCpuCount();
+			$this->ram = Vps::getUsableRam();
+			$this->cpu = Vps::getCpuCount();
         }
         $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
     	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
@@ -139,37 +127,10 @@ HELP;
 		$this->getLogger()->writeln($progress.'%');
     }
 
-    public function getInstalledVirts() {
-		$found = [];
-		foreach ($this->virtBins as $virt => $virtBin) {
-			if (file_exists($virtBin)) {
-				$found[] = $virt;
-			}
-		}
-		return $found;
-    }
-
-    public function isVirtualHost() {
-		$virts = $this->getInstalledVirts();
-		return count($virts) > 0;
-    }
-
-	public function isRedhatBased() {
-		return file_exists('/etc/redhat-release');
-	}
-
-	public function getRedhatVersion() {
-		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\\1"#g`));
-	}
-
-	public function getE2fsprogsVersion() {
-		return floatval(trim(`e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2`));
-	}
-
 	public function checkDeps() {
-		$this->getLogger()->info2('Checking for dependancy failures and fixing them');
-    	if ($this->isRedhatBased() && $this->getRedhatVersion() < 7) {
-			if ($this->getE2fsprogsVersion() <= 1.41) {
+		$this->getLogger()->info('Checking for dependancy failures and fixing them');
+    	if (Vps::isRedhatBased() && Vps::getRedhatVersion() < 7) {
+			if (Vps::getE2fsprogsVersion() <= 1.41) {
 				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
 					echo `/admin/ports/install e2fsprogs;`;
 				}
@@ -178,54 +139,9 @@ HELP;
 		$this->progress(10);
 	}
 
-	public function vpsExists($hostname) {
-		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
-		return $return == 0;
-	}
-
-	public function getPoolType() {
-		$pool = \xml2array(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		if ($pool == '') {
-			echo `{$this->base}/create_libvirt_storage_pools.sh`;
-			$pool = \xml2array(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		}
-		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
-			echo `virsh pool-start vz;`;
-		}
-		return $pool;
-	}
-
-	public function getTotalRam() {
-		preg_match('/^MemTotal:\s+(\d+)\skB/', file_get_contents('/proc/meminfo'), $matches);
-		$ram = floatval($matches[1]);
-		return $ram;
-	}
-
-	public function getUsableRam() {
-		$ram = floor($this->getTotalRam() / 100 * 70);
-		return $ram;
-	}
-
-	public function getCpuCount() {
-		preg_match('/CPU\(s\):\s+(\d+)/', `lscpu`, $matches);
-		return intval($matches[1]);
-	}
-
-	public function getVpsMac($hostname) {
-		$mac = \xml2array(trim(`/usr/bin/virsh dumpxml {$this->hostname};`))['domain']['devices']['interface']['mac_attr']['address'];
-		return $mac;
-	}
-
-	public function convert_id_to_mac($id, $useAll) {
-		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
-		$suffix = strtoupper(sprintf("%06s", dechex($id)));
-		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
-		return $mac;
-	}
-
 	public function startupVps() {
 		if ($this->error == 0) {
-			$this->getLogger()->info2('Enabling and Starting up the VPS');
+			$this->getLogger()->info('Enabling and Starting up the VPS');
 			echo `/usr/bin/virsh autostart {$this->hostname};`;
 			echo `/usr/bin/virsh start {$this->hostname};`;
 			$this->progress(85);
@@ -233,7 +149,7 @@ HELP;
 	}
 
 	public function setupStorage() {
-		$this->getLogger()->info2('Creating Storage Pool');
+		$this->getLogger()->info('Creating Storage Pool');
 		if ($this->pool == 'zfs') {
 			echo `zfs create vz/{$this->hostname}`;
 			@mkdir('/vz/'.$this->hostname, 0777, true);
@@ -252,7 +168,7 @@ HELP;
 	}
 
 	public function defineVps() {
-		$this->getLogger()->info2('Creating VPS Definition');
+		$this->getLogger()->info('Creating VPS Definition');
 		$this->getLogger()->indent();
 		if ($this->vpsExists($this->hostname)) {
 			echo `/usr/bin/virsh destroy {$this->hostname}`;
@@ -330,8 +246,8 @@ HELP;
 	}
 
     public function setupDhcpd() {
-		$this->getLogger()->info2('Setting up DHCPD');
-		$this->mac = $this->getVpsMac($this->hostname);
+		$this->getLogger()->info('Setting up DHCPD');
+		$this->mac = Vps::getVpsMac($this->hostname);
 		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
 		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
 		echo `/bin/cp -f {$dhcpvps} {$dhcpvps}.backup;`;
@@ -343,14 +259,14 @@ HELP;
     }
 
 	public function installTemplate() {
-		$this->getLogger()->info2('Installing OS Template');
+		$this->getLogger()->info('Installing OS Template');
 		return $this->pool == 'zfs' ? $this->installTemplateV2() : $this->installTemplateV1();
 	}
 
 
 	public function setupCgroups() {
 		if ($this->error == 0) {
-			$this->getLogger()->info2('Setting up CGroups');
+			$this->getLogger()->info('Setting up CGroups');
 			if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
 				$slices = $this->cpu;
 				$cpushares = $slices * 512;
@@ -366,7 +282,7 @@ HELP;
 
 	public function setupRouting() {
 		if ($this->error == 0) {
-			$this->getLogger()->info2('Setting up Routing');
+			$this->getLogger()->info('Setting up Routing');
 			if ($this->pool != 'zfs' && $this->useAll == false) {
 				echo `bash {$this->base}/run_buildebtables.sh;`;
 			}
@@ -382,7 +298,7 @@ HELP;
 
 	public function setupVnc() {
 		if ($this->error == 0) {
-			$this->getLogger()->info2('Setting up VNC');
+			$this->getLogger()->info('Setting up VNC');
 			touch('/tmp/_securexinetd');
 			if ($this->clientIp != '') {
 				$this->clientIp = escapeshellarg($this->clientIp);
