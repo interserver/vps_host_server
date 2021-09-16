@@ -346,7 +346,8 @@ HELP;
 			$this->getLogger()->debug('Customizing SCSI controller');
 			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
 		}
-		echo `/usr/bin/virsh define {$this->hostname}.xml; rm -f {$this->hostname}.xml`;
+		echo `/usr/bin/virsh define {$this->hostname}.xml`;
+		echo `rm -f {$this->hostname}.xml`;
 		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
 		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
