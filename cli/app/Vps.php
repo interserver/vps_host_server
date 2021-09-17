@@ -103,7 +103,7 @@ class Vps
 
 	public static function runBuildEbtables() {
 		if (self::getPoolType() != 'zfs') {
-			echo `bash {$this->base}/run_buildebtables.sh`;
+			echo `bash {self::$base}/run_buildebtables.sh`;
 		}
 	}
 
