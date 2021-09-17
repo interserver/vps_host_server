@@ -283,8 +283,8 @@ HELP;
 	public function setupRouting() {
 		if ($this->error == 0) {
 			$this->getLogger()->info('Setting up Routing');
-			if ($this->pool != 'zfs' && $this->useAll == false) {
-				echo `bash {$this->base}/run_buildebtables.sh;`;
+			if ($this->useAll == false) {
+				Vps::runBuildEbtables();
 			}
 			echo `{$this->base}/tclimit {$this->ip};`;
 			echo `/admin/kvmenable blocksmtp {$this->hostname};`;

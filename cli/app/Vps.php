@@ -101,6 +101,12 @@ class Vps
 		return $mac;
 	}
 
+	public static function runBuildEbtables() {
+		if (self::getPoolType() != 'zfs') {
+			echo `bash {$this->base}/run_buildebtables.sh`;
+		}
+	}
+
 	public static function lockXinetd() {
 		touch('/tmp/_securexinetd');
 	}
