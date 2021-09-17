@@ -21,7 +21,6 @@ class Vps
 	/** @var \CLIFramework\Logger */
 	public static $logger;
 
-
     /**
     * @param \CLIFramework\Logger $logger
     */
