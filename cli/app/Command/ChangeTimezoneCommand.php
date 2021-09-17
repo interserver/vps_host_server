@@ -32,20 +32,11 @@ class ChangeTimezoneCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
 			return 1;
 		}
-		$this->changeTimezoneVps($hostname);
+		Vps::stopVps($hostname);
+		echo `virsh dumpxml {$hostname} > {$hostname}.xml`;
+		echo `sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$param}'/>"#g -i {$hostname}.xml`;
+		echo `virsh define {$hostname}.xml`;
+		echo `rm -f {$hostname}.xml`;
+		Vps::startVps($hostname);
 	}
-
-/*
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-rm -f /etc/xinetd.d/{$hostname};
-service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null;
-virsh destroy {$hostname};
-virsh dumpxml {$hostname} > {$hostname}.xml
-sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$param}'/>"#g -i {$hostname}.xml;
-virsh define {$hostname}.xml;
-rm -f {$hostname}.xml;
-virsh start {$hostname};
-bash /root/cpaneldirect/run_buildebtables.sh;
-
-*/
 }

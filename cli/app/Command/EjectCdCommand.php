@@ -10,7 +10,7 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class EjectCdCommand extends Command {
 	public function brief() {
-		return "EjectCds a Virtual Machine.";
+		return "Eject a CD from a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -28,17 +28,7 @@ class EjectCdCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->ejectCdVps($hostname);
+		echo `virsh change-media {$hostname} hda --eject --live`;
+		echo `virsh change-media {$hostname} hda --eject --config`;
 	}
-
-/*
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-virsh change-media {$hostname} hda --eject --live;
-virsh change-media {$hostname} hda --eject --config;
-
-*/
 }
