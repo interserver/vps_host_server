@@ -123,4 +123,47 @@ class Vps
 	public static function restartXinetd() {
 		echo `service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null`;
 	}
+
+	public static function startVps($hostname) {
+		$this->getLogger()->info('Starting the VPS');
+		Vps::removeXinetd($hostname);
+		Vps::restartXinetd();
+		echo `/usr/bin/virsh start {$hostname}`;
+		Vps::runBuildEbtables();
+		if (!Vps::isVpsRunning($hostname))
+			return 1;
+	}
+
+	public static function stopVps($hostname) {
+		$this->getLogger()->info('Stopping the VPS');
+		$this->getLogger()->indent();
+		$this->getLogger()->info('Sending Softwawre Power-Off');
+		echo `/usr/bin/virsh shutdown {$hostname}`;
+		$stopped = false;
+		$waited = 0;
+		$maxWait = 120;
+		$sleepTime = 10;
+		while ($waited <= $maxWait && $stopped == false) {
+			if (Vps::isVpsRunning($hostname)) {
+				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
+				sleep($sleepTime);
+				$waited += $sleepTime;
+			} else {
+				$this->getLogger()->info('appears to have cleanly shutdown');
+				$stopped = true;
+			}
+		}
+		if ($stopped === false) {
+			$this->getLogger()->info('Sending Hardware Power-Off');
+			echo `/usr/bin/virsh destroy {$hostname};`;
+		}
+		Vps::removeXinetd($hostname);
+		Vps::restartXinetd();
+		$this->getLogger()->unIndent();
+	}
+
+	public static function restartVps($hostname) {
+		self::stopVps($hostname);
+		self::startVps($hostname);
+	}
 }

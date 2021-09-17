@@ -32,35 +32,6 @@ class StopCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
 			return 1;
 		}
-		$this->stopVps($hostname);
-	}
-
-	public function stopVps($hostname) {
-		$this->getLogger()->info('Stopping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$stopped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $stopped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$stopped = true;
-			}
-		}
-		if ($stopped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
-		$this->getLogger()->unIndent();
+		Vps::stopVps($hostname);
 	}
 }

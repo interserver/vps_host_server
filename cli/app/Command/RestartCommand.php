@@ -28,49 +28,6 @@ class RestartCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->restartVps($hostname);
-	}
-
-/*
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-virsh shutdown {$vps_vzid};
-sleep 1m
-virsh destroy {$vps_vzid};
-rm -f /etc/xinetd.d/{$vps_vzid};
-service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null;
-virsh start {$vps_vzid};
-bash /root/cpaneldirect/run_buildebtables.sh;
-
-*/
-
-	public function restartVps($hostname) {
-		$this->getLogger()->info('Restartping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$restartped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $restartped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$restartped = true;
-			}
-		}
-		if ($restartped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
+		Vps::restartVps($hostname);
 	}
 }

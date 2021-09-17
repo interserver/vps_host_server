@@ -32,16 +32,6 @@ class StartCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified appears to be already running.");
 			return 1;
 		}
-		$this->startVps($hostname);
-	}
-
-	public function startVps($hostname) {
-		$this->getLogger()->info('Starting the VPS');
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
-		echo `/usr/bin/virsh start {$hostname}`;
-		Vps::runBuildEbtables();
-		if (!Vps::isVpsRunning($hostname))
-			return 1;
+		Vps::startVps($hostname);
 	}
 }
