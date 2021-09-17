@@ -126,11 +126,11 @@ class Vps
 
 	public static function startVps($hostname) {
 		$this->getLogger()->info('Starting the VPS');
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
+		self::removeXinetd($hostname);
+		self::restartXinetd();
 		echo `/usr/bin/virsh start {$hostname}`;
-		Vps::runBuildEbtables();
-		if (!Vps::isVpsRunning($hostname))
+		self::runBuildEbtables();
+		if (!self::isVpsRunning($hostname))
 			return 1;
 	}
 
@@ -144,7 +144,7 @@ class Vps
 		$maxWait = 120;
 		$sleepTime = 10;
 		while ($waited <= $maxWait && $stopped == false) {
-			if (Vps::isVpsRunning($hostname)) {
+			if (self::isVpsRunning($hostname)) {
 				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
 				sleep($sleepTime);
 				$waited += $sleepTime;
@@ -157,8 +157,8 @@ class Vps
 			$this->getLogger()->info('Sending Hardware Power-Off');
 			echo `/usr/bin/virsh destroy {$hostname};`;
 		}
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
+		self::removeXinetd($hostname);
+		self::restartXinetd();
 		$this->getLogger()->unIndent();
 	}
 
