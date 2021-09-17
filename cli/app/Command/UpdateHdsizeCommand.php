@@ -36,42 +36,15 @@ class UpdateHdsizeCommand extends Command {
 	}
 
 /*
-virsh destroy {$vps_vzid};
+virsh destroy {$hostname};
 export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
 if [ "$pool" = "zfs" ]; then
-    zfs set volsize={$mb}M vz/{$vps_vzid}
+    zfs set volsize={$mb}M vz/{$hostname}
 else
-    sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$vps_vzid} $mb;
+    sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} $mb;
 fi
-virsh start {$vps_vzid};
+virsh start {$hostname};
 bash /root/cpaneldirect/run_buildebtables.sh;
 
 */
-
-	public function updateHdsizeVps($hostname) {
-		$this->getLogger()->info('UpdateHdsizeping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$updateHdsizeped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $updateHdsizeped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$updateHdsizeped = true;
-			}
-		}
-		if ($updateHdsizeped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

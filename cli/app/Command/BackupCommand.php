@@ -39,31 +39,4 @@ class BackupCommand extends Command {
 /admin/swift/vpsbackup {$vps_id} '{$email}'
 
 */
-
-	public function backupVps($hostname) {
-		$this->getLogger()->info('Backupping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$backupped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $backupped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$backupped = true;
-			}
-		}
-		if ($backupped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

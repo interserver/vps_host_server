@@ -36,36 +36,9 @@ class RestoreCommand extends Command {
 	}
 
 /*
-/root/cpaneldirect/vps_swift_restore.sh {$param1} {$param2} {$vps_vzid} && \
+/root/cpaneldirect/vps_swift_restore.sh {$param1} {$param2} {$hostname} && \
 curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$vps_id} https://{$domain}/vps_queue.php || \
 curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$vps_id} https://{$domain}/vps_queue.php;
 
 */
-
-	public function restoreVps($hostname) {
-		$this->getLogger()->info('Restoreping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$restoreped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $restoreped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$restoreped = true;
-			}
-		}
-		if ($restoreped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

@@ -37,49 +37,22 @@ class DisableCdCommand extends Command {
 
 /*
 export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-if [ "$(virsh dumpxml {$vps_vzid}|grep "disk.*cdrom")" = "" ]; then
+if [ "$(virsh dumpxml {$hostname}|grep "disk.*cdrom")" = "" ]; then
     echo "Skipping Removal, No CD-ROM Drive exists in VPS configuration";
 else
-    virsh detach-disk {$vps_vzid} hda --config
-    virsh shutdown {$vps_vzid};
+    virsh detach-disk {$hostname} hda --config
+    virsh shutdown {$hostname};
     max=30
     echo "Waiting up to $max Seconds for graceful shutdown";
     start="$(date +%s)";
-    while [ $(($(date +%s) - $start)) -le $max ] && [ "$(virsh list |grep {$vps_vzid})" != "" ]; do
+    while [ $(($(date +%s) - $start)) -le $max ] && [ "$(virsh list |grep {$hostname})" != "" ]; do
         sleep 5s;
     done;
-    virsh destroy {$vps_vzid};
-    virsh start {$vps_vzid};
+    virsh destroy {$hostname};
+    virsh start {$hostname};
     bash /root/cpaneldirect/run_buildebtables.sh;
-    /root/cpaneldirect/vps_refresh_vnc.sh {$vps_vzid};
+    /root/cpaneldirect/vps_refresh_vnc.sh {$hostname};
 fi;
 
 */
-
-	public function disableCdVps($hostname) {
-		$this->getLogger()->info('DisableCdping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$disableCdped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $disableCdped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$disableCdped = true;
-			}
-		}
-		if ($disableCdped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

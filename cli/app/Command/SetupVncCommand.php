@@ -10,15 +10,16 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class SetupVncCommand extends Command {
 	public function brief() {
-		return "SetupVncs a Virtual Machine.";
+		return "Setup VNC Allowed IP on a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('ip')->desc('IP Address')->isa('ip');
 	}
 
-	public function execute($hostname) {
+	public function execute($hostname, $ip) {
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -28,43 +29,8 @@ class SetupVncCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->setupVncVps($hostname);
-	}
-
-/*
-{if $vps_vzid != "0"}
-bash /root/cpaneldirect/vps_kvm_setup_vnc.sh {$vps_vzid} {$param|escapeshellarg};
-{/if}
-*/
-
-	public function setupVncVps($hostname) {
-		$this->getLogger()->info('SetupVncping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$setupVncped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $setupVncped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$setupVncped = true;
-			}
-		}
-		if ($setupVncped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
+		$ip = escapeshellarg($ip);
+		$hostname = escapeshellarg($hostname);
+		echo `/root/cpaneldirect/vps_kvm_setup_vnc.sh {$hostname} {$ip};`
 	}
 }

@@ -54,37 +54,10 @@ echo "<disk type='network' device='cdrom'>
     <host name='$host' port='$port'/>
   </source>
 </disk>" > /root/disk.xml;
-virsh update-device {$vps_vzid} /root/disk.xml --live
-virsh update-device {$vps_vzid} /root/disk.xml --config
-rm -f /root/disk.xml; 
-virsh reboot {$vps_vzid};
+virsh update-device {$hostname} /root/disk.xml --live
+virsh update-device {$hostname} /root/disk.xml --config
+rm -f /root/disk.xml;
+virsh reboot {$hostname};
 
 */
-
-	public function insertCdVps($hostname) {
-		$this->getLogger()->info('InsertCdping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$insertCdped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $insertCdped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$insertCdped = true;
-			}
-		}
-		if ($insertCdped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

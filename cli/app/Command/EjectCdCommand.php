@@ -37,35 +37,8 @@ class EjectCdCommand extends Command {
 
 /*
 export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-virsh change-media {$vps_vzid} hda --eject --live;
-virsh change-media {$vps_vzid} hda --eject --config;
+virsh change-media {$hostname} hda --eject --live;
+virsh change-media {$hostname} hda --eject --config;
 
 */
-
-	public function ejectCdVps($hostname) {
-		$this->getLogger()->info('EjectCdping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$ejectCdped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $ejectCdped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$ejectCdped = true;
-			}
-		}
-		if ($ejectCdped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

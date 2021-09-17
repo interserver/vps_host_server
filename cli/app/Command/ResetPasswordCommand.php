@@ -36,33 +36,6 @@ class ResetPasswordCommand extends Command {
 	}
 
 /*
-/root/cpaneldirect/vps_kvm_setup_password_clear.sh {$vps_vzid};
+/root/cpaneldirect/vps_kvm_setup_password_clear.sh {$hostname};
 */
-
-	public function resetPasswordVps($hostname) {
-		$this->getLogger()->info('ResetPasswordping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$resetPasswordped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $resetPasswordped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$resetPasswordped = true;
-			}
-		}
-		if ($resetPasswordped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

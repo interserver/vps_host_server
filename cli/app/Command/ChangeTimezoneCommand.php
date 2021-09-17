@@ -37,42 +37,15 @@ class ChangeTimezoneCommand extends Command {
 
 /*
 export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-rm -f /etc/xinetd.d/{$vps_vzid};
+rm -f /etc/xinetd.d/{$hostname};
 service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null;
-virsh destroy {$vps_vzid};
-virsh dumpxml {$vps_vzid} > {$vps_vzid}.xml
-sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$param}'/>"#g -i {$vps_vzid}.xml;
-virsh define {$vps_vzid}.xml;
-rm -f {$vps_vzid}.xml;
-virsh start {$vps_vzid};
+virsh destroy {$hostname};
+virsh dumpxml {$hostname} > {$hostname}.xml
+sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$param}'/>"#g -i {$hostname}.xml;
+virsh define {$hostname}.xml;
+rm -f {$hostname}.xml;
+virsh start {$hostname};
 bash /root/cpaneldirect/run_buildebtables.sh;
 
 */
-
-	public function changeTimezoneVps($hostname) {
-		$this->getLogger()->info('ChangeTimezoneping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$changeTimezoneped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $changeTimezoneped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$changeTimezoneped = true;
-			}
-		}
-		if ($changeTimezoneped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }
