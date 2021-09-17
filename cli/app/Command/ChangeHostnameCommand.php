@@ -28,17 +28,9 @@ class ChangeHostnameCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->changeHostnameVps($hostname);
-	}
-
+		$pool = Vps::getPoolType();
+		Vps::stopVps($hostname);
 /*
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)";
-virsh destroy {$hostname};
 if [ "$pool" = "zfs" ]; then
   zfs rename vz/{$hostname} vz/{$param|escapeshellarg};
 else
@@ -62,6 +54,7 @@ fi;
 rm -vf /etc/xinetd.d/{$hostname} /etc/xinetd.d/{$hostname}-spice;
 virsh start {$param|escapeshellarg};
 ./vps_refresh_vnc.sh {$param|escapeshellarg};
-
 */
+	}
+
 }
