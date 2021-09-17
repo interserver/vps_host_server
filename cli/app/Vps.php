@@ -124,6 +124,31 @@ class Vps
 		echo `service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null`;
 	}
 
+	public static function getVncPort($hostname) {
+		$vncPort = trim(`virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1`);
+		if ($vncPort == '') {
+			sleep(2);
+			$vncPort = trim(`virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1`);
+			if ($vncPort == '') {
+				sleep(2);
+				$vncPort = trim(`virsh dumpxml {$hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+			} else {
+				$vncPort += 5900;
+			}
+		} else {
+			$vncPort += 5900;
+		}
+		return $vncPort;
+	}
+
+	public static function enableAutostart($hostname) {
+		echo `/usr/bin/virsh autostart {$hostname}`;
+	}
+
+	public static function disableAutostart($hostname) {
+		echo `/usr/bin/virsh autostart --disable {$hostname}`;
+	}
+
 	public static function startVps($hostname) {
 		$this->getLogger()->info('Starting the VPS');
 		self::removeXinetd($hostname);

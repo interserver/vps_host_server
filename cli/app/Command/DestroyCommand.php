@@ -28,22 +28,16 @@ class DestroyCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
+		$vncPort = Vps::getVncPort($this->hostname);
+		if ($vncPort != '' && intval($vncPort) > 1000) {
+			$vncPort -= 5900;
+			echo `/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$this->hostname}`;
 		}
-		$this->destroyVps($hostname);
+		Vps::stopVps($hostname);
+		Vps::disableAutostart($hostname);
 	}
 
 /*
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-{if isset($vps_extra['vnc']) && (int)$vps_extra['vnc'] > 1000}
-/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vps_extra['vnc'] - 5900} {$vps_vzid};
-{/if}
-virsh destroy {$vps_vzid};
-rm -f /etc/xinetd.d/{$vps_vzid};
-service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null;
-virsh autostart --disable {$vps_vzid};
 virsh managedsave-remove {$vps_vzid};
 virsh undefine {$vps_vzid};
 export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
@@ -62,31 +56,4 @@ else
 fi;
 
 */
-
-	public function destroyVps($hostname) {
-		$this->getLogger()->info('Destroyping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
-		$destroyped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		$continue = true;
-		while ($waited <= $maxWait && $destroyped == false) {
-			if (Vps::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
-				$destroyped = true;
-			}
-		}
-		if ($destroyped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
-		}
-		$this->getLogger()->unIndent();
-	}
 }

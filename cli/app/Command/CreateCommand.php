@@ -142,7 +142,7 @@ HELP;
 	public function startupVps() {
 		if ($this->error == 0) {
 			$this->getLogger()->info('Enabling and Starting up the VPS');
-			echo `/usr/bin/virsh autostart {$this->hostname};`;
+			Vps::enableAutostart($this->hostname);
 			echo `/usr/bin/virsh start {$this->hostname};`;
 			$this->progress(85);
 		}
@@ -305,19 +305,8 @@ HELP;
 				echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
 			}
 			echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
-			$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-			if ($this->vncPort == '') {
-				sleep(2);
-				$this->vncPort = trim(`virsh vncdisplay {$this->hostname} | cut -d: -f2 | head -n 1`);
-				if ($this->vncPort == '') {
-					sleep(2);
-					$this->vncPort = trim(`virsh dumpxml {$this->hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
-				} else {
-					$this->vncPort += 5900;
-				}
-			} else {
-				$this->vncPort += 5900;
-			}
+
+			$this->vncPort = Vps::getVncPort($this->hostname);
 			$this->vncPort -= 5900;
 			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
 			sleep(1);
