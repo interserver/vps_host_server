@@ -10,7 +10,7 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class ResetPasswordCommand extends Command {
 	public function brief() {
-		return "ResetPasswords a Virtual Machine.";
+		return "Resets/Clears a Password on a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -28,14 +28,6 @@ class ResetPasswordCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->resetPasswordVps($hostname);
+		echo `/root/cpaneldirect/vps_kvm_setup_password_clear.sh {$hostname}`;
 	}
-
-/*
-/root/cpaneldirect/vps_kvm_setup_password_clear.sh {$hostname};
-*/
 }

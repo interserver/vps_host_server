@@ -10,15 +10,16 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class UpdateHdsizeCommand extends Command {
 	public function brief() {
-		return "UpdateHdsizes a Virtual Machine.";
+		return "Change the HD Size of a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('hd')->desc('HD Size in GB')->optional()->isa('number');
 	}
 
-	public function execute($hostname) {
+	public function execute($hostname, $hd) {
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -28,23 +29,14 @@ class UpdateHdsizeCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
+		$hd = $hd * 1024;
+		Vps::stopVps($hostname);
+		$pool = Vps::getPoolType();
+		if ($pool == 'zfs') {
+			echo `zfs set volsize={$hd}M vz/{$hostname}`;
+		} else {
+			echo `sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} {$hd}`;
 		}
-		$this->updateHdsizeVps($hostname);
+		Vps::startVps($hostname);
 	}
-
-/*
-virsh destroy {$hostname};
-export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
-if [ "$pool" = "zfs" ]; then
-    zfs set volsize={$mb}M vz/{$hostname}
-else
-    sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} $mb;
-fi
-virsh start {$hostname};
-bash /root/cpaneldirect/run_buildebtables.sh;
-
-*/
 }
