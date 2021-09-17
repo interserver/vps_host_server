@@ -35,25 +35,18 @@ class DestroyCommand extends Command {
 		}
 		Vps::stopVps($hostname);
 		Vps::disableAutostart($hostname);
+		echo `virsh managedsave-remove {$hostname}`;
+		echo `virsh undefine {$hostname}`;
+		$pool = Vps::getPoolType();
+		if ($pool == 'zfs') {
+			echo `zfs list -t snapshot|grep "/{$hostname}@"|cut -d" " -f1|xargs -r -n 1 zfs destroy -v`;
+			echo `virsh vol-delete --pool vz {$hostname}`;
+			echo `zfs destroy vz/{$hostname}`;
+		} else {
+			echo `kpartx -dv /dev/vz/{$hostname}`;
+			echo `lvremove -f /dev/vz/{$hostname}`;
+		}
+		$dhcpVps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
+		echo `sed s#"^host {$hostname} .*$"#""#g -i {$dhcpVps}`;
 	}
-
-/*
-virsh managedsave-remove {$vps_vzid};
-virsh undefine {$vps_vzid};
-export pool="$(virsh pool-dumpxml vz 2>/dev/null|grep "<pool"|sed s#"^.*type='\([^']*\)'.*$"#"\1"#g)"
-if [ "$pool" = "zfs" ]; then
-  zfs list -t snapshot|grep "/{$vps_vzid}@"|cut -d" " -f1|xargs -r -n 1 zfs destroy -v
-  virsh vol-delete --pool vz {$vps_vzid};
-  zfs destroy vz/{$vps_vzid};
-else
-  kpartx -dv /dev/vz/{$vps_vzid};
-  lvremove -f /dev/vz/{$vps_vzid};
-fi
-if [ -e /etc/dhcp/dhcpd.vps ]; then
-  sed s#"^host {$vps_vzid} .*$"#""#g -i /etc/dhcp/dhcpd.vps;
-else
-  sed s#"^host {$vps_vzid} .*$"#""#g -i /etc/dhcpd.vps;
-fi;
-
-*/
 }
