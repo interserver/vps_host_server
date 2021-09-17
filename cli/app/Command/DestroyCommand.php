@@ -40,8 +40,11 @@ class DestroyCommand extends Command {
 		$pool = Vps::getPoolType();
 		if ($pool == 'zfs') {
 			echo `zfs list -t snapshot|grep "/{$hostname}@"|cut -d" " -f1|xargs -r -n 1 zfs destroy -v`;
+			echo `virsh vol-delete --pool vz/os.qcow2 {$hostname} 2>/dev/null`;
 			echo `virsh vol-delete --pool vz {$hostname}`;
 			echo `zfs destroy vz/{$hostname}`;
+			if (file_exists('/vz/'.$hostname))
+				rmdir('/vz/'.$hostname);
 		} else {
 			echo `kpartx -dv /dev/vz/{$hostname}`;
 			echo `lvremove -f /dev/vz/{$hostname}`;
