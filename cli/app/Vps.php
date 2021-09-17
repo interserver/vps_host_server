@@ -18,6 +18,16 @@ class Vps
 		'/proc/cpuinfo' => 'egrep "svm|vmx" /proc/cpuinfo',
 		'virt-host-validate'
 	];
+	/** @var \CLIFramework\Logger */
+	public static $logger;
+
+
+    /**
+    * @param \CLIFramework\Logger $logger
+    */
+	public static function setLogger($logger) {
+		self::$logger = $logger;
+	}
 
     public static function getInstalledVirts() {
 		$found = [];
@@ -150,7 +160,7 @@ class Vps
 	}
 
 	public static function startVps($hostname) {
-		$this->getLogger()->info('Starting the VPS');
+		self::$logger->info('Starting the VPS');
 		self::removeXinetd($hostname);
 		self::restartXinetd();
 		echo `/usr/bin/virsh start {$hostname}`;
@@ -160,9 +170,9 @@ class Vps
 	}
 
 	public static function stopVps($hostname) {
-		$this->getLogger()->info('Stopping the VPS');
-		$this->getLogger()->indent();
-		$this->getLogger()->info('Sending Softwawre Power-Off');
+		self::$logger->info('Stopping the VPS');
+		self::$logger->indent();
+		self::$logger->info('Sending Softwawre Power-Off');
 		echo `/usr/bin/virsh shutdown {$hostname}`;
 		$stopped = false;
 		$waited = 0;
@@ -170,21 +180,21 @@ class Vps
 		$sleepTime = 10;
 		while ($waited <= $maxWait && $stopped == false) {
 			if (self::isVpsRunning($hostname)) {
-				$this->getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
+				self::$logger->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
 				sleep($sleepTime);
 				$waited += $sleepTime;
 			} else {
-				$this->getLogger()->info('appears to have cleanly shutdown');
+				self::$logger->info('appears to have cleanly shutdown');
 				$stopped = true;
 			}
 		}
 		if ($stopped === false) {
-			$this->getLogger()->info('Sending Hardware Power-Off');
+			self::$logger->info('Sending Hardware Power-Off');
 			echo `/usr/bin/virsh destroy {$hostname};`;
 		}
 		self::removeXinetd($hostname);
 		self::restartXinetd();
-		$this->getLogger()->unIndent();
+		self::$logger->unIndent();
 	}
 
 	public static function restartVps($hostname) {
