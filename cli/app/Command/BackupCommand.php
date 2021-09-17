@@ -10,15 +10,17 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class BackupCommand extends Command {
 	public function brief() {
-		return "Backups a Virtual Machine.";
+		return "Creates a Backup of a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('id')->desc('VPS ID')->isa('number');
+		$args->add('email')->desc('Email Address to notify when done')->isa('string');
 	}
 
-	public function execute($hostname) {
+	public function execute($hostname, $id, $email) {
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -28,15 +30,7 @@ class BackupCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->backupVps($hostname);
+		$email = escapeshellarg($email);
+		echo `/admin/swift/vpsbackup {$id} {$email}`;
 	}
-
-/*
-/admin/swift/vpsbackup {$vps_id} '{$email}'
-
-*/
 }

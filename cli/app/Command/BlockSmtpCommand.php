@@ -10,15 +10,16 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class BlockSmtpCommand extends Command {
 	public function brief() {
-		return "BlockSmtps a Virtual Machine.";
+		return "Blocks SMTP on a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('id')->desc('VPS ID')->isa('number');
 	}
 
-	public function execute($hostname) {
+	public function execute($hostname, $id) {
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -28,15 +29,10 @@ class BlockSmtpCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
-			return 1;
-		}
-		$this->blockSmtpVps($hostname);
+		echo `/admin/kvmenable blocksmtp {$id}`;
 	}
 
 /*
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
-/admin/kvmenable blocksmtp {$vps_id};
+;
 */
 }
