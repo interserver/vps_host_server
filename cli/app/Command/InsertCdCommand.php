@@ -33,7 +33,8 @@ class InsertCdCommand extends Command {
 		if (!array_key_exists('port', $parts)) {
 			$parts['port'] = trim(`grep "^{$proto}\\s" /etc/services |grep "/tcp\\s"|cut -d/ -f1|awk "{ print \\$2 }"`);
 		}
-		$str = "<disk type='network' device='cdrom'>
+		$str =
+"<disk type='network' device='cdrom'>
   <driver name='qemu' type='raw'/>
   <target dev='hda' bus='ide'/>
   <readonly/>

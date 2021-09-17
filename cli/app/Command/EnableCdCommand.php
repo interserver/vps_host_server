@@ -16,9 +16,10 @@ class EnableCdCommand extends Command {
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('url')->desc('CD image URL')->isa('string');
 	}
 
-	public function execute($hostname) {
+	public function execute($hostname, $url = '') {
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -31,14 +32,12 @@ class EnableCdCommand extends Command {
 		if (trim(`virsh dumpxml {$hostname}|grep "disk.*cdrom"`) != "") {
 			$this->getLogger()->error("Skipping Setup, CD-ROM Drive already exists in VPS configuration");
 		} else {
-/*
-    if [ "{$url}" != "" ]; then
-        virsh attach-disk {$hostname} "{$url}" hda --targetbus ide --type cdrom --sourcetype file --config
-    else
-        virsh attach-disk {$hostname} - hda --targetbus ide --type cdrom --sourcetype file --config
-        virsh change-media {$hostname} hda --eject --config
-    fi;
-*/
+			if ($url == '') {
+				echo `virsh attach-disk {$hostname} - hda --targetbus ide --type cdrom --sourcetype file --config`;
+				echo `virsh change-media {$hostname} hda --eject --config`;
+			} else {
+				echo `virsh attach-disk {$hostname} "{$url}" hda --targetbus ide --type cdrom --sourcetype file --config`;
+			}
 			Vps::restartVps($hostname);
 
 		}
