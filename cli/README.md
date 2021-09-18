@@ -4,47 +4,52 @@
 
 ### TODO
 
-* _server-setup_ Installs PreRequisites, Configures Software for our setup
-* _config_ - Management of the various settings
-* _test_ - Perform various self diagnostics to check on the health and prepairedness of the system
+* Add the following Commands:
+  * _server-setup_ Installs PreRequisites, Configures Software for our setup
+  * _config_ - Management of the various settings
+  * _test_ - Perform various self diagnostics to check on the health and prepairedness of the system
 
 ### Commands
 
-* **create** Creates a Virtual Machine.
-* **destroy** Destroys a Virtual Machine.
-* **enable** Enables a Virtual Machine.
-* **delete** Deletes a Virtual Machine.
-* **backup** Creates a Backup of a Virtual Machine.
-* **restore** Restores a Virtual Machine from Backup.
-* **stop** Stops a Virtual Machine.
-* **start** Starts a Virtual Machine.
-* **restart** Restarts a Virtual Machine.
-* **block-smtp** Blocks SMTP on a Virtual Machine.
-* **change-hostname** ChangeHostnames a Virtual Machine.
-* **change-timezone** ChangeTimezones a Virtual Machine.
-* **setup-vnc** Setup VNC Allowed IP on a Virtual Machine.
-* **update-hdsize** Change the HD Size of a Virtual Machine.
-* **reset-password** Resets/Clears a Password on a Virtual Machine.
-* **add-ip** Adds an IP Address to a Virtual Machine.
-* **remove-ip** Removes an IP Address from a Virtual Machine.
-* **enable-cd** Enable the CD-ROM in a Virtual Machine.
-* **disable-cd** Disable the CD-ROM in a Virtual Machine.
-* **eject-cd** Eject a CD from a Virtual Machine.
-* **insert-cd** Insert a CD-ROM into a Virtual Machine.
+| Command | Description |
+| ------- | ----------- |
+| create | Creates a Virtual Machine. |
+| destroy | Destroys a Virtual Machine. |
+| enable | Enables a Virtual Machine. |
+| delete | Deletes a Virtual Machine. |
+| backup | Creates a Backup of a Virtual Machine. |
+| restore | Restores a Virtual Machine from Backup. |
+| stop | Stops a Virtual Machine. |
+| start | Starts a Virtual Machine. |
+| restart | Restarts a Virtual Machine. |
+| block-smtp | Blocks SMTP on a Virtual Machine. |
+| change-hostname | ChangeHostnames a Virtual Machine. |
+| change-timezone | ChangeTimezones a Virtual Machine. |
+| setup-vnc | Setup VNC Allowed IP on a Virtual Machine. |
+| update-hdsize | Change the HD Size of a Virtual Machine. |
+| reset-password | Resets/Clears a Password on a Virtual Machine. |
+| add-ip | Adds an IP Address to a Virtual Machine. |
+| remove-ip | Removes an IP Address from a Virtual Machine. |
+| enable-cd | Enable the CD-ROM in a Virtual Machine. |
+| disable-cd | Disable the CD-ROM in a Virtual Machine. |
+| eject-cd | Eject a CD from a Virtual Machine. |
+| insert-cd | Insert a CD-ROM into a Virtual Machine. |
 
 ### Developer Links
 
-* [CLIFramework GitHub repo](https://github.com/c9s/CLIFramework)
-* [CLIFramework Wiki](https://github.com/c9s/CLIFramework/wiki)
-* [Webman Docs](https://www.workerman.net/doc/webman)
-* [Webman GitHub repo](https://github.com/walkor/webman)
-* [PHP's best friend for the terminal.](https://github.com/thephpleague/climate)
-* [CLImate Docs](https://climate.thephpleague.com/)
-* [A simple cli framework](https://github.com/kylekatarnls/simple-cli)
-* [PHP CLI application library, provide console argument parse, console controller/command run, color style, user interactive, format information show and more.](https://github.com/inhere/php-console)
-* [php-console Wiki](https://github.com/inhere/php-console/wiki)
-* [Colored CLI Table Output for PHP](https://github.com/jc21/clitable)
-* [Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL.](https://github.com/php-school/cli-menu)
+| Link | Description |
+| ---- | ----------- |
+| [https://github.com/c9s/CLIFramework](https://github.com/c9s/CLIFramework) | CLIFramework GitHub repo |
+| [https://github.com/c9s/CLIFramework/wiki](https://github.com/c9s/CLIFramework/wiki) | CLIFramework Wiki |
+| [https://www.workerman.net/doc/webman](https://www.workerman.net/doc/webman) | Webman Docs |
+| [https://github.com/walkor/webman](https://github.com/walkor/webman) | Webman GitHub repo |
+| [https://github.com/thephpleague/climate](https://github.com/thephpleague/climate) | PHP's best friend for the terminal. |
+| [https://climate.thephpleague.com/](https://climate.thephpleague.com/) | CLImate Docs |
+| [https://github.com/kylekatarnls/simple-cli](https://github.com/kylekatarnls/simple-cli) | A simple cli framework |
+| [https://github.com/inhere/php-console](https://github.com/inhere/php-console) | PHP CLI application library, provide console argument parse, console controller/command run, color style, user interactive, format information show and more. |
+| [https://github.com/inhere/php-console/wiki](https://github.com/inhere/php-console/wiki) | php-console Wiki |
+| [https://github.com/jc21/clitable](https://github.com/jc21/clitable) | Colored CLI Table Output for PHP |
+| [https://github.com/php-school/cli-menu](https://github.com/php-school/cli-menu) | Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL. |
 
 
 ### Building
