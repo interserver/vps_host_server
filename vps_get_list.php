@@ -141,7 +141,7 @@ function get_vps_list()
 		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
 //			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
 		//echo "CMD:$cmd\n";
-		echo `$cmd`;
+		//echo `$cmd`;
 	}
 	if (file_exists('/usr/sbin/vzctl') || file_exists('/usr/bin/prlctl')) {
 		if (file_exists('/usr/bin/prlctl')) {
