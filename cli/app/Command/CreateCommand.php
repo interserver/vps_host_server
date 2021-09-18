@@ -426,7 +426,7 @@ HELP;
 		}
 		if ($this->error == 0) {
 			if ($this->adjust_partitions == 1) {
-				$this->progress('resizing');
+				$this->progress(60);
 				$sects = trim(`fdisk -l -u {$this->device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\\1"#g`);
 				$t = trim(`fdisk -l -u {$this->device} | sed s#"\*"#""#g | grep "^{$this->device}" | tail -n 1`);
 				$p = trim(`echo {$t} | awk '{ print $1 }'`);
@@ -445,7 +445,7 @@ HELP;
 					echo `e2fsck -p -f /dev/mapper/{$pname}{$pn}`;
 					$resizefs = trim(`which resize4fs 2>/dev/null`) != '' ? 'resize4fs' : 'resize2fs';
 					echo `$resizefs -p /dev/mapper/{$pname}{$pn}`;
-					mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
+					@mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
 					echo `mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};`;
 					echo `echo root:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$this->password} "/vz/mounts/{$this->hostname}{$pn}"`;
 					if (file_exists('/vz/mounts/'.$this->hostname.$pn.'/home/kvm')) {
