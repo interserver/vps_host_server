@@ -17,6 +17,7 @@ class Console extends Application
     	$this->commandGroup('Maintanance', ['block-smtp', 'change-hostname', 'change-timezone', 'setup-vnc', 'update-hdsize', 'reset-password',
     	'add-ip', 'remove-ip', 'enable-cd', 'disable-cd', 'eject-cd', 'insert-cd']);
     	$this->topic('basic');
+    	$this->topic('examples');
         Vps::setLogger($this->getLogger());
     }
 }
