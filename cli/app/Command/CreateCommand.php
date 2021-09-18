@@ -431,7 +431,7 @@ HELP;
 				$t = trim(`fdisk -l -u {$this->device} | sed s#"\*"#""#g | grep "^{$this->device}" | tail -n 1`);
 				$p = trim(`echo {$t} | awk '{ print $1 }'`);
 				$fs = trim(`echo {$t} | awk '{ print $5 }'`);
-				if (trim(`echo "{$fs}" | grep "[A-Z]")`) != '') {
+				if (trim(`echo "{$fs}" | grep "[A-Z]"`) != '') {
 					$fs = trim(`echo {$t} | awk '{ print $6 }'`);
 				}
 				$pn = trim(`echo "{$p}" | sed s#"{$this->device}[p]*"#""#g`);
