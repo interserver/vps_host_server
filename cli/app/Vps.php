@@ -183,6 +183,8 @@ class Vps
 					self::$logger->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
 					sleep($sleepTime);
 					$waited += $sleepTime;
+					if ($waited % 15 == 0)
+						`/usr/bin/virsh shutdown {$hostname}`;
 				} else {
 					self::$logger->info('appears to have cleanly shutdown');
 					$stopped = true;
