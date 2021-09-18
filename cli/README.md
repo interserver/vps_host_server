@@ -8,29 +8,44 @@
 * _config_ - Management of the various settings
 * _test_ - Perform various self diagnostics to check on the health and prepairedness of the system
 
-### Command List
+### Commands
 
-* _create_ Creates a Virtual Machine.
-* _destroy_ Destroys a Virtual Machine.
-* _enable_ Enables a Virtual Machine.
-* _delete_ Deletes a Virtual Machine.
-* _backup_ Creates a Backup of a Virtual Machine.
-* _restore_ Restores a Virtual Machine from Backup.
-* _stop_ Stops a Virtual Machine.
-* _start_ Starts a Virtual Machine.
-* _restart_ Restarts a Virtual Machine.
-* _block-smtp_ Blocks SMTP on a Virtual Machine.
-* _change-hostname_ ChangeHostnames a Virtual Machine.
-* _change-timezone_ ChangeTimezones a Virtual Machine.
-* _setup-vnc_ Setup VNC Allowed IP on a Virtual Machine.
-* _update-hdsize_ Change the HD Size of a Virtual Machine.
-* _reset-password_ Resets/Clears a Password on a Virtual Machine.
-* _add-ip_ Adds an IP Address to a Virtual Machine.
-* _remove-ip_ Removes an IP Address from a Virtual Machine.
-* _enable-cd_ Enable the CD-ROM in a Virtual Machine.
-* _disable-cd_ Disable the CD-ROM in a Virtual Machine.
-* _eject-cd_ Eject a CD from a Virtual Machine.
-* _insert-cd_ Insert a CD-ROM into a Virtual Machine.
+* **create** Creates a Virtual Machine.
+* **destroy** Destroys a Virtual Machine.
+* **enable** Enables a Virtual Machine.
+* **delete** Deletes a Virtual Machine.
+* **backup** Creates a Backup of a Virtual Machine.
+* **restore** Restores a Virtual Machine from Backup.
+* **stop** Stops a Virtual Machine.
+* **start** Starts a Virtual Machine.
+* **restart** Restarts a Virtual Machine.
+* **block-smtp** Blocks SMTP on a Virtual Machine.
+* **change-hostname** ChangeHostnames a Virtual Machine.
+* **change-timezone** ChangeTimezones a Virtual Machine.
+* **setup-vnc** Setup VNC Allowed IP on a Virtual Machine.
+* **update-hdsize** Change the HD Size of a Virtual Machine.
+* **reset-password** Resets/Clears a Password on a Virtual Machine.
+* **add-ip** Adds an IP Address to a Virtual Machine.
+* **remove-ip** Removes an IP Address from a Virtual Machine.
+* **enable-cd** Enable the CD-ROM in a Virtual Machine.
+* **disable-cd** Disable the CD-ROM in a Virtual Machine.
+* **eject-cd** Eject a CD from a Virtual Machine.
+* **insert-cd** Insert a CD-ROM into a Virtual Machine.
+
+### Developer Links
+
+* [CLIFramework GitHub repo](https://github.com/c9s/CLIFramework)
+* [CLIFramework Wiki](https://github.com/c9s/CLIFramework/wiki)
+* [Webman Docs](https://www.workerman.net/doc/webman)
+* [Webman GitHub repo](https://github.com/walkor/webman)
+* [PHP's best friend for the terminal.](https://github.com/thephpleague/climate)
+* [CLImate Docs](https://climate.thephpleague.com/)
+* [A simple cli framework](https://github.com/kylekatarnls/simple-cli)
+* [PHP CLI application library, provide console argument parse, console controller/command run, color style, user interactive, format information show and more.](https://github.com/inhere/php-console)
+* [php-console Wiki](https://github.com/inhere/php-console/wiki)
+* [Colored CLI Table Output for PHP](https://github.com/jc21/clitable)
+* [Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL.](https://github.com/php-school/cli-menu)
+
 
 ### Building
 
@@ -88,20 +103,5 @@ termtosvg mydemo.svcg
 termtosvg record mydemo.svg
 termtosvg render mydemo.cast mydemo.svg
 ```
-
-### Developer Links
-
-* [CLIFramework GitHub repo](https://github.com/c9s/CLIFramework)
-* [CLIFramework Wiki](https://github.com/c9s/CLIFramework/wiki)
-* [Webman Docs](https://www.workerman.net/doc/webman)
-* [Webman GitHub repo](https://github.com/walkor/webman)
-* [PHP's best friend for the terminal.](https://github.com/thephpleague/climate)
-* [CLImate Docs](https://climate.thephpleague.com/)
-* [A simple cli framework](https://github.com/kylekatarnls/simple-cli)
-* [PHP CLI application library, provide console argument parse, console controller/command run, color style, user interactive, format information show and more.](https://github.com/inhere/php-console)
-* [php-console Wiki](https://github.com/inhere/php-console/wiki)
-* [Colored CLI Table Output for PHP](https://github.com/jc21/clitable)
-* [Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL.](https://github.com/php-school/cli-menu)
-
 
 
