@@ -2,6 +2,8 @@
 
 ### About
 
+Easy management of Virtualization technologies including KVM, OpenVZ and Virtuozzo.
+
 ### TODO
 
 * Add the following Commands:
@@ -109,4 +111,31 @@ termtosvg record mydemo.svg
 termtosvg render mydemo.cast mydemo.svg
 ```
 
+### Testing
 
+Here is a breakdown of the VPS type's and what distro/version combinations are used on each and how many. If we test each of the servers listed below of a given type, then we have tested it on every distro/version we use accross all servers of that type.
+
+```mysql
+(root@localhost:my) mysql> select vps_name as sample_host,st_name as type,vps_distro as distro,ifnull(null,substring(vps_distro_version, 1, locate('.', vps_distro_version) - 1)) as version, count(vps_id) as count from vps_masters left join vps_master_details using (vps_id)
+left join service_types on st_id=vps_type group by vps_type,vps_distro,ifnull(null,substring(vps_distro_version, 1, locate('.', vps_distro_version) - 1)) order by st_name,vps_distro,ifnull(null,substring(vps_distro_version, 1, locate('.', vps_distro_version) - 1));
++----------------+-----------------+-----------+---------+-------+
+| sample_host    | type            | distro    | version | count |
++----------------+-----------------+-----------+---------+-------+
+| HyperV-dev     | Hyper-V         | Windows   | NULL    |    92 |
+| KVM1004        | KVM Linux       | CentOS    | 7       |     4 |
+| Intvps4        | KVM Linux       | Ubuntu    | 20      |     1 |
+| KVM3.ny4       | KVM Windows     | Ubuntu    | 18      |     1 |
+| KVM27          | KVMv2           | Ubuntu    | 18      |    34 |
+| KVM3           | KVMv2           | Ubuntu    | 20      |    36 |
+| Storage-kvm100 | KVMv2 Storage   | Ubuntu    | 20      |    11 |
+| KVM28          | KVMv2 Windows   | Ubuntu    | 18      |    13 |
+| KVM12          | KVMv2 Windows   | Ubuntu    | 20      |    16 |
+| Lxc            | LXC             | Ubuntu    | 20      |     2 |
+| OpenVZ2        | OpenVZ          | CentOS    | 6       |    52 |
+| SSDOpenVZ2     | SSD OpenVZ      | CentOS    | 6       |    10 |
+| SSDOpenVZ1     | SSD Virtuozzo 7 | Virtuozzo | 7       |     4 |
+| IntVPS3        | Virtuozzo 7     | CentOS    | 6       |     1 |
+| OpenVZ1        | Virtuozzo 7     | Virtuozzo | 7       |    72 |
++----------------+-----------------+-----------+---------+-------+
+15 rows in set (0.00 sec)
+```
