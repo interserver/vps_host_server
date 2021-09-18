@@ -177,7 +177,7 @@ class Vps
 			echo `/usr/bin/virsh shutdown {$hostname}`;
 			$waited = 0;
 			$maxWait = 120;
-			$sleepTime = 10;
+			$sleepTime = 5;
 			while ($waited <= $maxWait && $stopped == false) {
 				if (self::isVpsRunning($hostname)) {
 					self::$logger->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
