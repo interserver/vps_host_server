@@ -10,7 +10,7 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class DisableCdCommand extends Command {
 	public function brief() {
-		return "DisableCds a Virtual Machine.";
+		return "Disable the CD-ROM in a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
