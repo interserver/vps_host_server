@@ -148,10 +148,19 @@ This fixs several issues with CentOS 6 and CentOS 7 servers
 ```bash
 if [ -e /etc/redhat-release ]; then
   rhver="$(cat /etc/redhat-release |sed s#"^.*release \([0-9][^ ]*\).*$"#"\1"#g)"
-  if [ ${rhver} -lt 7 ]; then
+  rhmajor="$(echo "${rhver}"|cut -c1)"
+  if [ ${rhmajor} -lt 7 ]; then
+    if [ "$rhver" = "6.108" ]; then
+      rhver="6.10";
+    fi;
     sed -i "/^mirrorlist/s/^/#/;/^#baseurl/{s/#//;s/mirror.centos.org\/centos\/$releasever/vault.centos.org\/${rhver}/}" /etc/yum.repos.d/*B*;
+  fi;
+  if [ ${rhmajor} -eq 6 ]; then
+    yum install epel-release yum-utils -y;
+    yum install http://rpms.remirepo.net/enterprise/remi-release-6.rpm -y;
+    yum-config-manager --enable remi-php73;
     yum update -y;
-  elif [ ${rhver} -eq 7 ]; then
+  elif [ ${rhmajor} -eq 7 ]; then
     yum install epel-release yum-utils -y;
     yum install http://rpms.remirepo.net/enterprise/remi-release-7.rpm -y;
     yum-config-manager --enable remi-php74;
