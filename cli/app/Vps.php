@@ -72,7 +72,8 @@ class Vps
 	public static function getPoolType() {
 		$pool = XmlToArray::go(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
 		if ($pool == '') {
-			echo `{self::$base}/create_libvirt_storage_pools.sh`;
+			$base = self::$base;
+			echo `{$base}/create_libvirt_storage_pools.sh`;
 			$pool = XmlToArray::go(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
 		}
 		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
@@ -112,7 +113,8 @@ class Vps
 
 	public static function runBuildEbtables() {
 		if (self::getPoolType() != 'zfs') {
-			echo `bash {self::$base}/run_buildebtables.sh`;
+			$base = self::$base;
+			echo `bash {$base}/run_buildebtables.sh`;
 		}
 	}
 
