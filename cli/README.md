@@ -6,10 +6,11 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 ## TODO
 
-* Add the following Commands:
+* add the following Commands:
   * _server-setup_ Installs PreRequisites, Configures Software for our setup
   * _config_ - Management of the various settings
   * _test_ - Perform various self diagnostics to check on the health and prepairedness of the system
+* add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
 
 ## Commands
 
@@ -140,3 +141,21 @@ termtosvg record mydemo.svg
 termtosvg render mydemo.cast mydemo.svg
 ```
 
+## Fixing CentOS 6/7 Hosts
+
+This fixs several issues with CentOS 6 and CentOS 7 servers
+
+```bash
+if [ -e /etc/redhat-release ]; then
+  rhver="$(cat /etc/redhat-release |sed s#"^.*release \([0-9][^ ]*\).*$"#"\1"#g)"
+  if [ ${rhver} -lt 7 ]; then
+    sed -i "/^mirrorlist/s/^/#/;/^#baseurl/{s/#//;s/mirror.centos.org\/centos\/$releasever/vault.centos.org\/${rhver}/}" /etc/yum.repos.d/*B*;
+    yum update -y;
+  elif [ ${rhver} -eq 7 ]; then
+    yum install epel-release yum-utils -y;
+    yum install http://rpms.remirepo.net/enterprise/remi-release-7.rpm -y;
+    yum-config-manager --enable remi-php74;
+    yum update -y;
+  fi;
+fi
+```
