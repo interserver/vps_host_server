@@ -91,17 +91,17 @@ termtosvg render mydemo.cast mydemo.svg
 
 ### Developer Links
 
-* [https://github.com/c9s/CLIFramework](CLIFramework GitHub repo)
-* [https://github.com/c9s/CLIFramework/wiki](CLIFramework Wiki)
-* [https://www.workerman.net/doc/webman](Webman Docs)
-* [https://github.com/walkor/webman](Webman GitHub repo)
-* [https://github.com/thephpleague/climate](PHP's best friend for the terminal.)
-* [https://climate.thephpleague.com/](CLImate Docs)
-* [https://github.com/kylekatarnls/simple-cli](A simple cli framework)
-* [https://github.com/inhere/php-console](PHP CLI application library, provide console argument parse, console controller/command run, color style, user interactive, format information show and more.)
-* [https://github.com/inhere/php-console/wiki](php-console Wiki)
-* [https://github.com/jc21/clitable](Colored CLI Table Output for PHP)
-* [https://github.com/php-school/cli-menu](Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL.)
+* [CLIFramework GitHub repo](https://github.com/c9s/CLIFramework)
+* [CLIFramework Wiki](https://github.com/c9s/CLIFramework/wiki)
+* [Webman Docs](https://www.workerman.net/doc/webman)
+* [Webman GitHub repo](https://github.com/walkor/webman)
+* [PHP's best friend for the terminal.](https://github.com/thephpleague/climate)
+* [CLImate Docs](https://climate.thephpleague.com/)
+* [A simple cli framework](https://github.com/kylekatarnls/simple-cli)
+* [PHP CLI application library, provide console argument parse, console controller/command run, color style, user interactive, format information show and more.](https://github.com/inhere/php-console)
+* [php-console Wiki](https://github.com/inhere/php-console/wiki)
+* [Colored CLI Table Output for PHP](https://github.com/jc21/clitable)
+* [Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL.](https://github.com/php-school/cli-menu)
 
 
 
