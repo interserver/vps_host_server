@@ -168,23 +168,25 @@ class Vps
 			return 1;
 	}
 
-	public static function stopVps($hostname) {
+	public static function stopVps($hostname, $fast = false) {
 		self::$logger->info('Stopping the VPS');
 		self::$logger->indent();
-		self::$logger->info('Sending Softwawre Power-Off');
-		echo `/usr/bin/virsh shutdown {$hostname}`;
 		$stopped = false;
-		$waited = 0;
-		$maxWait = 120;
-		$sleepTime = 10;
-		while ($waited <= $maxWait && $stopped == false) {
-			if (self::isVpsRunning($hostname)) {
-				self::$logger->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-				sleep($sleepTime);
-				$waited += $sleepTime;
-			} else {
-				self::$logger->info('appears to have cleanly shutdown');
-				$stopped = true;
+		if ($fast === false) {
+			self::$logger->info('Sending Softwawre Power-Off');
+			echo `/usr/bin/virsh shutdown {$hostname}`;
+			$waited = 0;
+			$maxWait = 120;
+			$sleepTime = 10;
+			while ($waited <= $maxWait && $stopped == false) {
+				if (self::isVpsRunning($hostname)) {
+					self::$logger->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
+					sleep($sleepTime);
+					$waited += $sleepTime;
+				} else {
+					self::$logger->info('appears to have cleanly shutdown');
+					$stopped = true;
+				}
 			}
 		}
 		if ($stopped === false) {

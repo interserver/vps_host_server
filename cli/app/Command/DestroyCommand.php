@@ -33,7 +33,7 @@ class DestroyCommand extends Command {
 			$vncPort -= 5900;
 			echo `/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}`;
 		}
-		Vps::stopVps($hostname);
+		Vps::stopVps($hostname, true);
 		Vps::disableAutostart($hostname);
 		echo `virsh managedsave-remove {$hostname}`;
 		echo `virsh undefine {$hostname}`;
