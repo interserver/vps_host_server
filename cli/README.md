@@ -71,46 +71,6 @@ I can generate a PHAR with the following command:
 php provirted.php --debug archive --app-bootstrap --executable --no-compress provirted.phar
 ```
 
-#### Terminal Recording
-
-##### asciinema
-
-* [https://github.com/asciinema/asciinema](https://github.com/asciinema/asciinema)
-* [https://asciinema.org/docs/how-it-works](https://asciinema.org/docs/how-it-works)
-
-```bash
-apt-get install asciinema
-asciinema rec mydemo.cast
-asciinema play mydemo.cast
-asciinema upload mydemo.cast
-```
-
-##### terminalizer
-
-* [https://github.com/faressoft/terminalizer](https://github.com/faressoft/terminalizer)
-* [https://terminalizer.com/](https://terminalizer.com/)
-* [https://terminalizer.com/docs](https://terminalizer.com/docs)
-
-```bash
-npm install -g terminalizer
-terminalizer record mydemo
-terminalizer render mydemo
-terminalizer play mydemo
-```
-
-##### termtosvg
-
-* [https://github.com/nbedos/termtosvg](https://github.com/nbedos/termtosvg)
-* [https://github.com/nbedos/termtosvg/blob/develop/man/termtosvg.md](https://github.com/nbedos/termtosvg/blob/develop/man/termtosvg.md)
-* [https://nbedos.github.io/termtosvg/](https://nbedos.github.io/termtosvg/)
-
-```bash
-pip3 install termtosvg
-termtosvg mydemo.svcg
-termtosvg record mydemo.svg
-termtosvg render mydemo.cast mydemo.svg
-```
-
 ### Testing
 
 Here is a breakdown of the VPS type's and what distro/version combinations are used on each and how many. If we test each of the servers listed below of a given type, then we have tested it on every distro/version we use accross all servers of that type.
@@ -139,3 +99,44 @@ left join service_types on st_id=vps_type group by vps_type,vps_distro,ifnull(nu
 +----------------+-----------------+-----------+---------+-------+
 15 rows in set (0.00 sec)
 ```
+
+### Terminal Recording
+
+#### asciinema
+
+* [https://github.com/asciinema/asciinema](https://github.com/asciinema/asciinema)
+* [https://asciinema.org/docs/how-it-works](https://asciinema.org/docs/how-it-works)
+
+```bash
+apt-get install asciinema
+asciinema rec mydemo.cast
+asciinema play mydemo.cast
+asciinema upload mydemo.cast
+```
+
+#### terminalizer
+
+* [https://github.com/faressoft/terminalizer](https://github.com/faressoft/terminalizer)
+* [https://terminalizer.com/](https://terminalizer.com/)
+* [https://terminalizer.com/docs](https://terminalizer.com/docs)
+
+```bash
+npm install -g terminalizer
+terminalizer record mydemo
+terminalizer render mydemo
+terminalizer play mydemo
+```
+
+#### termtosvg
+
+* [https://github.com/nbedos/termtosvg](https://github.com/nbedos/termtosvg)
+* [https://github.com/nbedos/termtosvg/blob/develop/man/termtosvg.md](https://github.com/nbedos/termtosvg/blob/develop/man/termtosvg.md)
+* [https://nbedos.github.io/termtosvg/](https://nbedos.github.io/termtosvg/)
+
+```bash
+pip3 install termtosvg
+termtosvg mydemo.svcg
+termtosvg record mydemo.svg
+termtosvg render mydemo.cast mydemo.svg
+```
+
