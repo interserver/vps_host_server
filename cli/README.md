@@ -1,17 +1,17 @@
 # ProVirted
 
-### About
+## About
 
 Easy management of Virtualization technologies including KVM, OpenVZ and Virtuozzo.
 
-### TODO
+## TODO
 
 * Add the following Commands:
   * _server-setup_ Installs PreRequisites, Configures Software for our setup
   * _config_ - Management of the various settings
   * _test_ - Perform various self diagnostics to check on the health and prepairedness of the system
 
-### Commands
+## Commands
 
 | Command | Description |
 | ------- | ----------- |
@@ -37,7 +37,7 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 | eject-cd | Eject a CD from a Virtual Machine. |
 | insert-cd | Insert a CD-ROM into a Virtual Machine. |
 
-### Developer Links
+## Developer Links
 
 | Link | Description |
 | ---- | ----------- |
@@ -54,15 +54,15 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 | [php-school/cli-menu](https://github.com/php-school/cli-menu) | Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL. |
 
 
-### Building
+## Building
 
-#### Setup Bash Completion
+### Setup Bash Completion
 
 ```bash
 php provirted.php bash --bind provirted --program provirted > /etc/bash_completion.d/provirted
 ```
 
-#### Compile the code into a PHAR
+### Compile the code into a PHAR
 
 Not sure yet if I want to just go with the php file and source tree or a single phar file.  A phar would probablybe simpler.
 
@@ -71,7 +71,7 @@ I can generate a PHAR with the following command:
 php provirted.php --debug archive --app-bootstrap --executable --no-compress provirted.phar
 ```
 
-### Testing
+## Testing
 
 Here is a breakdown of the VPS type's and what distro/version combinations are used on each and how many. If we test each of the servers listed below of a given type, then we have tested it on every distro/version we use accross all servers of that type.
 
@@ -100,9 +100,9 @@ left join service_types on st_id=vps_type group by vps_type,vps_distro,ifnull(nu
 15 rows in set (0.00 sec)
 ```
 
-### Terminal Recording
+## Terminal Recording
 
-#### asciinema
+### asciinema
 
 * [https://github.com/asciinema/asciinema](https://github.com/asciinema/asciinema)
 * [https://asciinema.org/docs/how-it-works](https://asciinema.org/docs/how-it-works)
@@ -114,7 +114,7 @@ asciinema play mydemo.cast
 asciinema upload mydemo.cast
 ```
 
-#### terminalizer
+### terminalizer
 
 * [https://github.com/faressoft/terminalizer](https://github.com/faressoft/terminalizer)
 * [https://terminalizer.com/](https://terminalizer.com/)
@@ -127,7 +127,7 @@ terminalizer render mydemo
 terminalizer play mydemo
 ```
 
-#### termtosvg
+### termtosvg
 
 * [https://github.com/nbedos/termtosvg](https://github.com/nbedos/termtosvg)
 * [https://github.com/nbedos/termtosvg/blob/develop/man/termtosvg.md](https://github.com/nbedos/termtosvg/blob/develop/man/termtosvg.md)
