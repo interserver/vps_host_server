@@ -21,10 +21,10 @@ class ExamplesTopic extends BaseTopic {
             provirted delete vps12345
             provirted enable vps12345
             provirted destroy vps12345
-            provirted disable-cd vps1
-            provirted enable-cd vps1 "https://mirror.trouble-free.net/iso/KNOPPIX_V7.2.0CD-2013-06-16-EN.iso"
-            provirted eject-cd vps1
-            provirted insert-cd vps1 "https://mirror.trouble-free.net/iso/KNOPPIX_V7.2.0CD-2013-06-16-EN.iso"
+            provirted disable-cd vps12345
+            provirted enable-cd vps12345 https://mirror.trouble-free.net/iso/KNOPPIX_V7.2.0CD-2013-06-16-EN.iso
+            provirted eject-cd vps12345
+            provirted insert-cd vps12345 https://mirror.trouble-free.net/iso/KNOPPIX_V7.2.0CD-2013-06-16-EN.iso
 
 
         Contributing

@@ -26,17 +26,18 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 | start | Starts a Virtual Machine. |
 | restart | Restarts a Virtual Machine. |
 | block-smtp | Blocks SMTP on a Virtual Machine. |
-| change-hostname | ChangeHostnames a Virtual Machine. |
-| change-timezone | ChangeTimezones a Virtual Machine. |
+| change-hostname | Change Hostname of a Virtual Machine. |
+| change-timezone | Change Timezone of a Virtual Machine. |
 | setup-vnc | Setup VNC Allowed IP on a Virtual Machine. |
 | update-hdsize | Change the HD Size of a Virtual Machine. |
 | reset-password | Resets/Clears a Password on a Virtual Machine. |
 | add-ip | Adds an IP Address to a Virtual Machine. |
 | remove-ip | Removes an IP Address from a Virtual Machine. |
-| enable-cd | Enable the CD-ROM in a Virtual Machine. |
+| enable-cd | Enable the CD-ROM and optionally Insert a CD in a Virtual Machine. |
 | disable-cd | Disable the CD-ROM in a Virtual Machine. |
 | eject-cd | Eject a CD from a Virtual Machine. |
-| insert-cd | Insert a CD-ROM into a Virtual Machine. |
+| insert-cd | Load a CD image into an existing CD-ROM in a Virtual Machine. |
+| test | Perform various self diagnostics to check on the health and prepairedness of the system. |
 
 ## Developer Links
 
