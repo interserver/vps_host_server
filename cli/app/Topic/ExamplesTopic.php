@@ -30,9 +30,9 @@ class ExamplesTopic extends BaseTopic {
             provirted eject-cd vps100
             provirted insert-cd vps100 https://mirror.trouble-free.net/iso/KNOPPIX_V7.2.0CD-2013-06-16-EN.iso
             provirted change-hostname vps100 vps101
+            provirted update-hdsize vps100 150
 
             provirted reset-password vps100
-            provirted update-hdsize vps100 150
             provirted backup vps101 101 detain@interserver.net
             provirted restore vps101 vps101-2021-09-18-13450.zst vps101 101
 

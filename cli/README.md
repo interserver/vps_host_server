@@ -12,6 +12,8 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * add **config** command - Management of the various settings
 * add **server-test** command - Perform various self diagnostics to check on the health and prepairedness of the system
 * possibly utilize virt-resize in update-hdsize call instead of qemu-img resize
+* fix reset-password command adding in detection of windows and skipping if not
+* fix the restore script to work with kvmv2 os.qcow2 files
 
 ## Commands
 
