@@ -10,15 +10,16 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class ChangeTimezoneCommand extends Command {
 	public function brief() {
-		return "ChangeTimezones a Virtual Machine.";
+		return "Change the Timezone of a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('timezone')->desc('The Timezone, ie America/New_York')->isa('string');
 	}
 
-	public function execute($hostname) {
+	public function execute($hostname, $timezone) {
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -34,7 +35,7 @@ class ChangeTimezoneCommand extends Command {
 		}
 		Vps::stopVps($hostname);
 		echo `virsh dumpxml {$hostname} > {$hostname}.xml`;
-		echo `sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$param}'/>"#g -i {$hostname}.xml`;
+		echo `sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$timezone}'/>"#g -i {$hostname}.xml`;
 		echo `virsh define {$hostname}.xml`;
 		echo `rm -f {$hostname}.xml`;
 		Vps::startVps($hostname);

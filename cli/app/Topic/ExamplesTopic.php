@@ -11,10 +11,11 @@ class ExamplesTopic extends BaseTopic {
     	return
 '        Command Examples
             provirted create vps100 162.246.19.201 ubuntu12 50 4096 4 p4ssw0rd
-            provirted create --add-ip=162.246.19.202 --client-ip=70.44.33.193 \
-                                 vps100 162.246.19.201 ubuntu-20.04 100 4096 4 p4ssw0rd
-            provirted create -i 208.73.201.161 -i 208.73.201.162 -i 208.73.201.163 -c 70.44.33.193 \
-                                 vps100 208.73.201.160 centos5 100 4096 4 p4ssw0rd
+            provirted create --add-ip=162.246.19.202 --client-ip=70.44.33.193 vps100 162.246.19.201 ubuntu-20.04 100 4096 4 p4ssw0rd
+            provirted create -i 208.73.201.161 -i 208.73.201.162 -i 208.73.201.163 -c 70.44.33.193 vps100 208.73.201.160 centos5 100 4096 4 p4ssw0rd
+            provirted block-smtp vps100 100
+            provirted block-smtp vps100
+            provirted change-timezone vps100 America/New_York
             provirted stop vps100
             provirted start vps100
             provirted restart vps100
