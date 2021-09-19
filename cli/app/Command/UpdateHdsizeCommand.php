@@ -33,8 +33,12 @@ class UpdateHdsizeCommand extends Command {
 		Vps::stopVps($hostname);
 		$pool = Vps::getPoolType();
 		if ($pool == 'zfs') {
+			$this->getLogger()->info('Attempting to set ZFS volume size to '.$hd.'MB');
 			echo `zfs set volsize={$hd}M vz/{$hostname}`;
+			$this->getLogger()->info('Attempting to resize qcow2 image to '.$hd.'MB');
+			echo `qemu-img resize vz/{$hostname}/os.qcow2 {$hd}M`;
 		} else {
+			$this->getLogger()->info('Attempting to resize LVM volume to '.$hd.'MB');
 			echo `sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} {$hd}`;
 		}
 		Vps::startVps($hostname);
