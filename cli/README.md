@@ -6,11 +6,11 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 ## TODO
 
-* add the following Commands:
-  * _server-setup_ Installs PreRequisites, Configures Software for our setup
-  * _config_ - Management of the various settings
-  * _test_ - Perform various self diagnostics to check on the health and prepairedness of the system
 * add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
+* add escapeshellarg() calls around any vars being passed through a exec type call
+* add **server-setup** command - Installs PreRequisites, Configures Software for our setup
+* add **config** command - Management of the various settings
+* add **server-test** command - Perform various self diagnostics to check on the health and prepairedness of the system
 
 ## Commands
 
