@@ -13,7 +13,7 @@ class Console extends Application
     	$this->enableCommandAutoload();
         parent::init();
     	$this->commandGroup('Power Commands', ['stop', 'start', 'restart']);
-    	$this->commandGroup('Provisioning', ['create', 'destroy', 'enable', 'delete', 'backup', 'restore']);
+    	$this->commandGroup('Provisioning', ['create', 'destroy', 'enable', 'delete', 'backup', 'restore', 'test']);
     	$this->commandGroup('Maintanance', ['block-smtp', 'change-hostname', 'change-timezone', 'setup-vnc', 'update-hdsize', 'reset-password',
     	'add-ip', 'remove-ip', 'enable-cd', 'disable-cd', 'eject-cd', 'insert-cd']);
     	$this->topic('basic');
