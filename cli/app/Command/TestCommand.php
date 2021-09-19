@@ -21,11 +21,22 @@ class TestCommand extends Command {
 		//$logger = new ActionLogger(fopen('php://stderr','w'), new Formatter);
 		$logger = new ActionLogger(fopen('php://stdout','w'), new Formatter);
 		$logAction = $logger->newAction('VPS');
-		$logAction->setStatus('checking if it exists');
-		sleep(1);
-		$logAction->setStatus('does it exist');
-		sleep(1);
-		$logAction->setStatus('is it running');
+		if (!Vps::isVirtualHost()) {
+			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
+			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
+			return 1;
+		}
+		$logAction->setStatus('setup');
+		if (!Vps::vpsExists($hostname)) {
+			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+			return 1;
+		}
+		$logAction->setStatus('exists');
+		if (!Vps::isVpsRunning($hostname)) {
+			$this->getLogger()->error("The VPS '{$hostname}' you specified appears to be already running.");
+			return 1;
+		}
+		$logAction->setStatus('running');
 		sleep(1);
 		$logAction->setStatus('passed all tests');
 		$logAction->done();
