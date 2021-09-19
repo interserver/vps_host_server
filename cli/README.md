@@ -11,6 +11,7 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * add **server-setup** command - Installs PreRequisites, Configures Software for our setup
 * add **config** command - Management of the various settings
 * add **server-test** command - Perform various self diagnostics to check on the health and prepairedness of the system
+* possibly utilize virt-resize in update-hdsize call instead of qemu-img resize
 
 ## Commands
 

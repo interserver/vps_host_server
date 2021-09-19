@@ -33,8 +33,8 @@ class ExamplesTopic extends BaseTopic {
 
             provirted reset-password vps100
             provirted update-hdsize vps100 150
-            provirted backup
-            provirted restore
+            provirted backup vps101 101 detain@interserver.net
+            provirted restore vps101 vps101-2021-09-18-13450.zst vps101 101
 
 
         Contributing
