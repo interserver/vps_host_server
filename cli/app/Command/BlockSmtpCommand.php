@@ -30,7 +30,7 @@ class BlockSmtpCommand extends Command {
 			return 1;
 		}
 		if ($id == '')
-			$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
+			$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $hostname);
 		if (!is_numeric($id)) {
 			$this->getLogger()->error("Either no ID was passed and we could not guess the ID from the Hostname, or a nonn-numeric ID was passed.");
 			return 1;
