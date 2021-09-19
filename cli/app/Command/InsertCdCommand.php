@@ -10,7 +10,7 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class InsertCdCommand extends Command {
 	public function brief() {
-		return "Insert a CD-ROM into a Virtual Machine.";
+		return "Load a CD image into an existing CD-ROM in a Virtual Machine.";
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -31,7 +31,7 @@ class InsertCdCommand extends Command {
 		}
 		$parts = parse_url($url);
 		if (!array_key_exists('port', $parts)) {
-			$parts['port'] = trim(`grep "^{$proto}\\s" /etc/services |grep "/tcp\\s"|cut -d/ -f1|awk "{ print \\$2 }"`);
+			$parts['port'] = trim(`grep "^{$parts['scheme']}\\s" /etc/services |grep "/tcp\\s"|cut -d/ -f1|awk "{ print \\$2 }"`);
 		}
 		$str =
 "<disk type='network' device='cdrom'>
