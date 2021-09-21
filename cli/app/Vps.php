@@ -104,6 +104,19 @@ class Vps
 		return $mac;
 	}
 
+	public static function getVpsIps($hostname) {
+		$hostname = escapeshellarg($hostname);
+		$params = XmlToArray::go(trim(`/usr/bin/virsh dumpxml {$hostname};`))['domain']['devices']['interface']['filterref']['parameter'];
+		$ips = [];
+		foreach ($params as $idx => $data) {
+			if (array_key_exists('name', $data) && $data['name'] == 'IP') {
+				$ips[] = $data['value'];
+			}
+		}
+		return $ips;
+	}
+
+
 	public static function convertIdToMac($id, $useAll) {
 		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
 		$suffix = strtoupper(sprintf("%06s", dechex($id)));
@@ -133,6 +146,36 @@ class Vps
 
 	public static function restartXinetd() {
 		echo `service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null`;
+	}
+
+	public static function isXinetdRunning() {
+		passthru('pidof xinetd >/dev/null', $return);
+		return $return == 0;
+	}
+
+	public static function isDhcpRunning() {
+		passthru('pidof dhcpd >/dev/null', $return);
+		return $return == 0;
+	}
+
+	public static function getDhcpHosts() {
+		preg_match_all('/^\s*host\s+(\S+)\s+{\s*hardware\s+ethernet\s+(\S+)\s*;\s*fixed-address\s+(\S+)\s*;\s*}/muU', file_get_contents(self::getDhcpFile()), $matches);
+		$hosts = [];
+		foreach ($matches[0] as $idx => $line) {
+			$host = $matches[1][$idx];
+			$mac = $matches[2][$idx];
+			$ip = $matches[3][$idx];
+			$hosts[$host] = ['mac' => $mac, 'ip' => $ip];
+		}
+		return $hosts;
+	}
+
+	public static function getDhcpFile() {
+		return file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
+	}
+
+	public static function getDhcpService() {
+		return file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
 	}
 
 	public static function getVncPort($hostname) {

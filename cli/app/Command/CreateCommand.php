@@ -24,6 +24,7 @@ class CreateCommand extends Command {
 	public $pool = '';
 	public $ip = '';
 	public $mac = '';
+	public $orderId = '';
 	public $password = '';
 	public $extraIps = [];
     public $softraid = [];
@@ -57,6 +58,7 @@ HELP;
 	public function options($opts) {
 		parent::options($opts);
         $opts->add('m|mac:', 'MAC Address')->isa('string');
+        $opts->add('o|order-id:', 'Order ID')->isa('number');
         $opts->add('i|add-ip+', 'Additional IPs')->multiple()->isa('string');
         $opts->add('c|client-ip:', 'Client IP')->isa('ip');
 		$opts->add('a|all', 'Use All Available HD, CPU Cores, and 70% RAM');
@@ -105,7 +107,12 @@ HELP;
         $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
         $this->extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
         $this->clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
+		$this->orderId = array_key_exists('order-id', $opts->keys) ? $opts->keys['order-id']->value : '';
         $this->mac = array_key_exists('mac', $opts->keys) ? $opts->keys['mac']->value : '';
+		if ($this->orderId == '')
+			$this->orderId = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname); // convert hostname to id
+		if ($this->mac == '' && is_numeric($this->orderId))
+			$this->mac = Vps::convertIdToMac($this->orderId, $this->useAll); // use id to generate mac address
         $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
         $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
 		$this->pool = Vps::getPoolType();
@@ -124,6 +131,8 @@ HELP;
     }
 
     public function progress($progress) {
+    	$progress = escapeshellarg($progress);
+    	`curl --connect-timeout 10 --max-time 20 -k -d action=install_progress -d progress={$progress} -d server={$this->orderId} '{$this->url}' < /dev/null > /dev/null 2>&1;`;
 		$this->getLogger()->writeln($progress.'%');
     }
 
@@ -199,12 +208,6 @@ HELP;
 					$repl = "{$repl}\\n        <parameter name='IP' value='{$extraIp}'/>";
 			echo `sed s#"<parameter name='IP' value.*/>"#"{$repl}"#g -i {$this->hostname}.xml;`;
 		}
-		/* convert hostname to id */
-		$id = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname);
-		if ($this->mac == '' && is_numeric($id)) {
-			/* use id to generate mac address if we a numeric id or remove mac otherwise */
-			$this->mac = Vps::convertIdToMac($id, $this->useAll);
-		}
 		if ($this->mac != '') {
 			$this->getLogger()->debug('Replacing MAC addresss');
 			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
@@ -248,13 +251,13 @@ HELP;
     public function setupDhcpd() {
 		$this->getLogger()->info('Setting up DHCPD');
 		$this->mac = Vps::getVpsMac($this->hostname);
-		$dhcpvps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
-		$dhcpservice = file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
-		echo `/bin/cp -f {$dhcpvps} {$dhcpvps}.backup;`;
-    	echo `grep -v -e "host {$this->hostname} " -e "fixed-address {$this->ip};" {$dhcpvps}.backup > {$dhcpvps}`;
-    	echo `echo "host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }" >> {$dhcpvps}`;
-    	echo `rm -f {$dhcpvps}.backup;`;
-    	echo `systemctl restart {$dhcpservice} 2>/dev/null || service {$dhcpservice} restart 2>/dev/null || /etc/init.d/{$dhcpservice} restart 2>/dev/null`;
+		$dhcpVps = Vps::getDhcpFile();
+		$dhcpService = Vps::getDhcpService();
+		echo `/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;`;
+    	echo `grep -v -e "host {$this->hostname} " -e "fixed-address {$this->ip};" {$dhcpVps}.backup > {$dhcpVps}`;
+    	echo `echo "host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }" >> {$dhcpVps}`;
+    	echo `rm -f {$dhcpVps}.backup;`;
+    	echo `systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null`;
 		$this->progress(25);
     }
 
