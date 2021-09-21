@@ -146,7 +146,7 @@ __mycompappend ()
 }
 __complete_meta ()
 {
-    local app="provirted"
+    local app="provirted.phar"
     local command_signature=$1
     local complete_for=$2
     local arg=$3  # could be "--dir", 0 for argument index
@@ -162,9 +162,9 @@ __complete_meta ()
     COMPREPLY=($(compgen -W "${lines[*]:1}" -- $cur))
 }
 
-___provirted_complete_add-ip ()
+___provirted_phar_complete_add-ip ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -298,9 +298,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_backup ()
+___provirted_phar_complete_backup ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -436,9 +436,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_block-smtp ()
+___provirted_phar_complete_block-smtp ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -572,9 +572,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_change-hostname ()
+___provirted_phar_complete_change-hostname ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -708,9 +708,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_change-timezone ()
+___provirted_phar_complete_change-timezone ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -844,9 +844,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_create ()
+___provirted_phar_complete_create ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -990,9 +990,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_delete ()
+___provirted_phar_complete_delete ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1124,9 +1124,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_destroy ()
+___provirted_phar_complete_destroy ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1258,9 +1258,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_disable-cd ()
+___provirted_phar_complete_disable-cd ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1392,9 +1392,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_eject-cd ()
+___provirted_phar_complete_eject-cd ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1526,9 +1526,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_enable-cd ()
+___provirted_phar_complete_enable-cd ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1662,9 +1662,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_enable ()
+___provirted_phar_complete_enable ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1796,9 +1796,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_insert-cd ()
+___provirted_phar_complete_insert-cd ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -1932,9 +1932,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_now ()
+___provirted_phar_complete_now ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2060,9 +2060,9 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_complete_remove-ip ()
+___provirted_phar_complete_remove-ip ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2196,9 +2196,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_reset-password ()
+___provirted_phar_complete_reset-password ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2330,9 +2330,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_restart ()
+___provirted_phar_complete_restart ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2464,9 +2464,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_restore ()
+___provirted_phar_complete_restore ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2604,9 +2604,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_setup-vnc ()
+___provirted_phar_complete_setup-vnc ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2740,9 +2740,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_start ()
+___provirted_phar_complete_start ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -2874,9 +2874,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_stop ()
+___provirted_phar_complete_stop ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3008,9 +3008,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_test ()
+___provirted_phar_complete_test ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3142,9 +3142,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_update-hdsize ()
+___provirted_phar_complete_update-hdsize ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3278,9 +3278,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_help ()
+___provirted_phar_complete_help ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3406,9 +3406,9 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_complete_zsh ()
+___provirted_phar_complete_zsh ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3534,9 +3534,9 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_complete_bash ()
+___provirted_phar_complete_bash ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3662,9 +3662,9 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_complete_meta ()
+___provirted_phar_complete_meta ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3790,9 +3790,9 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_complete_compile ()
+___provirted_phar_complete_compile ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -3918,9 +3918,9 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_complete_archive ()
+___provirted_phar_complete_archive ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -4052,9 +4052,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_github:build-topics ()
+___provirted_phar_complete_github:build-topics ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -4188,9 +4188,9 @@ if [[ $argument_min_length > 0 ]] ; then
         fi
     fi
 };
-___provirted_complete_ProVirted ()
+___provirted_phar_complete_ProVirted ()
 {
-local comp_prefix=___provirted
+local comp_prefix=___provirted_phar
 
         local cur words cword prev
         _get_comp_words_by_ref -n =: cur words cword prev
@@ -4317,8 +4317,8 @@ local argument_min_length=0
     fi
 };
 
-___provirted_main_wrapper()
+___provirted_phar_main_wrapper()
 {
-    ___provirted_complete_ProVirted "app" 0
+    ___provirted_phar_complete_ProVirted "app" 0
 }
-complete -o bashdefault -o default -o nospace -F ___provirted_main_wrapper provirted 2>/dev/null
+complete -o bashdefault -o default -o nospace -F ___provirted_phar_main_wrapper provirted.phar 2>/dev/null
