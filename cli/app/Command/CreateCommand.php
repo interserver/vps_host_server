@@ -218,7 +218,7 @@ HELP;
 		$this->getLogger()->debug('Setting CPU limits');
 		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='{$this->cpu}'>{$this->maxCpu}</vcpu>"#g -i {$this->hostname}.xml;`;
 		$this->getLogger()->debug('Setting Max Memory limits');
-		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$this->ram}</memory>"#g -i {$this->hostname}.xml;`;
+		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$this->maxRam}</memory>"#g -i {$this->hostname}.xml;`;
 		$this->getLogger()->debug('Setting Memory limits');
 		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$this->ram}</currentMemory>"#g -i {$this->hostname}.xml;`;
 		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
@@ -269,15 +269,9 @@ HELP;
 
 	public function setupCgroups() {
 		if ($this->error == 0) {
-			$this->getLogger()->info('Setting up CGroups');
-			if ($this->useAll == false && file_exists('/cgroup/blkio/libvirt/qemu')) {
+			if ($this->useAll == false) {
 				$slices = $this->cpu;
-				$cpushares = $slices * 512;
-				$ioweight = 400 + (37 * $slices);
-				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-				echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-				echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+				Vps::setupCgroups($this->hostname, $slices);
 			}
 			$this->progress(90);
 		}

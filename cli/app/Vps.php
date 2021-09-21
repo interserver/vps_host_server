@@ -249,4 +249,16 @@ class Vps
 		self::stopVps($hostname);
 		self::startVps($hostname);
 	}
+
+	public static function setupCgroups($hostname, $slices) {
+		if (file_exists('/cgroup/blkio/libvirt/qemu')) {
+			$this->getLogger()->info('Setting up CGroups');
+			$cpushares = $slices * 512;
+			$ioweight = 400 + (37 * $slices);
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
+			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
+			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+		}
+	}
 }
