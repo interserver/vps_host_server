@@ -31,7 +31,7 @@ class DeleteCommand extends Command {
 		$vncPort = Vps::getVncPort($hostname);
 		if ($vncPort != '' && intval($vncPort) > 1000) {
 			$vncPort -= 5900;
-			echo `/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}`;
+			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}");
 		}
 		Vps::stopVps($hostname);
 		Vps::disableAutostart($hostname);

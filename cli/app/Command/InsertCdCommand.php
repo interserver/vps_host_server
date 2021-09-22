@@ -43,10 +43,10 @@ class InsertCdCommand extends Command {
   </source>
 </disk>";
 		file_put_contents('/root/disk.xml', $str);
-		echo `virsh update-device {$hostname} /root/disk.xml --live`;
-		echo `virsh update-device {$hostname} /root/disk.xml --config`;
-		echo `rm -f /root/disk.xml`;
-		echo `virsh reboot {$hostname}`;
+		echo Vps::runCommand("virsh update-device {$hostname} /root/disk.xml --live");
+		echo Vps::runCommand("virsh update-device {$hostname} /root/disk.xml --config");
+		echo Vps::runCommand("rm -f /root/disk.xml");
+		echo Vps::runCommand("virsh reboot {$hostname}");
 	}
 
 }

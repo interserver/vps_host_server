@@ -31,23 +31,23 @@ class DestroyCommand extends Command {
 		$vncPort = Vps::getVncPort($hostname);
 		if ($vncPort != '' && intval($vncPort) > 1000) {
 			$vncPort -= 5900;
-			echo `/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}`;
+			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}");
 		}
 		Vps::stopVps($hostname, true);
 		Vps::disableAutostart($hostname);
-		echo `virsh managedsave-remove {$hostname}`;
-		echo `virsh undefine {$hostname}`;
+		echo Vps::runCommand("virsh managedsave-remove {$hostname}");
+		echo Vps::runCommand("virsh undefine {$hostname}");
 		$pool = Vps::getPoolType();
 		if ($pool == 'zfs') {
 			echo `zfs list -t snapshot|grep "/{$hostname}@"|cut -d" " -f1|xargs -r -n 1 zfs destroy -v`;
-			echo `virsh vol-delete --pool vz/os.qcow2 {$hostname} 2>/dev/null`;
-			echo `virsh vol-delete --pool vz {$hostname}`;
-			echo `zfs destroy vz/{$hostname}`;
+			echo Vps::runCommand("virsh vol-delete --pool vz/os.qcow2 {$hostname} 2>/dev/null");
+			echo Vps::runCommand("virsh vol-delete --pool vz {$hostname}");
+			echo Vps::runCommand("zfs destroy vz/{$hostname}");
 			if (file_exists('/vz/'.$hostname))
 				rmdir('/vz/'.$hostname);
 		} else {
-			echo `kpartx -dv /dev/vz/{$hostname}`;
-			echo `lvremove -f /dev/vz/{$hostname}`;
+			echo Vps::runCommand("kpartx -dv /dev/vz/{$hostname}");
+			echo Vps::runCommand("lvremove -f /dev/vz/{$hostname}");
 		}
 		$dhcpVps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
 		echo `sed s#"^host {$hostname} .*$"#""#g -i {$dhcpVps}`;

@@ -34,10 +34,10 @@ class ChangeTimezoneCommand extends Command {
 			return 1;
 		}
 		Vps::stopVps($hostname);
-		echo `virsh dumpxml {$hostname} > {$hostname}.xml`;
+		echo Vps::runCommand("virsh dumpxml {$hostname} > {$hostname}.xml");
 		echo `sed s#"<clock.*$"#"<clock offset='timezone' timezone='{$timezone}'/>"#g -i {$hostname}.xml`;
-		echo `virsh define {$hostname}.xml`;
-		echo `rm -f {$hostname}.xml`;
+		echo Vps::runCommand("virsh define {$hostname}.xml");
+		echo Vps::runCommand("rm -f {$hostname}.xml");
 		Vps::startVps($hostname);
 	}
 }

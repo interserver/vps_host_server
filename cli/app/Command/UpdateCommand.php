@@ -42,7 +42,7 @@ class UpdateCommand extends Command {
 		$updateRam = array_key_exists('ram', $opts->keys);
 		$updateCgroups = array_key_exists('cgroups', $opts->keys);
 		if ($updateCpu === true || $updateRam === true)
-			`virsh dumpxml > {$hostname}.xml;`;
+			Vps::runCommand("virsh dumpxml > {$hostname}.xml;");
 		if ($updateCpu === true || $updateRam === true || $updateHd === true)
 			Vps::stopVps($hostname);
 		if ($updateHd === true) {
@@ -51,12 +51,12 @@ class UpdateCommand extends Command {
 			$pool = Vps::getPoolType();
 			if ($pool == 'zfs') {
 				$this->getLogger()->info('Attempting to set ZFS volume size to '.$hd.'MB');
-				echo `zfs set volsize={$hd}M vz/{$hostname}`;
+				echo Vps::runCommand("zfs set volsize={$hd}M vz/{$hostname}");
 				$this->getLogger()->info('Attempting to resize qcow2 image to '.$hd.'MB');
-				echo `qemu-img resize /vz/{$hostname}/os.qcow2 {$hd}M`;
+				echo Vps::runCommand("qemu-img resize /vz/{$hostname}/os.qcow2 {$hd}M");
 			} else {
 				$this->getLogger()->info('Attempting to resize LVM volume to '.$hd.'MB');
-				echo `sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} {$hd}`;
+				echo Vps::runCommand("sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} {$hd}");
 			}
 		}
 		if ($updateCpu === true) {
@@ -75,8 +75,8 @@ class UpdateCommand extends Command {
 			echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$ram}</currentMemory>"#g -i {$hostname}.xml;`;
 		}
 		if ($updateCpu === true || $updateRam === true) {
-			echo `virsh define {$hostname}.xml;`;
-			echo `rm -f {$hostname}.xml`;
+			echo Vps::runCommand("virsh define {$hostname}.xml;");
+			echo Vps::runCommand("rm -f {$hostname}.xml");
 		}
 		if ($updateCpu === true || $updateRam === true || $updateHd === true)
 			Vps::startVps($hostname);

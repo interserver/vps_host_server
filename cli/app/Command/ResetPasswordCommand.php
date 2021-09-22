@@ -28,6 +28,6 @@ class ResetPasswordCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		echo `/root/cpaneldirect/vps_kvm_setup_password_clear.sh {$hostname}`;
+		echo Vps::runCommand("/root/cpaneldirect/vps_kvm_setup_password_clear.sh {$hostname}");
 	}
 }

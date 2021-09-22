@@ -29,9 +29,9 @@ class AddIpCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		echo `virsh dumpxml --inactive --security-info {$hostname} > {$hostname}.xml`;
+		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} > {$hostname}.xml");
 		echo `sed s#"</filterref>"#"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>"#g -i {$hostname}.xml`;
-		echo `/usr/bin/virsh define {$hostname}.xml`;
-		echo `rm -f {$hostname}.xml`;
+		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml");
+		echo Vps::runCommand("rm -f {$hostname}.xml");
 	}
 }

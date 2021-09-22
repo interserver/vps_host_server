@@ -33,8 +33,8 @@ class EnableCdCommand extends Command {
 			$this->getLogger()->error("Skipping Setup, CD-ROM Drive already exists in VPS configuration");
 		} else {
 			if ($url == '') {
-				echo `virsh attach-disk {$hostname} - hda --targetbus ide --type cdrom --sourcetype file --config`;
-				echo `virsh change-media {$hostname} hda --eject --config`;
+				echo Vps::runCommand("virsh attach-disk {$hostname} - hda --targetbus ide --type cdrom --sourcetype file --config");
+				echo Vps::runCommand("virsh change-media {$hostname} hda --eject --config");
 			} else {
 				echo `virsh attach-disk {$hostname} "{$url}" hda --targetbus ide --type cdrom --sourcetype file --config`;
 			}

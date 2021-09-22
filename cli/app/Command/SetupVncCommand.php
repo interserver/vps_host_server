@@ -31,6 +31,6 @@ class SetupVncCommand extends Command {
 		}
 		$ip = escapeshellarg($ip);
 		$hostname = escapeshellarg($hostname);
-		echo `/root/cpaneldirect/vps_kvm_setup_vnc.sh {$hostname} {$ip}`;
+		echo Vps::runCommand("/root/cpaneldirect/vps_kvm_setup_vnc.sh {$hostname} {$ip}");
 	}
 }

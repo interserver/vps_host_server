@@ -30,7 +30,7 @@ class RemoveIpCommand extends Command {
 			return 1;
 		}
 		echo `virsh dumpxml --inactive --security-info {$hostname} | grep -v "value='{$ip}'" > {$hostname}.xml`;
-		echo `virsh define {$hostname}.xml`;
-		echo `rm -f {$hostname}.xml`;
+		echo Vps::runCommand("virsh define {$hostname}.xml");
+		echo Vps::runCommand("rm -f {$hostname}.xml");
 	}
 }
