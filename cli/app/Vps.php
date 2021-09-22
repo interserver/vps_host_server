@@ -45,6 +45,8 @@ class Vps
 		self::$argList = $argList;
 		self::$args = $args;
 		self::$opts = $opts;
+		print_r($argList);
+		print_r($args);
 		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']->value : false);
 	}
 
@@ -66,7 +68,7 @@ class Vps
     }
 
     public static function isVirtualHost() {
-		$virt = Vps::getVirtType();
+		$virt = self::getVirtType();
 		if ($virt !== false)
 			self::$logger->info2('using '.$virt.' virtualization.');
 		return $virt !== false;
@@ -308,6 +310,18 @@ class Vps
 			echo self::runCommand("virsh blkiotune {$this->hostname} --weight {$ioweight} --config;");
 		}
 	}
+
+    public static function setupDhcpd($hostname, $ip, $mac) {
+		self::$logger->info('Setting up DHCPD');
+		$mac = self::getVpsMac($hostname);
+		$dhcpVps = self::getDhcpFile();
+		$dhcpService = self::getDhcpService();
+		echo self::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
+    	echo self::runCommand("grep -v -e \"host {$hostname} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
+    	echo self::runCommand("echo \"host {$hostname} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
+    	echo self::runCommand("rm -f {$dhcpVps}.backup;");
+    	echo self::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
+    }
 
 	public static function runCommand($cmd, &$return = 0) {
 		self::$logger->indent();

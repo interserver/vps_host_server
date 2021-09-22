@@ -87,7 +87,8 @@ HELP;
     	$this->checkDeps();
 		$this->setupStorage();
 		$this->defineVps();
-		$this->setupDhcpd();
+		Vps::setupDhcpd($this->hostname, $this->ip, $this->mac);
+		$this->progress(25);
 		$this->installTemplate();
 		$this->startupVps();
 		$this->setupCgroups();
@@ -174,7 +175,7 @@ HELP;
 			echo Vps::runCommand("{$this->base}/vps_kvm_lvmcreate.sh {$this->hostname} {$this->hd}");
 			// exit here on failed exit status
 		}
-		echo "{$this->pool} pool device {$this->device} created\n";
+		$this->getLogger()->info("{$this->pool} pool device {$this->device} created");
 		$this->progress(15);
 	}
 
@@ -250,19 +251,6 @@ HELP;
 		$this->progress(20);
 	}
 
-    public function setupDhcpd() {
-		$this->getLogger()->info('Setting up DHCPD');
-		$this->mac = Vps::getVpsMac($this->hostname);
-		$dhcpVps = Vps::getDhcpFile();
-		$dhcpService = Vps::getDhcpService();
-		echo Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
-    	echo Vps::runCommand("grep -v -e \"host {$this->hostname} \" -e \"fixed-address {$this->ip};\" {$dhcpVps}.backup > {$dhcpVps}");
-    	echo Vps::runCommand("echo \"host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }\" >> {$dhcpVps}");
-    	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
-    	echo Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
-		$this->progress(25);
-    }
-
 	public function installTemplate() {
 		$this->getLogger()->info('Installing OS Template');
 		return $this->pool == 'zfs' ? $this->installTemplateV2() : $this->installTemplateV1();
@@ -323,16 +311,16 @@ HELP;
 		// kvmv2
 		$downloadedTemplate = substr($this->template, 0, 7) == 'http://' || substr($this->template, 0, 8) == 'https://' || substr($this->template, 0, 6) == 'ftp://';
 		if ($downloadedTemplate == true) {
-			echo "Downloading {$this->template} Image\n";
+			$this->getLogger()->info("Downloading {$this->template} Image");
 			echo Vps::runCommand("{$this->base}/vps_get_image.sh \"{$this->template} zfs\"");
 			$this->template = 'image';
 		}
 		if (!file_exists('/vz/templates/'.$this->template.'.qcow2') && $this->template != 'empty') {
-			echo "There must have been a problem, the image does not exist\n";
+			$this->getLogger()->info("There must have been a problem, the image does not exist");
 			$this->error++;
 			return false;
 		} else {
-			echo "Copy {$this->template}.qcow2 Image\n";
+			$this->getLogger()->info("Copy {$this->template}.qcow2 Image");
 			if ($this->hd == 'all') {
 				$this->hd = intval(trim(Vps::runCommand("zfs list vz -o available -H -p"))) / (1024 * 1024);
 				if ($this->hd > 2000000)
@@ -358,7 +346,7 @@ HELP;
 			}
 			$this->progress(75);
 			if ($downloadedTemplate === true) {
-				echo "Removing Downloaded Image\n";
+				$this->getLogger()->info("Removing Downloaded Image");
 				echo Vps::runCommand("rm -f /vz/templates/{$this->template}.qcow2");
 			}
 			echo Vps::runCommand("virsh detach-disk {$this->hostname} vda --persistent;");
@@ -377,15 +365,15 @@ HELP;
 		if (substr($this->template, 0, 7) == 'http://' || substr($this->template, 0, 8) == 'https://' || substr($this->template, 0, 6) == 'ftp://') {
 			// image from url
 			$this->adjust_partitions = 0;
-			echo "Downloading {$this->template} Image\n";
+			$this->getLogger()->info("Downloading {$this->template} Image");
 			echo Vps::runCommand("{$this->base}/vps_get_image.sh \"{$this->template}\"");
 			if (!file_exists('/image_storage/image.img')) {
-				echo "There must have been a problem, the image does not exist\n";
+				$this->getLogger()->info("There must have been a problem, the image does not exist");
 				$this->error++;
 				return false;
 			} else {
 				$this->installImage('/image_storage/image.img', $this->device);
-				echo "Removing Downloaded Image\n";
+				$this->getLogger()->info("Removing Downloaded Image");
 			}
 			echo Vps::runCommand("umount /image_storage;");
 			echo Vps::runCommand("virsh vol-delete --pool vz image_storage;");
@@ -413,7 +401,7 @@ HELP;
 				}
 			}
 			if ($found == 0) {
-				echo "Template does not exist\n";
+				$this->getLogger()->info("Template does not exist");
 				$this->error++;
 				return false;
 			}
@@ -437,7 +425,7 @@ HELP;
 				$pt = $pn > 4 ? 'l' : 'p';
 				$start = trim(Vps::runCommand("echo {$t} | awk '{ print $2 }'"));
 				if ($fs == 83) {
-					echo "Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
+					$this->getLogger()->info("Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}");
 					echo Vps::runCommand("echo -e \"d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n\" | fdisk -u {$this->device}");
 					echo Vps::runCommand("kpartx {$this->kpartsOpts} -av {$this->device}");
 					$pname = trim(Vps::runCommand("ls /dev/mapper/vz-\"{$this->hostname}\"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/\"{$this->hostname}\"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#\"{$pn}$\"#\"\"#g"));
@@ -453,7 +441,7 @@ HELP;
 					echo Vps::runCommand("umount /dev/mapper/{$pname}{$pn}");
 					echo Vps::runCommand("kpartx {$this->kpartsOpts} -d {$this->device}");
 				} else {
-					echo "Skipping Resizing Last Partition FS is not 83. Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
+					$this->getLogger()->info("Skipping Resizing Last Partition FS is not 83. Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}");
 				}
 			}
 		}
@@ -461,7 +449,7 @@ HELP;
 	}
 
     public function installGzImage($source, $device) {
-    	echo "Copying {$source} Image\n";
+    	$this->getLogger()->info("Copying {$source} Image");
     	$tsize = trim(Vps::runCommand("stat -c%s \"{$source}\""));
     	echo Vps::runCommand("gzip -dc \"/{$source}\"  | dd of={$device} 2>&1");
     	/*
@@ -500,7 +488,7 @@ HELP;
 	}
 
 	public function installImage($source, $device) {
-		echo "Copying Image\n";
+		$this->getLogger()->info("Copying Image");
 		$tsize = trim(Vps::runCommand("stat -c%s \"{$source}\""));
 		echo Vps::runCommand("dd \"if={$source}\" \"of={$device}\" 2>&1");
 		/*
