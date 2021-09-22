@@ -309,8 +309,8 @@ class Vps
 		}
 	}
 
-	public static function runCommand($command) {
-		self::$logger->debug('executing:'.$command);
+	public static function runCommand($cmd) {
+		self::$logger->debug('executing:'.$cmd);
 		self::$logger->indent();
 		$output = [];
 		exec($cmd, $output, $return);
