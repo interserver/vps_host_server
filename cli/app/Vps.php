@@ -45,7 +45,7 @@ class Vps
 		self::$argList = $argList;
 		self::$args = $args;
 		self::$opts = $opts;
-		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']['value'] : false);
+		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']->value : false);
 	}
 
     public static function getInstalledVirts() {
