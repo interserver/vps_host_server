@@ -116,7 +116,7 @@ HELP;
 		if ($this->mac == '' && is_numeric($this->orderId))
 			$this->mac = Vps::convertIdToMac($this->orderId, $this->useAll); // use id to generate mac address
         $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
-        $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
+        $this->kpartsOpts = preg_match('/sync/', self::runCommand("kpartx 2>&1")) ? '-s' : '';
 		$this->ram = $this->ram * 1024; // convert ram to kb
 		$this->hd = $this->hd * 1024; // convert hd to mb
         if ($this->useAll == true) {
@@ -134,7 +134,7 @@ HELP;
 
     public function progress($progress) {
     	$progress = escapeshellarg($progress);
-    	`curl --connect-timeout 10 --max-time 20 -k -d action=install_progress -d progress={$progress} -d server={$this->orderId} '{$this->url}' < /dev/null > /dev/null 2>&1;`;
+    	self::runCommand("curl --connect-timeout 10 --max-time 20 -k -d action=install_progress -d progress={$progress} -d server={$this->orderId} '{$this->url}' < /dev/null > /dev/null 2>&1;");
 		$this->getLogger()->writeln($progress.'%');
     }
 
@@ -143,7 +143,7 @@ HELP;
     	if (Vps::isRedhatBased() && Vps::getRedhatVersion() < 7) {
 			if (Vps::getE2fsprogsVersion() <= 1.41) {
 				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
-					echo `/admin/ports/install e2fsprogs;`;
+					echo self::runCommand("/admin/ports/install e2fsprogs;");
 				}
 			}
     	}
@@ -154,7 +154,7 @@ HELP;
 		if ($this->error == 0) {
 			$this->getLogger()->info('Enabling and Starting up the VPS');
 			Vps::enableAutostart($this->hostname);
-			echo `/usr/bin/virsh start {$this->hostname};`;
+			echo self::runCommand("/usr/bin/virsh start {$this->hostname};");
 			$this->progress(85);
 		}
 	}
@@ -162,7 +162,7 @@ HELP;
 	public function setupStorage() {
 		$this->getLogger()->info('Creating Storage Pool');
 		if ($this->pool == 'zfs') {
-			echo `zfs create vz/{$this->hostname}`;
+			echo self::runCommand("zfs create vz/{$this->hostname}");
 			@mkdir('/vz/'.$this->hostname, 0777, true);
 			while (!file_exists('/vz/'.$this->hostname)) {
 				sleep(1);
@@ -171,7 +171,7 @@ HELP;
 			//sleep 5s;
 			//device="$(virsh vol-list vz --details|grep " {$this->hostname}[/ ]"|awk '{ print $2 }')"
 		} else {
-			echo `{$this->base}/vps_kvm_lvmcreate.sh {$this->hostname} {$this->hd}`;
+			echo self::runCommand("{$this->base}/vps_kvm_lvmcreate.sh {$this->hostname} {$this->hd}");
 			// exit here on failed exit status
 		}
 		echo "{$this->pool} pool device {$this->device} created\n";
@@ -182,10 +182,10 @@ HELP;
 		$this->getLogger()->info('Creating VPS Definition');
 		$this->getLogger()->indent();
 		if (Vps::vpsExists($this->hostname)) {
-			echo `/usr/bin/virsh destroy {$this->hostname}`;
-			echo `cp {$this->hostname}.xml {$this->hostname}.xml.backup`;
-			echo `/usr/bin/virsh undefine {$this->hostname}`;
-			echo `mv -f {$this->hostname}.xml.backup {$this->hostname}.xml`;
+			echo self::runCommand("/usr/bin/virsh destroy {$this->hostname}");
+			echo self::runCommand("cp {$this->hostname}.xml {$this->hostname}.xml.backup");
+			echo self::runCommand("/usr/bin/virsh undefine {$this->hostname}");
+			echo self::runCommand("mv -f {$this->hostname}.xml.backup {$this->hostname}.xml");
 		} else {
 			if ($this->pool != 'zfs') {
 				$this->getLogger()->debug('Removing UUID Filterref and IP information');
@@ -241,11 +241,11 @@ HELP;
 			$this->getLogger()->debug('Customizing SCSI controller');
 			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
 		}
-		echo `/usr/bin/virsh define {$this->hostname}.xml`;
-		echo `rm -f {$this->hostname}.xml`;
-		//echo `/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;`;
-		//echo `/usr/bin/virsh setmem {$this->hostname} $this->ram;`;
-		//echo `/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;`;
+		echo self::runCommand("/usr/bin/virsh define {$this->hostname}.xml");
+		echo self::runCommand("rm -f {$this->hostname}.xml");
+		//echo self::runCommand("/usr/bin/virsh setmaxmem {$this->hostname} $this->ram;");
+		//echo self::runCommand("/usr/bin/virsh setmem {$this->hostname} $this->ram;");
+		//echo self::runCommand("/usr/bin/virsh setvcpus {$this->hostname} $this->cpu;");
 		$this->getLogger()->unIndent();
 		$this->progress(20);
 	}
@@ -255,11 +255,11 @@ HELP;
 		$this->mac = Vps::getVpsMac($this->hostname);
 		$dhcpVps = Vps::getDhcpFile();
 		$dhcpService = Vps::getDhcpService();
-		echo `/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;`;
+		echo self::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
     	echo `grep -v -e "host {$this->hostname} " -e "fixed-address {$this->ip};" {$dhcpVps}.backup > {$dhcpVps}`;
     	echo `echo "host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }" >> {$dhcpVps}`;
-    	echo `rm -f {$dhcpVps}.backup;`;
-    	echo `systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null`;
+    	echo self::runCommand("rm -f {$dhcpVps}.backup;");
+    	echo self::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
 		$this->progress(25);
     }
 
@@ -285,11 +285,11 @@ HELP;
 			if ($this->useAll == false) {
 				Vps::runBuildEbtables();
 			}
-			echo `{$this->base}/tclimit {$this->ip};`;
-			echo `/admin/kvmenable blocksmtp {$this->hostname};`;
+			echo self::runCommand("{$this->base}/tclimit {$this->ip};");
+			echo self::runCommand("/admin/kvmenable blocksmtp {$this->hostname};");
 			if ($this->pool != 'zfs' && $this->useAll == false) {
-				echo `/admin/kvmenable ebflush;`;
-				echo `{$this->base}/buildebtablesrules | sh;`;
+				echo self::runCommand("/admin/kvmenable ebflush;");
+				echo self::runCommand("{$this->base}/buildebtablesrules | sh;");
 			}
 			$this->progress(95);
 		}
@@ -301,9 +301,9 @@ HELP;
 			Vps::lockXinetd();
 			if ($this->clientIp != '') {
 				$this->clientIp = escapeshellarg($this->clientIp);
-				echo `{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};`;
+				echo self::runCommand("{$this->base}/vps_kvm_setup_vnc.sh {$this->hostname} {$this->clientIp};");
 			}
-			echo `{$this->base}/vps_refresh_vnc.sh {$this->hostname};`;
+			echo self::runCommand("{$this->base}/vps_refresh_vnc.sh {$this->hostname};");
 
 			$this->vncPort = Vps::getVncPort($this->hostname);
 			$this->vncPort -= 5900;
@@ -334,39 +334,39 @@ HELP;
 		} else {
 			echo "Copy {$this->template}.qcow2 Image\n";
 			if ($this->hd == 'all') {
-				$this->hd = intval(trim(`zfs list vz -o available -H -p`)) / (1024 * 1024);
+				$this->hd = intval(trim(self::runCommand("zfs list vz -o available -H -p"))) / (1024 * 1024);
 				if ($this->hd > 2000000)
 					$this->hd = 2000000;
 			}
 			if (stripos($this->template, 'freebsd') !== false) {
-				echo `cp -f /vz/templates/{$this->template}.qcow2 {$this->device};`;
+				echo self::runCommand("cp -f /vz/templates/{$this->template}.qcow2 {$this->device};");
 				$this->progress(60);
 				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
 			} else {
-				echo `qemu-img create -f qcow2 -o preallocation=metadata {$this->device} 25G;`;
+				echo self::runCommand("qemu-img create -f qcow2 -o preallocation=metadata {$this->device} 25G;");
 				$this->progress(40);
 				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
 				$this->progress(60);
 				if ($this->template != 'empty') {
 					$this->getLogger()->debug('Listing Partitions in Template');
-					$part = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;`);
-					$backuppart = trim(`virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;`);
+					$part = trim(self::runCommand("virt-list-partitions /vz/templates/{$this->template}.qcow2|tail -n 1;"));
+					$backuppart = trim(self::runCommand("virt-list-partitions /vz/templates/{$this->template}.qcow2|head -n 1;"));
 					$this->getLogger()->debug('List Partitions got partition '.$part.' and backup partition '.$backuppart);
 					$this->getLogger()->debug('Copying and Resizing Template');
-					echo `virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}`;
+					echo self::runCommand("virt-resize --expand {$part} /vz/templates/{$this->template}.qcow2 {$this->device} || virt-resize --expand {$backuppart} /vz/templates/{$this->template}.qcow2 {$this->device} || cp -fv /vz/templates/{$this->template}.qcow2 {$this->device}");
 				}
 			}
 			$this->progress(75);
 			if ($downloadedTemplate === true) {
 				echo "Removing Downloaded Image\n";
-				echo `rm -f /vz/templates/{$this->template}.qcow2`;
+				echo self::runCommand("rm -f /vz/templates/{$this->template}.qcow2");
 			}
-			echo `virsh detach-disk {$this->hostname} vda --persistent;`;
-			echo `virsh attach-disk {$this->hostname} /vz/{$this->hostname}/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;`;
-			echo `virsh dumpxml {$this->hostname} > {$this->hostname}.xml`;
+			echo self::runCommand("virsh detach-disk {$this->hostname} vda --persistent;");
+			echo self::runCommand("virsh attach-disk {$this->hostname} /vz/{$this->hostname}/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;");
+			echo self::runCommand("virsh dumpxml {$this->hostname} > {$this->hostname}.xml");
 			echo `sed s#"type='qcow2'/"#"type='qcow2' cache='writeback' discard='unmap'/"#g -i {$this->hostname}.xml`;
-			echo `virsh define {$this->hostname}.xml`;
-			echo `rm -f {$this->hostname}.xml`;
+			echo self::runCommand("virsh define {$this->hostname}.xml");
+			echo self::runCommand("rm -f {$this->hostname}.xml");
 			echo `virt-customize -d {$this->hostname} --root-password password:{$this->password} --hostname "{$this->hostname}";`;
 			$this->adjust_partitions = 0;
 		}
@@ -387,9 +387,9 @@ HELP;
 				$this->installImage('/image_storage/image.img', $this->device);
 				echo "Removing Downloaded Image\n";
 			}
-			echo `umount /image_storage;`;
-			echo `virsh vol-delete --pool vz image_storage;`;
-			echo `rmdir /image_storage;`;
+			echo self::runCommand("umount /image_storage;");
+			echo self::runCommand("virsh vol-delete --pool vz image_storage;");
+			echo self::runCommand("rmdir /image_storage;");
 		} elseif ($this->template == 'empty') {
 			// kvmv1 install empty image
 			$this->adjust_partitions = 0;
@@ -428,30 +428,30 @@ HELP;
 				$this->progress(60);
 				$sects = trim(`fdisk -l -u {$this->device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\\1"#g`);
 				$t = trim(`fdisk -l -u {$this->device} | sed s#"\*"#""#g | grep "^{$this->device}" | tail -n 1`);
-				$p = trim(`echo {$t} | awk '{ print $1 }'`);
-				$fs = trim(`echo {$t} | awk '{ print $5 }'`);
+				$p = trim(self::runCommand("echo {$t} | awk '{ print $1 }'"));
+				$fs = trim(self::runCommand("echo {$t} | awk '{ print $5 }'"));
 				if (trim(`echo "{$fs}" | grep "[A-Z]"`) != '') {
-					$fs = trim(`echo {$t} | awk '{ print $6 }'`);
+					$fs = trim(self::runCommand("echo {$t} | awk '{ print $6 }'"));
 				}
 				$pn = trim(`echo "{$p}" | sed s#"{$this->device}[p]*"#""#g`);
 				$pt = $pn > 4 ? 'l' : 'p';
-				$start = trim(`echo {$t} | awk '{ print $2 }'`);
+				$start = trim(self::runCommand("echo {$t} | awk '{ print $2 }'"));
 				if ($fs == 83) {
 					echo "Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
 					echo `echo -e "d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n" | fdisk -u {$this->device}`;
-					echo `kpartx {$this->kpartsOpts} -av {$this->device}`;
+					echo self::runCommand("kpartx {$this->kpartsOpts} -av {$this->device}");
 					$pname = trim(`ls /dev/mapper/vz-"{$this->hostname}"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/"{$this->hostname}"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#"{$pn}$"#""#g`);
-					echo `e2fsck -p -f /dev/mapper/{$pname}{$pn}`;
-					$resizefs = trim(`which resize4fs 2>/dev/null`) != '' ? 'resize4fs' : 'resize2fs';
-					echo `$resizefs -p /dev/mapper/{$pname}{$pn}`;
+					echo self::runCommand("e2fsck -p -f /dev/mapper/{$pname}{$pn}");
+					$resizefs = trim(self::runCommand("which resize4fs 2>/dev/null")) != '' ? 'resize4fs' : 'resize2fs';
+					echo self::runCommand("$resizefs -p /dev/mapper/{$pname}{$pn}");
 					@mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
-					echo `mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};`;
+					echo self::runCommand("mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};");
 					echo `echo root:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$this->password} "/vz/mounts/{$this->hostname}{$pn}"`;
 					if (file_exists('/vz/mounts/'.$this->hostname.$pn.'/home/kvm')) {
-						echo `echo kvm:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd`;
+						echo self::runCommand("echo kvm:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd");
 					}
-					echo `umount /dev/mapper/{$pname}{$pn}`;
-					echo `kpartx {$this->kpartsOpts} -d {$this->device}`;
+					echo self::runCommand("umount /dev/mapper/{$pname}{$pn}");
+					echo self::runCommand("kpartx {$this->kpartsOpts} -d {$this->device}");
 				} else {
 					echo "Skipping Resizing Last Partition FS is not 83. Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
 				}
@@ -525,6 +525,6 @@ HELP;
 		fi;
 	done;
 	*/
-		echo `rm -f dd.progress;`;
+		echo self::runCommand("rm -f dd.progress;");
 	}
 }
