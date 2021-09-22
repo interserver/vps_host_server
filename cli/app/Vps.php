@@ -123,6 +123,8 @@ class Vps
 			if (preg_match('/vz/', self::runCommand("virsh pool-list --inactive"))) {
 				echo self::runCommand("virsh pool-start vz;");
 			}
+		} else {
+			echo "dont know how to handle virt type:".self::$virtType.PHP_EOL;
 		}
 		return $pool;
 	}
