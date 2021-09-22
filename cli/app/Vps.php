@@ -96,7 +96,7 @@ class Vps
 
 	public static function vpsExists($hostname) {
 		$hostname = escapeshellarg($hostname);
-		passthru('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
+		echo self::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
 		return $return == 0;
 	}
 
@@ -105,11 +105,11 @@ class Vps
 	}
 
 	public static function getRedhatVersion() {
-		return floatval(trim(`cat /etc/redhat-release |sed s#"^[^0-9]* \([0-9\.]*\).*$"#"\\1"#g`));
+		return floatval(trim(self::runCommand("cat /etc/redhat-release |sed s#'^[^0-9]* \([0-9\.]*\).*$'#'\\1'#g")));
 	}
 
 	public static function getE2fsprogsVersion() {
-		return floatval(trim(`e2fsck -V 2>&1 |head -n 1 | cut -d" " -f2 | cut -d"." -f1-2`));
+		return floatval(trim(self::runCommand("e2fsck -V 2>&1 |head -n 1 | cut -d' ' -f2 | cut -d'.' -f1-2")));
 	}
 
 	public static function getPoolType() {
@@ -196,12 +196,12 @@ class Vps
 	}
 
 	public static function isXinetdRunning() {
-		passthru('pidof xinetd >/dev/null', $return);
+		echo self::runCommand('pidof xinetd >/dev/null', $return);
 		return $return == 0;
 	}
 
 	public static function isDhcpRunning() {
-		passthru('pidof dhcpd >/dev/null', $return);
+		echo self::runCommand('pidof dhcpd >/dev/null', $return);
 		return $return == 0;
 	}
 
@@ -232,7 +232,7 @@ class Vps
 			$vncPort = trim(self::runCommand("virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1"));
 			if ($vncPort == '') {
 				sleep(2);
-				$vncPort = trim(`virsh dumpxml {$hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
+				$vncPort = trim(self::runCommand("virsh dumpxml {$hostname} |grep -i 'graphics type=.vnc.' | cut -d\' -f4"));
 			} else {
 				$vncPort += 5900;
 			}
@@ -309,8 +309,8 @@ class Vps
 		}
 	}
 
-	public static function runCommand($cmd) {
-		self::$logger->info2('executing:'.$cmd);
+	public static function runCommand($cmd, &$return = 0) {
+		self::$logger->info2('runnning:'.$cmd);
 		self::$logger->indent();
 		$output = [];
 		exec($cmd, $output, $return);
