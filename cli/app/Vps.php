@@ -7,9 +7,9 @@ class Vps
 {
 	public static $base = '/root/cpaneldirect';
 	public static $virtBins = [
-		'kvm' => '/usr/bin/virsh',
 		'virtuozzo' => '/usr/bin/prlctl',
 		'openvz' => '/usr/bin/vzctl',
+		'kvm' => '/usr/bin/virsh',
 		'lxc' => '/usr/bin/lxc',
 	];
 	public static $virtValidations = [
@@ -41,6 +41,13 @@ class Vps
     public static function isVirtualHost() {
 		$virts = self::getInstalledVirts();
 		return count($virts) > 0;
+    }
+
+    public static function getVirtType() {
+		$virts = self::getInstalledVirts();
+		if (count($virts) > 0)
+			return $virts[0];
+		return false;
     }
 
     public static function getRunningVps() {
@@ -252,7 +259,7 @@ class Vps
 
 	public static function setupCgroups($hostname, $slices) {
 		if (file_exists('/cgroup/blkio/libvirt/qemu')) {
-			$this->getLogger()->info('Setting up CGroups');
+			self::$logger->info('Setting up CGroups');
 			$cpushares = $slices * 512;
 			$ioweight = 400 + (37 * $slices);
 			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
