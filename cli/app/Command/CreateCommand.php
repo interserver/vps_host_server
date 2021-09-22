@@ -62,6 +62,7 @@ HELP;
         $opts->add('i|add-ip+', 'Additional IPs')->multiple()->isa('string');
         $opts->add('c|client-ip:', 'Client IP')->isa('ip');
 		$opts->add('a|all', 'Use All Available HD, CPU Cores, and 70% RAM');
+		$opts->add('v|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -76,6 +77,7 @@ HELP;
 	}
 
 	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
+		Vps::init($this->getArgInfoList(), func_get_args(), $this->getOptions());
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
@@ -94,6 +96,8 @@ HELP;
 	}
 
     public function initVariables($hostname, $ip, $template, $hd, $ram, $cpu, $password) {
+		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
+		$opts = $this->getOptions();
 		$this->getLogger()->info('Initializing Variables and process Options and Arguments');
 		$this->hostname = $hostname;
 		$this->ip = $ip;
@@ -102,8 +106,6 @@ HELP;
 		$this->ram = $ram;
 		$this->cpu = $cpu;
 		$this->password = $password;
-		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
-		$opts = $this->getOptions();
         $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
         $this->extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
         $this->clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
@@ -115,8 +117,6 @@ HELP;
 			$this->mac = Vps::convertIdToMac($this->orderId, $this->useAll); // use id to generate mac address
         $this->url = $this->useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
         $this->kpartsOpts = preg_match('/sync/', `kpartx 2>&1`) ? '-s' : '';
-		$this->pool = Vps::getPoolType();
-		$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
 		$this->ram = $this->ram * 1024; // convert ram to kb
 		$this->hd = $this->hd * 1024; // convert hd to mb
         if ($this->useAll == true) {
@@ -126,6 +126,8 @@ HELP;
         }
         $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
     	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
+		$this->pool = Vps::getPoolType();
+		$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
 		//$this->getLogger()->info2(print_r($opts, true));
         $this->progress(5);
     }

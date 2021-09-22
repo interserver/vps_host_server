@@ -12,6 +12,8 @@ class Vps
 		'kvm' => '/usr/bin/virsh',
 		'lxc' => '/usr/bin/lxc',
 	];
+	public static $virtInstalled = false;
+	public static $virtType = false;
 	public static $virtValidations = [
 		'kvm-ok',
 		'lscpu',
@@ -20,6 +22,12 @@ class Vps
 	];
 	/** @var \CLIFramework\Logger */
 	public static $logger;
+	/** @var \CLIFramework\ArgInfoList */
+	public static $argList;
+	/** @var array */
+	public static $args;
+	/** @var \GetOptionKit\OptionCollection */
+	public static $opts;
 
     /**
     * @param \CLIFramework\Logger $logger
@@ -28,30 +36,58 @@ class Vps
 		self::$logger = $logger;
 	}
 
+	/**
+	* @param \CLIFramework\ArgInfoList $argList
+	* @param array $args
+	* @param \GetOptionKit\OptionCollection $opts
+	*/
+	public static function init($argList, array $args, $opts) {
+		self::$argList = $argList;
+		self::$args = $args;
+		self::$opts = $opts;
+		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']['value'] : false);
+	}
+
     public static function getInstalledVirts() {
-		$found = [];
-		foreach (self::$virtBins as $virt => $virtBin) {
-			if (file_exists($virtBin)) {
-				$found[] = $virt;
+    	if (self::$virtInstalled === false) {
+    		self::$logger->info2('detecting installed virtualization types.');
+    		self::$logger->indent();
+			$found = [];
+			foreach (self::$virtBins as $virt => $virtBin) {
+				if (file_exists($virtBin)) {
+					self::$logger->info2('found '.$virt.' virtualization installed');
+					$found[] = $virt;
+				}
 			}
+    		self::$logger->unIndent();
+			self::$virtInstalled = $found;
 		}
-		return $found;
+		return self::$virtInstalled;
     }
 
     public static function isVirtualHost() {
-		$virts = self::getInstalledVirts();
-		return count($virts) > 0;
+		$type = Vps::getVirtType();
+		if ($type !== false)
+			self::$logger->info2('using '.$virt.' virtualization.');
+		return $type !== false;
     }
 
     public static function getVirtType() {
 		$virts = self::getInstalledVirts();
-		if (count($virts) > 0)
-			return $virts[0];
+		foreach ($virts as $idx => $virt)
+			if (self::$virtType == false || self::$virtType == $virt)
+				return $virt;
 		return false;
     }
 
+    public static function setVirtType($type) {
+    	if ($type !== false)
+    		self::$logger->info2('trying to force '.$type.' virtualization.');
+		self::$virtType = $type;
+    }
+
     public static function getRunningVps() {
-		return explode("\n", trim(`virsh list --name`));
+		return explode("\n", trim(self::runCommand("virsh list --name")));
     }
 
     public static function isVpsRunning($hostname) {
@@ -77,14 +113,16 @@ class Vps
 	}
 
 	public static function getPoolType() {
-		$pool = XmlToArray::go(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		if ($pool == '') {
-			$base = self::$base;
-			echo `{$base}/create_libvirt_storage_pools.sh`;
-			$pool = XmlToArray::go(trim(`virsh pool-dumpxml vz 2>/dev/null`))['pool_attr']['type'];
-		}
-		if (preg_match('/vz/', `virsh pool-list --inactive`)) {
-			echo `virsh pool-start vz;`;
+		if (self::$virtType == 'kvm') {
+			$pool = XmlToArray::go(trim(self::runCommand("virsh pool-dumpxml vz 2>/dev/null")))['pool_attr']['type'];
+			if ($pool == '') {
+				$base = self::$base;
+				echo self::runCommand("{$base}/create_libvirt_storage_pools.sh");
+				$pool = XmlToArray::go(trim(self::runCommand("virsh pool-dumpxml vz 2>/dev/null")))['pool_attr']['type'];
+			}
+			if (preg_match('/vz/', self::runCommand("virsh pool-list --inactive"))) {
+				echo self::runCommand("virsh pool-start vz;");
+			}
 		}
 		return $pool;
 	}
@@ -101,19 +139,19 @@ class Vps
 	}
 
 	public static function getCpuCount() {
-		preg_match('/CPU\(s\):\s+(\d+)/', `lscpu`, $matches);
+		preg_match('/CPU\(s\):\s+(\d+)/', self::runCommand("lscpu"), $matches);
 		return intval($matches[1]);
 	}
 
 	public static function getVpsMac($hostname) {
 		$hostname = escapeshellarg($hostname);
-		$mac = XmlToArray::go(trim(`/usr/bin/virsh dumpxml {$hostname};`))['domain']['devices']['interface']['mac_attr']['address'];
+		$mac = XmlToArray::go(trim(self::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['mac_attr']['address'];
 		return $mac;
 	}
 
 	public static function getVpsIps($hostname) {
 		$hostname = escapeshellarg($hostname);
-		$params = XmlToArray::go(trim(`/usr/bin/virsh dumpxml {$hostname};`))['domain']['devices']['interface']['filterref']['parameter'];
+		$params = XmlToArray::go(trim(self::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['filterref']['parameter'];
 		$ips = [];
 		foreach ($params as $idx => $data) {
 			if (array_key_exists('name', $data) && $data['name'] == 'IP') {
@@ -134,7 +172,7 @@ class Vps
 	public static function runBuildEbtables() {
 		if (self::getPoolType() != 'zfs') {
 			$base = self::$base;
-			echo `bash {$base}/run_buildebtables.sh`;
+			echo self::runCommand("bash {$base}/run_buildebtables.sh");
 		}
 	}
 
@@ -143,16 +181,16 @@ class Vps
 	}
 
 	public static function unlockXinetd() {
-		echo `rm -f /tmp/_securexinetd;`;
+		echo self::runCommand("rm -f /tmp/_securexinetd;");
 	}
 
 	public static function removeXinetd($hostname) {
 		$hostname = escapeshellarg($hostname);
-		echo `rm -f /etc/xinetd.d/{$hostname}`;
+		echo self::runCommand("rm -f /etc/xinetd.d/{$hostname}");
 	}
 
 	public static function restartXinetd() {
-		echo `service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null`;
+		echo self::runCommand("service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null");
 	}
 
 	public static function isXinetdRunning() {
@@ -186,10 +224,10 @@ class Vps
 	}
 
 	public static function getVncPort($hostname) {
-		$vncPort = trim(`virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1`);
+		$vncPort = trim(self::runCommand("virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1"));
 		if ($vncPort == '') {
 			sleep(2);
-			$vncPort = trim(`virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1`);
+			$vncPort = trim(self::runCommand("virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1"));
 			if ($vncPort == '') {
 				sleep(2);
 				$vncPort = trim(`virsh dumpxml {$hostname} |grep -i "graphics type='vnc'" | cut -d\' -f4`);
@@ -203,18 +241,18 @@ class Vps
 	}
 
 	public static function enableAutostart($hostname) {
-		echo `/usr/bin/virsh autostart {$hostname}`;
+		echo self::runCommand("/usr/bin/virsh autostart {$hostname}");
 	}
 
 	public static function disableAutostart($hostname) {
-		echo `/usr/bin/virsh autostart --disable {$hostname}`;
+		echo self::runCommand("/usr/bin/virsh autostart --disable {$hostname}");
 	}
 
 	public static function startVps($hostname) {
 		self::$logger->info('Starting the VPS');
 		self::removeXinetd($hostname);
 		self::restartXinetd();
-		echo `/usr/bin/virsh start {$hostname}`;
+		echo self::runCommand("/usr/bin/virsh start {$hostname}");
 		self::runBuildEbtables();
 		if (!self::isVpsRunning($hostname))
 			return 1;
@@ -226,7 +264,7 @@ class Vps
 		$stopped = false;
 		if ($fast === false) {
 			self::$logger->info('Sending Softwawre Power-Off');
-			echo `/usr/bin/virsh shutdown {$hostname}`;
+			echo self::runCommand("/usr/bin/virsh shutdown {$hostname}");
 			$waited = 0;
 			$maxWait = 120;
 			$sleepTime = 5;
@@ -236,7 +274,7 @@ class Vps
 					sleep($sleepTime);
 					$waited += $sleepTime;
 					if ($waited % 15 == 0)
-						`/usr/bin/virsh shutdown {$hostname}`;
+						self::runCommand("/usr/bin/virsh shutdown {$hostname}");
 				} else {
 					self::$logger->info('appears to have cleanly shutdown');
 					$stopped = true;
@@ -245,7 +283,7 @@ class Vps
 		}
 		if ($stopped === false) {
 			self::$logger->info('Sending Hardware Power-Off');
-			echo `/usr/bin/virsh destroy {$hostname};`;
+			echo self::runCommand("/usr/bin/virsh destroy {$hostname};");
 		}
 		self::removeXinetd($hostname);
 		self::restartXinetd();
@@ -262,10 +300,23 @@ class Vps
 			self::$logger->info('Setting up CGroups');
 			$cpushares = $slices * 512;
 			$ioweight = 400 + (37 * $slices);
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;`;
-			echo `virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --current;`;
-			echo `virsh blkiotune {$this->hostname} --weight {$ioweight} --config;`;
+			echo self::runCommand("virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;");
+			echo self::runCommand("virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;");
+			echo self::runCommand("virsh blkiotune {$this->hostname} --weight {$ioweight} --current;");
+			echo self::runCommand("virsh blkiotune {$this->hostname} --weight {$ioweight} --config;");
 		}
+	}
+
+	public static function runCommand($command) {
+		self::$logger->debug('executing:'.$command);
+		self::$logger->indent();
+		$output = [];
+		exec($cmd, $output, $return);
+		self::$logger->debug('returned with an exit code of '.$return);
+		foreach ($output as $line)
+			self::$logger->debug('output:'.$line);
+		self::$logger->unIndent();
+		$output = implode(PHP_EOL, $output);
+		return $output;
 	}
 }
