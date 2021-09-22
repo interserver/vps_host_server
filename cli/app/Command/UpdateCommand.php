@@ -63,16 +63,16 @@ class UpdateCommand extends Command {
 			$cpu = $opts->keys['cpu']->value;
 			$maxCpu = $cpu > 8 ? $cpu : 8;
     		$this->getLogger()->debug('Setting CPU limits');
-    		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>"#g -i {$hostname}.xml;`;
+    		echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$hostname}.xml;");
 		}
 		if ($updateRam === true) {
 			$ram = $opts->keys['ram']->value;
 			$ram = $ram * 1024;
     		$maxRam = $ram > 16384000 ? $ram : 16384000;
     		$this->getLogger()->debug('Setting Max Memory limits');
-			echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$maxRam}</memory>"#g -i {$hostname}.xml;`;
+			echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$hostname}.xml;");
 			$this->getLogger()->debug('Setting Memory limits');
-			echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$ram}</currentMemory>"#g -i {$hostname}.xml;`;
+			echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$hostname}.xml;");
 		}
 		if ($updateCpu === true || $updateRam === true) {
 			echo Vps::runCommand("virsh define {$hostname}.xml;");

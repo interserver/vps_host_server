@@ -42,7 +42,7 @@ class ChangeHostnameCommand extends Command {
 		}
 		echo Vps::runCommand("virsh domrename {$hostname} {$newname}");
 		echo Vps::runCommand("virsh dumpxml {$newname} > /root/cpaneldirect/vps.xml");
-		echo `sed s#"{$hostname}"#{$newname}#g -i /root/cpaneldirect/vps.xml`;
+		echo Vps::runCommand("sed s#\"{$hostname}\"#{$newname}#g -i /root/cpaneldirect/vps.xml");
 		echo Vps::runCommand("virsh define /root/cpaneldirect/vps.xml");
 		echo Vps::runCommand("rm -fv /root/cpaneldirect/vps.xml");
 		foreach (['/etc/dhcpd.vps', '/etc/dhcp/dhcpd.vps', '/root/cpaneldirect/vps.ipmap', '/root/cpaneldirect/vps.mainips', '/root/cpaneldirect/vps.slicemap', '/root/cpaneldirect/vps.vncmap'] as $file) {

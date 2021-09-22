@@ -30,7 +30,7 @@ class AddIpCommand extends Command {
 			return 1;
 		}
 		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} > {$hostname}.xml");
-		echo `sed s#"</filterref>"#"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>"#g -i {$hostname}.xml`;
+		echo Vps::runCommand("sed s#\"</filterref>\"#\"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>\"#g -i {$hostname}.xml");
 		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml");
 		echo Vps::runCommand("rm -f {$hostname}.xml");
 	}

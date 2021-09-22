@@ -39,7 +39,7 @@ class DestroyCommand extends Command {
 		echo Vps::runCommand("virsh undefine {$hostname}");
 		$pool = Vps::getPoolType();
 		if ($pool == 'zfs') {
-			echo `zfs list -t snapshot|grep "/{$hostname}@"|cut -d" " -f1|xargs -r -n 1 zfs destroy -v`;
+			echo Vps::runCommand("zfs list -t snapshot|grep \"/{$hostname}@\"|cut -d\" \" -f1|xargs -r -n 1 zfs destroy -v");
 			echo Vps::runCommand("virsh vol-delete --pool vz/os.qcow2 {$hostname} 2>/dev/null");
 			echo Vps::runCommand("virsh vol-delete --pool vz {$hostname}");
 			echo Vps::runCommand("zfs destroy vz/{$hostname}");
@@ -50,6 +50,6 @@ class DestroyCommand extends Command {
 			echo Vps::runCommand("lvremove -f /dev/vz/{$hostname}");
 		}
 		$dhcpVps = file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
-		echo `sed s#"^host {$hostname} .*$"#""#g -i {$dhcpVps}`;
+		echo Vps::runCommand("sed s#\"^host {$hostname} .*$\"#\"\"#g -i {$dhcpVps}");
 	}
 }

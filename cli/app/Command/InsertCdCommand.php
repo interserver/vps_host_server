@@ -31,7 +31,7 @@ class InsertCdCommand extends Command {
 		}
 		$parts = parse_url($url);
 		if (!array_key_exists('port', $parts)) {
-			$parts['port'] = trim(`grep "^{$parts['scheme']}\\s" /etc/services |grep "/tcp\\s"|cut -d/ -f1|awk "{ print \\$2 }"`);
+			$parts['port'] = trim(Vps::runCommand("grep \"^{$parts['scheme']}\\s\" /etc/services |grep \"/tcp\\s\"|cut -d/ -f1|awk \"{ print \\$2 }\""));
 		}
 		$str =
 "<disk type='network' device='cdrom'>

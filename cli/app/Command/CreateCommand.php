@@ -189,57 +189,57 @@ HELP;
 		} else {
 			if ($this->pool != 'zfs') {
 				$this->getLogger()->debug('Removing UUID Filterref and IP information');
-				echo `grep -v -e uuid -e filterref -e "<parameter name='IP'" {$this->base}/windows.xml | sed s#"windows"#"{$this->hostname}"#g > {$this->hostname}.xml`;
+				echo Vps::runCommand("grep -v -e uuid -e filterref -e \"<parameter name='IP'\" {$this->base}/windows.xml | sed s#\"windows\"#\"{$this->hostname}\"#g > {$this->hostname}.xml");
 			} else {
 				$this->getLogger()->debug('Removing UUID information');
-				echo `grep -v -e uuid {$this->base}/windows.xml | sed -e s#"windows"#"{$this->hostname}"#g -e s#"/dev/vz/{$this->hostname}"#"{$this->device}"#g > {$this->hostname}.xml`;
+				echo Vps::runCommand("grep -v -e uuid {$this->base}/windows.xml | sed -e s#\"windows\"#\"{$this->hostname}\"#g -e s#\"/dev/vz/{$this->hostname}\"#\"{$this->device}\"#g > {$this->hostname}.xml");
 			}
 			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
 				$this->getLogger()->debug('Replacing KVM Binary Path');
-				echo `sed s#"/usr/libexec/qemu-kvm"#"/usr/bin/kvm"#g -i {$this->hostname}.xml`;
+				echo Vps::runCommand("sed s#\"/usr/libexec/qemu-kvm\"#\"/usr/bin/kvm\"#g -i {$this->hostname}.xml");
 			}
 		}
 		if ($this->useAll == true) {
 			$this->getLogger()->debug('Removing IP information');
-			echo `sed -e s#"^.*<parameter name='IP.*$"#""#g -e  s#"^.*filterref.*$"#""#g -i {$this->hostname}.xml`;
+			echo Vps::runCommand("sed -e s#\"^.*<parameter name='IP.*$\"#\"\"#g -e  s#\"^.*filterref.*$\"#\"\"#g -i {$this->hostname}.xml");
 		} else {
 			$this->getLogger()->debug('Replacing UUID Filterref and IP information');
 			$repl = "<parameter name='IP' value='{$this->ip}'/>";
 			if (count($this->extraIps) > 0)
 				foreach ($this->extraIps as $extraIp)
 					$repl = "{$repl}\\n        <parameter name='IP' value='{$extraIp}'/>";
-			echo `sed s#"<parameter name='IP' value.*/>"#"{$repl}"#g -i {$this->hostname}.xml;`;
+			echo Vps::runCommand("sed s#\"<parameter name='IP' value.*/>\"#\"{$repl}\"#g -i {$this->hostname}.xml;");
 		}
 		if ($this->mac != '') {
 			$this->getLogger()->debug('Replacing MAC addresss');
-			echo `sed s#"<mac address='.*'"#"<mac address='{$this->mac}'"#g -i {$this->hostname}.xml`;
+			echo Vps::runCommand("sed s#\"<mac address='.*'\"#\"<mac address='{$this->mac}'\"#g -i {$this->hostname}.xml");
 		} else {
 			$this->getLogger()->debug('Removing MAC address');
-			echo `sed s#"^.*<mac address.*$"#""#g -i {$this->hostname}.xml`;
+			echo Vps::runCommand("sed s#\"^.*<mac address.*$\"#\"\"#g -i {$this->hostname}.xml");
 		}
 		$this->getLogger()->debug('Setting CPU limits');
-		echo `sed s#"<\(vcpu.*\)>.*</vcpu>"#"<vcpu placement='static' current='{$this->cpu}'>{$this->maxCpu}</vcpu>"#g -i {$this->hostname}.xml;`;
+		echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$this->cpu}'>{$this->maxCpu}</vcpu>\"#g -i {$this->hostname}.xml;");
 		$this->getLogger()->debug('Setting Max Memory limits');
-		echo `sed s#"<memory.*memory>"#"<memory unit='KiB'>{$this->maxRam}</memory>"#g -i {$this->hostname}.xml;`;
+		echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$this->maxRam}</memory>\"#g -i {$this->hostname}.xml;");
 		$this->getLogger()->debug('Setting Memory limits');
-		echo `sed s#"<currentMemory.*currentMemory>"#"<currentMemory unit='KiB'>{$this->ram}</currentMemory>"#g -i {$this->hostname}.xml;`;
-		if (trim(`grep -e "flags.*ept" -e "flags.*npt" /proc/cpuinfo`) != '') {
+		echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$this->ram}</currentMemory>\"#g -i {$this->hostname}.xml;");
+		if (trim(Vps::runCommand("grep -e \"flags.*ept\" -e \"flags.*npt\" /proc/cpuinfo")) != '') {
 			$this->getLogger()->debug('Adding HAP features flag');
-			echo `sed s#"<features>"#"<features>\\n    <hap/>"#g -i {$this->hostname}.xml;`;
+			echo Vps::runCommand("sed s#\"<features>\"#\"<features>\\n    <hap/>\"#g -i {$this->hostname}.xml;");
 		}
-		if (trim(`date "+%Z"`) == 'PDT') {
+		if (trim(Vps::runCommand("date \"+%Z\"")) == 'PDT') {
 			$this->getLogger()->debug('Setting Timezone to PST');
-			echo `sed s#"America/New_York"#"America/Los_Angeles"#g -i {$this->hostname}.xml;`;
+			echo Vps::runCommand("sed s#\"America/New_York\"#\"America/Los_Angeles\"#g -i {$this->hostname}.xml;");
 		}
 		if (file_exists('/etc/lsb-release')) {
 			if (substr($this->template, 0, 7) == 'windows') {
 				$this->getLogger()->debug('Adding HyperV block');
-				echo `sed -e s#"</features>"#"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>"#g -i {$this->hostname}.xml;`;
+				echo Vps::runCommand("sed -e s#\"</features>\"#\"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>\"#g -i {$this->hostname}.xml;");
 			$this->getLogger()->debug('Adding HyperV timer');
-					echo `sed -e s#"<clock offset='timezone' timezone='\([^']*\)'/>"#"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>"#g -i {$this->hostname}.xml;`;
+					echo Vps::runCommand("sed -e s#\"<clock offset='timezone' timezone='\([^']*\)'/>\"#\"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>\"#g -i {$this->hostname}.xml;");
 			}
 			$this->getLogger()->debug('Customizing SCSI controller');
-			echo `sed s#"\(<controller type='scsi' index='0'.*\)>"#"\\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>"#g -i  {$this->hostname}.xml;`;
+			echo Vps::runCommand("sed s#\"\(<controller type='scsi' index='0'.*\)>\"#\"\\1 model='virtio-scsi'>\\n      <driver queues='{$this->cpu}'/>\"#g -i  {$this->hostname}.xml;");
 		}
 		echo Vps::runCommand("/usr/bin/virsh define {$this->hostname}.xml");
 		echo Vps::runCommand("rm -f {$this->hostname}.xml");
@@ -256,8 +256,8 @@ HELP;
 		$dhcpVps = Vps::getDhcpFile();
 		$dhcpService = Vps::getDhcpService();
 		echo Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
-    	echo `grep -v -e "host {$this->hostname} " -e "fixed-address {$this->ip};" {$dhcpVps}.backup > {$dhcpVps}`;
-    	echo `echo "host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }" >> {$dhcpVps}`;
+    	echo Vps::runCommand("grep -v -e \"host {$this->hostname} \" -e \"fixed-address {$this->ip};\" {$dhcpVps}.backup > {$dhcpVps}");
+    	echo Vps::runCommand("echo \"host {$this->hostname} { hardware ethernet {$this->mac}; fixed-address {$this->ip}; }\" >> {$dhcpVps}");
     	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
     	echo Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
 		$this->progress(25);
@@ -307,11 +307,11 @@ HELP;
 
 			$this->vncPort = Vps::getVncPort($this->hostname);
 			$this->vncPort -= 5900;
-			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+			echo Vps::runCommand("{$this->base}/vps_kvm_screenshot.sh \"{$this->vncPort}\" \"{$this->url}?action=screenshot&name={$this->hostname}\";");
 			sleep(1);
-			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+			echo Vps::runCommand("{$this->base}/vps_kvm_screenshot.sh \"{$this->vncPort}\" \"{$this->url}?action=screenshot&name={$this->hostname}\";");
 			sleep(1);
-			echo `{$this->base}/vps_kvm_screenshot.sh "{$this->vncPort}" "{$this->url}?action=screenshot&name={$this->hostname}";`;
+			echo Vps::runCommand("{$this->base}/vps_kvm_screenshot.sh \"{$this->vncPort}\" \"{$this->url}?action=screenshot&name={$this->hostname}\";");
 			$this->vncPort += 5900;
 			Vps::unlockXinetd();
 			Vps::restartXinetd();
@@ -324,7 +324,7 @@ HELP;
 		$downloadedTemplate = substr($this->template, 0, 7) == 'http://' || substr($this->template, 0, 8) == 'https://' || substr($this->template, 0, 6) == 'ftp://';
 		if ($downloadedTemplate == true) {
 			echo "Downloading {$this->template} Image\n";
-			echo `{$this->base}/vps_get_image.sh "{$this->template} zfs"`;
+			echo Vps::runCommand("{$this->base}/vps_get_image.sh \"{$this->template} zfs\"");
 			$this->template = 'image';
 		}
 		if (!file_exists('/vz/templates/'.$this->template.'.qcow2') && $this->template != 'empty') {
@@ -341,11 +341,11 @@ HELP;
 			if (stripos($this->template, 'freebsd') !== false) {
 				echo Vps::runCommand("cp -f /vz/templates/{$this->template}.qcow2 {$this->device};");
 				$this->progress(60);
-				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
+				echo Vps::runCommand("qemu-img resize {$this->device} \"{$this->hd}\"M;");
 			} else {
 				echo Vps::runCommand("qemu-img create -f qcow2 -o preallocation=metadata {$this->device} 25G;");
 				$this->progress(40);
-				echo `qemu-img resize {$this->device} "{$this->hd}"M;`;
+				echo Vps::runCommand("qemu-img resize {$this->device} \"{$this->hd}\"M;");
 				$this->progress(60);
 				if ($this->template != 'empty') {
 					$this->getLogger()->debug('Listing Partitions in Template');
@@ -364,10 +364,10 @@ HELP;
 			echo Vps::runCommand("virsh detach-disk {$this->hostname} vda --persistent;");
 			echo Vps::runCommand("virsh attach-disk {$this->hostname} /vz/{$this->hostname}/os.qcow2 vda --targetbus virtio --driver qemu --subdriver qcow2 --type disk --sourcetype file --persistent;");
 			echo Vps::runCommand("virsh dumpxml {$this->hostname} > {$this->hostname}.xml");
-			echo `sed s#"type='qcow2'/"#"type='qcow2' cache='writeback' discard='unmap'/"#g -i {$this->hostname}.xml`;
+			echo Vps::runCommand("sed s#\"type='qcow2'/\"#\"type='qcow2' cache='writeback' discard='unmap'/\"#g -i {$this->hostname}.xml");
 			echo Vps::runCommand("virsh define {$this->hostname}.xml");
 			echo Vps::runCommand("rm -f {$this->hostname}.xml");
-			echo `virt-customize -d {$this->hostname} --root-password password:{$this->password} --hostname "{$this->hostname}";`;
+			echo Vps::runCommand("virt-customize -d {$this->hostname} --root-password password:{$this->password} --hostname \"{$this->hostname}\";");
 			$this->adjust_partitions = 0;
 		}
 		$this->progress(80);
@@ -378,7 +378,7 @@ HELP;
 			// image from url
 			$this->adjust_partitions = 0;
 			echo "Downloading {$this->template} Image\n";
-			echo `{$this->base}/vps_get_image.sh "{$this->template}"`;
+			echo Vps::runCommand("{$this->base}/vps_get_image.sh \"{$this->template}\"");
 			if (!file_exists('/image_storage/image.img')) {
 				echo "There must have been a problem, the image does not exist\n";
 				$this->error++;
@@ -426,27 +426,27 @@ HELP;
 		if ($this->error == 0) {
 			if ($this->adjust_partitions == 1) {
 				$this->progress(60);
-				$sects = trim(`fdisk -l -u {$this->device}  | grep sectors$ | sed s#"^.* \([0-9]*\) sectors$"#"\\1"#g`);
-				$t = trim(`fdisk -l -u {$this->device} | sed s#"\*"#""#g | grep "^{$this->device}" | tail -n 1`);
+				$sects = trim(Vps::runCommand("fdisk -l -u {$this->device}  | grep sectors$ | sed s#\"^.* \([0-9]*\) sectors$\"#\"\\1\"#g"));
+				$t = trim(Vps::runCommand("fdisk -l -u {$this->device} | sed s#\"\*\"#\"\"#g | grep \"^{$this->device}\" | tail -n 1"));
 				$p = trim(Vps::runCommand("echo {$t} | awk '{ print $1 }'"));
 				$fs = trim(Vps::runCommand("echo {$t} | awk '{ print $5 }'"));
-				if (trim(`echo "{$fs}" | grep "[A-Z]"`) != '') {
+				if (trim(Vps::runCommand("echo \"{$fs}\" | grep \"[A-Z]\"")) != '') {
 					$fs = trim(Vps::runCommand("echo {$t} | awk '{ print $6 }'"));
 				}
-				$pn = trim(`echo "{$p}" | sed s#"{$this->device}[p]*"#""#g`);
+				$pn = trim(Vps::runCommand("echo \"{$p}\" | sed s#\"{$this->device}[p]*\"#\"\"#g"));
 				$pt = $pn > 4 ? 'l' : 'p';
 				$start = trim(Vps::runCommand("echo {$t} | awk '{ print $2 }'"));
 				if ($fs == 83) {
 					echo "Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}\n";
-					echo `echo -e "d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n" | fdisk -u {$this->device}`;
+					echo Vps::runCommand("echo -e \"d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n\" | fdisk -u {$this->device}");
 					echo Vps::runCommand("kpartx {$this->kpartsOpts} -av {$this->device}");
-					$pname = trim(`ls /dev/mapper/vz-"{$this->hostname}"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/"{$this->hostname}"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#"{$pn}$"#""#g`);
+					$pname = trim(Vps::runCommand("ls /dev/mapper/vz-\"{$this->hostname}\"p{$pn} /dev/mapper/vz-{$this->hostname}{$pn} /dev/mapper/\"{$this->hostname}\"p{$pn} /dev/mapper/{$this->hostname}{$pn} 2>/dev/null | cut -d/ -f4 | sed s#\"{$pn}$\"#\"\"#g"));
 					echo Vps::runCommand("e2fsck -p -f /dev/mapper/{$pname}{$pn}");
 					$resizefs = trim(Vps::runCommand("which resize4fs 2>/dev/null")) != '' ? 'resize4fs' : 'resize2fs';
 					echo Vps::runCommand("$resizefs -p /dev/mapper/{$pname}{$pn}");
 					@mkdir('/vz/mounts/'.$this->hostname.$pn, 0777, true);
 					echo Vps::runCommand("mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$this->hostname}{$pn};");
-					echo `echo root:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$this->password} "/vz/mounts/{$this->hostname}{$pn}"`;
+					echo Vps::runCommand("echo root:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd || php {$this->base}/vps_kvm_password_manual.php {$this->password} \"/vz/mounts/{$this->hostname}{$pn}\"");
 					if (file_exists('/vz/mounts/'.$this->hostname.$pn.'/home/kvm')) {
 						echo Vps::runCommand("echo kvm:{$this->password} | chroot /vz/mounts/{$this->hostname}{$pn} chpasswd");
 					}
@@ -462,8 +462,8 @@ HELP;
 
     public function installGzImage($source, $device) {
     	echo "Copying {$source} Image\n";
-    	$tsize = trim(`stat -c%s "{$source}"`);
-    	echo `gzip -dc "/{$source}"  | dd of={$device} 2>&1`;
+    	$tsize = trim(Vps::runCommand("stat -c%s \"{$source}\""));
+    	echo Vps::runCommand("gzip -dc \"/{$source}\"  | dd of={$device} 2>&1");
     	/*
 	gzip -dc "/$source"  | dd of=$this->device 2>&1 &
 	pid=$!
@@ -501,8 +501,8 @@ HELP;
 
 	public function installImage($source, $device) {
 		echo "Copying Image\n";
-		$tsize = trim(`stat -c%s "{$source}"`);
-		echo `dd "if={$source}" "of={$device}" 2>&1`;
+		$tsize = trim(Vps::runCommand("stat -c%s \"{$source}\""));
+		echo Vps::runCommand("dd \"if={$source}\" \"of={$device}\" 2>&1");
 		/*
 	dd "if=$source" "of=$this->device" >dd.progress 2>&1 &
 	pid=$!

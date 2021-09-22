@@ -28,7 +28,7 @@ class DisableCdCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (trim(`virsh dumpxml {$hostname}|grep "disk.*cdrom"`) == "") {
+		if (trim(Vps::runCommand("virsh dumpxml {$hostname}|grep \"disk.*cdrom\"")) == "") {
 			$this->getLogger()->error("Skipping Removal, No CD-ROM Drive exists in VPS configuration");
 		} else {
 			echo Vps::runCommand("virsh detach-disk {$hostname} hda --config");
