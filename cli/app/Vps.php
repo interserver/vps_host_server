@@ -310,11 +310,11 @@ class Vps
 	}
 
 	public static function runCommand($cmd) {
-		self::$logger->debug('executing:'.$cmd);
+		self::$logger->info2('executing:'.$cmd);
 		self::$logger->indent();
 		$output = [];
 		exec($cmd, $output, $return);
-		self::$logger->debug('returned with an exit code of '.$return);
+		self::$logger->debug('exit code:'.$return);
 		foreach ($output as $line)
 			self::$logger->debug('output:'.$line);
 		self::$logger->unIndent();
