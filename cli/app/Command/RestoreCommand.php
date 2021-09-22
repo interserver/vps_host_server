@@ -13,6 +13,12 @@ class RestoreCommand extends Command {
 		return "Restores a Virtual Machine from Backup.";
 	}
 
+    /** @param \GetOptionKit\OptionCollection $opts */
+	public function options($opts) {
+		parent::options($opts);
+		$opts->add('v|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
+	}
+
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('source')->desc('Source Backup Hostname to use')->isa('string');
@@ -22,6 +28,7 @@ class RestoreCommand extends Command {
 	}
 
 	public function execute($source, $name, $hostname, $id) {
+		Vps::init($this->getArgInfoList(), func_get_args(), $this->getOptions());
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");

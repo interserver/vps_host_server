@@ -11,13 +11,7 @@ class NowCommand extends Command {
 	}
 
 	public function execute() {
-        $this->checkVirt();
-		$this->checkTemplates();
-		$this->checkStorage();
-		$this->checkServices();
-		$this->checkDhcp();
-		$this->checkXinetd();
-		//$this->samples();
+		$this->samples();
 	}
 
 	public function samples() {

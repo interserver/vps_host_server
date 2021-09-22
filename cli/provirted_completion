@@ -191,8 +191,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -327,8 +327,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=3
 
     # Get the command name chain of the current input, e.g.
@@ -465,8 +465,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -601,8 +601,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -737,8 +737,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -1019,8 +1019,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -1153,8 +1153,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -1287,8 +1287,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -1421,8 +1421,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -1555,8 +1555,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -1691,8 +1691,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -1825,8 +1825,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -2089,8 +2089,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -2225,8 +2225,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -2359,8 +2359,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -2493,8 +2493,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=4
 
     # Get the command name chain of the current input, e.g.
@@ -2633,8 +2633,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=2
 
     # Get the command name chain of the current input, e.g.
@@ -2769,8 +2769,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -2903,8 +2903,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -3037,8 +3037,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=()
-options_require_value=()
+options=(["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
@@ -3171,8 +3171,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=(["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" )
-options_require_value=(["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" )
+options=(["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" ["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" ["-v"]="1" ["--virt"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.

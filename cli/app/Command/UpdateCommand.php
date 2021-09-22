@@ -20,6 +20,7 @@ class UpdateCommand extends Command {
         $opts->add('r|ram:', 'Ram Size in MB')->isa('number');
         $opts->add('c|cpu:', 'Number of CPU/Cores')->isa('number');
         $opts->add('g|cgroups:', 'Update CGroups to number of slices')->isa('number');
+		$opts->add('v|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -28,6 +29,7 @@ class UpdateCommand extends Command {
 	}
 
 	public function execute($hostname, $hd) {
+		Vps::init($this->getArgInfoList(), func_get_args(), $this->getOptions());
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
