@@ -76,7 +76,7 @@ class Vps
 		$virts = self::getInstalledVirts();
 		foreach ($virts as $idx => $virt)
 			if (self::$virtType == false || self::$virtType == $virt)
-				return $virt;
+				return self::$virtType = $virt;
 		return false;
     }
 
