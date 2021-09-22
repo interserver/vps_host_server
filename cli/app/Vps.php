@@ -66,10 +66,10 @@ class Vps
     }
 
     public static function isVirtualHost() {
-		$type = Vps::getVirtType();
-		if ($type !== false)
+		$virt = Vps::getVirtType();
+		if ($virt !== false)
 			self::$logger->info2('using '.$virt.' virtualization.');
-		return $type !== false;
+		return $virt !== false;
     }
 
     public static function getVirtType() {
@@ -80,10 +80,10 @@ class Vps
 		return false;
     }
 
-    public static function setVirtType($type) {
-    	if ($type !== false)
-    		self::$logger->info2('trying to force '.$type.' virtualization.');
-		self::$virtType = $type;
+    public static function setVirtType($virt) {
+    	if ($virt !== false)
+    		self::$logger->info2('trying to force '.$virt.' virtualization.');
+		self::$virtType = $virt;
     }
 
     public static function getRunningVps() {
