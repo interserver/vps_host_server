@@ -873,8 +873,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=(["-m"]="1" ["--mac"]="1" ["-o"]="1" ["--order-id"]="1" ["-i"]="1" ["--add-ip"]="1" ["-c"]="1" ["--client-ip"]="1" ["-a"]="1" ["--all"]="1" )
-options_require_value=(["-m"]="1" ["--mac"]="1" ["-o"]="1" ["--order-id"]="1" ["-i"]="1" ["--add-ip"]="1" ["-c"]="1" ["--client-ip"]="1" )
+options=(["-m"]="1" ["--mac"]="1" ["-o"]="1" ["--order-id"]="1" ["-i"]="1" ["--add-ip"]="1" ["-c"]="1" ["--client-ip"]="1" ["-a"]="1" ["--all"]="1" ["-v"]="1" ["--virt"]="1" )
+options_require_value=(["-m"]="1" ["--mac"]="1" ["-o"]="1" ["--order-id"]="1" ["-i"]="1" ["--add-ip"]="1" ["-c"]="1" ["--client-ip"]="1" ["-v"]="1" ["--virt"]="1" )
 local argument_min_length=7
 
     # Get the command name chain of the current input, e.g.
