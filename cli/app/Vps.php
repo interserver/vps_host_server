@@ -310,6 +310,7 @@ class Vps
 	}
 
 	public static function runCommand($cmd, &$return = 0) {
+		self::$logger->indent();
 		self::$logger->info2('runnning:'.$cmd);
 		self::$logger->indent();
 		$output = [];
@@ -319,6 +320,7 @@ class Vps
 			self::$logger->debug('output:'.$line);
 		self::$logger->unIndent();
 		$output = implode(PHP_EOL, $output);
+		self::$logger->unIndent();
 		return $output;
 	}
 }
