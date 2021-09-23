@@ -304,10 +304,10 @@ class Vps
 			self::$logger->info('Setting up CGroups');
 			$cpushares = $slices * 512;
 			$ioweight = 400 + (37 * $slices);
-			echo self::runCommand("virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --current;");
-			echo self::runCommand("virsh schedinfo {$this->hostname} --set cpu_shares={$cpushares} --config;");
-			echo self::runCommand("virsh blkiotune {$this->hostname} --weight {$ioweight} --current;");
-			echo self::runCommand("virsh blkiotune {$this->hostname} --weight {$ioweight} --config;");
+			echo self::runCommand("virsh schedinfo {$hostname} --set cpu_shares={$cpushares} --current;");
+			echo self::runCommand("virsh schedinfo {$hostname} --set cpu_shares={$cpushares} --config;");
+			echo self::runCommand("virsh blkiotune {$hostname} --weight {$ioweight} --current;");
+			echo self::runCommand("virsh blkiotune {$hostname} --weight {$ioweight} --config;");
 		}
 	}
 
