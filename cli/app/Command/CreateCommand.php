@@ -107,7 +107,7 @@ HELP;
 		$this->ram = $ram;
 		$this->cpu = $cpu;
 		$this->password = $password;
-        $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']['value'] == 1;
+        $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
         $this->extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
         $this->clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
 		$this->orderId = array_key_exists('order-id', $opts->keys) ? $opts->keys['order-id']->value : '';
