@@ -45,8 +45,8 @@ class Vps
 		self::$argList = $argList;
 		self::$args = $args;
 		self::$opts = $opts;
-		print_r($argList);
-		print_r($args);
+		//print_r($argList);
+		//print_r($args);
 		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']->value : false);
 	}
 
