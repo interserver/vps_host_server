@@ -108,6 +108,7 @@ class Kvm
 
 	public static function setupStorage($hostname, $device, $pool, $hd) {
 		Vps::getLogger()->info('Creating Storage Pool');
+		$base = Vps::$base;
 		if ($pool == 'zfs') {
 			echo Vps::runCommand("zfs create vz/{$hostname}");
 			@mkdir('/vz/'.$hostname, 0777, true);
@@ -118,7 +119,7 @@ class Kvm
 			//sleep 5s;
 			//device="$(virsh vol-list vz --details|grep " {$hostname}[/ ]"|awk '{ print $2 }')"
 		} else {
-			echo Vps::runCommand("{Vps::$base}/vps_kvm_lvmcreate.sh {$hostname} {$hd}");
+			echo Vps::runCommand("{$base}/vps_kvm_lvmcreate.sh {$hostname} {$hd}");
 			// exit here on failed exit status
 		}
 		Vps::getLogger()->info("{$pool} pool device {$device} created");
@@ -141,6 +142,7 @@ class Kvm
 
 	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll) {
 		Vps::getLogger()->info('Creating VPS Definition');
+		$base = Vps::$base;
 		Vps::getLogger()->indent();
 		if (Vps::vpsExists($hostname)) {
 			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname}");
@@ -150,10 +152,10 @@ class Kvm
 		} else {
 			if ($pool != 'zfs') {
 				Vps::getLogger()->debug('Removing UUID Filterref and IP information');
-				echo Vps::runCommand("grep -v -e uuid -e filterref -e \"<parameter name='IP'\" {Vps::$base}/windows.xml | sed s#\"windows\"#\"{$hostname}\"#g > {$hostname}.xml");
+				echo Vps::runCommand("grep -v -e uuid -e filterref -e \"<parameter name='IP'\" {$base}/windows.xml | sed s#\"windows\"#\"{$hostname}\"#g > {$hostname}.xml");
 			} else {
 				Vps::getLogger()->debug('Removing UUID information');
-				echo Vps::runCommand("grep -v -e uuid {Vps::$base}/windows.xml | sed -e s#\"windows\"#\"{$hostname}\"#g -e s#\"/dev/vz/{$hostname}\"#\"{$device}\"#g > {$hostname}.xml");
+				echo Vps::runCommand("grep -v -e uuid {$base}/windows.xml | sed -e s#\"windows\"#\"{$hostname}\"#g -e s#\"/dev/vz/{$hostname}\"#\"{$device}\"#g > {$hostname}.xml");
 			}
 			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
 				Vps::getLogger()->debug('Replacing KVM Binary Path');
@@ -279,11 +281,12 @@ class Kvm
 		if ($useAll == false) {
 			Kvm::runBuildEbtables();
 		}
-		echo Vps::runCommand("{Vps::$base}/tclimit {$ip};");
+		$base = Vps::$base;
+		echo Vps::runCommand("{$base}/tclimit {$ip};");
 		self::blockSmtp($hostname, $id);
 		if ($pool != 'zfs' && $useAll == false) {
 			echo Vps::runCommand("/admin/kvmenable ebflush;");
-			echo Vps::runCommand("{Vps::$base}/buildebtablesrules | sh;");
+			echo Vps::runCommand("{$base}/buildebtablesrules | sh;");
 		}
 	}
 
@@ -294,21 +297,23 @@ class Kvm
 	public static function setupVnc($hostname, $clientIp) {
 		Vps::getLogger()->info('Setting up VNC');
 		Vps::lockXinetd();
+		$base = Vps::$base;
 		if ($clientIp != '') {
 			$clientIp = escapeshellarg($clientIp);
-			echo Vps::runCommand("{Vps::$base}/vps_kvm_setup_vnc.sh {$hostname} {$clientIp};");
+			echo Vps::runCommand("{$base}/vps_kvm_setup_vnc.sh {$hostname} {$clientIp};");
 		}
-		echo Vps::runCommand("{Vps::$base}/vps_refresh_vnc.sh {$hostname};");
+		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$hostname};");
 		Vps::unlockXinetd();
 		Vps::restartXinetd();
 	}
 
 	public static function installTemplateV2($hostname, $template, $password, $device, $hd, $kpartxOpts) {
 		// kvmv2
+		$base = Vps::$base;
 		$downloadedTemplate = substr($template, 0, 7) == 'http://' || substr($template, 0, 8) == 'https://' || substr($template, 0, 6) == 'ftp://';
 		if ($downloadedTemplate == true) {
 			Vps::getLogger()->info("Downloading {$template} Image");
-			echo Vps::runCommand("{Vps::$base}/vps_get_image.sh \"{$template} zfs\"");
+			echo Vps::runCommand("{$base}/vps_get_image.sh \"{$template} zfs\"");
 			$template = 'image';
 		}
 		if (!file_exists('/vz/templates/'.$template.'.qcow2') && $template != 'empty') {
@@ -353,6 +358,7 @@ class Kvm
 
 	public static function installTemplateV1($hostname, $template, $password, $device, $hd, $kpartxOpts) {
 		$adjust_partitions = 1;
+		$base = Vps::$base;
 		$softraid = trim(Vps::runCommand("grep -l -v idle /sys/block/md*/md/sync_action 2>/dev/null"));
 		$softraid = '' == $softraid ? [] : explode("\n", $softraid);
 		if (count($softraid) > 0)
@@ -362,7 +368,7 @@ class Kvm
 			// image from url
 			$adjust_partitions = 0;
 			Vps::getLogger()->info("Downloading {$template} Image");
-			echo Vps::runCommand("{Vps::$base}/vps_get_image.sh \"{$template}\"");
+			echo Vps::runCommand("{$base}/vps_get_image.sh \"{$template}\"");
 			if (!file_exists('/image_storage/image.img')) {
 				Vps::getLogger()->info("There must have been a problem, the image does not exist");
 				if (count($softraid) > 0)
@@ -427,7 +433,7 @@ class Kvm
 				echo Vps::runCommand("$resizefs -p /dev/mapper/{$pname}{$pn}");
 				@mkdir('/vz/mounts/'.$hostname.$pn, 0777, true);
 				echo Vps::runCommand("mount /dev/mapper/{$pname}{$pn} /vz/mounts/{$hostname}{$pn};");
-				echo Vps::runCommand("echo root:{$password} | chroot /vz/mounts/{$hostname}{$pn} chpasswd || php {Vps::$base}/vps_kvm_password_manual.php {$password} \"/vz/mounts/{$hostname}{$pn}\"");
+				echo Vps::runCommand("echo root:{$password} | chroot /vz/mounts/{$hostname}{$pn} chpasswd || php {$base}/vps_kvm_password_manual.php {$password} \"/vz/mounts/{$hostname}{$pn}\"");
 				if (file_exists('/vz/mounts/'.$hostname.$pn.'/home/kvm')) {
 					echo Vps::runCommand("echo kvm:{$password} | chroot /vz/mounts/{$hostname}{$pn} chpasswd");
 				}

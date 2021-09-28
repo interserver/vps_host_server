@@ -53,6 +53,7 @@ class Virtuozzo
 	public static function setupVnc($hostname, $clientIp) {
 		Vps::getLogger()->info('Setting up VNC');
 		$vncPort = self::getVncPort($hostname);
+		$base = Vps::$base;
 		if ($vncPort == '' || $vncPort < 5901) {
 			$vpsList = self::getList();
 			$ports = [];
@@ -67,9 +68,9 @@ class Virtuozzo
 		Vps::lockXinetd();
 		if ($clientIp != '') {
 			$clientIp = escapeshellarg($clientIp);
-			echo Vps::runCommand("{Vps::$base}/vps_virtuozzo_setup_vnc.sh {$hostname} {$clientIp};");
+			echo Vps::runCommand("{$base}/vps_virtuozzo_setup_vnc.sh {$hostname} {$clientIp};");
 		}
-		echo Vps::runCommand("{Vps::$base}/vps_refresh_vnc.sh {$hostname};");
+		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$hostname};");
 		Vps::unlockXinetd();
 		Vps::restartXinetd();
 	}
