@@ -71,12 +71,22 @@ class Kvm
 		Vps::getLogger()->info('Setting up DHCPD');
 		$mac = Vps::getVpsMac($hostname);
 		$dhcpVps = Vps::getDhcpFile();
-		$dhcpService = Vps::getDhcpService();
 		echo Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
     	echo Vps::runCommand("grep -v -e \"host {$hostname} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
     	echo Vps::runCommand("echo \"host {$hostname} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
     	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
-    	echo Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
+		Kvm::restartDhcpd();
+    }
+
+    public static function removeDhcpd($hostname) {
+		$dhcpVps = Vps::getDhcpFile();
+		echo Vps::runCommand("sed s#\"^host {$hostname} .*$\"#\"\"#g -i {$dhcpVps}");
+    	Kvm::restartDhcpd();
+    }
+
+    public static function restartDhcpd() {
+		$dhcpService = Vps::getDhcpService();
+		echo Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
     }
 
 	public static function getVncPort($hostname) {
@@ -96,56 +106,6 @@ class Kvm
 		return is_numeric($vncPort) ? intval($vncPort) : $vncPort;
 	}
 
-	public static function enableAutostart($hostname) {
-		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("/usr/bin/virsh autostart {$hostname}");
-	}
-
-	public static function disableAutostart($hostname) {
-		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("/usr/bin/virsh autostart --disable {$hostname}");
-	}
-
-	public static function startVps($hostname) {
-		Vps::getLogger()->info('Starting the VPS');
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
-		echo Vps::runCommand("/usr/bin/virsh start {$hostname}");
-		self::runBuildEbtables();
-	}
-
-	public static function stopVps($hostname, $fast = false) {
-		Vps::getLogger()->info('Stopping the VPS');
-		Vps::getLogger()->indent();
-		$stopped = false;
-		if ($fast === false) {
-			Vps::getLogger()->info('Sending Softwawre Power-Off');
-			echo Vps::runCommand("/usr/bin/virsh shutdown {$hostname}");
-			$waited = 0;
-			$maxWait = 120;
-			$sleepTime = 5;
-			while ($waited <= $maxWait && $stopped == false) {
-				if (Vps::isVpsRunning($hostname)) {
-					Vps::getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-					sleep($sleepTime);
-					$waited += $sleepTime;
-					if ($waited % 15 == 0)
-						Vps::runCommand("/usr/bin/virsh shutdown {$hostname}");
-				} else {
-					Vps::getLogger()->info('appears to have cleanly shutdown');
-					$stopped = true;
-				}
-			}
-		}
-		if ($stopped === false) {
-			Vps::getLogger()->info('Sending Hardware Power-Off');
-			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname};");
-		}
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
-		Vps::getLogger()->unIndent();
-	}
-
 	public static function setupStorage($hostname, $device, $pool, $hd) {
 		Vps::getLogger()->info('Creating Storage Pool');
 		if ($pool == 'zfs') {
@@ -162,6 +122,21 @@ class Kvm
 			// exit here on failed exit status
 		}
 		Vps::getLogger()->info("{$pool} pool device {$device} created");
+	}
+
+	public static function removeStorage($hostname) {
+		$pool = Vps::getPoolType();
+		if ($pool == 'zfs') {
+			echo Vps::runCommand("zfs list -t snapshot|grep \"/{$hostname}@\"|cut -d\" \" -f1|xargs -r -n 1 zfs destroy -v");
+			echo Vps::runCommand("virsh vol-delete --pool vz/os.qcow2 {$hostname} 2>/dev/null");
+			echo Vps::runCommand("virsh vol-delete --pool vz {$hostname}");
+			echo Vps::runCommand("zfs destroy vz/{$hostname}");
+			if (file_exists('/vz/'.$hostname))
+				rmdir('/vz/'.$hostname);
+		} else {
+			echo Vps::runCommand("kpartx -dv /dev/vz/{$hostname}");
+			echo Vps::runCommand("lvremove -f /dev/vz/{$hostname}");
+		}
 	}
 
 	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll) {
@@ -235,6 +210,63 @@ class Kvm
 		Vps::getLogger()->unIndent();
 		self::setupDhcpd($hostname, $ip, $mac);
 		return $return == 0;
+	}
+
+	public static function enableAutostart($hostname) {
+		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
+		echo Vps::runCommand("/usr/bin/virsh autostart {$hostname}");
+	}
+
+	public static function disableAutostart($hostname) {
+		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
+		echo Vps::runCommand("/usr/bin/virsh autostart --disable {$hostname}");
+	}
+
+	public static function startVps($hostname) {
+		Vps::getLogger()->info('Starting the VPS');
+		Vps::removeXinetd($hostname);
+		Vps::restartXinetd();
+		echo Vps::runCommand("/usr/bin/virsh start {$hostname}");
+		self::runBuildEbtables();
+	}
+
+	public static function stopVps($hostname, $fast = false) {
+		Vps::getLogger()->info('Stopping the VPS');
+		Vps::getLogger()->indent();
+		$stopped = false;
+		if ($fast === false) {
+			Vps::getLogger()->info('Sending Softwawre Power-Off');
+			echo Vps::runCommand("/usr/bin/virsh shutdown {$hostname}");
+			$waited = 0;
+			$maxWait = 120;
+			$sleepTime = 5;
+			while ($waited <= $maxWait && $stopped == false) {
+				if (Vps::isVpsRunning($hostname)) {
+					Vps::getLogger()->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
+					sleep($sleepTime);
+					$waited += $sleepTime;
+					if ($waited % 15 == 0)
+						Vps::runCommand("/usr/bin/virsh shutdown {$hostname}");
+				} else {
+					Vps::getLogger()->info('appears to have cleanly shutdown');
+					$stopped = true;
+				}
+			}
+		}
+		if ($stopped === false) {
+			Vps::getLogger()->info('Sending Hardware Power-Off');
+			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname};");
+		}
+		Vps::removeXinetd($hostname);
+		Vps::restartXinetd();
+		Vps::getLogger()->unIndent();
+	}
+
+	public static function destroyVps($hostname) {
+		echo Vps::runCommand("virsh managedsave-remove {$hostname}");
+		echo Vps::runCommand("virsh undefine {$hostname}");
+        self::removeStorage($hostname);
+        self::removeDhcpd($hostname);
 	}
 
 	public static function installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts) {

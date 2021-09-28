@@ -35,12 +35,6 @@ class DeleteCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		$vncPort = Vps::getVncPort($hostname);
-		if ($vncPort != '' && intval($vncPort) > 1000) {
-			$vncPort -= 5900;
-			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}");
-		}
-		Vps::stopVps($hostname);
-		Vps::disableAutostart($hostname);
+		Vps::deleteVps($hostname);
 	}
 }

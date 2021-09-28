@@ -223,6 +223,14 @@ class Vps
 		$vncPort += 5900;
 	}
 
+	public static function vncScreenshotSwift($hostname) {
+		$vncPort = self::getVncPort($hostname);
+		if ($vncPort != '' && intval($vncPort) > 1000) {
+			$vncPort -= 5900;
+			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}");
+		}
+	}
+
 	public static function enableAutostart($hostname) {
 		if (self::getVirtType() == 'kvm')
 			Kvm::enableAutostart($hostname);
@@ -257,6 +265,20 @@ class Vps
 	public static function restartVps($hostname) {
 		self::stopVps($hostname);
 		self::startVps($hostname);
+	}
+
+	public static function deleteVps($hostname) {
+		Vps::vncScreenshotSwift($hostname);
+		Vps::stopVps($hostname);
+		Vps::disableAutostart($hostname);
+	}
+
+	public static function destroyVps($hostname) {
+		Vps::deleteVps($hostname);
+		if (self::getVirtType() == 'kvm')
+			Kvm::destroyVps($hostname);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::destroyVps($hostname);
 	}
 
 	public static function addIp($hostname, $ip) {

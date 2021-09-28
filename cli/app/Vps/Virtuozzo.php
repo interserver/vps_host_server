@@ -96,6 +96,10 @@ class Virtuozzo
 		echo Vps::runCommand("prlctl stop {$hostname}");
 	}
 
+	public static function destroyVps($hostname) {
+		echo Vps::runCommand("prlctl delete {$hostname}");
+	}
+
 	public static function setupRouting($hostname, $id) {
 		self::blockSmtp($hostname, $id);
 	}
