@@ -36,8 +36,6 @@ class RemoveIpCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} | grep -v \"value='{$ip}'\" > {$hostname}.xml");
-		echo Vps::runCommand("virsh define {$hostname}.xml");
-		echo Vps::runCommand("rm -f {$hostname}.xml");
+		Vps::removeIp($hostname, $ip);
 	}
 }

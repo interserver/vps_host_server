@@ -288,6 +288,13 @@ class Vps
 			Virtuozzo::addIp($hostname, $ip);
 	}
 
+	public static function removeIp($hostname, $ip) {
+		if (self::getVirtType() == 'kvm')
+			Kvm::removeIp($hostname, $ip);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::removeIp($hostname, $ip);
+	}
+
 	public static function setupRouting($hostname, $ip, $pool, $useAll, $id) {
 		if (self::getVirtType() == 'kvm')
 			Kvm::setupRouting($hostname, $ip, $pool, $useAll, $id);

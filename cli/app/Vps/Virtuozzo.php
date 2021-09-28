@@ -142,6 +142,10 @@ class Virtuozzo
         echo Vps::runCommand("prlctl set {$hostname} --ipadd {$ip}");
 	}
 
+	public static function removeIp($hostname, $ip) {
+		echo Vps::runCommand("prlctl set {$hostname} --setmode restart --ipdel {$ip}");
+	}
+
 /* vps list is an array of entries list this:
 {
   "ID": "ccefa40c-5c72-4e17-94c7-d68034a1c1a5",

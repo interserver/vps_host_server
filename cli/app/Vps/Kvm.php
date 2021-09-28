@@ -464,4 +464,10 @@ class Kvm
 		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml");
 		echo Vps::runCommand("rm -f {$hostname}.xml");
 	}
+
+	public static function removeIp($hostname, $ip) {
+		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} | grep -v \"value='{$ip}'\" > {$hostname}.xml");
+		echo Vps::runCommand("virsh define {$hostname}.xml");
+		echo Vps::runCommand("rm -f {$hostname}.xml");
+	}
 }
