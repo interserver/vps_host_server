@@ -323,11 +323,11 @@ class Vps
 			Kvm::setupStorage($hostname, $device, $pool, $hd);
 	}
 
-	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll, $password) {
+	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $hd, $maxRam, $maxCpu, $useAll, $password) {
 		if (self::getVirtType() == 'kvm')
 			return Kvm::defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll);
 		elseif (self::getVirtType() == 'virtuozzo')
-			return Virtuozzo::defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $password);
+			return Virtuozzo::defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password);
 		return true;
 	}
 

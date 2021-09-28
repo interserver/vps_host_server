@@ -165,6 +165,8 @@ if [ -e /etc/redhat-release ]; then
     yum install http://rpms.remirepo.net/enterprise/remi-release-7.rpm -y;
     yum-config-manager --enable remi-php74;
     yum update -y;
+    # for Virtuozzo 7
+    yum install php74 php74-php-{bcmath,cli,pdo,devel,gd,intl,json,mbstring,opcache,pear,pecl-ev,pecl-event,pecl-eio,pecl-inotify,zstd,xz,xml,xmlrpc,sodium,soap,snmp,process,pecl-zip,pecl-xattr,pecl-yaml,pecl-ssh2,mysqlnd,pecl-igbinary,pecl-imagick} -y
   fi;
 fi
 ```

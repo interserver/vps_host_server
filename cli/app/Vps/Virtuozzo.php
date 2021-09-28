@@ -18,7 +18,7 @@ class Virtuozzo
 		return $return == 0;
 	}
 
-	public static function defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $password) {
+	public static function defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password) {
 		$ram = ceil($ram / 1024);
 		echo Vps::runCommand("prlctl create {$hostname} --vmtype ct --ostemplate {$template}", $return);
 		echo Vps::runCommand("prlctl set {$hostname} --userpasswd root:{$password}");

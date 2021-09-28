@@ -134,7 +134,7 @@ HELP;
 		Vps::setupStorage($this->hostname, $this->device, $this->pool, $this->hd);
 		$this->progress(15);
 		if ($this->error == 0) {
-			if (!Vps::defineVps($this->hostname, $this->template, $this->ip, $this->extraIps, $this->mac, $this->device, $this->pool, $this->ram, $this->cpu, $this->maxRam, $this->maxCpu, $this->useAll, $this->password))
+			if (!Vps::defineVps($this->hostname, $this->template, $this->ip, $this->extraIps, $this->mac, $this->device, $this->pool, $this->ram, $this->cpu, $this->hd, $this->maxRam, $this->maxCpu, $this->useAll, $this->password))
 				$this->error++;
 			else
 			$this->progress(25);
