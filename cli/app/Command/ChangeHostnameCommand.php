@@ -2,6 +2,7 @@
 namespace App\Command;
 
 use App\Vps;
+use App\Vps\Kvm;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -40,18 +41,20 @@ class ChangeHostnameCommand extends Command {
 			$this->getLogger()->error("The VPS '{$newname}' you specified already exists so we cannot rename '{$hostname}' to it.");
 			return 1;
 		}
-		$pool = Vps::getPoolType();
-		Vps::stopVps($hostname);
-		if ($pool == 'zfs') {
-			echo Vps::runCommand("zfs rename vz/{$hostname} vz/{$newname}");
-		} else {
-			echo Vps::runCommand("lvrename /dev/vz/{$hostname} vz/{$newname}");
+		if (Vps::getVirtType() == 'kvm') {
+			$pool = Vps::getPoolType();
+			Vps::stopVps($hostname);
+			if ($pool == 'zfs') {
+				echo Vps::runCommand("zfs rename vz/{$hostname} vz/{$newname}");
+			} else {
+				echo Vps::runCommand("lvrename /dev/vz/{$hostname} vz/{$newname}");
+			}
+			echo Vps::runCommand("virsh domrename {$hostname} {$newname}");
+			echo Vps::runCommand("virsh dumpxml {$newname} > /root/cpaneldirect/vps.xml");
+			echo Vps::runCommand("sed s#\"{$hostname}\"#{$newname}#g -i /root/cpaneldirect/vps.xml");
+			echo Vps::runCommand("virsh define /root/cpaneldirect/vps.xml");
+			echo Vps::runCommand("rm -fv /root/cpaneldirect/vps.xml");
 		}
-		echo Vps::runCommand("virsh domrename {$hostname} {$newname}");
-		echo Vps::runCommand("virsh dumpxml {$newname} > /root/cpaneldirect/vps.xml");
-		echo Vps::runCommand("sed s#\"{$hostname}\"#{$newname}#g -i /root/cpaneldirect/vps.xml");
-		echo Vps::runCommand("virsh define /root/cpaneldirect/vps.xml");
-		echo Vps::runCommand("rm -fv /root/cpaneldirect/vps.xml");
 		foreach (['/etc/dhcpd.vps', '/etc/dhcp/dhcpd.vps', '/root/cpaneldirect/vps.ipmap', '/root/cpaneldirect/vps.mainips', '/root/cpaneldirect/vps.slicemap', '/root/cpaneldirect/vps.vncmap'] as $file) {
 			if (file_exists($file)) {
 				$data = file_get_contents($file);
@@ -59,14 +62,15 @@ class ChangeHostnameCommand extends Command {
 				file_put_contents($file, $data);
 			}
 		}
-		if (file_exists('/etc/apt')) {
-			echo Vps::runCommand("systemctl restart isc-dhcp-server 2>/dev/null || service isc-dhcp-server restart 2>/dev/null || /etc/init.d/isc-dhcp-server restart 2>/dev/null");
-		} else {
-			echo Vps::runCommand("systemctl restart dhcpd 2>/dev/null || service dhcpd restart 2>/dev/null || /etc/init.d/dhcpd restart 2>/dev/null");
-		}
 		echo Vps::runCommand("rm -vf /etc/xinetd.d/{$hostname} /etc/xinetd.d/{$hostname}-spice");
-		echo Vps::runCommand("virsh start {$newname}");
+		if (Vps::getVirtType() == 'kvm') {
+			Kvm::restartDhcpd();
+		} elseif (Vps::getVirtType() == 'virtuozzo') {
+			echo Vps::runCommand("prlctl set {$hostname} --hostname {$newname}");
+		}
+		Vps::startVps($newname);
 		echo Vps::runCommand("/root/cpaneldirect/vps_refresh_vnc.sh {$newname}");
+
 	}
 
 }
