@@ -158,7 +158,7 @@ HELP;
 				Vps::setupCpanel($this->hostname);
 			Vps::setupCgroups($this->hostname, $this->useAll, $this->cpu);
 			$this->progress(90);
-			Vps::setupRouting($this->hostname, $this->ip, $this->pool, $this->useAll);
+			Vps::setupRouting($this->hostname, $this->ip, $this->pool, $this->useAll, $this->orderId);
 			$this->progress(95);
 			Vps::setupVnc($this->hostname, $this->clientIp);
 			Vps::vncScreenshot($this->hostname, $this->url);
