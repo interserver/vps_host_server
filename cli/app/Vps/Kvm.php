@@ -291,7 +291,7 @@ class Kvm
 	}
 
 	public static function blockSmtp($hostname, $id) {
-		echo Vps::runCommand("/admin/kvmenable blocksmtp {$id}");
+		echo Vps::runCommand("/admin/kvmenable blocksmtp {$hostname}");
 	}
 
 	public static function setupVnc($hostname, $clientIp) {

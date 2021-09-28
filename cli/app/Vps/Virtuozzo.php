@@ -107,7 +107,7 @@ class Virtuozzo
 	}
 
 	public static function blockSmtp($hostname, $id) {
-		echo Vps::runCommand("/admin/vzenable blocksmtp {$id}");
+		echo Vps::runCommand("/admin/vzenable blocksmtp {$hostname}");
 	}
 
 	public static function setupWebuzo($hostname) {
