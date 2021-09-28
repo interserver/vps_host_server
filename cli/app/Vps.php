@@ -112,7 +112,7 @@ class Vps
 	}
 
 	public static function getUrl($useAll = false) {
-		return $useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
+		return 'https://mynew.interserver.net/'.($useAll == true ? 'qs' : 'vps').'_queue.php';
 	}
 
 	public static function isRedhatBased() {
