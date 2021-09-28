@@ -356,17 +356,15 @@ class Vps
 	}
 
 	public static function runCommand($cmd, &$return = 0) {
-		self::getLogger()->indent();
-		self::getLogger()->info2('runnning:'.$cmd);
+		self::getLogger()->info2('cmd:'.$cmd);
 		self::getLogger()->indent();
 		$output = [];
 		exec($cmd, $output, $return);
-		self::getLogger()->debug('exit code:'.$return);
+		self::getLogger()->debug('exit:'.$return);
 		foreach ($output as $line)
-			self::getLogger()->debug('output:'.$line);
+			self::getLogger()->debug('out:'.$line);
 		self::getLogger()->unIndent();
-		$output = implode(PHP_EOL, $output);
-		self::getLogger()->unIndent();
-		return $output;
+		$return = implode("\n", $output);
+		return $return;
 	}
 }
