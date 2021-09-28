@@ -225,9 +225,10 @@ class Vps
 	public static function vncScreenshot($hostname, $url) {
 		$vncPort = self::getVncPort($hostname);
 		$vncPort -= 5900;
-		echo self::runCommand("{self::$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
+		$base = self::$base;
+		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
 		sleep(2);
-		echo self::runCommand("{self::$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
+		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
 		$vncPort += 5900;
 	}
 
