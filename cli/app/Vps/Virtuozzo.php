@@ -41,6 +41,23 @@ class Virtuozzo
 		return $vpsList;
 	}
 
+	public static function getVps($hostname) {
+		$vps = json_decode(Vps::runCommand("prlctl list --all --info --full --json {$hostname}"), true);
+		return is_null($vps) ? false : $vps[0];
+	}
+
+	public static function getVpsIps($hostname) {
+		$vps = self::getVps($hostname);
+		$ips = explode(' ', trim($vps['Hardware']['venet0']['ips']));
+		foreach ($ips as $idx => $ip) {
+			// strip the /netmask (ie 127.0.0.1/255.255.255.0 becomes 127.0.0.1)
+			if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches)) {
+				$ips[$idx] = $matches[1];
+			}
+		}
+		return $ips;
+	}
+
 	public static function getVncPort($hostname) {
 		$vpsList = self::getList();
 		$vncPort = '';

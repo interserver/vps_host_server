@@ -17,11 +17,14 @@ class UpdateCommand extends Command {
     /** @param \GetOptionKit\OptionCollection $opts */
 	public function options($opts) {
 		parent::options($opts);
+		$opts->add('v|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
         $opts->add('h|hd:', 'HD Size in GB')->isa('number');
         $opts->add('r|ram:', 'Ram Size in MB')->isa('number');
         $opts->add('c|cpu:', 'Number of CPU/Cores')->isa('number');
         $opts->add('g|cgroups:', 'Update CGroups to number of slices')->isa('number');
-		$opts->add('v|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
+        $opts->add('p|password:', 'Sets the root/Administrator password')->isa('string');
+        $opts->add('u|username:', 'Sets the password for the given username instead of the root/Administrator')->isa('string');
+        $opts->add('q|quota:', 'Enable or Disable Quotas setting them to on or off')->isa('string')->validValues(['on', 'off']);
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -43,6 +46,8 @@ class UpdateCommand extends Command {
 		$updateHd = array_key_exists('hd', $opts->keys);
 		$updateCpu = array_key_exists('cpu', $opts->keys);
 		$updateRam = array_key_exists('ram', $opts->keys);
+		$updatePassword = array_key_exists('password', $opts->keys);
+		$updateQuota = array_key_exists('quota', $opts->keys);
 		$updateCgroups = array_key_exists('cgroups', $opts->keys);
 		if ($updateCpu === true || $updateRam === true)
 			if (Vps::getVirtType() == 'kvm')
@@ -67,6 +72,27 @@ class UpdateCommand extends Command {
 				echo Vps::runCommand("prlctl set {$hostname} --device-set hdd0 --size {$hd}");
 				$hdG = ceil($hd / 1024);
 				echo Vps::runCommand("vzctl set {$hostname}  --diskspace {$hdG}G --save");
+			}
+		}
+		if ($updateQuota === true) {
+			if (Vps::getVirtType() == 'virtuozzo') {
+				$quota = $opts->keys['quota']->value;
+				if ($quota == 'on') {
+					echo Vps::runCommand("prlctl set {$hostname} --quotaugidlimit 200 --save --setmode restart");
+				} elseif ($quota == 'off') {
+                    echo Vps::runCommand("prlctl set {$hostname} --quotaugidlimit 0 --save --setmode restart");
+				} else {
+					$this->getLogger()->error('Invalid Quotas Option, must be on or off');
+				}
+			}
+		}
+		if ($updatePassword === true) {
+			$username = array_key_exists('username', $opts->keys) ? $opts->keys['username']->value : 'root';
+			$username = escapeshellarg($username);
+			$password = $opts->keys['password']->value;
+			$password = escapeshellarg($password);
+			if (Vps::getVirtType() == 'virtuozzo') {
+                echo Vps::runCommand("prlctl set {$hostname} --userpasswd {$username}:{$password}");
 			}
 		}
 		if ($updateCpu === true) {

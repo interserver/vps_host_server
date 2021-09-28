@@ -30,6 +30,12 @@ class Kvm
 		return $pool;
 	}
 
+	public static function getVps($hostname) {
+		$hostname = escapeshellarg($hostname);
+		$vps = XmlToArray::go(trim(Vps::runCommand("/usr/bin/virsh dumpxml {$hostname};")));
+		return $vps;
+	}
+
 	public static function getVpsMac($hostname) {
 		$hostname = escapeshellarg($hostname);
 		$mac = XmlToArray::go(trim(Vps::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['mac_attr']['address'];
@@ -476,4 +482,674 @@ class Kvm
 		echo Vps::runCommand("virsh define {$hostname}.xml");
 		echo Vps::runCommand("rm -f {$hostname}.xml");
 	}
+
+/* getVps returns the xml below as array below it
+<domain type='kvm' id='1'>
+  <name>windows81042</name>
+  <uuid>9b5b4562-8515-4372-93ab-168c65df4c2d</uuid>
+  <memory unit='KiB'>2120704</memory>
+  <currentMemory unit='KiB'>2120704</currentMemory>
+  <vcpu placement='static'>1</vcpu>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-2.11'>hvm</type>
+    <boot dev='cdrom'/>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <pae/>
+    <hap state='on'/>
+  </features>
+  <cpu mode='custom' match='exact' check='full'>
+    <model fallback='forbid'>Broadwell-IBRS</model>
+    <vendor>Intel</vendor>
+    <feature policy='require' name='vme'/>
+    <feature policy='require' name='ss'/>
+    <feature policy='require' name='vmx'/>
+    <feature policy='require' name='f16c'/>
+    <feature policy='require' name='rdrand'/>
+    <feature policy='require' name='hypervisor'/>
+    <feature policy='require' name='arat'/>
+    <feature policy='require' name='tsc_adjust'/>
+    <feature policy='require' name='umip'/>
+    <feature policy='require' name='md-clear'/>
+    <feature policy='require' name='stibp'/>
+    <feature policy='require' name='arch-capabilities'/>
+    <feature policy='require' name='ssbd'/>
+    <feature policy='require' name='xsaveopt'/>
+    <feature policy='require' name='pdpe1gb'/>
+    <feature policy='require' name='abm'/>
+    <feature policy='require' name='ibpb'/>
+    <feature policy='require' name='ibrs'/>
+    <feature policy='require' name='amd-stibp'/>
+    <feature policy='require' name='amd-ssbd'/>
+    <feature policy='require' name='skip-l1dfl-vmentry'/>
+    <feature policy='require' name='pschange-mc-no'/>
+  </cpu>
+  <clock offset='timezone' timezone='America/New_York'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <devices>
+    <emulator>/usr/bin/kvm</emulator>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu'/>
+      <target dev='hda' bus='ide'/>
+      <readonly/>
+      <alias name='ide0-0-0'/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='writeback' discard='unmap'/>
+      <source file='/vz/windows81042/os.qcow2' index='1'/>
+      <backingStore/>
+      <target dev='vda' bus='virtio'/>
+      <alias name='virtio-disk0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+    </disk>
+    <controller type='ide' index='0'>
+      <alias name='ide'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+    </controller>
+    <controller type='scsi' index='0' model='virtio-scsi'>
+      <driver queues='1'/>
+      <alias name='scsi0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+    </controller>
+    <controller type='usb' index='0' model='piix3-uhci'>
+      <alias name='usb'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+      <alias name='pci.0'/>
+    </controller>
+    <interface type='bridge'>
+      <mac address='52:54:00:26:45:ff'/>
+      <source bridge='br0'/>
+      <target dev='vnet0'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='pty'>
+      <source path='/dev/pts/0'/>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+      <alias name='serial0'/>
+    </serial>
+    <console type='pty' tty='/dev/pts/0'>
+      <source path='/dev/pts/0'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <input type='tablet' bus='usb'>
+      <alias name='input0'/>
+      <address type='usb' bus='0' port='1'/>
+    </input>
+    <input type='mouse' bus='ps2'>
+      <alias name='input1'/>
+    </input>
+    <input type='keyboard' bus='ps2'>
+      <alias name='input2'/>
+    </input>
+    <graphics type='vnc' port='5900' autoport='yes' listen='127.0.0.1' keymap='en-us'>
+      <listen type='address' address='127.0.0.1'/>
+    </graphics>
+    <graphics type='spice' port='5901' autoport='yes' listen='127.0.0.1'>
+      <listen type='address' address='127.0.0.1'/>
+      <image compression='auto_glz'/>
+      <streaming mode='filter'/>
+      <mouse mode='client'/>
+      <clipboard copypaste='yes'/>
+    </graphics>
+    <sound model='ac97'>
+      <alias name='sound0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </sound>
+    <video>
+      <model type='vga' vram='16384' heads='1' primary='yes'/>
+      <alias name='video0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <memballoon model='virtio'>
+      <alias name='balloon0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='dynamic' model='apparmor' relabel='yes'>
+    <label>libvirt-9b5b4562-8515-4372-93ab-168c65df4c2d</label>
+    <imagelabel>libvirt-9b5b4562-8515-4372-93ab-168c65df4c2d</imagelabel>
+  </seclabel>
+  <seclabel type='dynamic' model='dac' relabel='yes'>
+    <label>+64055:+108</label>
+    <imagelabel>+64055:+108</imagelabel>
+  </seclabel>
+</domain>
+
+ [                                                                                                                                                                                                                                                                   [463/95837]
+     "domain" => [
+       "name" => "windows81042",
+       "uuid" => "9b5b4562-8515-4372-93ab-168c65df4c2d",
+       "memory" => "2120704",
+       "memory_attr" => [
+         "unit" => "KiB",
+       ],
+       "currentMemory" => "2120704",
+       "currentMemory_attr" => [
+         "unit" => "KiB",
+       ],
+       "vcpu" => "1",
+       "vcpu_attr" => [
+         "placement" => "static",
+       ],
+       "resource" => [
+         "partition" => "/machine",
+       ],
+       "os" => [
+         "type" => "hvm",
+         "type_attr" => [
+           "arch" => "x86_64",
+           "machine" => "pc-i440fx-2.11",
+         ],
+         "boot" => [
+           0 => [],
+           1 => [],
+           "0_attr" => [
+             "dev" => "cdrom",
+           ],
+           "1_attr" => [
+             "dev" => "hd",
+           ],
+         ],
+       ],
+       "features" => [
+         "acpi" => [],
+         "apic" => [],
+         "pae" => [],
+         "hap" => [],
+         "hap_attr" => [
+           "state" => "on",
+         ],
+       ],
+       "cpu" => [
+         "model" => "Broadwell-IBRS",
+         "model_attr" => [
+           "fallback" => "forbid",
+         ],
+         "vendor" => "Intel",
+         "feature" => [
+           0 => [],
+           1 => [],
+           "0_attr" => [
+             "policy" => "require",
+             "name" => "vme",
+           ],
+           "1_attr" => [
+             "policy" => "require",
+             "name" => "ss",
+           ],
+           2 => [],
+           "2_attr" => [
+             "policy" => "require",
+             "name" => "vmx",
+           ],
+           3 => [],
+           "3_attr" => [
+             "policy" => "require",
+             "name" => "f16c",
+           ],
+           4 => [],
+           "4_attr" => [
+             "policy" => "require",
+             "name" => "rdrand",
+           ],
+           5 => [],
+           "5_attr" => [
+             "policy" => "require",
+             "name" => "hypervisor",
+           ],
+           6 => [],
+           "6_attr" => [
+             "policy" => "require",
+             "name" => "arat",
+           ],
+           7 => [],
+           "7_attr" => [
+             "policy" => "require",
+             "name" => "tsc_adjust",
+           ],
+           8 => [],
+           "8_attr" => [
+             "policy" => "require",
+             "name" => "umip",
+           ],
+           9 => [],
+           "9_attr" => [
+             "policy" => "require",
+             "name" => "md-clear",
+           ],
+           10 => [],
+           "10_attr" => [
+             "policy" => "require",
+             "name" => "stibp",
+           ],
+           11 => [],
+           "11_attr" => [
+             "policy" => "require",
+             "name" => "arch-capabilities",
+           ],
+           12 => [],
+           "12_attr" => [
+             "policy" => "require",
+             "name" => "ssbd",
+           ],
+           13 => [],
+           "13_attr" => [
+             "policy" => "require",
+             "name" => "xsaveopt",
+           ],
+           14 => [],
+           "14_attr" => [
+             "policy" => "require",
+             "name" => "pdpe1gb",
+           ],
+           15 => [],
+           "15_attr" => [
+             "policy" => "require",
+             "name" => "abm",
+           ],
+           16 => [],
+           "16_attr" => [
+             "policy" => "require",
+             "name" => "ibpb",
+           ],
+           17 => [],
+           "17_attr" => [
+             "policy" => "require",
+             "name" => "ibrs",
+           ],
+           18 => [],
+           "18_attr" => [
+             "policy" => "require",
+             "name" => "amd-stibp",
+           ],
+           19 => [],
+           "19_attr" => [
+             "policy" => "require",
+             "name" => "amd-ssbd",
+           ],
+           20 => [],
+           "20_attr" => [
+             "policy" => "require",
+             "name" => "skip-l1dfl-vmentry",
+           ],
+           21 => [],
+           "21_attr" => [
+             "policy" => "require",
+             "name" => "pschange-mc-no",
+           ],
+         ],
+       ],
+       "cpu_attr" => [
+         "mode" => "custom",
+         "match" => "exact",
+         "check" => "full",
+       ],
+       "clock" => [],
+       "clock_attr" => [
+         "offset" => "timezone",
+         "timezone" => "America/New_York",
+       ],
+       "on_poweroff" => "destroy",
+       "on_reboot" => "restart",
+       "on_crash" => "restart",
+       "devices" => [
+         "emulator" => "/usr/bin/kvm",
+         "disk" => [
+           0 => [
+             "driver" => [],
+             "driver_attr" => [
+               "name" => "qemu",
+             ],
+             "target" => [],
+             "target_attr" => [
+               "dev" => "hda",
+               "bus" => "ide",
+             ],
+             "readonly" => [],
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "ide0-0-0",
+             ],
+             "address" => [],
+             "address_attr" => [
+               "type" => "drive",
+               "controller" => "0",
+               "bus" => "0",
+               "target" => "0",
+               "unit" => "0",
+             ],
+           ],
+           1 => [
+             "driver" => [],
+             "driver_attr" => [
+               "name" => "qemu",
+               "type" => "qcow2",
+               "cache" => "writeback",
+               "discard" => "unmap",
+             ],
+             "source" => [],
+             "source_attr" => [
+               "file" => "/vz/windows81042/os.qcow2",
+               "index" => "1",
+             ],
+             "backingStore" => [],
+             "target" => [],
+             "target_attr" => [
+               "dev" => "vda",
+               "bus" => "virtio",
+             ],
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "virtio-disk0",
+             ],
+             "address" => [],
+             "address_attr" => [
+               "type" => "pci",
+               "domain" => "0x0000",
+               "bus" => "0x00",
+               "slot" => "0x07",
+               "function" => "0x0",
+             ],
+           ],
+           "0_attr" => [
+             "type" => "file",
+             "device" => "cdrom",
+           ],
+         ],
+         "controller" => [
+           0 => [
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "ide",
+             ],
+             "address" => [],
+             "address_attr" => [
+               "type" => "pci",
+               "domain" => "0x0000",
+               "bus" => "0x00",
+               "slot" => "0x01",
+               "function" => "0x1",
+             ],
+           ],
+           1 => [
+             "driver" => [],
+             "driver_attr" => [
+               "queues" => "1",
+             ],
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "scsi0",
+             ],
+             "address" => [],
+             "address_attr" => [
+               "type" => "pci",
+               "domain" => "0x0000",
+               "bus" => "0x00",
+               "slot" => "0x06",
+               "function" => "0x0",
+             ],
+           ],
+           "0_attr" => [
+             "type" => "ide",
+             "index" => "0",
+           ],
+           2 => [
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "usb",
+             ],
+             "address" => [],
+             "address_attr" => [
+               "type" => "pci",
+               "domain" => "0x0000",
+               "bus" => "0x00",
+               "slot" => "0x01",
+               "function" => "0x2",
+             ],
+           ],
+           3 => [
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "pci.0",
+             ],
+           ],
+         ],
+         "interface" => [
+           "mac" => [],
+           "mac_attr" => [
+             "address" => "52:54:00:26:45:ff",
+           ],
+           "source" => [],
+           "source_attr" => [
+             "bridge" => "br0",
+           ],
+           "target" => [],
+           "target_attr" => [
+             "dev" => "vnet0",
+           ],
+           "model" => [],
+           "model_attr" => [
+             "type" => "virtio",
+           ],
+           "alias" => [],
+           "alias_attr" => [
+             "name" => "net0",
+           ],
+           "address" => [],
+           "address_attr" => [
+             "type" => "pci",
+             "domain" => "0x0000",
+             "bus" => "0x00",
+             "slot" => "0x03",
+             "function" => "0x0",
+           ],
+         ],
+         "interface_attr" => [
+           "type" => "bridge",
+         ],
+         "serial" => [
+           "source" => [],
+           "source_attr" => [
+             "path" => "/dev/pts/0",
+           ],
+           "target" => [
+             "model" => [],
+             "model_attr" => [
+               "name" => "isa-serial",
+             ],
+           ],
+           "target_attr" => [
+             "type" => "isa-serial",
+             "port" => "0",
+           ],
+           "alias" => [],
+           "alias_attr" => [
+             "name" => "serial0",
+           ],
+         ],
+         "serial_attr" => [
+           "type" => "pty",
+         ],
+         "console" => [
+           "source" => [],
+           "source_attr" => [
+             "path" => "/dev/pts/0",
+           ],
+           "target" => [],
+           "target_attr" => [
+             "type" => "serial",
+             "port" => "0",
+           ],
+           "alias" => [],
+           "alias_attr" => [
+             "name" => "serial0",
+           ],
+         ],
+         "console_attr" => [
+           "type" => "pty",
+           "tty" => "/dev/pts/0",
+         ],
+         "input" => [
+           0 => [
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "input0",
+             ],
+             "address" => [],
+             "address_attr" => [
+               "type" => "usb",
+               "bus" => "0",
+               "port" => "1",
+             ],
+           ],
+           1 => [
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "input1",
+             ],
+           ],
+           "0_attr" => [
+             "type" => "tablet",
+             "bus" => "usb",
+           ],
+           2 => [
+             "alias" => [],
+             "alias_attr" => [
+               "name" => "input2",
+             ],
+           ],
+         ],
+         "graphics" => [
+           0 => [
+             "listen" => [],
+             "listen_attr" => [
+               "type" => "address",
+               "address" => "127.0.0.1",
+             ],
+           ],
+           1 => [
+             "listen" => [],
+             "listen_attr" => [
+               "type" => "address",
+               "address" => "127.0.0.1",
+             ],
+             "image" => [],
+             "image_attr" => [
+               "compression" => "auto_glz",
+             ],
+             "streaming" => [],
+             "streaming_attr" => [
+               "mode" => "filter",
+             ],
+             "mouse" => [],
+             "mouse_attr" => [
+               "mode" => "client",
+             ],
+             "clipboard" => [],
+             "clipboard_attr" => [
+               "copypaste" => "yes",
+             ],
+           ],
+           "0_attr" => [
+             "type" => "vnc",
+             "port" => "5900",
+             "autoport" => "yes",
+             "listen" => "127.0.0.1",
+             "keymap" => "en-us",
+           ],
+         ],
+         "sound" => [
+           "alias" => [],
+           "alias_attr" => [
+             "name" => "sound0",
+           ],
+           "address" => [],
+           "address_attr" => [
+             "type" => "pci",
+             "domain" => "0x0000",
+             "bus" => "0x00",
+             "slot" => "0x04",
+             "function" => "0x0",
+           ],
+         ],
+         "sound_attr" => [
+           "model" => "ac97",
+         ],
+         "video" => [
+           "model" => [],
+           "model_attr" => [
+             "type" => "vga",
+             "vram" => "16384",
+             "heads" => "1",
+             "primary" => "yes",
+           ],
+           "alias" => [],
+           "alias_attr" => [
+             "name" => "video0",
+           ],
+           "address" => [],
+           "address_attr" => [
+             "type" => "pci",
+             "domain" => "0x0000",
+             "bus" => "0x00",
+             "slot" => "0x02",
+             "function" => "0x0",
+           ],
+         ],
+         "memballoon" => [
+           "alias" => [],
+           "alias_attr" => [
+             "name" => "balloon0",
+           ],
+           "address" => [],
+           "address_attr" => [
+             "type" => "pci",
+             "domain" => "0x0000",
+             "bus" => "0x00",
+             "slot" => "0x05",
+             "function" => "0x0",
+           ],
+         ],
+         "memballoon_attr" => [
+           "model" => "virtio",
+         ],
+       ],
+       "seclabel" => [
+         0 => [
+           "label" => "libvirt-9b5b4562-8515-4372-93ab-168c65df4c2d",
+           "imagelabel" => "libvirt-9b5b4562-8515-4372-93ab-168c65df4c2d",
+         ],
+         1 => [
+           "label" => "+64055:+108",
+           "imagelabel" => "+64055:+108",
+         ],
+         "0_attr" => [
+           "type" => "dynamic",
+           "model" => "apparmor",
+           "relabel" => "yes",
+         ],
+       ],
+     ],
+     "domain_attr" => [
+       "type" => "kvm",
+       "id" => "1",
+     ],
+   ]
+*/
 }
