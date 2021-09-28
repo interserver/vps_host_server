@@ -42,7 +42,7 @@ class BlockSmtpCommand extends Command {
 			$this->getLogger()->error("Either no ID was passed and we could not guess the ID from the Hostname, or a nonn-numeric ID was passed.");
 			return 1;
 		}
-		echo Vps::runCommand("/admin/kvmenable blocksmtp {$id}");
+		Vps::blockSmtp($hostname, $id);
 	}
 
 /*

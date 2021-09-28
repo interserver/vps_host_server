@@ -19,6 +19,7 @@ class Virtuozzo
 	}
 
 	public static function defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $password) {
+		$ram = ceil($ram / 1024);
 		echo Vps::runCommand("prlctl create {$hostname} --vmtype ct --ostemplate {$template}", $return);
 		echo Vps::runCommand("prlctl set {$hostname} --userpasswd root:{$password}");
 		echo Vps::runCommand("prlctl set {$hostname} --swappages 1G --memsize {$ram}M");
@@ -74,11 +75,15 @@ class Virtuozzo
 	}
 
 	public static function enableAutostart($hostname) {
-		echo Vps::runCommand("prlctl set {$hostname} --onboot yes");
+		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
+		echo Vps::runCommand("prlctl set {$hostname} --onboot yes --autostart on");
+		echo Vps::runCommand("prlctl set {$hostname} --enable");
 	}
 
 	public static function disableAutostart($hostname) {
-		echo Vps::runCommand("prlctl set {$hostname} --onboot no");
+		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
+		echo Vps::runCommand("prlctl set {$hostname} --onboot no --autostart off");
+		echo Vps::runCommand("prlctl set {$hostname} --disable");
 	}
 
 	public static function startVps($hostname) {
@@ -91,8 +96,12 @@ class Virtuozzo
 		echo Vps::runCommand("prlctl stop {$hostname}");
 	}
 
-	public static function setupRouting($hostname) {
-        echo Vps::runCommand("/admin/vzenable blocksmtp {$hostname}");
+	public static function setupRouting($hostname, $id) {
+		self::blockSmtp($hostname, $id);
+	}
+
+	public static function blockSmtp($hostname, $id) {
+		echo Vps::runCommand("/admin/vzenable blocksmtp {$id}");
 	}
 
 	public static function setupWebuzo($hostname) {

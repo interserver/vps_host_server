@@ -266,11 +266,18 @@ class Vps
 			Virtuozzo::addIp($hostname, $ip);
 	}
 
-	public static function setupRouting($hostname, $ip, $pool, $useAll) {
+	public static function setupRouting($hostname, $ip, $pool, $useAll, $id) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::setupRouting($hostname, $ip, $pool, $useAll);
+			Kvm::setupRouting($hostname, $ip, $pool, $useAll, $id);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::setupRouting($hostname);
+			Virtuozzo::setupRouting($hostname, $id);
+	}
+
+	public static function blockSmtp($hostname, $id) {
+		if (self::getVirtType() == 'kvm')
+			Kvm::blockSmtp($hostname, $id);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::blockSmtp($hostname, $id);
 	}
 
 	public static function setupStorage($hostname, $device, $pool, $hd) {

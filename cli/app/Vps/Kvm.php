@@ -97,14 +97,17 @@ class Kvm
 	}
 
 	public static function enableAutostart($hostname) {
+		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
 		echo Vps::runCommand("/usr/bin/virsh autostart {$hostname}");
 	}
 
 	public static function disableAutostart($hostname) {
+		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
 		echo Vps::runCommand("/usr/bin/virsh autostart --disable {$hostname}");
 	}
 
 	public static function startVps($hostname) {
+		Vps::getLogger()->info('Starting the VPS');
 		Vps::removeXinetd($hostname);
 		Vps::restartXinetd();
 		echo Vps::runCommand("/usr/bin/virsh start {$hostname}");
@@ -239,17 +242,21 @@ class Kvm
 		return $pool == 'zfs' ? self::installTemplateV2($hostname, $template, $password, $device, $hd, $kpartxOpts) : self::installTemplateV1($hostname, $template, $password, $device, $hd, $kpartxOpts);
 	}
 
-	public static function setupRouting($hostname, $ip, $pool, $useAll) {
+	public static function setupRouting($hostname, $ip, $pool, $useAll, $id) {
 		Vps::getLogger()->info('Setting up Routing');
 		if ($useAll == false) {
 			Kvm::runBuildEbtables();
 		}
 		echo Vps::runCommand("{Vps::$base}/tclimit {$ip};");
-		echo Vps::runCommand("/admin/kvmenable blocksmtp {$hostname};");
+		self::blockSmtp($hostname, $id);
 		if ($pool != 'zfs' && $useAll == false) {
 			echo Vps::runCommand("/admin/kvmenable ebflush;");
 			echo Vps::runCommand("{Vps::$base}/buildebtablesrules | sh;");
 		}
+	}
+
+	public static function blockSmtp($hostname, $id) {
+		echo Vps::runCommand("/admin/kvmenable blocksmtp {$id}");
 	}
 
 	public static function setupVnc($hostname, $clientIp) {
