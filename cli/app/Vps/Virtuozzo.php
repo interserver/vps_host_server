@@ -37,7 +37,7 @@ class Virtuozzo
 	}
 
 	public static function getList() {
-		$vpsList = json_decode(trim(Vps::runCommand("prlctl list --all --info --full --json")), true);
+		$vpsList = json_decode(Vps::runCommand("prlctl list --all --info --full --json"), true);
 	}
 
 	public static function getVncPort($hostname) {
