@@ -25,7 +25,7 @@ class EjectCdCommand extends Command {
 	}
 
 	public function execute($hostname) {
-		Vps::init($this->getArgInfoList(), func_get_args(), $this->getOptions());
+		Vps::init($this->getOptions(), ['hostname' => $hostname]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");

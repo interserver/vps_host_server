@@ -26,7 +26,7 @@ class SetupVncCommand extends Command {
 	}
 
 	public function execute($hostname, $ip) {
-		Vps::init($this->getArgInfoList(), func_get_args(), $this->getOptions());
+		Vps::init($this->getOptions(), ['hostname' => $hostname, 'ip' => $ip]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -36,8 +36,6 @@ class SetupVncCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		$ip = escapeshellarg($ip);
-		$hostname = escapeshellarg($hostname);
-		echo Vps::runCommand("/root/cpaneldirect/vps_kvm_setup_vnc.sh {$hostname} {$ip}");
+		Vps::setupVnc($hostname, $ip);
 	}
 }

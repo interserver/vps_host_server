@@ -26,7 +26,7 @@ class AddIpCommand extends Command {
 	}
 
 	public function execute($hostname, $ip) {
-		Vps::init($this->getArgInfoList(), func_get_args(), $this->getOptions());
+		Vps::init($this->getOptions(), ['hostname' => $hostname, 'ip' => $ip]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
@@ -36,9 +36,6 @@ class AddIpCommand extends Command {
 			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} > {$hostname}.xml");
-		echo Vps::runCommand("sed s#\"</filterref>\"#\"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>\"#g -i {$hostname}.xml");
-		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml");
-		echo Vps::runCommand("rm -f {$hostname}.xml");
+		Vps::addIp($hostname, $ip);
 	}
 }

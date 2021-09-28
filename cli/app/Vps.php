@@ -2,6 +2,10 @@
 namespace App;
 
 use App\XmlToArray;
+use App\Vps\Kvm;
+use App\Vps\Lxc;
+use App\Vps\Virtuozzo;
+use App\Vps\OpenVz;
 
 class Vps
 {
@@ -21,13 +25,11 @@ class Vps
 		'virt-host-validate'
 	];
 	/** @var \CLIFramework\Logger */
-	public static $logger;
-	/** @var \CLIFramework\ArgInfoList */
-	public static $argList;
+	protected static $logger;
 	/** @var array */
-	public static $args;
+	protected static $args;
 	/** @var \GetOptionKit\OptionCollection */
-	public static $opts;
+	protected static $opts;
 
     /**
     * @param \CLIFramework\Logger $logger
@@ -37,31 +39,34 @@ class Vps
 	}
 
 	/**
-	* @param \CLIFramework\ArgInfoList $argList
-	* @param array $args
-	* @param \GetOptionKit\OptionCollection $opts
+    * @return \CLIFramework\Logger
 	*/
-	public static function init($argList, array $args, $opts) {
-		self::$argList = $argList;
-		self::$args = $args;
+	public static function getLogger() {
+		return self::$logger;
+	}
+
+	/**
+	* @param \GetOptionKit\OptionCollection $opts
+	* @param array $args
+	*/
+	public static function init($opts, array $args) {
 		self::$opts = $opts;
-		//print_r($argList);
-		//print_r($args);
+		self::$args = $args;
 		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']->value : false);
 	}
 
     public static function getInstalledVirts() {
     	if (self::$virtInstalled === false) {
-    		self::$logger->info2('detecting installed virtualization types.');
-    		self::$logger->indent();
+    		self::getLogger()->info2('detecting installed virtualization types.');
+    		self::getLogger()->indent();
 			$found = [];
 			foreach (self::$virtBins as $virt => $virtBin) {
 				if (file_exists($virtBin)) {
-					self::$logger->info2('found '.$virt.' virtualization installed');
+					self::getLogger()->info2('found '.$virt.' virtualization installed');
 					$found[] = $virt;
 				}
 			}
-    		self::$logger->unIndent();
+    		self::getLogger()->unIndent();
 			self::$virtInstalled = $found;
 		}
 		return self::$virtInstalled;
@@ -70,7 +75,7 @@ class Vps
     public static function isVirtualHost() {
 		$virt = self::getVirtType();
 		if ($virt !== false)
-			self::$logger->info2('using '.$virt.' virtualization.');
+			self::getLogger()->info2('using '.$virt.' virtualization.');
 		return $virt !== false;
     }
 
@@ -84,12 +89,15 @@ class Vps
 
     public static function setVirtType($virt) {
     	if ($virt !== false)
-    		self::$logger->info2('trying to force '.$virt.' virtualization.');
+    		self::getLogger()->info2('trying to force '.$virt.' virtualization.');
 		self::$virtType = $virt;
     }
 
     public static function getRunningVps() {
-		return explode("\n", trim(self::runCommand("virsh list --name")));
+		if (self::getVirtType() == 'kvm')
+			return Kvm::getRunningVps();
+		elseif (self::getVirtType() == 'virtuozzo')
+    		return Virtuozzo::getRunningVps();
     }
 
     public static function isVpsRunning($hostname) {
@@ -97,9 +105,14 @@ class Vps
     }
 
 	public static function vpsExists($hostname) {
-		$hostname = escapeshellarg($hostname);
-		echo self::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
-		return $return == 0;
+		if (self::getVirtType() == 'kvm')
+			return Kvm::vpsExists($hostname);
+		elseif (self::getVirtType() == 'virtuozzo')
+			return Virtuozzo::vpsExists($hostname);
+	}
+
+	public static function getUrl($useAll = false) {
+		return $useAll == true ? 'https://myquickserver.interserver.net/qs_queue.php' : 'https://myvps.interserver.net/vps_queue.php';
 	}
 
 	public static function isRedhatBased() {
@@ -112,23 +125,6 @@ class Vps
 
 	public static function getE2fsprogsVersion() {
 		return floatval(trim(self::runCommand("e2fsck -V 2>&1 |head -n 1 | cut -d' ' -f2 | cut -d'.' -f1-2")));
-	}
-
-	public static function getPoolType() {
-		if (self::$virtType == 'kvm') {
-			$pool = XmlToArray::go(trim(self::runCommand("virsh pool-dumpxml vz 2>/dev/null")))['pool_attr']['type'];
-			if ($pool == '') {
-				$base = self::$base;
-				echo self::runCommand("{$base}/create_libvirt_storage_pools.sh");
-				$pool = XmlToArray::go(trim(self::runCommand("virsh pool-dumpxml vz 2>/dev/null")))['pool_attr']['type'];
-			}
-			if (preg_match('/vz/', self::runCommand("virsh pool-list --inactive"))) {
-				echo self::runCommand("virsh pool-start vz;");
-			}
-		} else {
-			echo "dont know how to handle virt type:".self::$virtType.PHP_EOL;
-		}
-		return $pool;
 	}
 
 	public static function getTotalRam() {
@@ -147,24 +143,22 @@ class Vps
 		return intval($matches[1]);
 	}
 
+	public static function getPoolType() {
+		$pool = '';
+		if (self::getVirtType() == 'kvm')
+			$pool = Kvm::getPoolType();
+		else
+			self::getLogger()->error("dont know how to handle virt type:".self::getVirtType());
+		return $pool;
+	}
+
 	public static function getVpsMac($hostname) {
-		$hostname = escapeshellarg($hostname);
-		$mac = XmlToArray::go(trim(self::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['mac_attr']['address'];
-		return $mac;
+		return Kvm::getVpsMac($hostname);
 	}
 
 	public static function getVpsIps($hostname) {
-		$hostname = escapeshellarg($hostname);
-		$params = XmlToArray::go(trim(self::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['filterref']['parameter'];
-		$ips = [];
-		foreach ($params as $idx => $data) {
-			if (array_key_exists('name', $data) && $data['name'] == 'IP') {
-				$ips[] = $data['value'];
-			}
-		}
-		return $ips;
+		return Kvm::getVpsIps($hostname);
 	}
-
 
 	public static function convertIdToMac($id, $useAll) {
 		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';
@@ -173,11 +167,15 @@ class Vps
 		return $mac;
 	}
 
-	public static function runBuildEbtables() {
-		if (self::getPoolType() != 'zfs') {
-			$base = self::$base;
-			echo self::runCommand("bash {$base}/run_buildebtables.sh");
-		}
+	public static function checkDeps() {
+		self::getLogger()->info('Checking for dependancy failures and fixing them');
+    	if (self::isRedhatBased() && self::getRedhatVersion() < 7) {
+			if (self::getE2fsprogsVersion() <= 1.41) {
+				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
+					echo self::runCommand("/admin/ports/install e2fsprogs");
+				}
+			}
+    	}
 	}
 
 	public static function lockXinetd() {
@@ -202,96 +200,58 @@ class Vps
 		return $return == 0;
 	}
 
-	public static function isDhcpRunning() {
-		echo self::runCommand('pidof dhcpd >/dev/null', $return);
-		return $return == 0;
-	}
-
-	public static function getDhcpHosts() {
-		preg_match_all('/^\s*host\s+(\S+)\s+{\s*hardware\s+ethernet\s+(\S+)\s*;\s*fixed-address\s+(\S+)\s*;\s*}/muU', file_get_contents(self::getDhcpFile()), $matches);
-		$hosts = [];
-		foreach ($matches[0] as $idx => $line) {
-			$host = $matches[1][$idx];
-			$mac = $matches[2][$idx];
-			$ip = $matches[3][$idx];
-			$hosts[$host] = ['mac' => $mac, 'ip' => $ip];
-		}
-		return $hosts;
-	}
-
-	public static function getDhcpFile() {
-		return file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
-	}
-
-	public static function getDhcpService() {
-		return file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
-	}
-
 	public static function getVncPort($hostname) {
-		$vncPort = trim(self::runCommand("virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1"));
-		if ($vncPort == '') {
-			sleep(2);
-			$vncPort = trim(self::runCommand("virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1"));
-			if ($vncPort == '') {
-				sleep(2);
-				$vncPort = trim(self::runCommand("virsh dumpxml {$hostname} |grep -i 'graphics type=.vnc.' | cut -d\' -f4"));
-			} else {
-				$vncPort += 5900;
-			}
-		} else {
-			$vncPort += 5900;
-		}
-		return $vncPort;
+		if (self::getVirtType() == 'virtuozzo')
+			return Virtuozzo::getVncPort($hostname);
+		else
+			return Kvm::getVncPort($hostname);
+	}
+
+	public static function setupVnc($hostname, $clientIp = '') {
+		if (self::getVirtType() == 'kvm')
+			Kvm::setupVnc($hostname, $clientIp);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::setupVnc($hostname, $clientIp);
+	}
+
+	public static function vncScreenshot($hostname, $url) {
+		$vncPort = self::getVncPort($hostname);
+		$vncPort -= 5900;
+		echo self::runCommand("{self::$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
+		sleep(2);
+		echo self::runCommand("{self::$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
+		$vncPort += 5900;
 	}
 
 	public static function enableAutostart($hostname) {
-		echo self::runCommand("/usr/bin/virsh autostart {$hostname}");
+		if (self::getVirtType() == 'kvm')
+			Kvm::enableAutostart($hostname);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::enableAutostart($hostname);
 	}
 
 	public static function disableAutostart($hostname) {
-		echo self::runCommand("/usr/bin/virsh autostart --disable {$hostname}");
+		if (self::getVirtType() == 'kvm')
+			Kvm::disableAutostart($hostname);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::disableAutostart($hostname);
 	}
 
 	public static function startVps($hostname) {
-		self::$logger->info('Starting the VPS');
-		self::removeXinetd($hostname);
-		self::restartXinetd();
-		echo self::runCommand("/usr/bin/virsh start {$hostname}");
-		self::runBuildEbtables();
+		self::getLogger()->info('Starting the VPS');
+		if (self::getVirtType() == 'kvm')
+			Kvm::startVps($hostname);
+		elseif (self::getVirtType() == 'virtuozzo')
+        	Virtuozzo::startVps($hostname);
 		if (!self::isVpsRunning($hostname))
 			return 1;
 	}
 
 	public static function stopVps($hostname, $fast = false) {
-		self::$logger->info('Stopping the VPS');
-		self::$logger->indent();
-		$stopped = false;
-		if ($fast === false) {
-			self::$logger->info('Sending Softwawre Power-Off');
-			echo self::runCommand("/usr/bin/virsh shutdown {$hostname}");
-			$waited = 0;
-			$maxWait = 120;
-			$sleepTime = 5;
-			while ($waited <= $maxWait && $stopped == false) {
-				if (self::isVpsRunning($hostname)) {
-					self::$logger->info('still running, waiting (waited '.$waited.'/'.$maxWait.' seconds)');
-					sleep($sleepTime);
-					$waited += $sleepTime;
-					if ($waited % 15 == 0)
-						self::runCommand("/usr/bin/virsh shutdown {$hostname}");
-				} else {
-					self::$logger->info('appears to have cleanly shutdown');
-					$stopped = true;
-				}
-			}
-		}
-		if ($stopped === false) {
-			self::$logger->info('Sending Hardware Power-Off');
-			echo self::runCommand("/usr/bin/virsh destroy {$hostname};");
-		}
-		self::removeXinetd($hostname);
-		self::restartXinetd();
-		self::$logger->unIndent();
+		if (self::getVirtType() == 'kvm')
+			Kvm::stopVps($hostname, $fast);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::stopVps($hostname);
 	}
 
 	public static function restartVps($hostname) {
@@ -299,42 +259,69 @@ class Vps
 		self::startVps($hostname);
 	}
 
-	public static function setupCgroups($hostname, $slices) {
-		if (file_exists('/cgroup/blkio/libvirt/qemu')) {
-			self::$logger->info('Setting up CGroups');
-			$cpushares = $slices * 512;
-			$ioweight = 400 + (37 * $slices);
-			echo self::runCommand("virsh schedinfo {$hostname} --set cpu_shares={$cpushares} --current;");
-			echo self::runCommand("virsh schedinfo {$hostname} --set cpu_shares={$cpushares} --config;");
-			echo self::runCommand("virsh blkiotune {$hostname} --weight {$ioweight} --current;");
-			echo self::runCommand("virsh blkiotune {$hostname} --weight {$ioweight} --config;");
+	public static function addIp($hostname, $ip) {
+		if (self::getVirtType() == 'kvm')
+			Kvm::addIp($hostname, $ip);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::addIp($hostname, $ip);
+	}
+
+	public static function setupRouting($hostname, $ip, $pool, $useAll) {
+		if (self::getVirtType() == 'kvm')
+			Kvm::setupRouting($hostname, $ip, $pool, $useAll);
+		elseif (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::setupRouting($hostname);
+	}
+
+	public static function setupStorage($hostname, $device, $pool, $hd) {
+		if (self::getVirtType() == 'kvm')
+			Kvm::setupStorage($hostname, $device, $pool, $hd);
+	}
+
+	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll, $password) {
+		if (self::getVirtType() == 'kvm')
+			return Kvm::defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll);
+		elseif (self::getVirtType() == 'virtuozzo')
+			return Virtuozzo::defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $password);
+		return true;
+	}
+
+	public static function setupCgroups($hostname, $useAll, $cpu) {
+		$slices = $cpu;
+		if ($useAll == false) {
+			if (self::getVirtType() == 'kvm')
+				Kvm::setupCgroups($hostname, $slices);
 		}
 	}
 
-    public static function setupDhcpd($hostname, $ip, $mac) {
-		self::$logger->info('Setting up DHCPD');
-		$mac = self::getVpsMac($hostname);
-		$dhcpVps = self::getDhcpFile();
-		$dhcpService = self::getDhcpService();
-		echo self::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
-    	echo self::runCommand("grep -v -e \"host {$hostname} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
-    	echo self::runCommand("echo \"host {$hostname} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
-    	echo self::runCommand("rm -f {$dhcpVps}.backup;");
-    	echo self::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
-    }
+	public static function installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts) {
+		if (self::getVirtType() == 'kvm')
+			return Kvm::installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts);
+		return true;
+	}
+
+	public static function setupWebuzo($hostname) {
+		if (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::setupWebuzo($hostname);
+	}
+
+	public static function setupCpanel($hostname) {
+		if (self::getVirtType() == 'virtuozzo')
+			Virtuozzo::setupCpanel($hostname);
+	}
 
 	public static function runCommand($cmd, &$return = 0) {
-		self::$logger->indent();
-		self::$logger->info2('runnning:'.$cmd);
-		self::$logger->indent();
+		self::getLogger()->indent();
+		self::getLogger()->info2('runnning:'.$cmd);
+		self::getLogger()->indent();
 		$output = [];
 		exec($cmd, $output, $return);
-		self::$logger->debug('exit code:'.$return);
+		self::getLogger()->debug('exit code:'.$return);
 		foreach ($output as $line)
-			self::$logger->debug('output:'.$line);
-		self::$logger->unIndent();
+			self::getLogger()->debug('output:'.$line);
+		self::getLogger()->unIndent();
 		$output = implode(PHP_EOL, $output);
-		self::$logger->unIndent();
+		self::getLogger()->unIndent();
 		return $output;
 	}
 }
