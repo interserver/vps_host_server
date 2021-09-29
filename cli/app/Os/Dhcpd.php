@@ -1,6 +1,8 @@
 <?php
 namespace App\Os;
 
+use App\Vps;
+
 /**
 * DHCPD Service Management Class
 */
