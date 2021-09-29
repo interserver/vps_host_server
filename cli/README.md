@@ -40,6 +40,49 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * **insert-cd** Load a CD image into an existing CD-ROM in a Virtual Machine.
 * **test** Perform various self diagnostics to check on the health and prepairedness of the system.
 
+### Debugging
+
+you can add -v to increase verbosity by 1 .. 1 is additional messages, 2 is all the command lines being ran, 3 is also the output and return codes of each command .so like
+```bash
+provirted create vps100 1.2.3.4 ubuntu-20.04 100 4096 4 securepassword;
+provirted desetroy vps100;
+```
+could be called like
+```bash
+provirted -vvv create vps100 1.2.3.4 ubuntu-20.04 100 4096 4 securepassword;
+provirted -vvv destroy vps100;
+```
+the -v has to come berfore the command .. other options come after
+like this is a excerpt of normal output with no -v's
+```bash
+Initializing Variables and process Options and Arguments
+'5'%
+Checking for dependancy failures and fixing them
+'10'%
+Creating Storage Pool
+zfs pool device /vz/vps100/os.qcow2 created
+'15'%
+```
+the same section but run with 2 v's
+```bash
+detecting installed virtualization types.
+  found kvm virtualization installed
+using kvm virtualization.
+Initializing Variables and process Options and Arguments
+cmd:kpartx 2>&1
+cmd:virsh pool-dumpxml vz 2>/dev/null
+cmd:virsh pool-list --inactive
+'5'%
+Checking for dependancy failures and fixing them
+'10'%
+Creating Storage Pool
+cmd:zfs create vz/vps100
+zfs pool device /vz/vps100/os.qcow2 created
+'15'%
+```
+with the 3rd you would also see the output of each command... none of that is needed... but if your trying to dbug stuff or figure out whats happening.. its very useful
+
+
 ## Developer Links
 
 * [c9s/CLIFramework](https://github.com/c9s/CLIFramework) CLIFramework GitHub repo
