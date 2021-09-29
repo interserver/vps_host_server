@@ -15,7 +15,7 @@ class Console extends Application
     	$this->commandGroup('Power', ['stop', 'start', 'restart']);
     	$this->commandGroup('Provisioning', ['create', 'destroy', 'enable', 'delete', 'backup', 'restore', 'test']);
     	$this->commandGroup('Maintanance', ['change-hostname', 'change-timezone', 'install-cpanel', 'reset-password', 'update',
-        	'block-smtp', 'add-ip', 'remove-ip', 'setup-vnc',
+        	'block-smtp', 'add-ip', 'remove-ip', 'change-ip', 'setup-vnc',
         	'enable-cd', 'disable-cd', 'eject-cd', 'insert-cd']);
     	$this->topic('basic');
     	$this->topic('examples');

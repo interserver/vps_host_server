@@ -18,6 +18,86 @@ class Virtuozzo
 		return $return == 0;
 	}
 
+	public static function getList() {
+		$vpsList = json_decode(Vps::runCommand("prlctl list --all --info --full --json"), true);
+		return $vpsList;
+	}
+
+	public static function getVps($hostname) {
+		$vps = json_decode(Vps::runCommand("prlctl list --all --info --full --json {$hostname}"), true);
+		return is_null($vps) ? false : $vps[0];
+	}
+
+	public static function getVpsIps($hostname) {
+		$vps = self::getVps($hostname);
+		$ips = explode(' ', trim($vps['Hardware']['venet0']['ips']));
+		$out = [];
+		foreach ($ips as $idx => $ip) {
+			// strip the /netmask (ie 127.0.0.1/255.255.255.0 becomes 127.0.0.1)
+			if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
+				$out[$matches[1]] = $ip;
+			else
+				$out[$ip] = $ip;
+		}
+		return $out;
+	}
+
+	public static function addIp($hostname, $ip) {
+		$ips = self::getVpsIps($hostname);
+		if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
+			$ip = $matches[1];
+		if (array_key_exists($ip, $ips)) {
+			Vps::getLogger()->error('Skipping adding IP '.$ip.' to '.$hostname.', it already exists in the VPS.');
+			return false;
+		}
+		Vps::getLogger()->error('Adding IP '.$ip.' to '.$hostname);
+        echo Vps::runCommand("prlctl set {$hostname} --ipadd {$ip}");
+        return true;
+	}
+
+	public static function removeIp($hostname, $ip) {
+		$ips = self::getVpsIps($hostname);
+		if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
+			$ip = $matches[1];
+		if (!array_key_exists($ip, $ips)) {
+			Vps::getLogger()->error('Skipping removing IP '.$ip.' from '.$hostname.', it does not appear to exit in the VPS.');
+			return false;
+		}
+		Vps::getLogger()->error('Removing IP '.$ip.' from '.$hostname);
+		echo Vps::runCommand("prlctl set {$hostname} --setmode restart --ipdel {$ips[$ip]}");
+		return true;
+	}
+
+	public static function changeIp($hostname, $ipOld, $ipNew) {
+		$ips = self::getVpsIps($hostname);
+		$ips = array_keys($ips);
+		if (in_array($ipNew, $ips)) {
+			Vps::getLogger()->error('The New IP '.$ipNew.' alreaday exists as one of the IPs ('.implode(',', $ips).') for VPS '.$hostname);
+			return false;
+		}
+		if (!in_array($ipOld, $ips)) {
+			Vps::getLogger()->error('The Old IP '.$iOld.' does not alreaday exist as one of the IPs ('.implode(',', $ips).') for VPS '.$hostname);
+			return false;
+		}
+		if ($ipOld == $ips[0] && count($ips) > 1) {
+			Vps::getLogger()->info("Changing IP from '{$ipOld}' to '{$ipNew}'");
+			Vps::getLogger()->info("Removing all existing IPs and adding '{$ipNew}' to ensure it is still a primary IP");
+			echo Vps::runCommand("prlctl set {$hostname} --ipdel all --ipadd {$ipNew}");
+			for ($x = 1; $x <= count($ips); $x++) {
+				Vps::getLogger()->info("Adding IP {$ips[$x]} to {$hostname}");
+				echo Vps::runCommand("prlctl set {$hostname} --ipadd {$ips[$x]}");
+			}
+		} else {
+			Vps::getLogger()->info("Removing Old IP {$ipOld} to {$hostname}");
+			echo Vps::runCommand("prlctl set {$hostname} --ipdel {$ipOld}");
+			Vps::getLogger()->info("Adding New IP {$ipNew} to {$hostname}");
+			echo Vps::runCommand("prlctl set {$hostname} --ipadd {$ipNew}");
+		}
+		Vps::getLogger()->info("Restarting Virtual Machine '{$hostname}'");
+		echo Vps::runCommand("prlctl restart {$hostname}");
+		return true;
+	}
+
 	public static function defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password) {
 		$ram = ceil($ram / 1024);
 		echo Vps::runCommand("prlctl create {$hostname} --vmtype ct --ostemplate {$template}", $return);
@@ -34,28 +114,6 @@ class Virtuozzo
 		$hdG = ceil($hd / 1024);
 		echo Vps::runCommand("vzctl set {$hostname}  --diskspace {$hdG}G --save");
 		return $return == 0;
-	}
-
-	public static function getList() {
-		$vpsList = json_decode(Vps::runCommand("prlctl list --all --info --full --json"), true);
-		return $vpsList;
-	}
-
-	public static function getVps($hostname) {
-		$vps = json_decode(Vps::runCommand("prlctl list --all --info --full --json {$hostname}"), true);
-		return is_null($vps) ? false : $vps[0];
-	}
-
-	public static function getVpsIps($hostname) {
-		$vps = self::getVps($hostname);
-		$ips = explode(' ', trim($vps['Hardware']['venet0']['ips']));
-		foreach ($ips as $idx => $ip) {
-			// strip the /netmask (ie 127.0.0.1/255.255.255.0 becomes 127.0.0.1)
-			if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches)) {
-				$ips[$idx] = $matches[1];
-			}
-		}
-		return $ips;
 	}
 
 	public static function getVncPort($hostname) {
@@ -155,14 +213,6 @@ class Virtuozzo
 		echo Vps::runCommand("prlctl exec {$hostname} 'cd /opt/cpanel; for i in \$(find * -maxdepth 0 -name \"ea-php*\"); do /usr/local/cpanel/bin/rebuild_phpconf --default=ea-php72 --\$i=lsapi; done'");
 		echo Vps::runCommand("prlctl exec {$hostname} '/scripts/restartsrv_httpd'");
 		echo Vps::runCommand("prlctl exec {$hostname} 'rsync -a rsync://rsync.is.cc/admin /admin && cd /etc/cron.daily && ln -s /admin/wp/webuzo_wp_cli_auto.sh /etc/cron.daily/webuzo_wp_cli_auto.sh'");
-	}
-
-	public static function addIp($hostname, $ip) {
-        echo Vps::runCommand("prlctl set {$hostname} --ipadd {$ip}");
-	}
-
-	public static function removeIp($hostname, $ip) {
-		echo Vps::runCommand("prlctl set {$hostname} --setmode restart --ipdel {$ip}");
 	}
 
 /* vps list is an array of entries list this:

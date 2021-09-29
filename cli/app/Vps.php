@@ -304,6 +304,13 @@ class Vps
 			Virtuozzo::removeIp($hostname, $ip);
 	}
 
+	public static function changeIp($hostname, $ipOld, $ipNew) {
+		if (self::getVirtType() == 'virtuozzo')
+			return Virtuozzo::changeIp($hostname, $ipOld, $ipNew);
+		self::getLogger()->error('Changing an IP is not supported on this platform yet.');
+		return false;
+	}
+
 	public static function setupRouting($hostname, $ip, $pool, $useAll, $id) {
 		if (self::getVirtType() == 'kvm')
 			Kvm::setupRouting($hostname, $ip, $pool, $useAll, $id);

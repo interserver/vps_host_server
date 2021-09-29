@@ -17,12 +17,17 @@ class Kvm
 		return $return == 0;
 	}
 
+	public static function getPool() {
+		$pool = XmlToArray::go(trim(Vps::runCommand("virsh pool-dumpxml vz 2>/dev/null")));
+		return $pool;
+	}
+
 	public static function getPoolType() {
-		$pool = XmlToArray::go(trim(Vps::runCommand("virsh pool-dumpxml vz 2>/dev/null")))['pool_attr']['type'];
+		$pool = self::getPool()['pool_attr']['type'];
 		if ($pool == '') {
 			$base = Vps::$base;
 			echo Vps::runCommand("{$base}/create_libvirt_storage_pools.sh");
-			$pool = XmlToArray::go(trim(Vps::runCommand("virsh pool-dumpxml vz 2>/dev/null")))['pool_attr']['type'];
+			$pool = self::getPool()['pool_attr']['type'];
 		}
 		if (preg_match('/vz/', Vps::runCommand("virsh pool-list --inactive"))) {
 			echo Vps::runCommand("virsh pool-start vz;");
@@ -38,13 +43,13 @@ class Kvm
 
 	public static function getVpsMac($hostname) {
 		$hostname = escapeshellarg($hostname);
-		$mac = XmlToArray::go(trim(Vps::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['mac_attr']['address'];
+		$mac = self::getVps($hostname)['domain']['devices']['interface']['mac_attr']['address'];
 		return $mac;
 	}
 
 	public static function getVpsIps($hostname) {
 		$hostname = escapeshellarg($hostname);
-		$params = XmlToArray::go(trim(Vps::runCommand("/usr/bin/virsh dumpxml {$hostname};")))['domain']['devices']['interface']['filterref']['parameter'];
+		$params = self::getVps($hostname)['domain']['devices']['interface']['filterref']['parameter'];
 		$ips = [];
 		foreach ($params as $idx => $data) {
 			if (array_key_exists('name', $data) && $data['name'] == 'IP') {
@@ -52,6 +57,105 @@ class Kvm
 			}
 		}
 		return $ips;
+	}
+
+	public static function addIp($hostname, $ip) {
+		$ips = self::getVpsIps($hostname);
+		if (in_array($ip, $ips)) {
+			Vps::getLogger()->error('Skipping adding IP '.$ip.' to '.$hostname.', it already exists in the VPS.');
+			return false;
+		}
+		Vps::getLogger()->error('Adding IP '.$ip.' to '.$hostname);
+		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} > {$hostname}.xml");
+		echo Vps::runCommand("sed s#\"</filterref>\"#\"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>\"#g -i {$hostname}.xml");
+		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml");
+		echo Vps::runCommand("rm -f {$hostname}.xml");
+	}
+
+	public static function removeIp($hostname, $ip) {
+		$ips = self::getVpsIps($hostname);
+		if (!in_array($ip, $ips)) {
+			Vps::getLogger()->error('Skipping removing IP '.$ip.' from '.$hostname.', it does not appear to exit in the VPS.');
+			return false;
+		}
+		Vps::getLogger()->error('Removing IP '.$ip.' from '.$hostname);
+		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} | grep -v \"value='{$ip}'\" > {$hostname}.xml");
+		echo Vps::runCommand("virsh define {$hostname}.xml");
+		echo Vps::runCommand("rm -f {$hostname}.xml");
+	}
+
+	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll) {
+		Vps::getLogger()->info('Creating VPS Definition');
+		$base = Vps::$base;
+		Vps::getLogger()->indent();
+		if (Vps::vpsExists($hostname)) {
+			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname}");
+			echo Vps::runCommand("cp {$hostname}.xml {$hostname}.xml.backup");
+			echo Vps::runCommand("/usr/bin/virsh undefine {$hostname}");
+			echo Vps::runCommand("mv -f {$hostname}.xml.backup {$hostname}.xml");
+		} else {
+			if ($pool != 'zfs') {
+				Vps::getLogger()->debug('Removing UUID Filterref and IP information');
+				echo Vps::runCommand("grep -v -e uuid -e filterref -e \"<parameter name='IP'\" {$base}/windows.xml | sed s#\"windows\"#\"{$hostname}\"#g > {$hostname}.xml");
+			} else {
+				Vps::getLogger()->debug('Removing UUID information');
+				echo Vps::runCommand("grep -v -e uuid {$base}/windows.xml | sed -e s#\"windows\"#\"{$hostname}\"#g -e s#\"/dev/vz/{$hostname}\"#\"{$device}\"#g > {$hostname}.xml");
+			}
+			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
+				Vps::getLogger()->debug('Replacing KVM Binary Path');
+				echo Vps::runCommand("sed s#\"/usr/libexec/qemu-kvm\"#\"/usr/bin/kvm\"#g -i {$hostname}.xml");
+			}
+		}
+		if ($useAll == true) {
+			Vps::getLogger()->debug('Removing IP information');
+			echo Vps::runCommand("sed -e s#\"^.*<parameter name='IP.*$\"#\"\"#g -e  s#\"^.*filterref.*$\"#\"\"#g -i {$hostname}.xml");
+		} else {
+			Vps::getLogger()->debug('Replacing UUID Filterref and IP information');
+			$repl = "<parameter name='IP' value='{$ip}'/>";
+			if (count($extraIps) > 0)
+				foreach ($extraIps as $extraIp)
+					$repl = "{$repl}\\n        <parameter name='IP' value='{$extraIp}'/>";
+			echo Vps::runCommand("sed s#\"<parameter name='IP' value.*/>\"#\"{$repl}\"#g -i {$hostname}.xml;");
+		}
+		if ($mac != '') {
+			Vps::getLogger()->debug('Replacing MAC addresss');
+			echo Vps::runCommand("sed s#\"<mac address='.*'\"#\"<mac address='{$mac}'\"#g -i {$hostname}.xml");
+		} else {
+			Vps::getLogger()->debug('Removing MAC address');
+			echo Vps::runCommand("sed s#\"^.*<mac address.*$\"#\"\"#g -i {$hostname}.xml");
+		}
+		Vps::getLogger()->debug('Setting CPU limits');
+		echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$hostname}.xml;");
+		Vps::getLogger()->debug('Setting Max Memory limits');
+		echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$hostname}.xml;");
+		Vps::getLogger()->debug('Setting Memory limits');
+		echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$hostname}.xml;");
+		if (trim(Vps::runCommand("grep -e \"flags.*ept\" -e \"flags.*npt\" /proc/cpuinfo")) != '') {
+			Vps::getLogger()->debug('Adding HAP features flag');
+			echo Vps::runCommand("sed s#\"<features>\"#\"<features>\\n    <hap/>\"#g -i {$hostname}.xml;");
+		}
+		if (trim(Vps::runCommand("date \"+%Z\"")) == 'PDT') {
+			Vps::getLogger()->debug('Setting Timezone to PST');
+			echo Vps::runCommand("sed s#\"America/New_York\"#\"America/Los_Angeles\"#g -i {$hostname}.xml;");
+		}
+		if (file_exists('/etc/lsb-release')) {
+			if (substr($template, 0, 7) == 'windows') {
+				Vps::getLogger()->debug('Adding HyperV block');
+				echo Vps::runCommand("sed -e s#\"</features>\"#\"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>\"#g -i {$hostname}.xml;");
+			Vps::getLogger()->debug('Adding HyperV timer');
+					echo Vps::runCommand("sed -e s#\"<clock offset='timezone' timezone='\([^']*\)'/>\"#\"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>\"#g -i {$hostname}.xml;");
+			}
+			Vps::getLogger()->debug('Customizing SCSI controller');
+			echo Vps::runCommand("sed s#\"\(<controller type='scsi' index='0'.*\)>\"#\"\\1 model='virtio-scsi'>\\n      <driver queues='{$cpu}'/>\"#g -i  {$hostname}.xml;");
+		}
+		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml", $return);
+		echo Vps::runCommand("rm -f {$hostname}.xml");
+		//echo Vps::runCommand("/usr/bin/virsh setmaxmem {$hostname} $maxRam;");
+		//echo Vps::runCommand("/usr/bin/virsh setmem {$hostname} $ram;");
+		//echo Vps::runCommand("/usr/bin/virsh setvcpus {$hostname} $cpu;");
+		Vps::getLogger()->unIndent();
+		self::setupDhcpd($hostname, $ip, $mac);
+		return $return == 0;
 	}
 
 	public static function runBuildEbtables() {
@@ -144,80 +248,6 @@ class Kvm
 			echo Vps::runCommand("kpartx -dv /dev/vz/{$hostname}");
 			echo Vps::runCommand("lvremove -f /dev/vz/{$hostname}");
 		}
-	}
-
-	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll) {
-		Vps::getLogger()->info('Creating VPS Definition');
-		$base = Vps::$base;
-		Vps::getLogger()->indent();
-		if (Vps::vpsExists($hostname)) {
-			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname}");
-			echo Vps::runCommand("cp {$hostname}.xml {$hostname}.xml.backup");
-			echo Vps::runCommand("/usr/bin/virsh undefine {$hostname}");
-			echo Vps::runCommand("mv -f {$hostname}.xml.backup {$hostname}.xml");
-		} else {
-			if ($pool != 'zfs') {
-				Vps::getLogger()->debug('Removing UUID Filterref and IP information');
-				echo Vps::runCommand("grep -v -e uuid -e filterref -e \"<parameter name='IP'\" {$base}/windows.xml | sed s#\"windows\"#\"{$hostname}\"#g > {$hostname}.xml");
-			} else {
-				Vps::getLogger()->debug('Removing UUID information');
-				echo Vps::runCommand("grep -v -e uuid {$base}/windows.xml | sed -e s#\"windows\"#\"{$hostname}\"#g -e s#\"/dev/vz/{$hostname}\"#\"{$device}\"#g > {$hostname}.xml");
-			}
-			if (!file_exists('/usr/libexec/qemu-kvm') && file_exists('/usr/bin/kvm')) {
-				Vps::getLogger()->debug('Replacing KVM Binary Path');
-				echo Vps::runCommand("sed s#\"/usr/libexec/qemu-kvm\"#\"/usr/bin/kvm\"#g -i {$hostname}.xml");
-			}
-		}
-		if ($useAll == true) {
-			Vps::getLogger()->debug('Removing IP information');
-			echo Vps::runCommand("sed -e s#\"^.*<parameter name='IP.*$\"#\"\"#g -e  s#\"^.*filterref.*$\"#\"\"#g -i {$hostname}.xml");
-		} else {
-			Vps::getLogger()->debug('Replacing UUID Filterref and IP information');
-			$repl = "<parameter name='IP' value='{$ip}'/>";
-			if (count($extraIps) > 0)
-				foreach ($extraIps as $extraIp)
-					$repl = "{$repl}\\n        <parameter name='IP' value='{$extraIp}'/>";
-			echo Vps::runCommand("sed s#\"<parameter name='IP' value.*/>\"#\"{$repl}\"#g -i {$hostname}.xml;");
-		}
-		if ($mac != '') {
-			Vps::getLogger()->debug('Replacing MAC addresss');
-			echo Vps::runCommand("sed s#\"<mac address='.*'\"#\"<mac address='{$mac}'\"#g -i {$hostname}.xml");
-		} else {
-			Vps::getLogger()->debug('Removing MAC address');
-			echo Vps::runCommand("sed s#\"^.*<mac address.*$\"#\"\"#g -i {$hostname}.xml");
-		}
-		Vps::getLogger()->debug('Setting CPU limits');
-		echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$hostname}.xml;");
-		Vps::getLogger()->debug('Setting Max Memory limits');
-		echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$hostname}.xml;");
-		Vps::getLogger()->debug('Setting Memory limits');
-		echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$hostname}.xml;");
-		if (trim(Vps::runCommand("grep -e \"flags.*ept\" -e \"flags.*npt\" /proc/cpuinfo")) != '') {
-			Vps::getLogger()->debug('Adding HAP features flag');
-			echo Vps::runCommand("sed s#\"<features>\"#\"<features>\\n    <hap/>\"#g -i {$hostname}.xml;");
-		}
-		if (trim(Vps::runCommand("date \"+%Z\"")) == 'PDT') {
-			Vps::getLogger()->debug('Setting Timezone to PST');
-			echo Vps::runCommand("sed s#\"America/New_York\"#\"America/Los_Angeles\"#g -i {$hostname}.xml;");
-		}
-		if (file_exists('/etc/lsb-release')) {
-			if (substr($template, 0, 7) == 'windows') {
-				Vps::getLogger()->debug('Adding HyperV block');
-				echo Vps::runCommand("sed -e s#\"</features>\"#\"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>\"#g -i {$hostname}.xml;");
-			Vps::getLogger()->debug('Adding HyperV timer');
-					echo Vps::runCommand("sed -e s#\"<clock offset='timezone' timezone='\([^']*\)'/>\"#\"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>\"#g -i {$hostname}.xml;");
-			}
-			Vps::getLogger()->debug('Customizing SCSI controller');
-			echo Vps::runCommand("sed s#\"\(<controller type='scsi' index='0'.*\)>\"#\"\\1 model='virtio-scsi'>\\n      <driver queues='{$cpu}'/>\"#g -i  {$hostname}.xml;");
-		}
-		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml", $return);
-		echo Vps::runCommand("rm -f {$hostname}.xml");
-		//echo Vps::runCommand("/usr/bin/virsh setmaxmem {$hostname} $maxRam;");
-		//echo Vps::runCommand("/usr/bin/virsh setmem {$hostname} $ram;");
-		//echo Vps::runCommand("/usr/bin/virsh setvcpus {$hostname} $cpu;");
-		Vps::getLogger()->unIndent();
-		self::setupDhcpd($hostname, $ip, $mac);
-		return $return == 0;
 	}
 
 	public static function enableAutostart($hostname) {
@@ -468,19 +498,6 @@ class Kvm
 		echo Vps::runCommand("dd \"if={$source}\" \"of={$device}\" 2>&1");
 		echo Vps::runCommand("rm -f dd.progress;");
 		return true;
-	}
-
-	public static function addIp($hostname, $ip) {
-		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} > {$hostname}.xml");
-		echo Vps::runCommand("sed s#\"</filterref>\"#\"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>\"#g -i {$hostname}.xml");
-		echo Vps::runCommand("/usr/bin/virsh define {$hostname}.xml");
-		echo Vps::runCommand("rm -f {$hostname}.xml");
-	}
-
-	public static function removeIp($hostname, $ip) {
-		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$hostname} | grep -v \"value='{$ip}'\" > {$hostname}.xml");
-		echo Vps::runCommand("virsh define {$hostname}.xml");
-		echo Vps::runCommand("rm -f {$hostname}.xml");
 	}
 
 /* getVps returns the xml below as array below it
