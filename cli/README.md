@@ -214,6 +214,11 @@ if [ -e /etc/redhat-release ]; then
 fi
 ```
 
+Some Install Code
+```bash
+cd /root/cpaneldirect && git pull --all && /bin/cp -fv /root/cpaneldirect/cli/provirted_completion /etc/bash_completion.d/ && if [ -e /etc/apt ]; then apt-get update &&  apt-get autoremove -y --purge && apt-get dist-upgrade -y && apt-get autoremove -y --purge && apt-get clean && if [ "$(php -v|head -n 1|cut -c5)" = 7 ]; then exit; fi; else yum update -y && if [ "$(php -v|head -n 1|cut -c5)" = 7 ]; then exit; fi; fi
+```
+
 ## Data Structures Found In Code
 
 ### Virtuozzo
