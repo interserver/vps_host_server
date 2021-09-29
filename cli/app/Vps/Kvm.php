@@ -316,7 +316,7 @@ class Kvm
 
 	public static function setupVnc($hostname, $clientIp) {
 		Vps::getLogger()->info('Setting up VNC');
-		Xinetd::lock;
+		Xinetd::lock();
 		$base = Vps::$base;
 		if ($clientIp != '') {
 			$clientIp = escapeshellarg($clientIp);
