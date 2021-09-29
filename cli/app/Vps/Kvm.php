@@ -18,10 +18,9 @@ class Kvm
     }
 
 	public static function vpsExists($hostname) {
-		//$hostname = escapeshellarg($hostname);
-		//echo Vps::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
-		echo Vps::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null', $return);
-		return $return == 0 ? true : false;
+		$hostname = escapeshellarg($hostname);
+		echo Vps::runCommand("virsh dominfo {$hostname} >/dev/null 2>&1", $return);
+		return $return == 0;
 	}
 
 	public static function getPool() {
