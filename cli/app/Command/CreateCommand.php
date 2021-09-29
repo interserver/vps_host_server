@@ -13,30 +13,6 @@ use CLIFramework\Component\Progress\ProgressBar;
 class CreateCommand extends Command {
     /* log levels: critical[1] error[2] warn[3] info[4] info2[5] debug[6] debug2[7] (default: 4, below current shown) */
 	public $base = '/root/cpaneldirect';
-	public $cpu = 1;
-	public $ram = 1024;
-	public $hd = 25;
-	public $maxCpu = 8;
-	public $maxRam = 16384000;
-	public $useAll = false;
-	public $hostname = '';
-	public $template = '';
-	public $device = '';
-	public $pool = '';
-	public $ip = '';
-	public $mac = '';
-	public $orderId = '';
-	public $password = '';
-	public $extraIps = [];
-    public $softraid = [];
-    public $error = 0;
-    public $adjust_partitions = 1;
-    public $vncPort = '';
-    public $clientIp = '';
-    public $url = '';
-    public $kpartxOpts = '';
-    public $cpanel = false;
-    public $webuzo = false;
 
 	public function brief() {
 		return "Creates a Virtual Machine.";
@@ -70,6 +46,7 @@ HELP;
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
 		$args->add('hostname')->desc('Hostname to use')->isa('string');
 		$args->add('ip')->desc('IP Address')->isa('ip');
 		$args->add('template')->desc('Install Image To Use')->isa('string');
@@ -79,8 +56,8 @@ HELP;
 		$args->add('password')->desc('Root/Administrator password')->optional()->isa('string');
 	}
 
-	public function execute($hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
-		Vps::init($this->getOptions(), ['hostname' => $hostname, 'ip' => $ip, 'template' => $template, 'hd' => $hd, 'ram' => $ram, 'cpu' => $cpu, 'password' => $password]);
+	public function execute($vzid, $hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
+		Vps::init($this->getOptions(), ['vzid' => $vzid, 'hostname' => $hostname, 'ip' => $ip, 'template' => $template, 'hd' => $hd, 'ram' => $ram, 'cpu' => $cpu, 'password' => $password]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
@@ -89,87 +66,80 @@ HELP;
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
 		$opts = $this->getOptions();
 		$this->getLogger()->info('Initializing Variables and process Options and Arguments');
-		$this->hostname = $hostname;
-		$this->ip = $ip;
-		$this->template = $template;
-		$this->hd = $hd;
-		$this->ram = $ram;
-		$this->cpu = $cpu;
-		$this->password = $password;
-        $this->useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
-        $this->extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
-        $this->clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
-		$this->orderId = array_key_exists('order-id', $opts->keys) ? $opts->keys['order-id']->value : '';
-        $this->mac = array_key_exists('mac', $opts->keys) ? $opts->keys['mac']->value : '';
-		if ($this->orderId == '')
-			$this->orderId = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $this->hostname); // convert hostname to id
-		if ($this->mac == '' && is_numeric($this->orderId))
-			$this->mac = Vps::convertIdToMac($this->orderId, $this->useAll); // use id to generate mac address
-        $this->url = Vps::getUrl($this->useAll);
-        $this->kpartxOpts = preg_match('/sync/', Vps::runCommand("kpartx 2>&1")) ? '-s' : '';
-		$this->ram = $this->ram * 1024; // convert ram to kb
-		$this->hd = $this->hd * 1024; // convert hd to mb
-        if ($this->useAll == true) {
-			$this->hd = 'all';
-			$this->ram = Os::getUsableRam();
-			$this->cpu = Os::getCpuCount();
+        $useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
+        $extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
+        $clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
+		$orderId = array_key_exists('order-id', $opts->keys) ? $opts->keys['order-id']->value : '';
+        $mac = array_key_exists('mac', $opts->keys) ? $opts->keys['mac']->value : '';
+		if ($orderId == '')
+			$orderId = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $hostname); // convert hostname to id
+		if ($mac == '' && is_numeric($orderId))
+			$mac = Vps::convertIdToMac($orderId, $useAll); // use id to generate mac address
+        $url = Vps::getUrl($useAll);
+        $kpartxOpts = preg_match('/sync/', Vps::runCommand("kpartx 2>&1")) ? '-s' : '';
+		$ram = $ram * 1024; // convert ram to kb
+		$hd = $hd * 1024; // convert hd to mb
+        if ($useAll == true) {
+			$hd = 'all';
+			$ram = Os::getUsableRam();
+			$cpu = Os::getCpuCount();
         }
-        $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
-    	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
+        $maxCpu = $cpu > 8 ? $cpu : 8;
+    	$maxRam = $ram > 16384000 ? $ram : 16384000;
     	if (Vps::getVirtType() == 'kvm') {
-			$this->pool = Vps::getPoolType();
-			$this->device = $this->pool == 'zfs' ? '/vz/'.$this->hostname.'/os.qcow2' : '/dev/vz/'.$this->hostname;
+			$pool = Vps::getPoolType();
+			$device = $pool == 'zfs' ? '/vz/'.$hostname.'/os.qcow2' : '/dev/vz/'.$hostname;
 		}
         if (Vps::getVirtType() == 'virtuozzo') {
-	        if ($this->template == 'centos-7-x86_64-breadbasket') {
-				$this->template = 'centos-7-x86_64';
-				$this->webuzo = true;
-	        } elseif ($this->template == 'centos-7-x86_64-cpanel') {
-				$this->template = 'centos-7-x86_64';
-				$this->cpanel = true;
+	        if ($template == 'centos-7-x86_64-breadbasket') {
+				$template = 'centos-7-x86_64';
+				$webuzo = true;
+	        } elseif ($template == 'centos-7-x86_64-cpanel') {
+				$template = 'centos-7-x86_64';
+				$cpanel = true;
 	        }
 		}
-		$this->progress(5);
+		$this->progress(5, $url, $orderId);
 		Os::checkDeps();
-		$this->progress(10);
-		Vps::setupStorage($this->hostname, $this->device, $this->pool, $this->hd);
-		$this->progress(15);
-		if ($this->error == 0) {
-			if (!Vps::defineVps($this->hostname, $this->template, $this->ip, $this->extraIps, $this->mac, $this->device, $this->pool, $this->ram, $this->cpu, $this->hd, $this->maxRam, $this->maxCpu, $this->useAll, $this->password))
-				$this->error++;
+		$this->progress(10, $url, $orderId);
+		Vps::setupStorage($hostname, $device, $pool, $hd);
+		$this->progress(15, $url, $orderId);
+		if ($error == 0) {
+			if (!Vps::defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $hd, $maxRam, $maxCpu, $useAll, $password))
+				$error++;
 			else
-			$this->progress(25);
+			$this->progress(25, $url, $orderId);
 		}
-		if ($this->error == 0) {
-			if (!Vps::installTemplate($this->hostname, $this->template, $this->password, $this->device, $this->pool, $this->hd, $this->kpartxOpts))
-				$this->error++;
+		if ($error == 0) {
+			if (!Vps::installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts))
+				$error++;
 			else
-				$this->progress(70);
+				$this->progress(70, $url, $orderId);
 		}
-		if ($this->error == 0) {
+		if ($error == 0) {
 			$this->getLogger()->info('Enabling and Starting up the VPS');
-			Vps::enableAutostart($this->hostname);
-			Vps::startVps($this->hostname);
-			$this->progress(85);
+			Vps::enableAutostart($hostname);
+			Vps::startVps($hostname);
+			$this->progress(85, $url, $orderId);
 		}
-		if ($this->error == 0) {
-			if ($this->webuzo === true)
-				Vps::setupWebuzo($this->hostname);
-			if ($this->cpanel === true)
-				Vps::setupCpanel($this->hostname);
-			Vps::setupCgroups($this->hostname, $this->useAll, $this->cpu);
-			$this->progress(90);
-			Vps::setupRouting($this->hostname, $this->ip, $this->pool, $this->useAll, $this->orderId);
-			$this->progress(95);
-			Vps::setupVnc($this->hostname, $this->clientIp);
-			Vps::vncScreenshot($this->hostname, $this->url);
-			$this->progress(100);
+		if ($error == 0) {
+			if ($webuzo === true)
+				Vps::setupWebuzo($hostname);
+			if ($cpanel === true)
+				Vps::setupCpanel($hostname);
+			Vps::setupCgroups($hostname, $useAll, $cpu);
+			$this->progress(90, $url, $orderId);
+			Vps::setupRouting($hostname, $ip, $pool, $useAll, $orderId);
+			$this->progress(95, $url, $orderId);
+			Vps::setupVnc($hostname, $clientIp);
+			Vps::vncScreenshot($hostname, $url);
+			$this->progress(100, $url, $orderId);
 		}
 	}
 
-    public function progress($progress) {
+    public function progress($progress, $url, $orderId) {
     	$progress = escapeshellarg($progress);
-    	Vps::runCommand("curl --connect-timeout 10 --max-time 20 -k -d action=install_progress -d progress={$progress} -d server={$this->orderId} '{$this->url}' < /dev/null > /dev/null 2>&1;");
+    	Vps::runCommand("curl --connect-timeout 10 --max-time 20 -k -d action=install_progress -d progress={$progress} -d server={$orderId} '{$url}' < /dev/null > /dev/null 2>&1;");
 		$this->getLogger()->writeln($progress.'%');
     }
 }
