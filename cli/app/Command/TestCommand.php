@@ -2,6 +2,7 @@
 namespace App\Command;
 
 use App\Vps;
+use App\Os\Dhcpd;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -48,11 +49,11 @@ class TestCommand extends Command {
 		$logAction->done();
 		$logAction = $logger->newAction('DHCP');
 		$logAction->setStatus('configured');
-		$hosts = Vps::getDhcpHosts();
+		$hosts = Dhcpd::getHosts();
 		$mac = Vps::getVpsMac($hostname);
 		$ips = Vps::getVpsIps($hostname);
 		$logAction->setStatus('running');
-		if (!Vps::isDhcpRunning()) {
+		if (!Dhcpd::isRunning()) {
 			$this->getLogger()->error("XinetD does not appear to be running.");
 			return 1;
 		}

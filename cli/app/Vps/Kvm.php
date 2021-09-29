@@ -3,6 +3,7 @@ namespace App\Vps;
 
 use App\XmlToArray;
 use App\Vps;
+use App\Os\Dhcpd;
 
 class Kvm
 {
@@ -154,7 +155,7 @@ class Kvm
 		//echo Vps::runCommand("/usr/bin/virsh setmem {$hostname} $ram;");
 		//echo Vps::runCommand("/usr/bin/virsh setvcpus {$hostname} $cpu;");
 		Vps::getLogger()->unIndent();
-		self::setupDhcpd($hostname, $ip, $mac);
+		Dhcpd::setup($hostname, $ip, $mac);
 		return $return == 0;
 	}
 
@@ -176,51 +177,6 @@ class Kvm
 			echo Vps::runCommand("virsh blkiotune {$hostname} --weight {$ioweight} --config;");
 		}
 	}
-
-	public static function getDhcpHosts() {
-		$dhcpFile = self::getDhcpFile();
-		$dhcpData = file_get_contents($dhcpFile);
-		$hosts = [];
-		if (preg_match_all('/^\s*host\s+(?P<host>\S+)\s+{\s+hardware\s+ethernet\s+(?P<mac>\S+)\s*;\s*fixed-address\s+(?P<ip>\S+)\s*;\s*}/msuU', $dhcpData, $matches)) {
-			foreach ($matches[0] as $idx => $match) {
-				$host = $matches['host'][$idx];
-				$mac = $matches['mac'][$idx];
-				$ip = $matches['ip'][$idx];
-				$hosts[$host] = ['ip' => $ip, 'mac' => $mac];
-			}
-		}
-		return $hosts;
-	}
-
-	public static function getDhcpFile() {
-		return file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
-	}
-
-	public static function getDhcpService() {
-		return file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
-	}
-
-    public static function setupDhcpd($hostname, $ip, $mac) {
-		Vps::getLogger()->info('Setting up DHCPD');
-		$mac = Vps::getVpsMac($hostname);
-		$dhcpVps = self::getDhcpFile();
-		echo Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
-    	echo Vps::runCommand("grep -v -e \"host {$hostname} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
-    	echo Vps::runCommand("echo \"host {$hostname} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
-    	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
-		self::restartDhcpd();
-    }
-
-    public static function removeDhcpd($hostname) {
-		$dhcpVps = self::getDhcpFile();
-		echo Vps::runCommand("sed s#\"^host {$hostname} .*$\"#\"\"#g -i {$dhcpVps}");
-    	self::restartDhcpd();
-    }
-
-    public static function restartDhcpd() {
-		$dhcpService = self::getDhcpService();
-		echo Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
-    }
 
 	public static function getVncPort($hostname) {
 		$vncPort = trim(Vps::runCommand("virsh vncdisplay {$hostname} | cut -d: -f2 | head -n 1"));
@@ -327,7 +283,7 @@ class Kvm
 		echo Vps::runCommand("virsh managedsave-remove {$hostname}");
 		echo Vps::runCommand("virsh undefine {$hostname}");
         self::removeStorage($hostname);
-        self::removeDhcpd($hostname);
+        Dhcpd::remove($hostname);
 	}
 
 	public static function installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts) {

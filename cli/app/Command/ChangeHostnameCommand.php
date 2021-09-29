@@ -3,6 +3,7 @@ namespace App\Command;
 
 use App\Vps;
 use App\Vps\Kvm;
+use App\Os\Dhcpd;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -64,7 +65,7 @@ class ChangeHostnameCommand extends Command {
 		}
 		echo Vps::runCommand("rm -vf /etc/xinetd.d/{$hostname} /etc/xinetd.d/{$hostname}-spice");
 		if (Vps::getVirtType() == 'kvm') {
-			Kvm::restartDhcpd();
+			Dhcpd::restart();
 		} elseif (Vps::getVirtType() == 'virtuozzo') {
 			echo Vps::runCommand("prlctl set {$hostname} --hostname {$newname}");
 		}
