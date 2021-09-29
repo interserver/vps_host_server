@@ -19,7 +19,8 @@ class Kvm
 
 	public static function vpsExists($hostname) {
 		$hostname = escapeshellarg($hostname);
-		echo Vps::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
+		//echo Vps::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
+		echo Vps::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null', $return);
 		return $return == 0;
 	}
 
@@ -94,7 +95,7 @@ class Kvm
 		Vps::getLogger()->info('Creating VPS Definition');
 		$base = Vps::$base;
 		Vps::getLogger()->indent();
-		if (Vps::vpsExists($hostname)) {
+		if (self::vpsExists($hostname)) {
 			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname}");
 			echo Vps::runCommand("virsh dumpxml {$hostname} > {$hostname}.xml");
 			echo Vps::runCommand("/bin/cp -f {$hostname}.xml {$hostname}.xml.backup");
