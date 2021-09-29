@@ -310,7 +310,7 @@ class Vps
 		foreach ($output as $line)
 			self::getLogger()->debug('out:'.$line);
 		self::getLogger()->unIndent();
-		$return = implode("\n", $output);
-		return $return;
+		$response = implode("\n", $output);
+		return $response;
 	}
 }
