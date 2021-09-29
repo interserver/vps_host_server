@@ -76,7 +76,7 @@ class Virtuozzo
 			return false;
 		}
 		if (!in_array($ipOld, $ips)) {
-			Vps::getLogger()->error('The Old IP '.$iOld.' does not alreaday exist as one of the IPs ('.implode(',', $ips).') for VPS '.$hostname);
+			Vps::getLogger()->error('The Old IP '.$ipOld.' does not alreaday exist as one of the IPs ('.implode(',', $ips).') for VPS '.$hostname);
 			return false;
 		}
 		if ($ipOld == $ips[0] && count($ips) > 1) {
