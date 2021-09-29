@@ -66,6 +66,7 @@ HELP;
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
 		$opts = $this->getOptions();
 		$this->getLogger()->info('Initializing Variables and process Options and Arguments');
+		$error = 0;
         $useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
         $extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
         $clientIp = array_key_exists('client-ip', $opts->keys) ? $opts->keys['client-ip']->value : '';
@@ -90,6 +91,8 @@ HELP;
 			$pool = Vps::getPoolType();
 			$device = $pool == 'zfs' ? '/vz/'.$vzid.'/os.qcow2' : '/dev/vz/'.$vzid;
 		}
+		$webuzo = false;
+		$cpanel = false;
         if (Vps::getVirtType() == 'virtuozzo') {
 	        if ($template == 'centos-7-x86_64-breadbasket') {
 				$template = 'centos-7-x86_64';
