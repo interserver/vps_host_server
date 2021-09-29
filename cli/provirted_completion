@@ -1013,7 +1013,7 @@ subcommand_alias=()
 subcommand_signs=()
 options=(["-v"]="1" ["--virt"]="1" ["-m"]="1" ["--mac"]="1" ["-o"]="1" ["--order-id"]="1" ["-i"]="1" ["--add-ip"]="1" ["-c"]="1" ["--client-ip"]="1" ["-a"]="1" ["--all"]="1" )
 options_require_value=(["-v"]="1" ["--virt"]="1" ["-m"]="1" ["--mac"]="1" ["-o"]="1" ["--order-id"]="1" ["-i"]="1" ["--add-ip"]="1" ["-c"]="1" ["--client-ip"]="1" )
-local argument_min_length=7
+local argument_min_length=8
 
     # Get the command name chain of the current input, e.g.
     # 
@@ -1098,6 +1098,8 @@ if [[ $argument_min_length > 0 ]] ; then
       5)
       ;;
       6)
+      ;;
+      7)
       ;;
   esac
   fi
