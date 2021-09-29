@@ -2,6 +2,7 @@
 namespace App\Command;
 
 use CLIFramework\Command;
+use CLIFramework\Component\Progress\ProgressBar;
 use DateTime;
 use DateTimeInterface;
 
@@ -15,18 +16,23 @@ class NowCommand extends Command {
 	}
 
 	public function samples() {
-		$this->logger->notice('executing bar command.');
+		$this->logger->critical("[1] critical message");
+		$this->logger->error("[2] error message");
+		$this->logger->warn("[3] warn message");
+		$this->logger->info("[4] info message");
+		$this->logger->info2("[5] info2 message");
+		$this->logger->debug("[6] debug message");
+		$this->logger->debug2("[7] debug2 message");
+		$this->logger->notice("[a] notice messsage");
+		$this->logger->writeln('[b] writeln message');
+		$this->progressbar();
 		$this->logger->newline();
-		$this->logger->info('info message');
-		$this->logger->writeln('message formatting end');
-		$this->logger->debug('debug message');
-		$this->logger->writeln('message formatting end');
+		return;
 		$this->logger->newline();
 		$this->tableFromArray();
 		$this->logger->newline();
 		$this->formattingTable();
 		$this->logger->newline();
-		$this->progressbar();
 		$this->logger->newline();
 		$this->tableSimple();
 		$this->logger->newline();
