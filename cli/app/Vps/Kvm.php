@@ -48,13 +48,11 @@ class Kvm
 	}
 
 	public static function getVpsMac($hostname) {
-		$hostname = escapeshellarg($hostname);
 		$mac = self::getVps($hostname)['domain']['devices']['interface']['mac_attr']['address'];
 		return $mac;
 	}
 
 	public static function getVpsIps($hostname) {
-		$hostname = escapeshellarg($hostname);
 		$params = self::getVps($hostname)['domain']['devices']['interface']['filterref']['parameter'];
 		$ips = [];
 		foreach ($params as $idx => $data) {
