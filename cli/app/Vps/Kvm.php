@@ -96,7 +96,8 @@ class Kvm
 		Vps::getLogger()->indent();
 		if (Vps::vpsExists($hostname)) {
 			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname}");
-			echo Vps::runCommand("cp {$hostname}.xml {$hostname}.xml.backup");
+			echo Vps::runCommand("virsh dumpxml {$hostname} > {$hostname}.xml");
+			echo Vps::runCommand("/bin/cp -f {$hostname}.xml {$hostname}.xml.backup");
 			echo Vps::runCommand("/usr/bin/virsh undefine {$hostname}");
 			echo Vps::runCommand("mv -f {$hostname}.xml.backup {$hostname}.xml");
 		} else {
