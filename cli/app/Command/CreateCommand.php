@@ -2,6 +2,7 @@
 namespace App\Command;
 
 use App\Vps;
+use App\Os\Os;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -110,8 +111,8 @@ HELP;
 		$this->hd = $this->hd * 1024; // convert hd to mb
         if ($this->useAll == true) {
 			$this->hd = 'all';
-			$this->ram = Vps::getUsableRam();
-			$this->cpu = Vps::getCpuCount();
+			$this->ram = Os::getUsableRam();
+			$this->cpu = Os::getCpuCount();
         }
         $this->maxCpu = $this->cpu > 8 ? $this->cpu : 8;
     	$this->maxRam = $this->ram > 16384000 ? $this->ram : 16384000;
@@ -129,7 +130,7 @@ HELP;
 	        }
 		}
 		$this->progress(5);
-		Vps::checkDeps();
+		Os::checkDeps();
 		$this->progress(10);
 		Vps::setupStorage($this->hostname, $this->device, $this->pool, $this->hd);
 		$this->progress(15);

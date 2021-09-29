@@ -2,6 +2,7 @@
 namespace App;
 
 use App\XmlToArray;
+use App\Os\Os;
 use App\Vps\Kvm;
 use App\Vps\Lxc;
 use App\Vps\Virtuozzo;
@@ -115,34 +116,6 @@ class Vps
 		return 'https://mynew.interserver.net/'.($useAll == true ? 'qs' : 'vps').'_queue.php';
 	}
 
-	public static function isRedhatBased() {
-		return file_exists('/etc/redhat-release');
-	}
-
-	public static function getRedhatVersion() {
-		return floatval(trim(self::runCommand("cat /etc/redhat-release |sed s#'^[^0-9]* \([0-9\.]*\).*$'#'\\1'#g")));
-	}
-
-	public static function getE2fsprogsVersion() {
-		return floatval(trim(self::runCommand("e2fsck -V 2>&1 |head -n 1 | cut -d' ' -f2 | cut -d'.' -f1-2")));
-	}
-
-	public static function getTotalRam() {
-		preg_match('/^MemTotal:\s+(\d+)\skB/', file_get_contents('/proc/meminfo'), $matches);
-		$ram = floatval($matches[1]);
-		return $ram;
-	}
-
-	public static function getUsableRam() {
-		$ram = floor(self::getTotalRam() / 100 * 70);
-		return $ram;
-	}
-
-	public static function getCpuCount() {
-		preg_match('/CPU\(s\):\s+(\d+)/', self::runCommand("lscpu"), $matches);
-		return intval($matches[1]);
-	}
-
 	public static function getPoolType() {
 		$pool = '';
 		if (self::getVirtType() == 'kvm')
@@ -165,17 +138,6 @@ class Vps
 		$suffix = strtoupper(sprintf("%06s", dechex($id)));
 		$mac = $prefix.':'.substr($suffix, 0, 2).':'.substr($suffix, 2, 2).':'.substr($suffix, 4, 2);
 		return $mac;
-	}
-
-	public static function checkDeps() {
-		self::getLogger()->info('Checking for dependancy failures and fixing them');
-    	if (self::isRedhatBased() && self::getRedhatVersion() < 7) {
-			if (self::getE2fsprogsVersion() <= 1.41) {
-				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
-					echo self::runCommand("/admin/ports/install e2fsprogs");
-				}
-			}
-    	}
 	}
 
 	public static function lockXinetd() {
