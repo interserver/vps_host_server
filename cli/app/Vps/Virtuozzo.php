@@ -2,6 +2,7 @@
 namespace App\Vps;
 
 use App\Vps;
+use App\Os\Xinetd;
 
 class Virtuozzo
 {
@@ -145,14 +146,14 @@ class Virtuozzo
 				$vncPort++;
 	        echo Vps::runCommand("prlctl set {$hostname} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1");
 		}
-		Vps::lockXinetd();
+		Xinetd::lock();
 		if ($clientIp != '') {
 			$clientIp = escapeshellarg($clientIp);
 			echo Vps::runCommand("{$base}/vps_virtuozzo_setup_vnc.sh {$hostname} {$clientIp};");
 		}
 		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$hostname};");
-		Vps::unlockXinetd();
-		Vps::restartXinetd();
+		Xinetd::unlock();
+		Xinetd::restart();
 	}
 
 	public static function enableAutostart($hostname) {

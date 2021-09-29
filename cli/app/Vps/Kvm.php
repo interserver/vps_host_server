@@ -4,6 +4,7 @@ namespace App\Vps;
 use App\XmlToArray;
 use App\Vps;
 use App\Os\Dhcpd;
+use App\Os\Xinetd;
 
 class Kvm
 {
@@ -245,8 +246,8 @@ class Kvm
 
 	public static function startVps($hostname) {
 		Vps::getLogger()->info('Starting the VPS');
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
+		Xinetd::remove($hostname);
+		Xinetd::restart();
 		echo Vps::runCommand("/usr/bin/virsh start {$hostname}");
 		self::runBuildEbtables();
 	}
@@ -278,8 +279,8 @@ class Kvm
 			Vps::getLogger()->info('Sending Hardware Power-Off');
 			echo Vps::runCommand("/usr/bin/virsh destroy {$hostname};");
 		}
-		Vps::removeXinetd($hostname);
-		Vps::restartXinetd();
+		Xinetd::remove($hostname);
+		Xinetd::restart();
 		Vps::getLogger()->unIndent();
 	}
 
@@ -315,15 +316,15 @@ class Kvm
 
 	public static function setupVnc($hostname, $clientIp) {
 		Vps::getLogger()->info('Setting up VNC');
-		Vps::lockXinetd();
+		Xinetd::lock;
 		$base = Vps::$base;
 		if ($clientIp != '') {
 			$clientIp = escapeshellarg($clientIp);
 			echo Vps::runCommand("{$base}/vps_kvm_setup_vnc.sh {$hostname} {$clientIp};");
 		}
 		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$hostname};");
-		Vps::unlockXinetd();
-		Vps::restartXinetd();
+		Xinetd::unlock();
+		Xinetd::restart();
 	}
 
 	public static function installTemplateV2($hostname, $template, $password, $device, $hd, $kpartxOpts) {

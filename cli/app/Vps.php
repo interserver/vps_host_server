@@ -147,28 +147,6 @@ class Vps
 		return $mac;
 	}
 
-	public static function lockXinetd() {
-		touch('/tmp/_securexinetd');
-	}
-
-	public static function unlockXinetd() {
-		echo self::runCommand("rm -f /tmp/_securexinetd;");
-	}
-
-	public static function removeXinetd($hostname) {
-		$hostname = escapeshellarg($hostname);
-		echo self::runCommand("rm -f /etc/xinetd.d/{$hostname}");
-	}
-
-	public static function restartXinetd() {
-		echo self::runCommand("service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null");
-	}
-
-	public static function isXinetdRunning() {
-		echo self::runCommand('pidof xinetd >/dev/null', $return);
-		return $return == 0;
-	}
-
 	public static function getVncPort($hostname) {
 		if (self::getVirtType() == 'virtuozzo')
 			return Virtuozzo::getVncPort($hostname);
