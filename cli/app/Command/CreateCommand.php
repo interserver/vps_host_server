@@ -72,7 +72,7 @@ HELP;
 		$orderId = array_key_exists('order-id', $opts->keys) ? $opts->keys['order-id']->value : '';
         $mac = array_key_exists('mac', $opts->keys) ? $opts->keys['mac']->value : '';
 		if ($orderId == '')
-			$orderId = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $hostname); // convert hostname to id
+			$orderId = str_replace(['qs', 'windows', 'linux', 'vps'], ['', '', '', ''], $vzid); // convert hostname to id
 		if ($mac == '' && is_numeric($orderId))
 			$mac = Vps::convertIdToMac($orderId, $useAll); // use id to generate mac address
         $url = Vps::getUrl($useAll);
@@ -88,7 +88,7 @@ HELP;
     	$maxRam = $ram > 16384000 ? $ram : 16384000;
     	if (Vps::getVirtType() == 'kvm') {
 			$pool = Vps::getPoolType();
-			$device = $pool == 'zfs' ? '/vz/'.$hostname.'/os.qcow2' : '/dev/vz/'.$hostname;
+			$device = $pool == 'zfs' ? '/vz/'.$vzid.'/os.qcow2' : '/dev/vz/'.$vzid;
 		}
         if (Vps::getVirtType() == 'virtuozzo') {
 	        if ($template == 'centos-7-x86_64-breadbasket') {
@@ -102,37 +102,42 @@ HELP;
 		$this->progress(5, $url, $orderId);
 		Os::checkDeps();
 		$this->progress(10, $url, $orderId);
-		Vps::setupStorage($hostname, $device, $pool, $hd);
+		Vps::setupStorage($vzid, $device, $pool, $hd);
 		$this->progress(15, $url, $orderId);
 		if ($error == 0) {
-			if (!Vps::defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $hd, $maxRam, $maxCpu, $useAll, $password))
+			if (!Vps::defineVps($vzid, $hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $hd, $maxRam, $maxCpu, $useAll, $password))
 				$error++;
 			else
 			$this->progress(25, $url, $orderId);
 		}
 		if ($error == 0) {
-			if (!Vps::installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts))
+			if (!Vps::installTemplate($vzid, $template, $password, $device, $pool, $hd, $kpartxOpts))
 				$error++;
 			else
 				$this->progress(70, $url, $orderId);
+			if (Vps::getVirtType() == 'kvm') {
+				$password = escapeshellarg($password);
+				$hostname = escapeshellarg($hostname);
+				echo Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password} --hostname {$hostname};");
+			}
 		}
 		if ($error == 0) {
 			$this->getLogger()->info('Enabling and Starting up the VPS');
-			Vps::enableAutostart($hostname);
-			Vps::startVps($hostname);
+			Vps::enableAutostart($vzid);
+			Vps::startVps($vzid);
 			$this->progress(85, $url, $orderId);
 		}
 		if ($error == 0) {
 			if ($webuzo === true)
-				Vps::setupWebuzo($hostname);
+				Vps::setupWebuzo($vzid);
 			if ($cpanel === true)
-				Vps::setupCpanel($hostname);
-			Vps::setupCgroups($hostname, $useAll, $cpu);
+				Vps::setupCpanel($vzid);
+			Vps::setupCgroups($vzid, $useAll, $cpu);
 			$this->progress(90, $url, $orderId);
-			Vps::setupRouting($hostname, $ip, $pool, $useAll, $orderId);
+			Vps::setupRouting($vzid, $ip, $pool, $useAll, $orderId);
 			$this->progress(95, $url, $orderId);
-			Vps::setupVnc($hostname, $clientIp);
-			Vps::vncScreenshot($hostname, $url);
+			Vps::setupVnc($vzid, $clientIp);
+			Vps::vncScreenshot($vzid, $url);
 			$this->progress(100, $url, $orderId);
 		}
 	}

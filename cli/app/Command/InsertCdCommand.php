@@ -21,19 +21,19 @@ class InsertCdCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
 		$args->add('url')->desc('CD image URL')->isa('string');
 	}
 
-	public function execute($hostname, $url) {
-		Vps::init($this->getOptions(), ['hostname' => $hostname, 'url' => $url]);
+	public function execute($vzid, $url) {
+		Vps::init($this->getOptions(), ['vzid' => $vzid, 'url' => $url]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		if (!Vps::vpsExists($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+		if (!Vps::vpsExists($vzid)) {
+			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
 		$parts = parse_url($url);
@@ -50,10 +50,10 @@ class InsertCdCommand extends Command {
   </source>
 </disk>";
 		file_put_contents('/root/disk.xml', $str);
-		echo Vps::runCommand("virsh update-device {$hostname} /root/disk.xml --live");
-		echo Vps::runCommand("virsh update-device {$hostname} /root/disk.xml --config");
+		echo Vps::runCommand("virsh update-device {$vzid} /root/disk.xml --live");
+		echo Vps::runCommand("virsh update-device {$vzid} /root/disk.xml --config");
 		echo Vps::runCommand("rm -f /root/disk.xml");
-		echo Vps::runCommand("virsh reboot {$hostname}");
+		echo Vps::runCommand("virsh reboot {$vzid}");
 	}
 
 }

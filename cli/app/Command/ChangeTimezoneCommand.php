@@ -21,30 +21,30 @@ class ChangeTimezoneCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
 		$args->add('timezone')->desc('The Timezone, ie America/New_York')->isa('string');
 	}
 
-	public function execute($hostname, $timezone) {
-		Vps::init($this->getOptions(), ['hostname' => $hostname, 'timezone' => $timezone]);
+	public function execute($vzid, $timezone) {
+		Vps::init($this->getOptions(), ['vzid' => $vzid, 'timezone' => $timezone]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		if (!Vps::vpsExists($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+		if (!Vps::vpsExists($vzid)) {
+			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (!Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to be powered on.");
+		if (!Vps::isVpsRunning($vzid)) {
+			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to be powered on.");
 			return 1;
 		}
-		Vps::stopVps($hostname);
-		echo Vps::runCommand("virsh dumpxml {$hostname} > {$hostname}.xml");
-		echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$hostname}.xml");
-		echo Vps::runCommand("virsh define {$hostname}.xml");
-		echo Vps::runCommand("rm -f {$hostname}.xml");
-		Vps::startVps($hostname);
+		Vps::stopVps($vzid);
+		echo Vps::runCommand("virsh dumpxml {$vzid} > {$vzid}.xml");
+		echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml");
+		echo Vps::runCommand("virsh define {$vzid}.xml");
+		echo Vps::runCommand("rm -f {$vzid}.xml");
+		Vps::startVps($vzid);
 	}
 }

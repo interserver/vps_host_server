@@ -21,24 +21,24 @@ class StartCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
 	}
 
-	public function execute($hostname) {
-		Vps::init($this->getOptions(), ['hostname' => $hostname]);
+	public function execute($vzid) {
+		Vps::init($this->getOptions(), ['vzid' => $vzid]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		if (!Vps::vpsExists($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+		if (!Vps::vpsExists($vzid)) {
+			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		if (Vps::isVpsRunning($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified appears to be already running.");
+		if (Vps::isVpsRunning($vzid)) {
+			$this->getLogger()->error("The VPS '{$vzid}' you specified appears to be already running.");
 			return 1;
 		}
-		Vps::startVps($hostname);
+		Vps::startVps($vzid);
 	}
 }

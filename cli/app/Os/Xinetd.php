@@ -17,9 +17,9 @@ class Xinetd
 		echo Vps::runCommand("rm -f /tmp/_securexinetd;");
 	}
 
-	public static function remove($hostname) {
-		$hostname = escapeshellarg($hostname);
-		echo Vps::runCommand("rm -f /etc/xinetd.d/{$hostname} /etc/xinetd.d/{$hostname}-spice");
+	public static function remove($vzid) {
+		$vzid = escapeshellarg($vzid);
+		echo Vps::runCommand("rm -f /etc/xinetd.d/{$vzid} /etc/xinetd.d/{$vzid}-spice");
 	}
 
 	public static function restart() {

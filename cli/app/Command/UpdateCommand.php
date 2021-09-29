@@ -29,18 +29,18 @@ class UpdateCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('hostname')->desc('Hostname to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
 	}
 
-	public function execute($hostname) {
-		Vps::init($this->getOptions(), ['hostname' => $hostname]);
+	public function execute($vzid) {
+		Vps::init($this->getOptions(), ['vzid' => $vzid]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		if (!Vps::vpsExists($hostname)) {
-			$this->getLogger()->error("The VPS '{$hostname}' you specified does not appear to exist, check the name and try again.");
+		if (!Vps::vpsExists($vzid)) {
+			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
 		$updateHd = array_key_exists('hd', $opts->keys);
@@ -51,9 +51,9 @@ class UpdateCommand extends Command {
 		$updateCgroups = array_key_exists('cgroups', $opts->keys);
 		if ($updateCpu === true || $updateRam === true)
 			if (Vps::getVirtType() == 'kvm')
-				Vps::runCommand("virsh dumpxml > {$hostname}.xml;");
+				Vps::runCommand("virsh dumpxml > {$vzid}.xml;");
 		if ($updateCpu === true || $updateRam === true || $updateHd === true)
-			Vps::stopVps($hostname);
+			Vps::stopVps($vzid);
 		if ($updateHd === true) {
 			$hd = $opts->keys['hd']->value;
 			$hd = $hd * 1024;
@@ -61,26 +61,26 @@ class UpdateCommand extends Command {
 				$pool = Vps::getPoolType();
 				if ($pool == 'zfs') {
 					$this->getLogger()->info('Attempting to set ZFS volume size to '.$hd.'MB');
-					echo Vps::runCommand("zfs set volsize={$hd}M vz/{$hostname}");
+					echo Vps::runCommand("zfs set volsize={$hd}M vz/{$vzid}");
 					$this->getLogger()->info('Attempting to resize qcow2 image to '.$hd.'MB');
-					echo Vps::runCommand("qemu-img resize /vz/{$hostname}/os.qcow2 {$hd}M");
+					echo Vps::runCommand("qemu-img resize /vz/{$vzid}/os.qcow2 {$hd}M");
 				} else {
 					$this->getLogger()->info('Attempting to resize LVM volume to '.$hd.'MB');
-					echo Vps::runCommand("sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$hostname} {$hd}");
+					echo Vps::runCommand("sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$vzid} {$hd}");
 				}
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
-				echo Vps::runCommand("prlctl set {$hostname} --device-set hdd0 --size {$hd}");
+				echo Vps::runCommand("prlctl set {$vzid} --device-set hdd0 --size {$hd}");
 				$hdG = ceil($hd / 1024);
-				echo Vps::runCommand("vzctl set {$hostname}  --diskspace {$hdG}G --save");
+				echo Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save");
 			}
 		}
 		if ($updateQuota === true) {
 			if (Vps::getVirtType() == 'virtuozzo') {
 				$quota = $opts->keys['quota']->value;
 				if ($quota == 'on') {
-					echo Vps::runCommand("prlctl set {$hostname} --quotaugidlimit 200 --save --setmode restart");
+					echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 200 --save --setmode restart");
 				} elseif ($quota == 'off') {
-                    echo Vps::runCommand("prlctl set {$hostname} --quotaugidlimit 0 --save --setmode restart");
+                    echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
 				} else {
 					$this->getLogger()->error('Invalid Quotas Option, must be on or off');
 				}
@@ -92,7 +92,7 @@ class UpdateCommand extends Command {
 			$password = $opts->keys['password']->value;
 			$password = escapeshellarg($password);
 			if (Vps::getVirtType() == 'virtuozzo') {
-                echo Vps::runCommand("prlctl set {$hostname} --userpasswd {$username}:{$password}");
+                echo Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}");
 			}
 		}
 		if ($updateCpu === true) {
@@ -100,11 +100,11 @@ class UpdateCommand extends Command {
 			$maxCpu = $cpu > 8 ? $cpu : 8;
     		$this->getLogger()->debug('Setting CPU limits');
 			if (Vps::getVirtType() == 'kvm') {
-    			echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$hostname}.xml;");
+    			echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$vzid}.xml;");
     		} elseif (Vps::getVirtType() == 'virtuozzo') {
-				echo Vps::runCommand("prlctl set {$hostname} --cpus {$cpu}");
+				echo Vps::runCommand("prlctl set {$vzid} --cpus {$cpu}");
 				$cpuUnits = 1500 * $cpu;
-				echo Vps::runCommand("prlctl set {$hostname} --cpuunits {$cpuUnits}");
+				echo Vps::runCommand("prlctl set {$vzid} --cpuunits {$cpuUnits}");
 			}
 		}
 		if ($updateRam === true) {
@@ -113,26 +113,26 @@ class UpdateCommand extends Command {
     		$maxRam = $ram > 16384000 ? $ram : 16384000;
     		$this->getLogger()->debug('Setting Max Memory limits');
 			if (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$hostname}.xml;");
+				echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$vzid}.xml;");
 				$this->getLogger()->debug('Setting Memory limits');
-				echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$hostname}.xml;");
+				echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$vzid}.xml;");
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
 				$ramM = ceil($ram / 1024);
-				echo Vps::runCommand("prlctl set {$hostname} --swappages 1G --memsize {$ramM}M");
+				echo Vps::runCommand("prlctl set {$vzid} --swappages 1G --memsize {$ramM}M");
 			}
 		}
 		if ($updateCpu === true || $updateRam === true) {
 			if (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("virsh define {$hostname}.xml;");
-				echo Vps::runCommand("rm -f {$hostname}.xml");
+				echo Vps::runCommand("virsh define {$vzid}.xml;");
+				echo Vps::runCommand("rm -f {$vzid}.xml");
 			}
 		}
 		if ($updateCpu === true || $updateRam === true || $updateHd === true)
-			Vps::startVps($hostname);
+			Vps::startVps($vzid);
 		if ($updateCgroups === true) {
 			$slices = $opts->keys['cgroups']->value;
 			if (Vps::getVirtType() == 'kvm')
-				Kvm::setupCgroups($hostname, $slices);
+				Kvm::setupCgroups($vzid, $slices);
 		}
 	}
 }

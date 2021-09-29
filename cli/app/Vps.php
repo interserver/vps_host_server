@@ -108,15 +108,15 @@ class Vps
     		return Virtuozzo::getAllVps();
     }
 
-    public static function isVpsRunning($hostname) {
-		return in_array($hostname, self::getRunningVps());
+    public static function isVpsRunning($vzid) {
+		return in_array($vzid, self::getRunningVps());
     }
 
-	public static function vpsExists($hostname) {
+	public static function vpsExists($vzid) {
 		if (self::getVirtType() == 'kvm')
-			return Kvm::vpsExists($hostname);
+			return Kvm::vpsExists($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
-			return Virtuozzo::vpsExists($hostname);
+			return Virtuozzo::vpsExists($vzid);
 	}
 
 	public static function getUrl($useAll = false) {
@@ -132,12 +132,12 @@ class Vps
 		return $pool;
 	}
 
-	public static function getVpsMac($hostname) {
-		return Kvm::getVpsMac($hostname);
+	public static function getVpsMac($vzid) {
+		return Kvm::getVpsMac($vzid);
 	}
 
-	public static function getVpsIps($hostname) {
-		return Kvm::getVpsIps($hostname);
+	public static function getVpsIps($vzid) {
+		return Kvm::getVpsIps($vzid);
 	}
 
 	public static function convertIdToMac($id, $useAll) {
@@ -147,158 +147,158 @@ class Vps
 		return $mac;
 	}
 
-	public static function getVncPort($hostname) {
+	public static function getVncPort($vzid) {
 		if (self::getVirtType() == 'virtuozzo')
-			return Virtuozzo::getVncPort($hostname);
+			return Virtuozzo::getVncPort($vzid);
 		else
-			return Kvm::getVncPort($hostname);
+			return Kvm::getVncPort($vzid);
 	}
 
-	public static function setupVnc($hostname, $clientIp = '') {
+	public static function setupVnc($vzid, $clientIp = '') {
 		if (self::getVirtType() == 'kvm')
-			Kvm::setupVnc($hostname, $clientIp);
+			Kvm::setupVnc($vzid, $clientIp);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::setupVnc($hostname, $clientIp);
+			Virtuozzo::setupVnc($vzid, $clientIp);
 	}
 
-	public static function vncScreenshot($hostname, $url) {
-		$vncPort = self::getVncPort($hostname);
+	public static function vncScreenshot($vzid, $url) {
+		$vncPort = self::getVncPort($vzid);
 		$vncPort -= 5900;
 		$base = self::$base;
-		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
+		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
 		sleep(2);
-		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$hostname}\";");
+		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
 		$vncPort += 5900;
 	}
 
-	public static function vncScreenshotSwift($hostname) {
-		$vncPort = self::getVncPort($hostname);
+	public static function vncScreenshotSwift($vzid) {
+		$vncPort = self::getVncPort($vzid);
 		if ($vncPort != '' && intval($vncPort) > 1000) {
 			$vncPort -= 5900;
-			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$hostname}");
+			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}");
 		}
 	}
 
-	public static function enableAutostart($hostname) {
+	public static function enableAutostart($vzid) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::enableAutostart($hostname);
+			Kvm::enableAutostart($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::enableAutostart($hostname);
+			Virtuozzo::enableAutostart($vzid);
 	}
 
-	public static function disableAutostart($hostname) {
+	public static function disableAutostart($vzid) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::disableAutostart($hostname);
+			Kvm::disableAutostart($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::disableAutostart($hostname);
+			Virtuozzo::disableAutostart($vzid);
 	}
 
-	public static function startVps($hostname) {
+	public static function startVps($vzid) {
 		self::getLogger()->info('Starting the VPS');
 		if (self::getVirtType() == 'kvm')
-			Kvm::startVps($hostname);
+			Kvm::startVps($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
-        	Virtuozzo::startVps($hostname);
-		if (!self::isVpsRunning($hostname))
+        	Virtuozzo::startVps($vzid);
+		if (!self::isVpsRunning($vzid))
 			return 1;
 	}
 
-	public static function stopVps($hostname, $fast = false) {
+	public static function stopVps($vzid, $fast = false) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::stopVps($hostname, $fast);
+			Kvm::stopVps($vzid, $fast);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::stopVps($hostname);
+			Virtuozzo::stopVps($vzid);
 	}
 
-	public static function restartVps($hostname) {
-		self::stopVps($hostname);
-		self::startVps($hostname);
+	public static function restartVps($vzid) {
+		self::stopVps($vzid);
+		self::startVps($vzid);
 	}
 
-	public static function deleteVps($hostname) {
-		Vps::vncScreenshotSwift($hostname);
-		Vps::stopVps($hostname);
-		Vps::disableAutostart($hostname);
+	public static function deleteVps($vzid) {
+		Vps::vncScreenshotSwift($vzid);
+		Vps::stopVps($vzid);
+		Vps::disableAutostart($vzid);
 	}
 
-	public static function destroyVps($hostname) {
-		Vps::deleteVps($hostname);
+	public static function destroyVps($vzid) {
+		Vps::deleteVps($vzid);
 		if (self::getVirtType() == 'kvm')
-			Kvm::destroyVps($hostname);
+			Kvm::destroyVps($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::destroyVps($hostname);
+			Virtuozzo::destroyVps($vzid);
 	}
 
-	public static function addIp($hostname, $ip) {
+	public static function addIp($vzid, $ip) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::addIp($hostname, $ip);
+			Kvm::addIp($vzid, $ip);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::addIp($hostname, $ip);
+			Virtuozzo::addIp($vzid, $ip);
 	}
 
-	public static function removeIp($hostname, $ip) {
+	public static function removeIp($vzid, $ip) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::removeIp($hostname, $ip);
+			Kvm::removeIp($vzid, $ip);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::removeIp($hostname, $ip);
+			Virtuozzo::removeIp($vzid, $ip);
 	}
 
-	public static function changeIp($hostname, $ipOld, $ipNew) {
+	public static function changeIp($vzid, $ipOld, $ipNew) {
 		if (self::getVirtType() == 'virtuozzo')
-			return Virtuozzo::changeIp($hostname, $ipOld, $ipNew);
+			return Virtuozzo::changeIp($vzid, $ipOld, $ipNew);
 		self::getLogger()->error('Changing an IP is not supported on this platform yet.');
 		return false;
 	}
 
-	public static function setupRouting($hostname, $ip, $pool, $useAll, $id) {
+	public static function setupRouting($vzid, $ip, $pool, $useAll, $id) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::setupRouting($hostname, $ip, $pool, $useAll, $id);
+			Kvm::setupRouting($vzid, $ip, $pool, $useAll, $id);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::setupRouting($hostname, $id);
+			Virtuozzo::setupRouting($vzid, $id);
 	}
 
-	public static function blockSmtp($hostname, $id) {
+	public static function blockSmtp($vzid, $id) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::blockSmtp($hostname, $id);
+			Kvm::blockSmtp($vzid, $id);
 		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::blockSmtp($hostname, $id);
+			Virtuozzo::blockSmtp($vzid, $id);
 	}
 
-	public static function setupStorage($hostname, $device, $pool, $hd) {
+	public static function setupStorage($vzid, $device, $pool, $hd) {
 		if (self::getVirtType() == 'kvm')
-			Kvm::setupStorage($hostname, $device, $pool, $hd);
+			Kvm::setupStorage($vzid, $device, $pool, $hd);
 	}
 
-	public static function defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $hd, $maxRam, $maxCpu, $useAll, $password) {
+	public static function defineVps($vzid, $hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $hd, $maxRam, $maxCpu, $useAll, $password) {
 		if (self::getVirtType() == 'kvm')
-			return Kvm::defineVps($hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll);
+			return Kvm::defineVps($vzid, $hostname, $template, $ip, $extraIps, $mac, $device, $pool, $ram, $cpu, $maxRam, $maxCpu, $useAll);
 		elseif (self::getVirtType() == 'virtuozzo')
-			return Virtuozzo::defineVps($hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password);
+			return Virtuozzo::defineVps($vzid, $hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password);
 		return true;
 	}
 
-	public static function setupCgroups($hostname, $useAll, $cpu) {
+	public static function setupCgroups($vzid, $useAll, $cpu) {
 		$slices = $cpu;
 		if ($useAll == false) {
 			if (self::getVirtType() == 'kvm')
-				Kvm::setupCgroups($hostname, $slices);
+				Kvm::setupCgroups($vzid, $slices);
 		}
 	}
 
-	public static function installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts) {
+	public static function installTemplate($vzid, $template, $password, $device, $pool, $hd, $kpartxOpts) {
 		if (self::getVirtType() == 'kvm')
-			return Kvm::installTemplate($hostname, $template, $password, $device, $pool, $hd, $kpartxOpts);
+			return Kvm::installTemplate($vzid, $template, $password, $device, $pool, $hd, $kpartxOpts);
 		return true;
 	}
 
-	public static function setupWebuzo($hostname) {
+	public static function setupWebuzo($vzid) {
 		if (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::setupWebuzo($hostname);
+			Virtuozzo::setupWebuzo($vzid);
 	}
 
-	public static function setupCpanel($hostname) {
+	public static function setupCpanel($vzid) {
 		if (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::setupCpanel($hostname);
+			Virtuozzo::setupCpanel($vzid);
 	}
 
 	public static function runCommand($cmd, &$return = 0) {

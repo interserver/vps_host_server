@@ -54,28 +54,28 @@ class Dhcpd
 
     /**
     * sets up a new host for dhcp
-    * @param string $hostname hostname
+    * @param string $vzid hostname
     * @param string $ip ip address
     * @param string $mac mac address
     */
-    public static function setup($hostname, $ip, $mac) {
+    public static function setup($vzid, $ip, $mac) {
 		Vps::getLogger()->info('Setting up DHCPD');
-		$mac = Vps::getVpsMac($hostname);
+		$mac = Vps::getVpsMac($vzid);
 		$dhcpVps = self::getFile();
 		echo Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
-    	echo Vps::runCommand("grep -v -e \"host {$hostname} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
-    	echo Vps::runCommand("echo \"host {$hostname} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
+    	echo Vps::runCommand("grep -v -e \"host {$vzid} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
+    	echo Vps::runCommand("echo \"host {$vzid} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
     	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
 		self::restart();
     }
 
     /**
     * removes a host from dhcp
-    * @param string $hostname
+    * @param string $vzid
     */
-    public static function remove($hostname) {
+    public static function remove($vzid) {
 		$dhcpVps = self::getFile();
-		echo Vps::runCommand("sed s#\"^host {$hostname} .*$\"#\"\"#g -i {$dhcpVps}");
+		echo Vps::runCommand("sed s#\"^host {$vzid} .*$\"#\"\"#g -i {$dhcpVps}");
     	self::restart();
     }
 
