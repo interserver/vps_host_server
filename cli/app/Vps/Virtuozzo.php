@@ -20,7 +20,7 @@ class Virtuozzo
 	public static function vpsExists($hostname) {
 		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand('prlctl status '.$hostname.' >/dev/null 2>&1', $return);
-		return $return == 0;
+		return $return == 0 ? true : false;
 	}
 
 	public static function getList() {
