@@ -101,6 +101,13 @@ class Vps
     		return Virtuozzo::getRunningVps();
     }
 
+    public static function getAllVps() {
+		if (self::getVirtType() == 'kvm')
+			return Kvm::getAllVps();
+		elseif (self::getVirtType() == 'virtuozzo')
+    		return Virtuozzo::getAllVps();
+    }
+
     public static function isVpsRunning($hostname) {
 		return in_array($hostname, self::getRunningVps());
     }

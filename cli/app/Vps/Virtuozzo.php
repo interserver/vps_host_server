@@ -12,6 +12,10 @@ class Virtuozzo
 		return explode("\n", trim(Vps::runCommand("prlctl list -o name|grep -v NAME")));
     }
 
+    public static function getAllVps() {
+		return explode("\n", trim(Vps::runCommand("prlctl list -a -o name|grep -v NAME")));
+    }
+
 	public static function vpsExists($hostname) {
 		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand('prlctl status '.$hostname.' >/dev/null 2>&1', $return);

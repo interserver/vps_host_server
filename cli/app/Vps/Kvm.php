@@ -12,6 +12,10 @@ class Kvm
 		return explode("\n", trim(Vps::runCommand("virsh list --name")));
     }
 
+    public static function getAllVps() {
+		return explode("\n", trim(Vps::runCommand("virsh list --all --name")));
+    }
+
 	public static function vpsExists($hostname) {
 		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand('/usr/bin/virsh dominfo '.$hostname.' >/dev/null 2>&1', $return);
