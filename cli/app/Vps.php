@@ -104,14 +104,6 @@ class Vps
 		return in_array($hostname, self::getRunningVps());
     }
 
-	public static function getDhcpFile() {
-		return file_exists('/etc/dhcp/dhcpd.vps') ? '/etc/dhcp/dhcpd.vps' : '/etc/dhcpd.vps';
-	}
-
-	public static function getDhcpService() {
-		return file_exists('/etc/apt') ? 'isc-dhcp-server' : 'dhcpd';
-	}
-
 	public static function vpsExists($hostname) {
 		if (self::getVirtType() == 'kvm')
 			return Kvm::vpsExists($hostname);
