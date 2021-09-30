@@ -76,7 +76,7 @@ return function ($stdObject) {
 				}
 			}
 		}
-		`PATH="\$PATH:/sbin:/usr/sbin"  iptables -Z`;
+		`PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/sbin:/usr/sbin"  iptables -Z`;
 		$stdObject->vps_iptables_traffic_rules();
 	}
 	$stdObject->bandwidth = $totals;

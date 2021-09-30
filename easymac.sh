@@ -56,11 +56,11 @@
 #	Version 1.3:
 #		Changed the way XenSource MAC addresses are created.
 
-# 
+#
 # Version
 #
 
-export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/bin:/usr/bin:/sbin:/usr/sbin"
 
 EMVersion=1.r3
 ReleaseYear=2009
@@ -177,12 +177,12 @@ case "$1" in
 		echo "Usage: $0 {-r|-R|-s|-S|-x|-X|-g|-G} {-m}"
 		echo ""
 		echo "Options:"
-		echo "   -r:	Random VMware MAC address, lower case"	
-		echo "   -R:	Random VMware MAC address, UPPER CASE"	
-		echo "   -s:	Static VMware MAC address, lower case"	
-		echo "   -S:	Static VMware MAC address, UPPER CASE"	
-		echo "   -x:	XenSource MAC address, lower case"	
-		echo "   -X:	XenSource MAC address, UPPER CASE"	
+		echo "   -r:	Random VMware MAC address, lower case"
+		echo "   -R:	Random VMware MAC address, UPPER CASE"
+		echo "   -s:	Static VMware MAC address, lower case"
+		echo "   -S:	Static VMware MAC address, UPPER CASE"
+		echo "   -x:	XenSource MAC address, lower case"
+		echo "   -X:	XenSource MAC address, UPPER CASE"
 		echo "   -g:	Global MAC address, lower case"
 		echo "   -G:	Global MAC address, UPPER CASE"
 		echo ""

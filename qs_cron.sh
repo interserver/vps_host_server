@@ -1,5 +1,5 @@
 #!/bin/bash
-export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/bin:/usr/bin:/sbin:/usr/sbin"
 export base="$(readlink -f "$(dirname "$0")")";
 export url=https://mynew.interserver.net/qs_queue.php
 export dir=${base};

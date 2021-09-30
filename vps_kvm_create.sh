@@ -85,7 +85,7 @@ if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release |sed s#"^[^0-9]* "#
             ./install e2fsprogs
             popd;
         fi;
-        export PREPATH="/opt/e2fsprogs/sbin:";
+        export PREPATH="/opt/e2fsprogs/sbin:$PATH";
         export PATH="$PREPATH$PATH";
     fi;
 fi;
@@ -386,7 +386,7 @@ else
                 $resizefs -p /dev/mapper/$pname$pn
                 mkdir -p /vz/mounts/$name$pn
                 mount /dev/mapper/$pname$pn /vz/mounts/$name$pn;
-                PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
+                PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/root/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin" \
                 echo "root:$password" | chroot /vz/mounts/$name$pn chpasswd || \
                 php ${base}/vps_kvm_password_manual.php "$password" "/vz/mounts/$name$pn"
                 if [ -e /vz/mounts/$name$pn/home/kvm ]; then

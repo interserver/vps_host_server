@@ -171,7 +171,7 @@ if [ "$gateway" = "" ]; then
 	fi
 fi
 
-export PATH=$PATH:/sbin:/usr/local/sbin
+export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/sbin
 
 if [ -e /usr/bin/systemctl ] || [ -e /bin/systemctl ]; then
 	br=`ifconfig br0 | grep "inet" | grep -v inet6 | cut -d: -f2 | awk '{ print $2 }'`;
@@ -193,7 +193,7 @@ if [ ! "$debug" = "1" ]; then
 #!/bin/sh
 
 #Found br0 of $br and gateway $gateway
-export PATH=$PATH:/sbin:/usr/local/sbin
+export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/sbin
 /sbin/iptables --flush
 iptables -F INPUT
 iptables -F OUTPUT

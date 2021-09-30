@@ -9,7 +9,7 @@ else
 	DHCPVPS=/etc/dhcpd.vps
 fi
 
-export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin
+export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 base="$(readlink -f "$(dirname "$0")")";
 

@@ -2,7 +2,7 @@
 # This Script will move an IP from venet to veth
 # By Joe Huss <detain@interserver.net>
 
-export PATH="$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin"
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/bin:/usr/bin:/sbin:/usr/sbin"
 export base="$(readlink -f "$(dirname "$0")")";
 set -x
 

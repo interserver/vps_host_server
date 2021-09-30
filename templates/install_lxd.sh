@@ -6,7 +6,7 @@ ip=162.250.126.182
 template="$1"
 mac="00:16:3e:03:84:d9"
 
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 lxc stop -f ${vps};
 lxc delete -f ${vps};
 

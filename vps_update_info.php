@@ -126,7 +126,7 @@ function update_vps_info()
         }
     }
 	if (!isset($out) && file_exists('/usr/sbin/vzctl')) {
-		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
+		$out = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
 	} elseif (!isset($out) && file_exists('/usr/bin/lxc')) {
 		$parts = explode("\n", trim(`lxc storage info lxd --bytes|grep -e "space used:" -e "total space:"|cut -d'"' -f2`));
 		$used = ceil($parts[0]/1073741824);
@@ -149,7 +149,7 @@ function update_vps_info()
 			$usedg = ceil($usedb / 1073741824);
 			$out = $totalg.' '.$freeg;
 		} elseif (trim(`lvdisplay  |grep 'Allocated pool';`) == '') {
-			$parts = explode(':', trim(`export PATH="\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep :vz:`));
+			$parts = explode(':', trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/sbin:/usr/sbin"; pvdisplay -c|grep :vz:`));
 			$pesize = $parts[7];
 			$totalpe = $parts[8];
 			$freepe = $parts[9];

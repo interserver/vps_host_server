@@ -11,7 +11,7 @@ fi
 cat <<EOF
 #!/bin/sh
 
-export PATH=$PATH:/sbin
+export PATH=/usr/local/bin:/usr/local/sbin:$PATH:/sbin
 
 modprobe ipt_mark
 modprobe ipt_MARK

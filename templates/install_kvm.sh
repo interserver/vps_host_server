@@ -6,7 +6,7 @@ ip=206.72.195.91
 imagedir="$(readlink -f "$(dirname "$1")")"
 template="$(basename "$1")"
 
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 virsh destroy ${vps} 2>/dev/null;
 rm -f /etc/xinetd.d/${vps};
 service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null;
@@ -146,7 +146,7 @@ if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release |sed s#"^[^0-9]* "#
             ./install e2fsprogs
             popd;
         fi;
-        export PREPATH="/opt/e2fsprogs/sbin:";
+        export PREPATH="/opt/e2fsprogs/sbin:$PATH";
         export PATH="$PREPATH$PATH";
     fi;
 fi;
@@ -335,7 +335,7 @@ if [ $error -eq 0 ]; then
             $resizefs -p /dev/mapper/$pname$pn
             mkdir -p /vz/mounts/${vps}$pn
             mount /dev/mapper/$pname$pn /vz/mounts/${vps}$pn;
-            PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/X11R6/bin:/root/bin" \
+            PATH="$PREPATH/usr/local/sbin:/usr/local/bin:/root/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin" \
             echo root:"${root}" | chroot /vz/mounts/${vps}$pn chpasswd || \
             php /root/cpaneldirect/vps_kvm_password_manual.php "${root}" "/vz/mounts/${vps}$pn"
             if [ -e /vz/mounts/${vps}$pn/home/kvm ]; then

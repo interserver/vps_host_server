@@ -15,15 +15,15 @@ $updateinterval = 5 * 60;
 $lastupdate = 0;
 $GLOBALS['time'] = time();
 $oldips = array();
-$vzctl = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
+$vzctl = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 
 function get_vps_ipmap()
 {
 	$dir = __DIR__;
 	if ($GLOBALS['vzctl'] == '') {
-		$output = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  if [ -e \$DHCPVPS ]; then grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'; fi;`);
+		$output = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  if [ -e \$DHCPVPS ]; then grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'; fi;`);
 	} else {
-		$output = rtrim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip`);
+		$output = rtrim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -H -o veid,ip`);
 	}
 	$lines = explode("\n", $output);
 	$ips = array();
@@ -31,7 +31,7 @@ function get_vps_ipmap()
 		$parts = explode(' ', trim($line));
 		$id = $parts[0];
 		$ip = $parts[1];
-		$extra = trim(`touch {$dir}/vps.ipmap ; export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" {$dir}/vps.ipmap | cut -d: -f2`);
+		$extra = trim(`touch {$dir}/vps.ipmap ; export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" {$dir}/vps.ipmap | cut -d: -f2`);
 		if ($extra != '') {
 			$parts = array_merge($parts, explode("\n", $extra));
 		}
@@ -46,7 +46,7 @@ function get_vps_ipmap()
 
 function vps_iptables_traffic_rules($ips)
 {
-	$cmd = 'export PATH="$PATH:/sbin:/usr/sbin"; ';
+	$cmd = 'export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/sbin:/usr/sbin"; ';
 	foreach ($ips as $ip => $id) {
 		if ($GLOBALS['vzctl'] == '') {
 			$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
@@ -72,7 +72,7 @@ function get_vps_iptables_traffic($ips)
 {
 	$totals = array();
 	if ($GLOBALS['vzctl'] == '') {
-		$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; ebtables -L -Z --Lc --Lx | grep " -j CONTINUE -c " |  sed s#"ebtables -t filter -A FORWARD -p IPv4 --ip-"#""#g | sed s#"-j CONTINUE -c "#""#g`));
+		$lines = explode("\n", trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; ebtables -L -Z --Lc --Lx | grep " -j CONTINUE -c " |  sed s#"ebtables -t filter -A FORWARD -p IPv4 --ip-"#""#g | sed s#"-j CONTINUE -c "#""#g`));
 //			print_r($lines);
 		foreach ($lines as $line) {
 			$parts = explode(' ', trim($line));
@@ -87,7 +87,7 @@ function get_vps_iptables_traffic($ips)
 			}
 		}
 	} else {
-		$lines = explode("\n", trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L -Z FORWARD 2>/dev/null | grep -v DROP | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]"`));
+		$lines = explode("\n", trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L -Z FORWARD 2>/dev/null | grep -v DROP | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]"`));
 		foreach ($lines as $line) {
 			$parts = explode(' ', trim($line));
 			if ($parts[0] == '0.0.0.0/0') {

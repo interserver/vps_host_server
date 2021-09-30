@@ -13,7 +13,7 @@ function get_qs_list()
 	$dir = __DIR__;
 	$url = 'https://mynew.interserver.net/qs_queue.php';
 	if (!file_exists('/usr/sbin/vzctl')) {
-		$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
+		$out = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State\$" -e "------\$" -e "^\$" | awk "{ print \\\$2 \" \" \\\$3 }"`);
 		$lines = explode("\n", $out);
 		$servers = array();
 		$cmd = '';
@@ -24,7 +24,7 @@ function get_qs_list()
 				$veid = $name;
 				//$veid = str_replace(array('windows', 'linux', 'qs'), array('', ''), $veid);
 				$status = $parts[1];
-				$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
+				$out = `export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
 				$xml = xml2array($out, 1, 'attribute');
 				$server = array(
 					'type' => 'kvm',
@@ -79,7 +79,7 @@ function get_qs_list()
 		//echo "CMD:$cmd\n";
 		//echo `$cmd`;
 	} else {
-		$out = `export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -a -o veid,numproc,status,ip,hostname,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage,cpulimit,cpuunits -H`;
+		$out = `export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzlist -a -o veid,numproc,status,ip,hostname,kmemsize,kmemsize.f,lockedpages,lockedpages.f,privvmpages,privvmpages.f,shmpages,shmpages.f,numproc.f,physpages,physpages.f,vmguarpages,vmguarpages.f,oomguarpages,oomguarpages.f,numtcpsock,numtcpsock.f,numflock,numflock.f,numpty,numpty.f,numsiginfo,numsiginfo.f,tcpsndbuf,tcpsndbuf.f,tcprcvbuf,tcprcvbuf.f,othersockbuf,othersockbuf.f,dgramrcvbuf,dgramrcvbuf.f,numothersock,numothersock.f,dcachesize,dcachesize.f,numfile,numfile.f,numiptent,numiptent.f,diskspace,diskspace.s,diskspace.h,diskinodes,diskinodes.s,diskinodes.h,laverage,cpulimit,cpuunits -H`;
 		preg_match_all('/\s+(?P<veid>[^\s]+)\s+(?P<numproc>[^\s]+)\s+(?P<status>[^\s]+)\s+(?P<ip>[^\s]+)\s+(?P<hostname>[^\s]+)\s+(?P<kmemsize>[^\s]+)\s+(?P<kmemsize_f>[^\s]+)\s+(?P<lockedpages>[^\s]+)\s+(?P<lockedpages_f>[^\s]+)\s+(?P<privvmpages>[^\s]+)\s+(?P<privvmpages_f>[^\s]+)\s+(?P<shmpages>[^\s]+)\s+(?P<shmpages_f>[^\s]+)\s+(?P<numproc_f>[^\s]+)\s+(?P<physpages>[^\s]+)\s+(?P<physpages_f>[^\s]+)\s+(?P<vmguarpages>[^\s]+)\s+(?P<vmguarpages_f>[^\s]+)\s+(?P<oomguarpages>[^\s]+)\s+(?P<oomguarpages_f>[^\s]+)\s+(?P<numtcpsock>[^\s]+)\s+(?P<numtcpsock_f>[^\s]+)\s+(?P<numflock>[^\s]+)\s+(?P<numflock_f>[^\s]+)\s+(?P<numpty>[^\s]+)\s+(?P<numpty_f>[^\s]+)\s+(?P<numsiginfo>[^\s]+)\s+(?P<numsiginfo_f>[^\s]+)\s+(?P<tcpsndbuf>[^\s]+)\s+(?P<tcpsndbuf_f>[^\s]+)\s+(?P<tcprcvbuf>[^\s]+)\s+(?P<tcprcvbuf_f>[^\s]+)\s+(?P<othersockbuf>[^\s]+)\s+(?P<othersockbuf_f>[^\s]+)\s+(?P<dgramrcvbuf>[^\s]+)\s+(?P<dgramrcvbuf_f>[^\s]+)\s+(?P<numothersock>[^\s]+)\s+(?P<numothersock_f>[^\s]+)\s+(?P<dcachesize>[^\s]+)\s+(?P<dcachesize_f>[^\s]+)\s+(?P<numfile>[^\s]+)\s+(?P<numfile_f>[^\s]+)\s+(?P<numiptent>[^\s]+)\s+(?P<numiptent_f>[^\s]+)\s+(?P<diskspace>[^\s]+)\s+(?P<diskspace_s>[^\s]+)\s+(?P<diskspace_h>[^\s]+)\s+(?P<diskinodes>[^\s]+)\s+(?P<diskinodes_s>[^\s]+)\s+(?P<diskinodes_h>[^\s]+)\s+(?P<laverage>[^\s]+)\s+(?P<cpulimit>[^\s]+)\s+(?P<cpuunits>[^\s]+)/', $out, $matches);
 		//print_r($matches);
 		$servers = array();
@@ -143,7 +143,7 @@ function get_qs_list()
 			$servers[$id] = $server;
 		}
 		foreach ($servers as $id => $server) {
-			$out = trim(`export PATH="\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print $2 " " $3 }'`);
+			$out = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";vzquota stat $id 2>/dev/null | grep blocks | awk '{ print $2 " " $3 }'`);
 			if ($out != '') {
 				$disk = explode(' ', $out);
 				$servers[$id]['diskused'] = $disk[0];

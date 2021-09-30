@@ -6,7 +6,7 @@ ip=104.37.189.227
 template="$1"
 mac="00:16:3e:03:84:d9"
 
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin:";
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 prlctl stop ${vps};
 prlctl delete ${vps};
 function iprogress() {

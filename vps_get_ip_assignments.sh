@@ -1,6 +1,6 @@
 #!/bin/bash
 # Gets a list of all the IPs used by each VPS and sends them
-export PATH="$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
 if [ "$(which prlctl 2>/dev/null)" != "" ]; then
 	for i in $(grep -l "^IP_ADDRESS=\"[^\\\"].*\"" /etc/vz/conf/*.conf); do
         unset VEID;
