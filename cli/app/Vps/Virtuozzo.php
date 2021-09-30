@@ -108,7 +108,9 @@ class Virtuozzo
 		echo Vps::runCommand("prlctl create {$vzid} --vmtype ct --ostemplate {$template}", $return);
 		$passsword = escapeshellarg($password);
 		echo Vps::runCommand("prlctl set {$vzid} --userpasswd root:{$password}");
-		echo Vps::runCommand("prlctl set {$vzid} --swappages 1G --memsize {$ram}M");
+		echo Vps::runCommand("prlctl set {$vzid} --memsize {$ram}M");
+		//commented out because virtuozzo says "WARNING: Use of swap significantly slows down both the container and the node."
+		//echo Vps::runCommand("prlctl set {$vzid} --swappages 1G");
 		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
 		echo Vps::runCommand("prlctl set {$vzid} --device-add net --type routed --ipadd {$ip} --nameserver 8.8.8.8");
