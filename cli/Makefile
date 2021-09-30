@@ -7,7 +7,7 @@ completion:
 
 phar:
 	rm -f provirted.phar
-	php provirted.php --debug archive --app-bootstrap --executable --no-compress provirted.phar
+	php provirted.php -v --debug archive --composer=composer.json --app-bootstrap --executable --no-compress provirted.phar
 	chmod +x provirted.phar
 
 install:
