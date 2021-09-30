@@ -17,34 +17,34 @@ class NowCommand extends Command {
 
 	public function samples() {
 		$this->getLogger()->writeln("Current Logger Level:".$this->getLogger()->level);
-		$this->logger->critical("[1] critical message");
-		$this->logger->error("[2] error message");
-		$this->logger->warn("[3] warn message");
-		$this->logger->info("[4] info message");
-		$this->logger->info2("[5] info2 message");
-		$this->logger->debug("[6] debug message");
-		$this->logger->debug2("[7] debug2 message");
-		$this->logger->notice("[a] notice messsage");
-		$this->logger->writeln('[b] writeln message');
+		$this->getLogger()->critical("[1] critical message");
+		$this->getLogger()->error("[2] error message");
+		$this->getLogger()->warn("[3] warn message");
+		$this->getLogger()->info("[4] info message");
+		$this->getLogger()->info2("[5] info2 message");
+		$this->getLogger()->debug("[6] debug message");
+		$this->getLogger()->debug2("[7] debug2 message");
+		$this->getLogger()->notice("[a] notice messsage");
+		$this->getLogger()->writeln('[b] writeln message');
 		$this->progressbar();
-		$this->logger->newline();
+		$this->getLogger()->newline();
 		return;
-		$this->logger->newline();
+		$this->getLogger()->newline();
 		$this->tableFromArray();
-		$this->logger->newline();
+		$this->getLogger()->newline();
 		$this->formattingTable();
-		$this->logger->newline();
-		$this->logger->newline();
+		$this->getLogger()->newline();
+		$this->getLogger()->newline();
 		$this->tableSimple();
-		$this->logger->newline();
+		$this->getLogger()->newline();
         $this->tableColored();
-		$this->logger->newline();
+		$this->getLogger()->newline();
 		$this->lineIndicator();
-		$this->logger->newline();
+		$this->getLogger()->newline();
 	}
 
     public function lineIndicator() {
-		$this->logger->info('line message');
+		$this->getLogger()->info('line message');
 		$indicator = new LineIndicator;
 		echo PHP_EOL, $indicator->indicateFile(__FILE__, __LINE__);
 	}
@@ -60,7 +60,7 @@ class NowCommand extends Command {
 		    $progress->update($i, $total);
 		}
 		$progress->finish();
-		$this->logger->writeln('finished progress bar');
+		$this->getLogger()->writeln('finished progress bar');
 	}
 
 	public function tableFromArray() {
@@ -79,7 +79,7 @@ class NowCommand extends Command {
 		$table = new Table;
 		$table->setStyle(new MarkdownTableStyle());
 		$table->setHeaders(['Style', 'Example']);
-		echo $this->logger->writeln('Testing message formatting');
+		echo $this->getLogger()->writeln('Testing message formatting');
 		$styles = ['red', 'green', 'white', 'yellow', 'strong_red', 'strong_green', 'strong_white' ];
 		$formatter = new Formatter;
 		foreach ($styles as $style) {
