@@ -81,6 +81,8 @@ HELP;
         $kpartxOpts = preg_match('/sync/', Vps::runCommand("kpartx 2>&1")) ? '-s' : '';
 		$ram = $ram * 1024; // convert ram to kb
 		$hd = $hd * 1024; // convert hd to mb
+		$device = '';
+		$pool = '';
         if ($useAll == true) {
 			$hd = 'all';
 			$ram = Os::getUsableRam();
