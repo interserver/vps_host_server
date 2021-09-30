@@ -30,7 +30,7 @@ private static $installed = array (
     'aliases' => 
     array (
     ),
-    'reference' => '716c8fe4fef591b29bc672ef05c0a1631e51dbc3',
+    'reference' => '43939f039cd68b65c6bb064bafdfe3eecdb96458',
     'name' => 'detain/vps-host-service',
   ),
   'versions' => 
@@ -78,7 +78,7 @@ private static $installed = array (
       'aliases' => 
       array (
       ),
-      'reference' => '716c8fe4fef591b29bc672ef05c0a1631e51dbc3',
+      'reference' => '43939f039cd68b65c6bb064bafdfe3eecdb96458',
     ),
     'doctrine/inflector' => 
     array (
