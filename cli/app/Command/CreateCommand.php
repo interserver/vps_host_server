@@ -36,7 +36,8 @@ HELP;
     /** @param \GetOptionKit\OptionCollection $opts */
 	public function options($opts) {
 		parent::options($opts);
-		$opts->add('v|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
+		$opts->add('v|verbose', 'increase output verbosity (stacked..use multiple times for even more output)')->isa('number')->incremental();
+		$opts->add('t|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
         $opts->add('m|mac:', 'MAC Address')->isa('string');
         $opts->add('o|order-id:', 'Order ID')->isa('number');
         $opts->add('i|add-ip+', 'Additional IPs')->multiple()->isa('string');

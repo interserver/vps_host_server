@@ -16,6 +16,7 @@ class NowCommand extends Command {
 	}
 
 	public function samples() {
+		$this->getLogger()->writeln("Current Logger Level:".$this->getLogger()->level);
 		$this->logger->critical("[1] critical message");
 		$this->logger->error("[2] error message");
 		$this->logger->warn("[3] warn message");

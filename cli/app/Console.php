@@ -23,5 +23,9 @@ class Console extends Application
     	$this->topic('basic');
     	$this->topic('examples');
         Vps::setLogger($this->getLogger());
+		if (array_key_exists('verbose', $this->getOptions()->keys)) {
+			echo "Verbose mode passed, increasing verbosity by ".$this->getOptions()->keys['verbose']->value." levels\n";
+			$this->getLogger()->setLevel($this->getLogger()->getLevel() + $this->getOptions()->keys['verbose']->value);
+		}
     }
 }

@@ -54,6 +54,10 @@ class Vps
 		self::$opts = $opts;
 		self::$args = $args;
 		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']->value : false);
+		if (array_key_exists('verbose', self::$opts->keys)) {
+			self::getLogger()->info("verbosity increased by ".self::$opts->keys['verbose']->value." levels");
+			self::getLogger()->setLevel(self::getLogger()->getLevel() + self::$opts->keys['verbose']->value);
+		}
 	}
 
     public static function getInstalledVirts() {
