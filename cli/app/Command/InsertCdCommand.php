@@ -37,6 +37,7 @@ class InsertCdCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
+		$base = Vps::$base;
 		$parts = parse_url($url);
 		if (!array_key_exists('port', $parts)) {
 			$parts['port'] = trim(Vps::runCommand("grep \"^{$parts['scheme']}\\s\" /etc/services |grep \"/tcp\\s\"|cut -d/ -f1|awk \"{ print \\$2 }\""));
@@ -50,10 +51,10 @@ class InsertCdCommand extends Command {
     <host name='{$parts['host']}' port='{$parts['port']}'/>
   </source>
 </disk>";
-		file_put_contents('/root/disk.xml', $str);
-		echo Vps::runCommand("virsh update-device {$vzid} /root/disk.xml --live");
-		echo Vps::runCommand("virsh update-device {$vzid} /root/disk.xml --config");
-		echo Vps::runCommand("rm -f /root/disk.xml");
+		file_put_contents("{$base}/disk.xml", $str);
+		echo Vps::runCommand("virsh update-device {$vzid} {$base}/disk.xml --live");
+		echo Vps::runCommand("virsh update-device {$vzid} {$base}/disk.xml --config");
+		echo Vps::runCommand("rm -f {$base}/disk.xml");
 		echo Vps::runCommand("virsh reboot {$vzid}");
 	}
 

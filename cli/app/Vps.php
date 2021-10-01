@@ -177,9 +177,10 @@ class Vps
 
 	public static function vncScreenshotSwift($vzid) {
 		$vncPort = self::getVncPort($vzid);
+		$base = Vps::$base;
 		if ($vncPort != '' && intval($vncPort) > 1000) {
 			$vncPort -= 5900;
-			echo Vps::runCommand("/root/cpaneldirect/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}");
+			echo Vps::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}");
 		}
 	}
 

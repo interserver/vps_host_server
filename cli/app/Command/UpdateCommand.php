@@ -44,6 +44,7 @@ class UpdateCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
+		$base = Vps::$base;
 		$updateHd = array_key_exists('hd', $opts->keys);
 		$updateCpu = array_key_exists('cpu', $opts->keys);
 		$updateRam = array_key_exists('ram', $opts->keys);
@@ -67,7 +68,7 @@ class UpdateCommand extends Command {
 					echo Vps::runCommand("qemu-img resize /vz/{$vzid}/os.qcow2 {$hd}M");
 				} else {
 					$this->getLogger()->info('Attempting to resize LVM volume to '.$hd.'MB');
-					echo Vps::runCommand("sh /root/cpaneldirect/vps_kvm_lvmresize.sh {$vzid} {$hd}");
+					echo Vps::runCommand("sh {$base}/vps_kvm_lvmresize.sh {$vzid} {$hd}");
 				}
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
 				echo Vps::runCommand("prlctl set {$vzid} --device-set hdd0 --size {$hd}");

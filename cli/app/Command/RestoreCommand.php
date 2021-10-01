@@ -39,6 +39,7 @@ class RestoreCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		echo Vps::runCommand("/root/cpaneldirect/vps_swift_restore.sh {$source} {$name} {$vzid} && curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php || curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php");
+		$base = Vps::$base;
+		echo Vps::runCommand("{$base}/vps_swift_restore.sh {$source} {$name} {$vzid} && curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php || curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php");
 	}
 }

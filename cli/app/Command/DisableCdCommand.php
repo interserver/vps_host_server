@@ -41,7 +41,8 @@ class DisableCdCommand extends Command {
 		} else {
 			echo Vps::runCommand("virsh detach-disk {$vzid} hda --config");
 			Vps::restartVps($vzid);
-			echo Vps::runCommand("/root/cpaneldirect/vps_refresh_vnc.sh {$vzid}");
+			$base = Vps::$base;
+			echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$vzid}");
 		}
 	}
 

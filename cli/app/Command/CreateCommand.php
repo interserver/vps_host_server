@@ -11,9 +11,6 @@ use CLIFramework\Debug\ConsoleDebug;
 use CLIFramework\Component\Progress\ProgressBar;
 
 class CreateCommand extends Command {
-    /* log levels: critical[1] error[2] warn[3] info[4] info2[5] debug[6] debug2[7] (default: 4, below current shown) */
-	public $base = '/root/cpaneldirect';
-
 	public function brief() {
 		return "Creates a Virtual Machine.";
 	}

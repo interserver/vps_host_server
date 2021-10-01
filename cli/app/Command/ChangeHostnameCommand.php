@@ -45,6 +45,7 @@ class ChangeHostnameCommand extends Command {
 			$this->getLogger()->error("The VPS '{$newname}' you specified already exists so we cannot rename '{$vzid}' to it.");
 			return 1;
 		}
+		$base = Vps::$base;
 		if (Vps::getVirtType() == 'kvm') {
 			$pool = Vps::getPoolType();
 			Vps::stopVps($vzid);
@@ -54,12 +55,12 @@ class ChangeHostnameCommand extends Command {
 				echo Vps::runCommand("lvrename /dev/vz/{$vzid} vz/{$newname}");
 			}
 			echo Vps::runCommand("virsh domrename {$vzid} {$newname}");
-			echo Vps::runCommand("virsh dumpxml {$newname} > /root/cpaneldirect/vps.xml");
-			echo Vps::runCommand("sed s#\"{$vzid}\"#{$newname}#g -i /root/cpaneldirect/vps.xml");
-			echo Vps::runCommand("virsh define /root/cpaneldirect/vps.xml");
-			echo Vps::runCommand("rm -fv /root/cpaneldirect/vps.xml");
+			echo Vps::runCommand("virsh dumpxml {$newname} > {$base}/vps.xml");
+			echo Vps::runCommand("sed s#\"{$vzid}\"#{$newname}#g -i {$base}/vps.xml");
+			echo Vps::runCommand("virsh define {$base}/vps.xml");
+			echo Vps::runCommand("rm -fv {$base}/vps.xml");
 		}
-		foreach (['/etc/dhcpd.vps', '/etc/dhcp/dhcpd.vps', '/root/cpaneldirect/vps.ipmap', '/root/cpaneldirect/vps.mainips', '/root/cpaneldirect/vps.slicemap', '/root/cpaneldirect/vps.vncmap'] as $file) {
+		foreach (['/etc/dhcpd.vps', '/etc/dhcp/dhcpd.vps', $base.'/vps.ipmap', $base.'/vps.mainips', $base.'/vps.slicemap', $base.'/vps.vncmap'] as $file) {
 			if (file_exists($file)) {
 				$data = file_get_contents($file);
 				$data = str_replace($vzid, $newname, $data);
@@ -73,7 +74,7 @@ class ChangeHostnameCommand extends Command {
 			echo Vps::runCommand("prlctl set {$vzid} --hostname {$newname}");
 		}
 		Vps::startVps($newname);
-		echo Vps::runCommand("/root/cpaneldirect/vps_refresh_vnc.sh {$newname}");
+		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$newname}");
 
 	}
 
