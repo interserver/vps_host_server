@@ -22,7 +22,7 @@ class InstallCpanelCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string')->validValues([Vps::class, 'getAllVpsAllVirts']);
 		$args->add('email')->desc('Email Address')->isa('string');
 	}
 

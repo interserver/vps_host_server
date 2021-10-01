@@ -22,7 +22,7 @@ class ChangeIpCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string')->validValues([Vps::class, 'getAllVpsAllVirts']);
 		$args->add('ip')->desc('Old IP Address')->isa('ip');
 		$args->add('ipNew')->desc('New IP Address')->isa('ip');
 	}

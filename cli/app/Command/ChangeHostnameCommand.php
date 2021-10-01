@@ -25,7 +25,7 @@ class ChangeHostnameCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string')->validValues([Vps::class, 'getAllVpsAllVirts']);
 		//$args->add('hostname')->desc('New Hostname')->isa('string');
 		$args->add('newname')->desc('New Hostname')->isa('string');
 	}

@@ -24,7 +24,7 @@ class RestoreCommand extends Command {
 	public function arguments($args) {
 		$args->add('source')->desc('Source Backup Hostname to use')->isa('string');
 		$args->add('name')->desc('Backup Name to restore')->isa('string');
-		$args->add('vzid')->desc('VPS id/name to use')->isa('string');
+		$args->add('vzid')->desc('VPS id/name to use')->isa('string')->validValues([Vps::class, 'getAllVpsAllVirts']);
 		$args->add('id')->desc('VPS ID')->isa('number');
 	}
 
