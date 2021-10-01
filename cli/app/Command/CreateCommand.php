@@ -24,8 +24,13 @@ HELP;
 
     public function help()
     {
+    	$progName = basename($this->getApplication()->getProgramName());
         return <<<HELP
-<bold>bold text</bold>
+<bold>EXAMPLES</bold>
+	{$progName} create vps1001 vps2.provirted.com 192.168.1.103 centos-7 25 2048 1 password
+	{$progName} create --virt=virtuozzo vps1002 vps3.provirted.com 192.168.1.104 ubuntu-20.04 25 2048 1 password
+	{$progName} create -vv --order-id=2328714 --add-ip=192.168.1.101 --add-ip=192.168.1.102 --client-ip=127.0.0.1 vps1003 vps3.provirted.com 192.168.1.105 ubuntu-20.04 60 4096 2 password
+
 <underline>underlined text</underline>
 HELP;
     }
