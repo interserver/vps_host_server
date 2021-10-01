@@ -22,5 +22,6 @@ class Console extends Application
         ]);
     	$this->topic('basic');
     	$this->topic('examples');
+    	Vps::setLogger($this->getLogger());
     }
 }
