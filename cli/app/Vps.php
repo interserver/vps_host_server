@@ -112,6 +112,16 @@ class Vps
     		return Virtuozzo::getAllVps();
     }
 
+    public static function getAllVpsAllVirts() {
+		$virts = self::getInstalledVirts();
+		$vpsList = [];
+		if (in_array('virtuozzo', $virts))
+			$vpsList = array_merge($vpsList, Virtuozzo::getAllVps());
+		if (in_array('kvm', $virts))
+			$vpsList = array_merge($vpsList, Kvm::getAllVps());
+		return $vpsList;
+    }
+
     public static function isVpsRunning($vzid) {
 		return in_array($vzid, self::getRunningVps());
     }
