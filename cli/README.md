@@ -14,6 +14,26 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * possibly utilize virt-resize in update-hdsize call instead of qemu-img resize
 * fix reset-password command adding in detection of windows and skipping if not
 * fix the restore script to work with kvmv2 os.qcow2 files
+* remove unused scripts
+* split off into its own github org/repo
+* remove reliance on local scripts
+
+buildebtablesrules
+create_libvirt_storage_pools.sh
+run_buildebtables.sh
+tclimit
+vps_get_image.sh
+vps_kvm_lvmcreate.sh
+vps_kvm_lvmresize.sh
+vps_kvm_password_manual.php
+vps_kvm_screenshot.sh
+vps_kvm_screenshot_swift.sh
+vps_kvm_setup_password_clear.sh
+vps_kvm_setup_vnc.sh
+vps_refresh_vnc.sh
+vps_swift_restore.sh
+vps_virtuozzo_setup_vnc.sh
+
 
 ## Commands
 
