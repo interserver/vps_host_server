@@ -198,6 +198,7 @@ class Virtuozzo
 	}
 
 	public static function setupWebuzo($vzid) {
+		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y update'");
 		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y remove httpd sendmail xinetd firewalld samba samba-libs samba-common-tools samba-client samba-common samba-client-libs samba-common-libs rpcbind; userdel apache'");
 		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y install nano net-tools'");
 		echo Vps::runCommand("prlctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin;/admin/yumcron;echo \"/usr/local/emps/bin/php /usr/local/webuzo/cron.php\" > /etc/cron.daily/wu.sh && chmod +x /etc/cron.daily/wu.sh'");
