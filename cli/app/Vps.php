@@ -53,7 +53,7 @@ class Vps
 	public static function init($opts, array $args) {
 		self::$opts = $opts;
 		self::$args = $args;
-		self::setVirtType(array_key_exists('virt', self::$opts->keys) ? self::$opts->keys['virt']->value : false);
+		self::setVirtType(array_key_exists('virt', self::$opts->keys) && self::$opts->keys['virt']->value != 'auto' ? self::$opts->keys['virt']->value : false);
 		if (array_key_exists('verbose', self::$opts->keys)) {
 			self::getLogger()->info("verbosity increased by ".self::$opts->keys['verbose']->value." levels");
 			self::getLogger()->setLevel(self::getLogger()->getLevel() + self::$opts->keys['verbose']->value);
