@@ -60,6 +60,11 @@ class Vps
 		}
 	}
 
+    /**
+    * returns an array of installed virtualization types
+    *
+    * @return array
+    */
 	public static function getInstalledVirts() {
 		if (self::$virtInstalled === false) {
 			self::getLogger()->info2('detecting installed virtualization types.');
