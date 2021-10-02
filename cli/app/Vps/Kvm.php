@@ -8,14 +8,13 @@ use App\Os\Xinetd;
 
 class Kvm
 {
-
-    public static function getRunningVps() {
+	public static function getRunningVps() {
 		return explode("\n", trim(Vps::runCommand("virsh list --name")));
-    }
+	}
 
-    public static function getAllVps() {
+	public static function getAllVps() {
 		return explode("\n", trim(Vps::runCommand("virsh list --all --name")));
-    }
+	}
 
 	public static function vpsExists($vzid) {
 		$vzid = escapeshellarg($vzid);
@@ -147,8 +146,8 @@ class Kvm
 			if (substr($template, 0, 7) == 'windows') {
 				Vps::getLogger()->debug('Adding HyperV block');
 				echo Vps::runCommand("sed -e s#\"</features>\"#\"  <hyperv>\\n      <relaxed state='on'/>\\n      <vapic state='on'/>\\n      <spinlocks state='on' retries='8191'/>\\n    </hyperv>\\n  </features>\"#g -i {$vzid}.xml;");
-			Vps::getLogger()->debug('Adding HyperV timer');
-					echo Vps::runCommand("sed -e s#\"<clock offset='timezone' timezone='\([^']*\)'/>\"#\"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>\"#g -i {$vzid}.xml;");
+				Vps::getLogger()->debug('Adding HyperV timer');
+				echo Vps::runCommand("sed -e s#\"<clock offset='timezone' timezone='\([^']*\)'/>\"#\"<clock offset='timezone' timezone='\\1'>\\n    <timer name='hypervclock' present='yes'/>\\n  </clock>\"#g -i {$vzid}.xml;");
 			}
 			Vps::getLogger()->debug('Customizing SCSI controller');
 			echo Vps::runCommand("sed s#\"\(<controller type='scsi' index='0'.*\)>\"#\"\\1 model='virtio-scsi'>\\n      <driver queues='{$cpu}'/>\"#g -i  {$vzid}.xml;");
@@ -286,8 +285,8 @@ class Kvm
 	public static function destroyVps($vzid) {
 		echo Vps::runCommand("virsh managedsave-remove {$vzid}");
 		echo Vps::runCommand("virsh undefine {$vzid}");
-        self::removeStorage($vzid);
-        Dhcpd::remove($vzid);
+		self::removeStorage($vzid);
+		Dhcpd::remove($vzid);
 	}
 
 	public static function installTemplate($vzid, $template, $password, $device, $pool, $hd, $kpartxOpts) {
@@ -468,11 +467,11 @@ class Kvm
 		return true;
 	}
 
-    public static function installGzImage($source, $device) {
-    	Vps::getLogger()->info("Copying {$source} Image");
-    	$tsize = trim(Vps::runCommand("stat -c%s \"{$source}\""));
-    	echo Vps::runCommand("gzip -dc \"/{$source}\"  | dd of={$device} 2>&1");
-    	return true;
+	public static function installGzImage($source, $device) {
+		Vps::getLogger()->info("Copying {$source} Image");
+		$tsize = trim(Vps::runCommand("stat -c%s \"{$source}\""));
+		echo Vps::runCommand("gzip -dc \"/{$source}\"  | dd of={$device} 2>&1");
+		return true;
 	}
 
 	public static function installImage($source, $device) {

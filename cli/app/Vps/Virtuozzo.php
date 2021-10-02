@@ -9,13 +9,13 @@ class Virtuozzo
 	public static $vpsList;
 
 
-    public static function getRunningVps() {
+	public static function getRunningVps() {
 		return explode("\n", trim(Vps::runCommand("prlctl list -o name|grep -v NAME")));
-    }
+	}
 
-    public static function getAllVps() {
+	public static function getAllVps() {
 		return explode("\n", trim(Vps::runCommand("prlctl list -a -o name|grep -v NAME")));
-    }
+	}
 
 	public static function vpsExists($vzid) {
 		$vzid = escapeshellarg($vzid);
@@ -56,8 +56,8 @@ class Virtuozzo
 			return false;
 		}
 		Vps::getLogger()->error('Adding IP '.$ip.' to '.$vzid);
-        echo Vps::runCommand("prlctl set {$vzid} --ipadd {$ip}");
-        return true;
+		echo Vps::runCommand("prlctl set {$vzid} --ipadd {$ip}");
+		return true;
 	}
 
 	public static function removeIp($vzid, $ip) {
@@ -130,7 +130,7 @@ class Virtuozzo
 		$vncPort = '';
 		foreach ($vpsList as $vps) {
 			//if (!isset($vps['Hostname']))
-				//echo Vps::getLogger()->info("No Hostname but got: ".json_encode($vps));
+			//echo Vps::getLogger()->info("No Hostname but got: ".json_encode($vps));
 			if ($vps['ID'] == $vzid || $vps['EnvID'] == $vzid || $vps['Name'] == $vzid || (isset($vps['Hostname']) && $vps['Hostname'] == $vzid))
 				if (isset($vps['Remote display']['port']))
 					$vncPort = intval($vps['Remote display']['port']);
@@ -148,10 +148,10 @@ class Virtuozzo
 			foreach ($vpsList as $vps)
 				if (isset($vps['Remote display']['port']))
 					$ports[] = intval($vps['Remote display']['port']);
-			$vncPort = 5901;
+				$vncPort = 5901;
 			while (in_array($vncPort, $ports))
 				$vncPort++;
-	        echo Vps::runCommand("prlctl set {$vzid} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1");
+			echo Vps::runCommand("prlctl set {$vzid} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1");
 		}
 		Xinetd::lock();
 		if ($clientIp != '') {

@@ -32,15 +32,15 @@ class Vps
 	/** @var \GetOptionKit\OptionCollection */
 	protected static $opts;
 
-    /**
-    * @param \CLIFramework\Logger $logger
-    */
+	/**
+	* @param \CLIFramework\Logger $logger
+	*/
 	public static function setLogger($logger) {
 		self::$logger = $logger;
 	}
 
 	/**
-    * @return \CLIFramework\Logger
+	* @return \CLIFramework\Logger
 	*/
 	public static function getLogger() {
 		return self::$logger;
@@ -60,10 +60,10 @@ class Vps
 		}
 	}
 
-    public static function getInstalledVirts() {
-    	if (self::$virtInstalled === false) {
-    		self::getLogger()->info2('detecting installed virtualization types.');
-    		self::getLogger()->indent();
+	public static function getInstalledVirts() {
+		if (self::$virtInstalled === false) {
+			self::getLogger()->info2('detecting installed virtualization types.');
+			self::getLogger()->indent();
 			$found = [];
 			foreach (self::$virtBins as $virt => $virtBin) {
 				if (file_exists($virtBin)) {
@@ -71,48 +71,48 @@ class Vps
 					$found[] = $virt;
 				}
 			}
-    		self::getLogger()->unIndent();
+			self::getLogger()->unIndent();
 			self::$virtInstalled = $found;
 		}
 		return self::$virtInstalled;
-    }
+	}
 
-    public static function isVirtualHost() {
+	public static function isVirtualHost() {
 		$virt = self::getVirtType();
 		if ($virt !== false)
 			self::getLogger()->info2('using '.$virt.' virtualization.');
 		return $virt !== false;
-    }
+	}
 
-    public static function getVirtType() {
+	public static function getVirtType() {
 		$virts = self::getInstalledVirts();
 		foreach ($virts as $idx => $virt)
 			if (self::$virtType == false || self::$virtType == $virt)
 				return self::$virtType = $virt;
-		return false;
-    }
+			return false;
+	}
 
-    public static function setVirtType($virt) {
-    	if ($virt !== false)
-    		self::getLogger()->info2('trying to force '.$virt.' virtualization.');
+	public static function setVirtType($virt) {
+		if ($virt !== false)
+			self::getLogger()->info2('trying to force '.$virt.' virtualization.');
 		self::$virtType = $virt;
-    }
+	}
 
-    public static function getRunningVps() {
+	public static function getRunningVps() {
 		if (self::getVirtType() == 'kvm')
 			return Kvm::getRunningVps();
 		elseif (self::getVirtType() == 'virtuozzo')
-    		return Virtuozzo::getRunningVps();
-    }
+			return Virtuozzo::getRunningVps();
+	}
 
-    public static function getAllVps() {
+	public static function getAllVps() {
 		if (self::getVirtType() == 'kvm')
 			return Kvm::getAllVps();
 		elseif (self::getVirtType() == 'virtuozzo')
-    		return Virtuozzo::getAllVps();
-    }
+			return Virtuozzo::getAllVps();
+	}
 
-    public static function getAllVpsAllVirts() {
+	public static function getAllVpsAllVirts() {
 		$virts = self::getInstalledVirts();
 		$vpsList = [];
 		if (in_array('virtuozzo', $virts))
@@ -120,11 +120,11 @@ class Vps
 		if (in_array('kvm', $virts))
 			$vpsList = array_merge($vpsList, Kvm::getAllVps());
 		return $vpsList;
-    }
+	}
 
-    public static function isVpsRunning($vzid) {
+	public static function isVpsRunning($vzid) {
 		return in_array($vzid, self::getRunningVps());
-    }
+	}
 
 	public static function vpsExists($vzid) {
 		if (self::getVirtType() == 'kvm')
@@ -213,7 +213,7 @@ class Vps
 		if (self::getVirtType() == 'kvm')
 			Kvm::startVps($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
-        	Virtuozzo::startVps($vzid);
+			Virtuozzo::startVps($vzid);
 		if (!self::isVpsRunning($vzid))
 			return 1;
 	}
