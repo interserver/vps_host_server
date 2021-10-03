@@ -27,16 +27,5 @@ class ConfigCommand extends Command {
 
 	public function execute($vzid) {
 		Vps::init($this->getOptions(), ['vzid' => $vzid]);
-		if (!Vps::isVirtualHost()) {
-			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
-			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
-			return 1;
-		}
-		if (!Vps::vpsExists($vzid)) {
-			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
-			return 1;
-		}
-		echo Vps::runCommand("virsh change-media {$vzid} hda --eject --live");
-		echo Vps::runCommand("virsh change-media {$vzid} hda --eject --config");
 	}
 }
