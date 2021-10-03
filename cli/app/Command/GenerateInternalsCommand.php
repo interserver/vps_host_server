@@ -22,51 +22,39 @@ class GenerateInternalsCommand extends Command {
 		$smarty->assign('type', 'json');
 		$smarty->assign('method', 'somecall()');
 		echo $smarty->fetch(__DIR__.'/internals.tpl');
-		exit;
 		$projectFactory = \phpDocumentor\Reflection\Php\ProjectFactory::createInstance();
 		$files = [ new \phpDocumentor\Reflection\File\LocalFile('app/Vps.php') ];
 		/** @var Project $project */
 		$project = $projectFactory->create('MyProject', $files);
 		/** @var \phpDocumentor\Reflection\Php\Class_ $class */
-		foreach ($project->getFiles()['app/Vps.php']->getClasses() as $class) {
-		    echo '- ' . $class->getFqsen() . PHP_EOL;
+		foreach ($project->getFiles()['app/Vps.php']->getClasses() as $classFullName => $class) {
+			$className = $class->getFqsen()->getName();
+			echo "- {$classFullName}\n";
 			/** @var \phpDocumentor\Reflection\Php\Method_ $method */
-			foreach ($class->getMethods() as $method) {
-				echo "Method: ".$method->getName().PHP_EOL;
-				var_export($method->getDocBlock()).PHP_EOL;
+			foreach ($class->getMethods() as $methodFullName => $method) {
+				$docblock = $method->getDocBlock();
+				$methodName = $method->getName();
+				$arguments = $method->getArguments();
+				$returnType = $method->getReturnType();
+				echo "  - {$methodFullName}\n";
+				if (!is_null($docblock)) {
+					$context = $docblock->getContext();
+					$description = $docblock->getDescription();
+					$summary = $docblock->getSummary();
+					echo "    - {$summary}\n";
+					$tags = $docblock->getTags();
+					/*
+					$tags = $docblock->getTags();
+					$tag = $tags[0];
+					$tag->getName();
+					$tag->getType();
+					$desc = $tag->getDescription();
+					$desc->getBodyTemplate();
+					$desc->getTags();
+					*/
+				}
 			}
 		}
-		echo "Functions:\n";
-		/** @var \phpDocumentor\Reflection\Php\Function_ $class */
-		foreach ($project->getFiles()['app/Vps.php']->getFunctions() as $class) {
-		    echo '- ' . $class->getFqsen() . PHP_EOL;
-		}
-		echo "DocBlock:\n";
-		/** @var \phpDocumentor\Reflection\Php\Function_ $class */
-		foreach ($project->getFiles()['app/Vps.php']->getDocBlock() as $class) {
-		    echo '- ' . $class . PHP_EOL;
-		}
-
-		$class = $project->getFiles()['app/Vps.php']->getClasses()['\App\Vps'];
-		$class->getMethods();
-		$class->getMethods()["\App\Vps::getAllVpsAllVirts()"];
-		$method = $class->getMethods()["\App\Vps::getAllVpsAllVirts()"];
-		$method->getArguments();
-		$method->getName;
-		$method->getName();
-		$method->getReturnType();
-		$method->getDocBlock();
-		$docblock = $method->getDocBlock();
-		$docblock->getContext();
-		$docblock->getDescription();
-		$docblock->getSummary();
-		$tags = $docblock->getTags();
-		$tag = $tags[0];
-		$tag->getName();
-		$tag->getType();
-		$desc = $tag->getDescription();
-		$desc->getBodyTemplate();
-		$desc->getTags();
 	}
 }
 
