@@ -90,7 +90,7 @@ class Vps
     *
     * @return bool
     */
-	public static function iVirtualHost() {
+	public static function isVirtualHost() {
 		$virt = self::getVirtType();
 		if ($virt !== false)
 			self::getLogger()->info2('using '.$virt.' virtualization.');
