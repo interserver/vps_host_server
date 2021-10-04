@@ -6,25 +6,23 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 ## TODO
 
-* add **self-update** command for downloading the latest phar and replacing it
 * store vzid only in the vzid field not hostname for kvm
-* add **internals** command with acess to internal methods making it easier to use the tool to create scripts
-* merge **change-hostname** and **change-timezone** into **update**
-* merge **insert-cd**, **eject-cd**, **enable-cd**, **disable-cd** commands into a single **cd** command mabye with subdommands
-* add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
-* add escapeshellarg() calls around any vars being passed through a exec type call
-* add **install** command - Installs PreRequisites, Configures Software for our setup
-* add **config** command - Management of the various settings
-* add server option to **test** command to perform various self diagnostics to check on the health and prepairedness of the system
+* merge **reset-password** **change-hostname** and **change-timezone** into **update**
 * possibly utilize virt-resize in **update** call instead of qemu-img resize
 * fix **reset-password** command adding in detection of windows and skipping if not
-* merge **reset-password** into **update**
+* add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
+* add escapeshellarg() calls around any vars being passed through a exec type call
 * fix the restore script to work with kvmv2 os.qcow2 files
 * split off into its own github org/repo
 * create public website on github
 * add wiki entries
 * add openvz support
 * add lxc support
+* add **self-update** command for downloading the latest phar and replacing it
+* add **internals** command with acess to internal methods making it easier to use the tool to create scripts
+* add **install** command - Installs PreRequisites, Configures Software for our setup
+* add **config** command - Management of the various settings
+* add server option to **test** command to perform various self diagnostics to check on the health and prepairedness of the system
 * remove unused scripts
 * remove reliance on local scripts
 
