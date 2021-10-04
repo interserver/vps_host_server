@@ -6,6 +6,7 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 ## TODO
 
+* add **self-update** command for downloading the latest phar and replacing it
 * store vzid only in the vzid field not hostname for kvm
 * add **internals** command with acess to internal methods making it easier to use the tool to create scripts
 * merge **change-hostname** and **change-timezone** into **update**
