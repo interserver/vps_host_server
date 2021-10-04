@@ -23,7 +23,10 @@ class UpdateCommand extends Command {
         $opts->add('r|ram:', 'Ram Size in MB')->isa('number');
         $opts->add('c|cpu:', 'Number of CPU/Cores')->isa('number');
         $opts->add('g|cgroups:', 'Update CGroups to number of slices')->isa('number');
+        $opts->add('t|timezone:', 'changes the timezone')->isa('string');
+        $opts->add('n|hostname:', 'changes the hostname')->isa('string');
         $opts->add('p|password:', 'Sets the root/Administrator password')->isa('string');
+        $opts->add('password-reset', 'Sets the root/Administrator password');
         $opts->add('u|username:', 'Sets the password for the given username instead of the root/Administrator')->isa('string');
         $opts->add('q|quota:', 'Enable or Disable Quotas setting them to on or off')->isa('string')->validValues(['on', 'off']);
 	}
@@ -49,12 +52,12 @@ class UpdateCommand extends Command {
 		$updateCpu = array_key_exists('cpu', $opts->keys);
 		$updateRam = array_key_exists('ram', $opts->keys);
 		$updatePassword = array_key_exists('password', $opts->keys);
+		$updatePasswordReset = array_key_exists('password-reset', $opts->keys);
 		$updateQuota = array_key_exists('quota', $opts->keys);
 		$updateCgroups = array_key_exists('cgroups', $opts->keys);
-		if ($updateCpu === true || $updateRam === true)
-			if (Vps::getVirtType() == 'kvm')
-				Vps::runCommand("virsh dumpxml > {$vzid}.xml;");
-		if ($updateCpu === true || $updateRam === true || $updateHd === true)
+		$updateTimezone = array_key_exists('timezone', $opts->keys);
+		$updateHostname = array_key_exists('hostname', $opts->keys);
+		if ($updateCpu === true || $updateRam === true || $updateHd === true || $updateTimezone === true || $updateHostname === true || $updatePassword === true || $updatePasswordReset === true)
 			Vps::stopVps($vzid);
 		if ($updateHd === true) {
 			$hd = $opts->keys['hd']->value;
@@ -95,8 +98,22 @@ class UpdateCommand extends Command {
 			$password = escapeshellarg($password);
 			if (Vps::getVirtType() == 'virtuozzo') {
                 echo Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}");
+			} elseif (Vps::getVirtType() == 'kvm') {
+				echo Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password};");
 			}
 		}
+		if ($updateHostname === true) {
+			$hostname = $opts->keys['hostname']->value;
+			$hostname = escapeshellarg($hostname);
+			if (Vps::getVirtType() == 'virtuozzo') {
+				echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
+			} elseif (Vps::getVirtType() == 'kvm') {
+				echo Vps::runCommand("virt-customize -d {$vzid} --hostname {$hostname};");
+			}
+		}
+		if ($updateCpu === true || $updateRam === true || $updateTimezone === true)
+			if (Vps::getVirtType() == 'kvm')
+				Vps::runCommand("virsh dumpxml > {$vzid}.xml;");
 		if ($updateCpu === true) {
 			$cpu = $opts->keys['cpu']->value;
 			$maxCpu = $cpu > 8 ? $cpu : 8;
@@ -123,13 +140,17 @@ class UpdateCommand extends Command {
 				echo Vps::runCommand("prlctl set {$vzid} --swappages 1G --memsize {$ramM}M");
 			}
 		}
-		if ($updateCpu === true || $updateRam === true) {
+		if ($updateTimezone === true) {
+			$timezone = $opts->keys['timezone']->value;
+            echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml");
+		}
+		if ($updateCpu === true || $updateRam === true || $updateTimezone === true) {
 			if (Vps::getVirtType() == 'kvm') {
 				echo Vps::runCommand("virsh define {$vzid}.xml;");
 				echo Vps::runCommand("rm -f {$vzid}.xml");
 			}
 		}
-		if ($updateCpu === true || $updateRam === true || $updateHd === true)
+		if ($updateCpu === true || $updateRam === true || $updateHd === true || $updateTimezone === true || $updateHostname === true || $updatePassword === true || $updatePasswordReset === true)
 			Vps::startVps($vzid);
 		if ($updateCgroups === true) {
 			$slices = $opts->keys['cgroups']->value;

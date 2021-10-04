@@ -4649,8 +4649,8 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" ["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" ["-p"]="1" ["--password"]="1" ["-u"]="1" ["--username"]="1" ["-q"]="1" ["--quota"]="1" )
-options_require_value=(["-t"]="1" ["--virt"]="1" ["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" ["-p"]="1" ["--password"]="1" ["-u"]="1" ["--username"]="1" ["-q"]="1" ["--quota"]="1" )
+options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" ["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" ["--timezone"]="1" ["-n"]="1" ["--hostname"]="1" ["-p"]="1" ["--password"]="1" ["--password-reset"]="1" ["-u"]="1" ["--username"]="1" ["-q"]="1" ["--quota"]="1" )
+options_require_value=(["-t"]="1" ["--virt"]="1" ["-h"]="1" ["--hd"]="1" ["-r"]="1" ["--ram"]="1" ["-c"]="1" ["--cpu"]="1" ["-g"]="1" ["--cgroups"]="1" ["--timezone"]="1" ["-n"]="1" ["--hostname"]="1" ["-p"]="1" ["--password"]="1" ["-u"]="1" ["--username"]="1" ["-q"]="1" ["--quota"]="1" )
 local argument_min_length=1
 
     # Get the command name chain of the current input, e.g.
