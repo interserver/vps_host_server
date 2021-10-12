@@ -168,14 +168,14 @@ class OpenVz
 
 	public static function enableAutostart($vzid) {
 		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("prlctl set {$vzid} --onboot yes --autostart on");
-		echo Vps::runCommand("prlctl set {$vzid} --enable");
+		echo Vps::runCommand("vzctl set {$vzid} --save --onboot yes");
+		echo Vps::runCommand("vzctl set {$vzid} --save --disabled no");
 	}
 
 	public static function disableAutostart($vzid) {
 		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("prlctl set {$vzid} --onboot no --autostart off");
-		echo Vps::runCommand("prlctl set {$vzid} --disable");
+		echo Vps::runCommand("vzctl set {$vzid} --save --onboot no");
+		echo Vps::runCommand("vzctl set {$vzid} --save --disabled yes");
 	}
 
 	public static function startVps($vzid) {
@@ -189,7 +189,7 @@ class OpenVz
 	}
 
 	public static function destroyVps($vzid) {
-		echo Vps::runCommand("prlctl delete {$vzid}");
+		echo Vps::runCommand("vzctl destroy {$vzid}");
 	}
 
 	public static function setupRouting($vzid, $id) {
@@ -201,12 +201,12 @@ class OpenVz
 	}
 
 	public static function setupWebuzo($vzid) {
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y update'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y remove httpd sendmail xinetd firewalld samba samba-libs samba-common-tools samba-client samba-common samba-client-libs samba-common-libs rpcbind; userdel apache'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y install nano net-tools'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin;/admin/yumcron;echo \"/usr/local/emps/bin/php /usr/local/webuzo/cron.php\" > /etc/cron.daily/wu.sh && chmod +x /etc/cron.daily/wu.sh'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'wget -N http://files.webuzo.com/install.sh -O /install.sh'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'chmod +x /install.sh;bash -l /install.sh;rm -f /install.sh'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y update'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y remove httpd sendmail xinetd firewalld samba samba-libs samba-common-tools samba-client samba-common samba-client-libs samba-common-libs rpcbind; userdel apache'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install nano net-tools'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin;/admin/yumcron;echo \"/usr/local/emps/bin/php /usr/local/webuzo/cron.php\" > /etc/cron.daily/wu.sh && chmod +x /etc/cron.daily/wu.sh'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'wget -N http://files.webuzo.com/install.sh -O /install.sh'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'chmod +x /install.sh;bash -l /install.sh;rm -f /install.sh'");
 		Vps::getLogger()->info("Sleeping for a minute to workaround an ish");
 		sleep(10);
 		Vps::getLogger()->info("That was a pleasant nap.. back to the grind...");
@@ -216,18 +216,18 @@ class OpenVz
 		Vps::getLogger()->info("Sleeping for a minute to workaround an ish");
 		sleep(10);
 		Vps::getLogger()->info("That was a pleasant nap.. back to the grind...");
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y install perl nano screen wget psmisc net-tools'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'wget http://layer1.cpanel.net/latest'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'systemctl disable firewalld.service; systemctl mask firewalld.service; rpm -e firewalld xinetd httpd'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'bash -l latest'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y remove ea-apache24-mod_ruid2'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'killall httpd; if [ -e /bin/systemctl ]; then systemctl stop httpd.service; else service httpd stop; fi'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y install ea-apache24-mod_headers ea-apache24-mod_lsapi ea-liblsapi ea-apache24-mod_env ea-apache24-mod_deflate ea-apache24-mod_expires ea-apache24-mod_suexec'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'yum -y install ea-php72-php-litespeed ea-php72-php-opcache ea-php72-php-mysqlnd ea-php72-php-mcrypt ea-php72-php-gd ea-php72-php-mbstring'");
-		echo Vps::runCommand("prlctl exec {$vzid} '/usr/local/cpanel/bin/rebuild_phpconf  --default=ea-php72 --ea-php72=lsapi'");
-		echo Vps::runCommand("prlctl exec {$vzid} '/usr/sbin/whmapi1 php_ini_set_directives directive-1=post_max_size%3A32M directive-2=upload_max_filesize%3A128M directive-3=memory_limit%3A256M version=ea-php72'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'cd /opt/cpanel; for i in \$(find * -maxdepth 0 -name \"ea-php*\"); do /usr/local/cpanel/bin/rebuild_phpconf --default=ea-php72 --\$i=lsapi; done'");
-		echo Vps::runCommand("prlctl exec {$vzid} '/scripts/restartsrv_httpd'");
-		echo Vps::runCommand("prlctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin && cd /etc/cron.daily && ln -s /admin/wp/webuzo_wp_cli_auto.sh /etc/cron.daily/webuzo_wp_cli_auto.sh'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install perl nano screen wget psmisc net-tools'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'wget http://layer1.cpanel.net/latest'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'systemctl disable firewalld.service; systemctl mask firewalld.service; rpm -e firewalld xinetd httpd'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'bash -l latest'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y remove ea-apache24-mod_ruid2'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'killall httpd; if [ -e /bin/systemctl ]; then systemctl stop httpd.service; else service httpd stop; fi'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install ea-apache24-mod_headers ea-apache24-mod_lsapi ea-liblsapi ea-apache24-mod_env ea-apache24-mod_deflate ea-apache24-mod_expires ea-apache24-mod_suexec'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install ea-php72-php-litespeed ea-php72-php-opcache ea-php72-php-mysqlnd ea-php72-php-mcrypt ea-php72-php-gd ea-php72-php-mbstring'");
+		echo Vps::runCommand("vzctl exec {$vzid} '/usr/local/cpanel/bin/rebuild_phpconf  --default=ea-php72 --ea-php72=lsapi'");
+		echo Vps::runCommand("vzctl exec {$vzid} '/usr/sbin/whmapi1 php_ini_set_directives directive-1=post_max_size%3A32M directive-2=upload_max_filesize%3A128M directive-3=memory_limit%3A256M version=ea-php72'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'cd /opt/cpanel; for i in \$(find * -maxdepth 0 -name \"ea-php*\"); do /usr/local/cpanel/bin/rebuild_phpconf --default=ea-php72 --\$i=lsapi; done'");
+		echo Vps::runCommand("vzctl exec {$vzid} '/scripts/restartsrv_httpd'");
+		echo Vps::runCommand("vzctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin && cd /etc/cron.daily && ln -s /admin/wp/webuzo_wp_cli_auto.sh /etc/cron.daily/webuzo_wp_cli_auto.sh'");
 	}
 }
