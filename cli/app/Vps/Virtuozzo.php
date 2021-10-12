@@ -33,18 +33,21 @@ class Virtuozzo
 		return is_null($vps) ? false : $vps[0];
 	}
 
-	public static function getVpsIps($vzid) {
+	public static function getVpsIps($vzid, $simple = false) {
 		$vps = self::getVps($vzid);
 		$ips = explode(' ', trim($vps['Hardware']['venet0']['ips']));
 		$out = [];
+		$matchups = [];
 		foreach ($ips as $idx => $ip) {
+			$simpleIp = $ip;
 			// strip the /netmask (ie 127.0.0.1/255.255.255.0 becomes 127.0.0.1)
-			if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
-				$out[$matches[1]] = $ip;
-			else
-				$out[$ip] = $ip;
+			if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches)) {
+				$simpleIp = $matches[1];
+			}
+			$matchups[$simpleIp] = $ip;
+			$out[] = $simpleIp;
 		}
-		return $out;
+		return $simple === false ? $matchups : $out;
 	}
 
 	public static function addIp($vzid, $ip) {
