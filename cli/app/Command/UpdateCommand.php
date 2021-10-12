@@ -9,29 +9,30 @@ use CLIFramework\Logger\ActionLogger;
 use CLIFramework\Debug\LineIndicator;
 use CLIFramework\Debug\ConsoleDebug;
 
-class UpdateCommand extends Command {
+class UpdateCommand extends Command
+{
 	public function brief() {
 		return "Updates a Virtual Machine setting HD, Ram, CPU, Cgroups.";
 	}
 
-    /** @param \GetOptionKit\OptionCollection $opts */
+	/** @param \GetOptionKit\OptionCollection $opts */
 	public function options($opts) {
 		parent::options($opts);
 		$opts->add('v|verbose', 'increase output verbosity (stacked..use multiple times for even more output)')->isa('number')->incremental();
 		$opts->add('t|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
-        $opts->add('h|hd:', 'HD Size in GB')->isa('number');
-        $opts->add('r|ram:', 'Ram Size in MB')->isa('number');
-        $opts->add('c|cpu:', 'Number of CPU/Cores')->isa('number');
-        $opts->add('g|cgroups:', 'Update CGroups to number of slices')->isa('number');
-        $opts->add('t|timezone:', 'changes the timezone')->isa('string');
-        $opts->add('n|hostname:', 'changes the hostname')->isa('string');
-        $opts->add('p|password:', 'Sets the root/Administrator password')->isa('string');
-        $opts->add('password-reset', 'Sets the root/Administrator password');
-        $opts->add('u|username:', 'Sets the password for the given username instead of the root/Administrator')->isa('string');
-        $opts->add('q|quota:', 'Enable or Disable Quotas setting them to on or off')->isa('string')->validValues(['on', 'off']);
+		$opts->add('h|hd:', 'HD Size in GB')->isa('number');
+		$opts->add('r|ram:', 'Ram Size in MB')->isa('number');
+		$opts->add('c|cpu:', 'Number of CPU/Cores')->isa('number');
+		$opts->add('g|cgroups:', 'Update CGroups to number of slices')->isa('number');
+		$opts->add('t|timezone:', 'changes the timezone')->isa('string');
+		$opts->add('n|hostname:', 'changes the hostname')->isa('string');
+		$opts->add('p|password:', 'Sets the root/Administrator password')->isa('string');
+		$opts->add('password-reset', 'Sets the root/Administrator password');
+		$opts->add('u|username:', 'Sets the password for the given username instead of the root/Administrator')->isa('string');
+		$opts->add('q|quota:', 'Enable or Disable Quotas setting them to on or off')->isa('string')->validValues(['on', 'off']);
 	}
 
-    /** @param \CLIFramework\ArgInfoList $args */
+	/** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
 		$args->add('vzid')->desc('VPS id/name to use')->isa('string')->validValues([Vps::class, 'getAllVpsAllVirts']);
 	}
@@ -92,9 +93,9 @@ class UpdateCommand extends Command {
 				}
 			} elseif ($quota == 'off') {
 				if (Vps::getVirtType() == 'virtuozzo') {
-	                echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
+					echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
 				} elseif (Vps::getVirtType() == 'openvz') {
-	                echo Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
+					echo Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
 				}
 			} else {
 				$this->getLogger()->error('Invalid Quotas Option, must be on or off');
@@ -106,9 +107,9 @@ class UpdateCommand extends Command {
 			$password = $opts->keys['password']->value;
 			$password = escapeshellarg($password);
 			if (Vps::getVirtType() == 'virtuozzo') {
-                echo Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}");
+				echo Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}");
 			} elseif (Vps::getVirtType() == 'openvz') {
-                echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --userpasswd {$username}:{$password}");
+				echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --userpasswd {$username}:{$password}");
 			} elseif (Vps::getVirtType() == 'kvm') {
 				echo Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password};");
 			}
@@ -124,26 +125,31 @@ class UpdateCommand extends Command {
 				echo Vps::runCommand("virt-customize -d {$vzid} --hostname {$hostname};");
 			}
 		}
-		if ($updateCpu === true || $updateRam === true || $updateTimezone === true)
+		if ($updateCpu === true || $updateRam === true || $updateTimezone === true) {
 			if (Vps::getVirtType() == 'kvm')
 				Vps::runCommand("virsh dumpxml > {$vzid}.xml;");
+		}
 		if ($updateCpu === true) {
 			$cpu = $opts->keys['cpu']->value;
 			$maxCpu = $cpu > 8 ? $cpu : 8;
-    		$this->getLogger()->debug('Setting CPU limits');
+			$this->getLogger()->debug('Setting CPU limits');
 			if (Vps::getVirtType() == 'kvm') {
-    			echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$vzid}.xml;");
-    		} elseif (Vps::getVirtType() == 'virtuozzo') {
+				echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$vzid}.xml;");
+			} elseif (Vps::getVirtType() == 'virtuozzo') {
 				echo Vps::runCommand("prlctl set {$vzid} --cpus {$cpu}");
 				$cpuUnits = 1500 * $cpu;
 				echo Vps::runCommand("prlctl set {$vzid} --cpuunits {$cpuUnits}");
+			} elseif (Vps::getVirtType() == 'openvz') {
+				echo Vps::runCommand("vzctl set {$vzid} --save --cpus {$cpu}");
+				$cpuUnits = 1500 * $cpu;
+				echo Vps::runCommand("vzctl set {$vzid} --save --cpuunits {$cpuUnits}");
 			}
 		}
 		if ($updateRam === true) {
 			$ram = $opts->keys['ram']->value;
 			$ram = $ram * 1024;
-    		$maxRam = $ram > 16384000 ? $ram : 16384000;
-    		$this->getLogger()->debug('Setting Max Memory limits');
+			$maxRam = $ram > 16384000 ? $ram : 16384000;
+			$this->getLogger()->debug('Setting Max Memory limits');
 			if (Vps::getVirtType() == 'kvm') {
 				echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$vzid}.xml;");
 				$this->getLogger()->debug('Setting Memory limits');
@@ -155,7 +161,7 @@ class UpdateCommand extends Command {
 		}
 		if ($updateTimezone === true) {
 			$timezone = $opts->keys['timezone']->value;
-            echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml");
+			echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml");
 		}
 		if ($updateCpu === true || $updateRam === true || $updateTimezone === true) {
 			if (Vps::getVirtType() == 'kvm') {
