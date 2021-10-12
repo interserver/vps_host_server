@@ -48,22 +48,14 @@ class OpenVz
 	public static function getVpsIps($vzid) {
 		$vps = self::getVps($vzid);
 		$ips = $vps['ip'];
-		$out = [];
-		foreach ($ips as $idx => $ip) {
-			// strip the /netmask (ie 127.0.0.1/255.255.255.0 becomes 127.0.0.1)
-			if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
-				$out[$matches[1]] = $ip;
-			else
-				$out[$ip] = $ip;
-		}
-		return $out;
+		return $ips;
 	}
 
 	public static function addIp($vzid, $ip) {
 		$ips = self::getVpsIps($vzid);
 		if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
 			$ip = $matches[1];
-		if (array_key_exists($ip, $ips)) {
+		if (in_array($ip, $ips)) {
 			Vps::getLogger()->error('Skipping adding IP '.$ip.' to '.$vzid.', it already exists in the VPS.');
 			return false;
 		}
@@ -76,7 +68,7 @@ class OpenVz
 		$ips = self::getVpsIps($vzid);
 		if (preg_match('/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/', $ip, $matches))
 			$ip = $matches[1];
-		if (!array_key_exists($ip, $ips)) {
+		if (!in_array($ip, $ips)) {
 			Vps::getLogger()->error('Skipping removing IP '.$ip.' from '.$vzid.', it does not appear to exit in the VPS.');
 			return false;
 		}
@@ -87,7 +79,6 @@ class OpenVz
 
 	public static function changeIp($vzid, $ipOld, $ipNew) {
 		$ips = self::getVpsIps($vzid);
-		$ips = array_keys($ips);
 		if (in_array($ipNew, $ips)) {
 			Vps::getLogger()->error('The New IP '.$ipNew.' alreaday exists as one of the IPs ('.implode(',', $ips).') for VPS '.$vzid);
 			return false;
@@ -99,19 +90,19 @@ class OpenVz
 		if ($ipOld == $ips[0] && count($ips) > 1) {
 			Vps::getLogger()->info("Changing IP from '{$ipOld}' to '{$ipNew}'");
 			Vps::getLogger()->info("Removing all existing IPs and adding '{$ipNew}' to ensure it is still a primary IP");
-			echo Vps::runCommand("prlctl set {$vzid} --ipdel all --ipadd {$ipNew}");
+			echo Vps::runCommand("vzctl set {$vzid} --ipdel all --ipadd {$ipNew}");
 			for ($x = 1; $x <= count($ips); $x++) {
 				Vps::getLogger()->info("Adding IP {$ips[$x]} to {$vzid}");
-				echo Vps::runCommand("prlctl set {$vzid} --ipadd {$ips[$x]}");
+				echo Vps::runCommand("vzctl set {$vzid} --ipadd {$ips[$x]}");
 			}
 		} else {
 			Vps::getLogger()->info("Removing Old IP {$ipOld} to {$vzid}");
-			echo Vps::runCommand("prlctl set {$vzid} --ipdel {$ipOld}");
+			echo Vps::runCommand("vzctl set {$vzid} --ipdel {$ipOld}");
 			Vps::getLogger()->info("Adding New IP {$ipNew} to {$vzid}");
-			echo Vps::runCommand("prlctl set {$vzid} --ipadd {$ipNew}");
+			echo Vps::runCommand("vzctl set {$vzid} --ipadd {$ipNew}");
 		}
 		Vps::getLogger()->info("Restarting Virtual Machine '{$vzid}'");
-		echo Vps::runCommand("prlctl restart {$vzid}");
+		echo Vps::runCommand("vzctl restart {$vzid}");
 		return true;
 	}
 
@@ -189,12 +180,12 @@ class OpenVz
 
 	public static function startVps($vzid) {
 		Vps::getLogger()->info('Starting the VPS');
-		echo Vps::runCommand("prlctl start {$vzid}");
+		echo Vps::runCommand("vzctl start {$vzid}");
 	}
 
 	public static function stopVps($vzid, $fast = false) {
 		Vps::getLogger()->info('Stopping the VPS');
-		echo Vps::runCommand("prlctl stop {$vzid}");
+		echo Vps::runCommand("vzctl stop {$vzid}");
 	}
 
 	public static function destroyVps($vzid) {

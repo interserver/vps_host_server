@@ -77,18 +77,27 @@ class UpdateCommand extends Command {
 				echo Vps::runCommand("prlctl set {$vzid} --device-set hdd0 --size {$hd}");
 				$hdG = ceil($hd / 1024);
 				echo Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save");
+			} elseif (Vps::getVirtType() == 'openvz') {
+				$hdG = ceil($hd / 1024);
+				echo Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save");
 			}
 		}
 		if ($updateQuota === true) {
-			if (Vps::getVirtType() == 'virtuozzo') {
-				$quota = $opts->keys['quota']->value;
-				if ($quota == 'on') {
+			$quota = $opts->keys['quota']->value;
+			if ($quota == 'on') {
+				if (Vps::getVirtType() == 'virtuozzo') {
 					echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 200 --save --setmode restart");
-				} elseif ($quota == 'off') {
-                    echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
-				} else {
-					$this->getLogger()->error('Invalid Quotas Option, must be on or off');
+				} elseif (Vps::getVirtType() == 'openvz') {
+					echo Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 200 --save --setmode restart");
 				}
+			} elseif ($quota == 'off') {
+				if (Vps::getVirtType() == 'virtuozzo') {
+	                echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
+				} elseif (Vps::getVirtType() == 'openvz') {
+	                echo Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
+				}
+			} else {
+				$this->getLogger()->error('Invalid Quotas Option, must be on or off');
 			}
 		}
 		if ($updatePassword === true) {
@@ -98,6 +107,8 @@ class UpdateCommand extends Command {
 			$password = escapeshellarg($password);
 			if (Vps::getVirtType() == 'virtuozzo') {
                 echo Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}");
+			} elseif (Vps::getVirtType() == 'openvz') {
+                echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --userpasswd {$username}:{$password}");
 			} elseif (Vps::getVirtType() == 'kvm') {
 				echo Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password};");
 			}
@@ -107,6 +118,8 @@ class UpdateCommand extends Command {
 			$hostname = escapeshellarg($hostname);
 			if (Vps::getVirtType() == 'virtuozzo') {
 				echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
+			} elseif (Vps::getVirtType() == 'openvz') {
+				echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --hostname {$hostname}");
 			} elseif (Vps::getVirtType() == 'kvm') {
 				echo Vps::runCommand("virt-customize -d {$vzid} --hostname {$hostname};");
 			}
