@@ -77,8 +77,7 @@ class Virtuozzo
 	}
 
 	public static function changeIp($vzid, $ipOld, $ipNew) {
-		$ips = self::getVpsIps($vzid);
-		$ips = array_keys($ips);
+		$ips = self::getVpsIps($vzid, true);
 		if (in_array($ipNew, $ips)) {
 			Vps::getLogger()->error('The New IP '.$ipNew.' alreaday exists as one of the IPs ('.implode(',', $ips).') for VPS '.$vzid);
 			return false;

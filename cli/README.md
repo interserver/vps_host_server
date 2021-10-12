@@ -7,9 +7,10 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 ## TODO
 
 * store vzid only in the vzid field not hostname for kvm
+  * it looks like we can grab information about the vm by using virt-inspector --no-applications -d <vzid> to get a xml formatted output of basic os info including hostnmae
 * merge **reset-password** **change-hostname** and **change-timezone** into **update**
-* possibly utilize virt-resize in **update** call instead of qemu-img resize
 * fix **reset-password** command adding in detection of windows and skipping if not
+* possibly utilize virt-resize in **update** call instead of qemu-img resize
 * add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
 * add escapeshellarg() calls around any vars being passed through a exec type call
 * fix the restore script to work with kvmv2 os.qcow2 files
