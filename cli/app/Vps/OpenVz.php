@@ -110,13 +110,11 @@ class OpenVz
 		// if tempolate doesnt exist download it
 		if (!file_exists('/vz/template/cache/'.$template)) {
 			// if web url
-		/*
-  if [ "$(echo "{$vps_os}"|grep "://")" != "" ]; then
-    wget -O /vz/template/cache/{$vps_os} {$vps_os};
-  else
-    vztmpl-dl --gpg-check --update {$vps_os}};
-  fi;
-*/
+			if (strpos($template, '://') !== false) {
+				echo Vps::runCommand("wget -O /vz/template/cache/{$template} {$template}");
+			} else {
+				echo Vps::runCommand("vztmpl-dl --gpg-check --update {$vps_os}");
+			}
 		}
 		// if template is .xz recompress it to .gz
 		$pathInfo = pathinfo($template);
@@ -188,57 +186,52 @@ class OpenVz
 		$kMemSizeB = (45 * 1024 * $avNumProcB + $dCacheSizeB);
 		$diskSpace = $hd * 1024;
 		$diskSpaceB = $diskSpace;
-
+		echo Vps::runCommand("vzctl set {$vzid} --save {$force} --cpuunits {$cpuUnits} --cpus {$cpu} --diskspace {$diskspace}:{$diskspace_b} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmguarpages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomguarpages}:{$limit} --privvmpages {$privvmpages}:{$privvmpages_b} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dcachesize}:{$dcachesize_b} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1");
+		if (file_exists('/proc/vz/vswap')) {
+			echo Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup");
+			echo Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup");
+			echo Vps::runCommand("/bin/rm -f /etc/vz/conf/{$vzid}.conf.backup");
+			echo Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save");
+			echo Vps::runCommand("vzctl set {$vzid} --reset_ub");
+		}
+		// validate vps
+		if (file_exists('/usr/sbin/vzcfgvalidate'))
+			echo Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf");
+		echo Vps::runCommand("vzctl set {$vzid} --save --devices c:1:3:rw --devices c:10:200:rw --capability net_admin:on");
+		echo Vps::runCommand("vzctl set {$vzid} --save --nameserver '8.8.8.8 64.20.34.50' --searchdomain interserver.net --onboot yes");
+		echo Vps::runCommand("vzctl set {$vzid} --save --noatime yes 2>/dev/null");
+		// setup ips
+		foreach ($extraIps as $extraIp)
+			echo Vps::runCommand("vzctl set {$vzid} --save --ipadd {$extraIp} 2>&1");
+		echo Vps::runCommand("vzctl start {$vzid} 2>&1");
+		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
+		echo Vps::runCommand("vzctl exec {$vzid} mkdir -p /dev/net");
+		echo Vps::runCommand("vzctl exec {$vzid} mknod /dev/net/tun c 10 200");
+		echo Vps::runCommand("vzctl exec {$vzid} chmod 600 /dev/net/tun");
+		echo Vps::runCommand("/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh");
+		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
+		// setup ssh
+		$sshCnf = glob('/etc/*ssh/sshd_config');
+		if (countg($sshCnf) > 0) {
+			$sshCnf = $sshCnf[0];
+			// install ssh key
+			if (isset($sshKey)) {
+				echo Vps::runCommand("vzctl exec {$vzid} \"mkdir -p /root/.ssh\"");
+				echo Vps::runCommand("vzctl exec {$vzid} \"echo {$ssh_key} >> /root/.ssh/authorized_keys2\"");
+				echo Vps::runCommand("vzctl exec {$vzid} \"chmod go-w /root; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys2\"");
+			}
 /*
-{assign var=diskspace value=1024 * 1024 * (($settings.slice_hd * $vps_slices) + $settings.additional_hd)}
-{assign var=diskspace_b value=1024 * 1024 * (($settings.slice_hd * $vps_slices) + $settings.additional_hd)}
-vzctl set {$vzid} --save $force --cpuunits {$cpuUnits} --cpus {$cpus} --diskspace {$diskspace}:{$diskspace_b} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmguarpages}:$limit --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomguarpages}:$limit --privvmpages {$privvmpages}:{$privvmpages_b} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:$limit --dcachesize {$dcachesize}:{$dcachesize_b} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1;
-if [ -e /proc/vz/vswap ]; then
-  /bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup;
-  grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup;
-  /bin/rm -f /etc/vz/conf/{$vzid}.conf.backup;
-  echo Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save");
-  echo Vps::runCommand("vzctl set {$vzid} --reset_ub");
+if [ "$(grep "^PermitRootLogin" $sshcnf)" = "" ]; then
+echo "PermitRootLogin yes" >> $sshcnf;
+echo "Added PermitRootLogin line in $sshcnf";
+kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]{$vzid}[[:space:]]" | sed s#"{$vzid}.*ssh.*$"#""#g);
+elif [ "$(grep "^PermitRootLogin" $sshcnf)" != "PermitRootLogin yes" ]; then
+sed s#"^PermitRootLogin.*$"#"PermitRootLogin yes"#g -i $sshcnf;
+echo "Updated PermitRootLogin line in $sshcnf";
+kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]{$vzid}[[:space:]]" | sed s#"{$vzid}.*ssh.*$"#""#g);
 fi;
 */
-			// validate vps
-			if (file_exists('/usr/sbin/vzcfgvalidate'))
-				echo Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf");
-			echo Vps::runCommand("vzctl set {$vzid} --save --devices c:1:3:rw --devices c:10:200:rw --capability net_admin:on");
-			echo Vps::runCommand("vzctl set {$vzid} --save --nameserver '8.8.8.8 64.20.34.50' --searchdomain interserver.net --onboot yes");
-			echo Vps::runCommand("vzctl set {$vzid} --save --noatime yes 2>/dev/null");
-			// setup ips
-			foreach ($extraIps as $extraIp)
-				echo Vps::runCommand("vzctl set {$vzid} --save --ipadd {$extraIp} 2>&1");
-			echo Vps::runCommand("vzctl start {$vzid} 2>&1");
-			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$rootpass} 2>&1");
-			echo Vps::runCommand("vzctl exec {$vzid} mkdir -p /dev/net");
-			echo Vps::runCommand("vzctl exec {$vzid} mknod /dev/net/tun c 10 200");
-			echo Vps::runCommand("vzctl exec {$vzid} chmod 600 /dev/net/tun");
-			echo Vps::runCommand("/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh");
-			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$rootpass} 2>&1");
-			// setup ssh
-			$sshCnf = glob('/etc/*ssh/sshd_config');
-			if (countg($sshCnf) > 0) {
-				$sshCnf = $sshCnf[0];
-				// install ssh key
-				if (isset($sshKey)) {
-					echo Vps::runCommand("vzctl exec {$vzid} \"mkdir -p /root/.ssh\"");
-					echo Vps::runCommand("vzctl exec {$vzid} \"echo {$ssh_key} >> /root/.ssh/authorized_keys2\"");
-					echo Vps::runCommand("vzctl exec {$vzid} \"chmod go-w /root; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys2\"");
-				}
-/*
- if [ "$(grep "^PermitRootLogin" $sshcnf)" = "" ]; then
-  echo "PermitRootLogin yes" >> $sshcnf;
-  echo "Added PermitRootLogin line in $sshcnf";
-  kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]{$vzid}[[:space:]]" | sed s#"{$vzid}.*ssh.*$"#""#g);
- elif [ "$(grep "^PermitRootLogin" $sshcnf)" != "PermitRootLogin yes" ]; then
-  sed s#"^PermitRootLogin.*$"#"PermitRootLogin yes"#g -i $sshcnf;
-  echo "Updated PermitRootLogin line in $sshcnf";
-  kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]{$vzid}[[:space:]]" | sed s#"{$vzid}.*ssh.*$"#""#g);
- fi;
-*/
-			}
+		}
 		// template specific stuff
 		if ($template == 'centos-7-x86_64-breadbasket') {
     		echo "Sleeping for a minute to workaround an ish";
