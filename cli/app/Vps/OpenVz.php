@@ -143,7 +143,7 @@ class OpenVz
 			$layout = $layout == '--layout ploop' ? '--layout simfs' : $layout;
 			echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return);
 		}
-        mkdir('/vz/root/'.$vzid, 0777, true);
+        @mkdir('/vz/root/'.$vzid, 0777, true);
 		$slices = $cpu;
 		$wiggle = 1000;
 		$dCacheWiggle = 400000;
@@ -171,7 +171,7 @@ class OpenVz
 		$tcpSndBuf = 8958464 * $slices;
 		$tcpSndBufB = (2561 * $numTcpSock) + $tcpSndBuf;
 		$otherSockBuf = 775488 * $slices;
-		$otherSockBufB = (2561 * $numOtherSock) + $otherSockBu;
+		$otherSockBufB = (2561 * $numOtherSock) + $otherSockBuf;
 		$shmPages = 100000 * $slices;
 		$shmPagesB = $shmPages;
 		$dCacheSize = 384 * $numFile + $dCacheWiggle;
@@ -184,7 +184,7 @@ class OpenVz
 		$kMemSizeB = (45 * 1024 * $avNumProcB + $dCacheSizeB);
 		$diskSpace = $hd * 1024;
 		$diskSpaceB = $diskSpace;
-		echo Vps::runCommand("vzctl set {$vzid} --save {$force} --cpuunits {$cpuUnits} --cpus {$cpu} --diskspace {$diskspace}:{$diskspace_b} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmguarpages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomguarpages}:{$limit} --privvmpages {$privvmpages}:{$privvmpages_b} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dcachesize}:{$dcachesize_b} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1");
+		echo Vps::runCommand("vzctl set {$vzid} --save {$force} --cpuunits {$cpuUnits} --cpus {$cpu} --diskspace {$diskSpace}:{$diskSpaceB} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmGuarPages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomGuarPages}:{$limit} --privvmpages {$privVmPages}:{$privVmPagesB} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dCacheSize}:{$dCacheSizeB} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1");
 		if (file_exists('/proc/vz/vswap')) {
 			echo Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup");
 			echo Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup");
@@ -207,7 +207,7 @@ class OpenVz
 		echo Vps::runCommand("/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh");
 		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
 		$sshCnf = glob('/etc/*ssh/sshd_config');
-		if (countg($sshCnf) > 0) { // setup ssh
+		if (count($sshCnf) > 0) { // setup ssh
 			$sshCnf = $sshCnf[0];
 			if (isset($sshKey)) { // install ssh key
 				echo Vps::runCommand("vzctl exec {$vzid} \"mkdir -p /root/.ssh\"");
