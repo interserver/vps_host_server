@@ -6,7 +6,11 @@ use CLIFramework\Command;
 use CLIFramework\Component\Table\Table;
 use CLIFramework\Component\Table\MarkdownTableStyle;
 
-class GetInstalledVirtsCommand extends Command {
+/**
+* {$brief}
+*/
+class {$pascal}Command extends Command
+{
 	public function brief() {
 		return "{$brief}";
 	}
