@@ -135,6 +135,8 @@ class OpenVz
 		}
 		$config = !file_exists('/etc/vz/conf/ve-vps.small.conf') ? '' : '--config vps.small';
 		$template = str_replace(['.tar.gz', '.tar.xz'], ['', ''], $template);
+		$passsword = escapeshellarg($password);
+		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return); // create vps
 		if ($return != 0) {
 			Vps::runCommand("vzctl destroy {$vzid}");
@@ -236,14 +238,12 @@ class OpenVz
 		if ($template == 'ubuntu-15.04-x86_64-xrdp') {
 			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd kvm:{$password} 2>&1");
 		}
-		echo Vps::runCommand("/admin/vzenable blocksmtp {$vzid}");
+		self::blockSmtp($vzid);
 
 
 		$ram = ceil($ram / 1024);
-		$passsword = escapeshellarg($password);
 		echo Vps::runCommand("prlctl set {$vzid} --userpasswd root:{$password}");
 		echo Vps::runCommand("prlctl set {$vzid} --memsize {$ram}M");
-		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
 		return $return == 0;
 	}
@@ -259,31 +259,6 @@ class OpenVz
 					$vncPort = intval($vps['Remote display']['port']);
 		}
 		return $vncPort;
-	}
-
-	public static function setupVnc($vzid, $clientIp) {
-		Vps::getLogger()->info('Setting up VNC');
-		$vncPort = self::getVncPort($vzid);
-		$base = Vps::$base;
-		if ($vncPort == '' || $vncPort < 5901) {
-			$vpsList = self::getList();
-			$ports = [];
-			foreach ($vpsList as $vps)
-				if (isset($vps['Remote display']['port']))
-					$ports[] = intval($vps['Remote display']['port']);
-				$vncPort = 5901;
-			while (in_array($vncPort, $ports))
-				$vncPort++;
-			echo Vps::runCommand("prlctl set {$vzid} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1");
-		}
-		Xinetd::lock();
-		if ($clientIp != '') {
-			$clientIp = escapeshellarg($clientIp);
-			echo Vps::runCommand("{$base}/vps_virtuozzo_setup_vnc.sh {$vzid} {$clientIp};");
-		}
-		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$vzid};");
-		Xinetd::unlock();
-		Xinetd::restart();
 	}
 
 	public static function enableAutostart($vzid) {
@@ -316,7 +291,7 @@ class OpenVz
 		self::blockSmtp($vzid, $id);
 	}
 
-	public static function blockSmtp($vzid, $id) {
+	public static function blockSmtp($vzid, $id = false) {
 		echo Vps::runCommand("/admin/vzenable blocksmtp {$vzid}");
 	}
 
