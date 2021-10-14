@@ -263,21 +263,25 @@ class Vps
 	}
 
 	public static function vncScreenshot($vzid, $url) {
-		$vncPort = self::getVncPort($vzid);
-		$vncPort -= 5900;
-		$base = self::$base;
-		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
-		sleep(2);
-		echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
-		$vncPort += 5900;
+		if (in_array(self::getVirtType(), ['kvm', 'virtuozzo'])) {
+			$vncPort = self::getVncPort($vzid);
+			$vncPort -= 5900;
+			$base = self::$base;
+			echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
+			sleep(2);
+			echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
+			$vncPort += 5900;
+		}
 	}
 
 	public static function vncScreenshotSwift($vzid) {
-		$vncPort = self::getVncPort($vzid);
-		$base = Vps::$base;
-		if ($vncPort != '' && intval($vncPort) > 1000) {
-			$vncPort -= 5900;
-			echo Vps::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}");
+		if (in_array(self::getVirtType(), ['kvm', 'virtuozzo'])) {
+			$vncPort = self::getVncPort($vzid);
+			$base = Vps::$base;
+			if ($vncPort != '' && intval($vncPort) > 1000) {
+				$vncPort -= 5900;
+				echo Vps::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}");
+			}
 		}
 	}
 
