@@ -239,26 +239,7 @@ class OpenVz
 			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd kvm:{$password} 2>&1");
 		}
 		self::blockSmtp($vzid);
-
-
-		$ram = ceil($ram / 1024);
-		echo Vps::runCommand("prlctl set {$vzid} --userpasswd root:{$password}");
-		echo Vps::runCommand("prlctl set {$vzid} --memsize {$ram}M");
-		echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
 		return $return == 0;
-	}
-
-	public static function getVncPort($vzid) {
-		$vpsList = self::getList();
-		$vncPort = '';
-		foreach ($vpsList as $vps) {
-			//if (!isset($vps['Hostname']))
-			//echo Vps::getLogger()->info("No Hostname but got: ".json_encode($vps));
-			if ($vps['ID'] == $vzid || $vps['EnvID'] == $vzid || $vps['Name'] == $vzid || (isset($vps['Hostname']) && $vps['Hostname'] == $vzid))
-				if (isset($vps['Remote display']['port']))
-					$vncPort = intval($vps['Remote display']['port']);
-		}
-		return $vncPort;
 	}
 
 	public static function enableAutostart($vzid) {

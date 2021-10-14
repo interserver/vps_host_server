@@ -251,8 +251,6 @@ class Vps
 	public static function getVncPort($vzid) {
 		if (self::getVirtType() == 'virtuozzo')
 			return Virtuozzo::getVncPort($vzid);
-		elseif (self::getVirtType() == 'openvz')
-			return OpenVz::getVncPort($vzid);
 		else
 			return Kvm::getVncPort($vzid);
 	}
@@ -262,8 +260,6 @@ class Vps
 			Kvm::setupVnc($vzid, $clientIp);
 		elseif (self::getVirtType() == 'virtuozzo')
 			Virtuozzo::setupVnc($vzid, $clientIp);
-		elseif (self::getVirtType() == 'openvz')
-			OpenVz::setupVnc($vzid, $clientIp);
 	}
 
 	public static function vncScreenshot($vzid, $url) {
