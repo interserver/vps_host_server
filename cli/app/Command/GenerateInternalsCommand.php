@@ -9,19 +9,89 @@ class GenerateInternalsCommand extends Command {
 		return "generate the classes to provide wrappers to internal commands making them usable for scripting";
 	}
 
+	/**
+	* Convert name to snake_case
+	*  HelpCommand => help
+	*  SuchLongCommand => such_long
+	*  hello-my-name-is => hello_my_name_is
+	* @param string $className name to convert
+	* @return string snake_case translated name
+	*/
+	public function snakeCase($className)
+	{
+		$className = lcfirst($className);
+		$return = preg_replace_callback('/[A-Z]/', function ($matches) {
+			return '_' . strtolower($matches[0]);
+			}, $className);
+		return $return;
+	}
+
+	/**
+	* Convert name to kebab-case
+	*  HelpCommand => help
+	*  SuchLongCommand => such-long
+	*  hello-my-name-is => hello-my-name-is
+	* @param string $className name to convert
+	* @return string kebab-case translated name
+	*/
+	public function kebabCase($className)
+	{
+		$className = lcfirst($className);
+		$return = preg_replace_callback('/[A-Z]/', function ($matches) {
+			return '-' . strtolower($matches[0]);
+			}, $className);
+		return $return;
+	}
+
+	/**
+	* Convert name to PascalCase
+	*  HelpCommand => Help
+	*  SuchLongCommand => SuchLong
+	*  hello-my-name-is => HelloMyNameIs
+	* @param string $className name to convert
+	* @return string PascalCase translated name
+	*/
+	public function pascalCase($command)
+	{
+		$args = explode('-', $command);
+		foreach ($args as & $a) {
+			$a = ucfirst($a);
+		}
+		return join('', $args);
+	}
+
+	/**
+	* Convert name to camelCase
+	*  HelpCommand => help
+	*  SuchLongCommand => suchLong
+	*  hello-my-name-is => helloMyNameIs
+	* @param string $className name to convert
+	* @return string camelCase translated name
+	*/
+	public function camelCase($command)
+	{
+		$args = explode('-', $command);
+		foreach ($args as $idx =>  & $a) {
+			if ($idx > 0)
+				$a = ucfirst($a);
+		}
+		return join('', $args);
+	}
+
+
 	public function execute() {
 		$smarty = new \Smarty();
 		$smarty->setTemplateDir(['.'])
-			->setCompileDir('/home/my/logs/smarty_templates_c')
-			->setConfigDir('/home/my/config/smarty_configs')
-			->setCacheDir('/home/my/logs/smarty_cache')
-			->setCaching(false);
+		->setCompileDir('/home/my/logs/smarty_templates_c')
+		->setConfigDir('/home/my/config/smarty_configs')
+		->setCacheDir('/home/my/logs/smarty_cache')
+		->setCaching(false);
 		$smarty->setDebugging(false);
 		$smarty->assign('use', '');
 		$smarty->assign('brief', 'briefing');
 		$smarty->assign('type', 'json');
 		$smarty->assign('method', 'somecall()');
-		echo $smarty->fetch(__DIR__.'/internals.tpl');
+		echo $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl');
 		$projectFactory = \phpDocumentor\Reflection\Php\ProjectFactory::createInstance();
 		$files = [ new \phpDocumentor\Reflection\File\LocalFile('app/Vps.php') ];
 		/** @var Project $project */
@@ -41,7 +111,9 @@ class GenerateInternalsCommand extends Command {
 					$context = $docblock->getContext();
 					$description = $docblock->getDescription();
 					$summary = $docblock->getSummary();
-					echo "    - {$summary}\n";
+					//echo "    - context: {$context}\n";
+					//echo "    - description: {$description}\n";
+					echo "    - summary: {$summary}\n";
 					$tags = $docblock->getTags();
 					/*
 					$tags = $docblock->getTags();
