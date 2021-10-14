@@ -107,24 +107,22 @@ class OpenVz
 	}
 
 	public static function defineVps($vzid, $hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password) {
-		// if tempolate doesnt exist download it
-		if (!file_exists('/vz/template/cache/'.$template)) {
-			// if web url
-			if (strpos($template, '://') !== false) {
+		if (!file_exists('/vz/template/cache/'.$template)) { // if tempolate doesnt exist download it
+			if (strpos($template, '://') !== false) { // if web url
 				echo Vps::runCommand("wget -O /vz/template/cache/{$template} {$template}");
 			} else {
 				echo Vps::runCommand("vztmpl-dl --gpg-check --update {$vps_os}");
 			}
 		}
-		// if template is .xz recompress it to .gz
 		$pathInfo = pathinfo($template);
-		if ($pathInfo['extension'] == 'xz') {
+		if ($pathInfo['extension'] == 'xz') { // if template is .xz recompress it to .gz
 			if (file_exists('/vz/template/cache/'.str_replace('.xz', '.gz', $template))) {
 				echo "Already Exists in .gz, not changing anything";
 			} else {
 				echo "Recompressing {$vps_os} to .gz";
-    			// xz -d --keep "/vz/template/cache/{$vps_os}";
-    			// gzip -9 "$(echo "/vz/template/cache/{$vps_os}" | sed s#"\.xz$"#""#g)";
+    			echo Vps::runCommand("xz -d --keep '/vz/template/cache/{$template}'");
+    			$uncompressed = escapeshellarg('/vz/template/cache/'.$pathInfo['filename']);
+    			echo Vps::runCommand("gzip -9 {$uncompressed}");
 			}
 		}
 		$uname = posix_uname();
@@ -136,16 +134,14 @@ class OpenVz
 			$force = '--force';
 		}
 		$config = !file_exists('/etc/vz/conf/ve-vps.small.conf') ? '' : '--config vps.small';
-		// create vps
 		$template = str_replace(['.tar.gz', '.tar.xz'], ['', ''], $template);
-		echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return);
+		echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return); // create vps
 		if ($return != 0) {
 			Vps::runCommand("vzctl destroy {$vzid}");
 			$layout = $layout == '--layout ploop' ? '--layout simfs' : $layout;
 			echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return);
 		}
         mkdir('/vz/root/'.$vzid, 0777, true);
-		// set limits
 		$slices = $cpu;
 		$wiggle = 1000;
 		$dCacheWiggle = 400000;
@@ -194,14 +190,12 @@ class OpenVz
 			echo Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save");
 			echo Vps::runCommand("vzctl set {$vzid} --reset_ub");
 		}
-		// validate vps
-		if (file_exists('/usr/sbin/vzcfgvalidate'))
+		if (file_exists('/usr/sbin/vzcfgvalidate')) // validate vps
 			echo Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf");
 		echo Vps::runCommand("vzctl set {$vzid} --save --devices c:1:3:rw --devices c:10:200:rw --capability net_admin:on");
 		echo Vps::runCommand("vzctl set {$vzid} --save --nameserver '8.8.8.8 64.20.34.50' --searchdomain interserver.net --onboot yes");
 		echo Vps::runCommand("vzctl set {$vzid} --save --noatime yes 2>/dev/null");
-		// setup ips
-		foreach ($extraIps as $extraIp)
+		foreach ($extraIps as $extraIp) // setup ips
 			echo Vps::runCommand("vzctl set {$vzid} --save --ipadd {$extraIp} 2>&1");
 		echo Vps::runCommand("vzctl start {$vzid} 2>&1");
 		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
@@ -210,63 +204,47 @@ class OpenVz
 		echo Vps::runCommand("vzctl exec {$vzid} chmod 600 /dev/net/tun");
 		echo Vps::runCommand("/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh");
 		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
-		// setup ssh
 		$sshCnf = glob('/etc/*ssh/sshd_config');
-		if (countg($sshCnf) > 0) {
+		if (countg($sshCnf) > 0) { // setup ssh
 			$sshCnf = $sshCnf[0];
-			// install ssh key
-			if (isset($sshKey)) {
+			if (isset($sshKey)) { // install ssh key
 				echo Vps::runCommand("vzctl exec {$vzid} \"mkdir -p /root/.ssh\"");
 				echo Vps::runCommand("vzctl exec {$vzid} \"echo {$ssh_key} >> /root/.ssh/authorized_keys2\"");
 				echo Vps::runCommand("vzctl exec {$vzid} \"chmod go-w /root; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys2\"");
 			}
-/*
-if [ "$(grep "^PermitRootLogin" $sshcnf)" = "" ]; then
-echo "PermitRootLogin yes" >> $sshcnf;
-echo "Added PermitRootLogin line in $sshcnf";
-kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]{$vzid}[[:space:]]" | sed s#"{$vzid}.*ssh.*$"#""#g);
-elif [ "$(grep "^PermitRootLogin" $sshcnf)" != "PermitRootLogin yes" ]; then
-sed s#"^PermitRootLogin.*$"#"PermitRootLogin yes"#g -i $sshcnf;
-echo "Updated PermitRootLogin line in $sshcnf";
-kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]{$vzid}[[:space:]]" | sed s#"{$vzid}.*ssh.*$"#""#g);
-fi;
-*/
+			$sshCnfData = file_get_contents($sshCnf);
+			if (!preg_match('/^PermitRootLogin/', $sshCnfData)) {
+				echo 'Adding PermitRootLogin line to '.$sshCnf;
+				$sshCnfData .= PHP_EOL.'PermitRootLogin yes'.PHP_EOL;
+				file_put_contents($sshCnf, $sshCnfData);
+				echo Vps::runCommand('kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]'.$vzid.'[[:space:]]" | sed s#"'.$vzid.'.*ssh.*$"#""#g)');
+			} elseif (preg_match('/^PermitRootLogin (.*)$/m', $sshCnfData, $matches) && $matches[1] != 'yes') {
+				echo 'Replacing PermitRootLogin line options in '.$sshCnf;
+				$sshCnfData = str_replace($matches[0], str_replace($matches[1], 'yes', $matches[0]), $sshCnfData);
+				file_put_contents($sshCnf, $sshCnfData);
+				echo Vps::runCommand('kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]'.$vzid.'[[:space:]]" | sed s#"'.$vzid.'.*ssh.*$"#""#g)');
+			}
 		}
-		// template specific stuff
 		if ($template == 'centos-7-x86_64-breadbasket') {
     		echo "Sleeping for a minute to workaround an ish";
     		sleep(60);
     		echo "That was a pleasant nap.. back to the grind...";
 		}
 		if ($template == 'centos-7-x86_64-nginxwordpress') {
-			echo Vps::runCommand("vzctl exec {$vzid} /root/change.sh {$rootpass} 2>&1");
+			echo Vps::runCommand("vzctl exec {$vzid} /root/change.sh {$password} 2>&1");
 		}
 		if ($template == 'ubuntu-15.04-x86_64-xrdp') {
-			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd kvm:{$rootpass} 2>&1");
+			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd kvm:{$password} 2>&1");
 		}
 		echo Vps::runCommand("/admin/vzenable blocksmtp {$vzid}");
 
 
-
-
 		$ram = ceil($ram / 1024);
-		echo Vps::runCommand("prlctl create {$vzid} --vmtype ct --ostemplate {$template}", $return);
 		$passsword = escapeshellarg($password);
 		echo Vps::runCommand("prlctl set {$vzid} --userpasswd root:{$password}");
 		echo Vps::runCommand("prlctl set {$vzid} --memsize {$ram}M");
-		//commented out because virtuozzo says "WARNING: Use of swap significantly slows down both the container and the node."
-		//echo Vps::runCommand("prlctl set {$vzid} --swappages 1G");
 		$hostname = escapeshellarg($hostname);
 		echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
-		echo Vps::runCommand("prlctl set {$vzid} --device-add net --type routed --ipadd {$ip} --nameserver 8.8.8.8");
-		foreach ($extraIps as $extraIp)
-			echo Vps::runCommand("prlctl set {$vzid} --ipadd {$extraIp}/255.255.255.0 2>&1");
-		echo Vps::runCommand("prlctl set {$vzid} --cpus {$cpu}");
-		$cpuUnits = 1500 * $cpu;
-		echo Vps::runCommand("prlctl set {$vzid} --cpuunits {$cpuUnits}");
-		echo Vps::runCommand("prlctl set {$vzid} --device-set hdd0 --size {$hd}");
-		$hdG = ceil($hd / 1024);
-		echo Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save");
 		return $return == 0;
 	}
 
