@@ -119,7 +119,7 @@ class GenerateInternalsCommand extends Command {
 					$smarty->assign('snake', $this->snakeCase($methodName));
 					$smarty->assign('kebab', $this->kebabCase($methodName));
 					$smarty->assign('method', str_replace('\\App\\Vps', 'Vps', $methodFullName));
-					echo $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl');
+					file_put_contents(__DIR__.'/InternalsCommand/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl'));
 					//echo "    - context: {$context}\n";
 					//echo "    - description: {$description}\n";
 					//echo "    - summary: {$summary}\n";
