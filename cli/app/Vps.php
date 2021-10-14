@@ -16,7 +16,7 @@ class Vps
 	public static $base = '/root/cpaneldirect';
 	public static $virtBins = [
 		'virtuozzo' => '/usr/bin/prlctl',
-		'openvz' => '/usr/bin/vzctl',
+		'openvz' => '/usr/sbin/vzctl',
 		'kvm' => '/usr/bin/virsh',
 		'lxc' => '/usr/bin/lxc',
 	];
