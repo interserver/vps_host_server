@@ -41,7 +41,12 @@ class InstallCpanelCommand extends Command {
 			$email = escapeshellarg($email);
 			echo Vps::runCommand("prlctl exec {$vzid} 'if [ ! -e /usr/bin/screen ]; then yum -y install screen; fi'");
 			echo Vps::runCommand("prlctl exec {$vzid} 'if [ ! -e /admin/cpanelinstall ]; then rsync -a rsync://mirror.trouble-free.net/admin /admin; fi'");
-			echo Vps::runCommand("prlctl exec {$vzid} '/admin/cpanelinstall {$email}'");
+			echo Vps::runCommand("prlctl exec {$vzid} '/admin/cpanelinstall {$email};'");
+		} elseif (Vps::getVirtType() == 'openvz') {
+			$email = escapeshellarg($email);
+			echo Vps::runCommand("vzctl exec {$vzid} 'if [ ! -e /usr/bin/screen ]; then yum -y install screen; fi'");
+			echo Vps::runCommand("vzctl exec {$vzid} 'if [ ! -e /admin/cpanelinstall ]; then rsync -a rsync://mirror.trouble-free.net/admin /admin; fi'");
+			echo Vps::runCommand("vzctl exec {$vzid} '/admin/cpanelinstall {$email};'");
 		}
 	}
 }

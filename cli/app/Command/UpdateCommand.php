@@ -136,13 +136,11 @@ class UpdateCommand extends Command
 			if (Vps::getVirtType() == 'kvm') {
 				echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$vzid}.xml;");
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
-				echo Vps::runCommand("prlctl set {$vzid} --cpus {$cpu}");
 				$cpuUnits = 1500 * $cpu;
-				echo Vps::runCommand("prlctl set {$vzid} --cpuunits {$cpuUnits}");
+				echo Vps::runCommand("prlctl set {$vzid} --cpus {$cpu} --cpuunits {$cpuUnits}");
 			} elseif (Vps::getVirtType() == 'openvz') {
-				echo Vps::runCommand("vzctl set {$vzid} --save --cpus {$cpu}");
 				$cpuUnits = 1500 * $cpu;
-				echo Vps::runCommand("vzctl set {$vzid} --save --cpuunits {$cpuUnits}");
+				echo Vps::runCommand("vzctl set {$vzid} --save --cpus {$cpu} --cpuunits {$cpuUnits}");
 			}
 		}
 		if ($updateRam === true) {
@@ -157,6 +155,61 @@ class UpdateCommand extends Command
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
 				$ramM = ceil($ram / 1024);
 				echo Vps::runCommand("prlctl set {$vzid} --swappages 1G --memsize {$ramM}M");
+			} elseif (Vps::getVirtType() == 'openvz') {
+				$ramM = ceil($ram / 1024);
+
+				$slices = $cpu;
+				$wiggle = 1000;
+				$dCacheWiggle = 400000;
+				$avNumProc = 300 * $slices;
+				$avNumProcB = $avNumProc;
+				$numProc = 250 * $slices;
+				$numProcB = $numProc;
+				$numFlock = 8200 * $slices;
+				$numFlockB = $numFlock;
+				$numIptent = 2000 * $slices;
+				$numIptentB = $numIptent;
+				$numPty = 35 + (24 * $slices);
+				$numPtyB = $numPty;
+		        $numTcpSock = 1800 + $slices;
+		        $numTcpSockB = $numTcpSock;
+				$numOtherSock = 1900 * $slices;
+				$numOtherSockB = $numOtherSock;
+				$numFile = 32 * $avNumProc;
+				$numFileB = $numFile;
+				$dgramRcvBuf = 2075488 * $slices;
+				$dgramRcvBufB = $dgramRcvBuf;
+				$tcpRcvBuf = 8958464 * $slices;
+				$tcpRcvBufB = (2561 * $numTcpSock) + $tcpRcvBuf;
+				$tcpSndBuf = 8958464 * $slices;
+				$tcpSndBufB = (2561 * $numTcpSock) + $tcpSndBuf;
+				$otherSockBuf = 775488 * $slices;
+				$otherSockBufB = (2561 * $numOtherSock) + $otherSockBuf;
+				$shmPages = 100000 * $slices;
+				$shmPagesB = $shmPages;
+				$dCacheSize = 384 * $numFile + $dCacheWiggle;
+				$dCacheSizeB = 384 * $numFileB + $dCacheWiggle;
+				$vmGuarPages = ((256 * 2048) * $slices) - $wiggle;
+				$privVmPages = ((256 * 2048) * $slices);
+				$privVmPagesB = $privVmPages + $wiggle;
+				$oomGuarPages = $vmGuarPages;
+				$kMemSize = (45 * 1024 * $avNumProc + $dCacheSize);
+				$kMemSizeB = (45 * 1024 * $avNumProcB + $dCacheSizeB);
+				$diskSpace = $hd * 1024;
+				$diskSpaceB = $diskSpace;
+				$ram = floor($ram / 1024);
+				echo Vps::runCommand("vzctl set {$vzid} --save {$force} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmGuarPages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomGuarPages}:{$limit} --privvmpages {$privVmPages}:{$privVmPagesB} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dCacheSize}:{$dCacheSizeB} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1");
+				if (file_exists('/proc/vz/vswap')) {
+					echo Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup");
+					echo Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup");
+					echo Vps::runCommand("/bin/rm -f /etc/vz/conf/{$vzid}.conf.backup");
+					echo Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save");
+					echo Vps::runCommand("vzctl set {$vzid} --reset_ub");
+				}
+				if (file_exists('/usr/sbin/vzcfgvalidate')) // validate vps
+					echo Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf");
+
+
 			}
 		}
 		if ($updateTimezone === true) {

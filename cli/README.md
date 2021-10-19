@@ -8,7 +8,6 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 * store vzid only in the vzid field not hostname for kvm
   * it looks like we can grab information about the vm by using virt-inspector --no-applications -d <vzid> to get a xml formatted output of basic os info including hostnmae
-* merge **reset-password** **change-hostname** and **change-timezone** into **update**
 * fix **reset-password** command adding in detection of windows and skipping if not
 * possibly utilize virt-resize in **update** call instead of qemu-img resize
 * add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
@@ -17,10 +16,8 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * split off into its own github org/repo
 * create public website on github
 * add wiki entries
-* add openvz support
 * add lxc support
 * add **self-update** command for downloading the latest phar and replacing it
-* add **internals** command with acess to internal methods making it easier to use the tool to create scripts
 * add **install** command - Installs PreRequisites, Configures Software for our setup
 * add **config** command - Management of the various settings
 * add server option to **test** command to perform various self diagnostics to check on the health and prepairedness of the system
