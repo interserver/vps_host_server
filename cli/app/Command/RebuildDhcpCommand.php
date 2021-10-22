@@ -11,7 +11,7 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class RebuildDhcpCommand extends Command {
 	public function brief() {
-		return "Regenerates the dhcpd config and host assignments files.";
+		return "Regenerates the dhcpd config and host assignments files.\n<what> can be 'conf', 'vps', or 'all' to regenerate the config file, host assignmetns file, or both (respectivly)";
 	}
 
     /** @param \GetOptionKit\OptionCollection $opts */
@@ -36,17 +36,13 @@ class RebuildDhcpCommand extends Command {
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		if (!Vps::vpsExists($vzid)) {
-			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
-			return 1;
-		}
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
 		$opts = $this->getOptions();
 		$useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
 		$output = array_key_exists('output', $opts->keys) && $opts->keys['output']->value == 1;
 		if (in_array($what, ['conf', 'all']))
 			Dhcpd::rebuildConf($useAll, $output);
-		if (in_array($what, ['conf', 'all']))
+		if (in_array($what, ['vps', 'all']))
 			Dhcpd::rebuildHosts($useAll, $output);
 	}
 }
