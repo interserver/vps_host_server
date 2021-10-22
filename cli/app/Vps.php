@@ -116,6 +116,18 @@ class Vps
 		self::$virtType = $virt;
 	}
 
+	public static function getHostInfo($useAll = false) {
+		$response = trim(self::runCommand('curl -s '.escapeshellarg(self::getUrl($useAll).'?action=get_info')));
+		$host = json_decode($response, true);
+		if (!is_array($host) || !isset($host['vlans'])) {
+			self::getLogger()->error("invalid response getting host info:".$response);
+			return false;
+		}
+        @mkdir($_SERVER['HOME'].'/.provirted', 0750, true);
+        file_put_contents($_SERVER['HOME'].'/.provirted/host.json', $response);
+        return $host;
+	}
+
     /**
     * return a list of the running vps
     *

@@ -37,6 +37,14 @@ class Dhcpd
 	}
 
     /**
+    * returns the name of the dhcpd config file
+    * @return string
+    */
+	public static function getConfFile() {
+		return file_exists('/etc/dhcp/dhcpd.conf') ? '/etc/dhcp/dhcpd.conf' : '/etc/dhcpd.conf';
+	}
+
+    /**
     * returns the name of the dhcpd hosts file
     * @return string
     */
@@ -67,6 +75,53 @@ class Dhcpd
     	echo Vps::runCommand("echo \"host {$vzid} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
     	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
 		self::restart();
+    }
+
+    /**
+    * regenerates the dhcpd.conf file
+    * @param bool $useAll defaults to false, optional true for qs
+    */
+    public static function rebuildConf($useAll = false) {
+    	$host = Vps::getHostInfo($useAll);
+		$file = 'authoritative;
+option domain-name "interserver.net";
+option domain-name-servers 1.1.1.1;
+allow bootp;
+allow booting;
+ddns-update-style interim;
+default-lease-time 600;
+max-lease-time 7200;
+log-facility local7;
+include "'.self::getFile().'";
+
+shared-network myvpn {
+';
+		foreach ($host['vlans'] as $vlanId => $vlanData)
+			$file .= 'subnet '.$vlanData['network_ip'].' netmask '.$vlanData['netmask'].' {
+	next-server '.$vlanData['hostmin'].';
+	#range dynamic-bootp '.long2ip(ip2long($vlanData['hostmin']) + 1).' '.$vlanData['hostmax'].';
+	option domain-name-servers 64.20.34.50;
+	option domain-name "interserver.net";
+	option routers '.long2ip(ip2long($vlanData['hostmin'])).';
+	option broadcast-address '.$vlanData['broadcast'].';
+	default-lease-time 86400; # 24 hours
+	max-lease-time 172800; # 48 hours
+}
+';
+		$file .= '}';
+		file_put_contents(self::getConfFile(), $file);
+    }
+
+    /**
+    * regenerates the dhcpd.vps hosts file
+    * @param bool $useAll defaults to false, optional true for qs
+    */
+    public static function rebuildHosts($useAll = false) {
+    	$host = Vps::getHostInfo($useAll);
+		$file = '';
+		foreach ($host['vps'] as $vps)
+			$file .= 'host '.$vps['vzid'].' { hardware ethernet '.$vps['mac'].'; fixed-address '.$vps['ip'].';}'.PHP_EOL;
+		file_put_contents(self::getFile(), $file);
     }
 
     /**
