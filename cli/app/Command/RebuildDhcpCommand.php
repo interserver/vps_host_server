@@ -11,7 +11,7 @@ use CLIFramework\Debug\ConsoleDebug;
 
 class RebuildDhcpCommand extends Command {
 	public function brief() {
-		return "Regenerates the dhcpd config and host assignments files.\n<what> can be 'conf', 'vps', or 'all' to regenerate the config file, host assignmetns file, or both (respectivly)";
+		return "Regenerates the dhcpd config and host assignments files.\n\n	<what> can be 'conf', 'vps', or 'all' to regenerate the config file, host assignmetns file, or both (respectivly)";
 	}
 
     /** @param \GetOptionKit\OptionCollection $opts */
@@ -28,12 +28,17 @@ class RebuildDhcpCommand extends Command {
 		$args->add('what')->desc('rebuild the dhcpd.conf config (conf), dhcpd.vps host asignments (vps), or both (all)')->validValues(['conf','vps','all']);
 	}
 
-	public function execute($what) {
+	public function execute($what = '') {
 		$useAll = false;
 		Vps::init($this->getOptions(), ['what' => $what]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
+			return 1;
+		}
+		if (!in_array($what, 'conf', 'vps', 'all')) {
+			$this->getLogger()->error("Invalid or missing <what> value");
+			$this->getLogger()->error("<what> can be 'conf', 'vps', or 'all' to regenerate the config file, host assignmetns file, or both (respectivly)");
 			return 1;
 		}
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
