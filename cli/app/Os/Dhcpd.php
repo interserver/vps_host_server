@@ -123,9 +123,10 @@ shared-network myvpn {
     */
     public static function rebuildHosts($useAll = false, $display = false) {
     	$host = Vps::getHostInfo($useAll);
-		$file = '';
+		$lines = [];
 		foreach ($host['vps'] as $vps)
-			$file .= 'host '.$vps['vzid'].' { hardware ethernet '.$vps['mac'].'; fixed-address '.$vps['ip'].';}'.PHP_EOL;
+			$lines[] = 'host '.$vps['vzid'].' { hardware ethernet '.$vps['mac'].'; fixed-address '.$vps['ip'].';}';
+		$file = implode(PHP_EOL, $lines);
 		file_put_contents(self::getFile(), $file);
 		if ($display === false)
 			file_put_contents(self::getFile(), $file);
