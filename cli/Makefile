@@ -1,4 +1,10 @@
-all: completion phar
+all: update completion nodev phar
+
+update:
+	composer update --with-all-dependencies -v -o --ansi --dev
+
+nodev:
+	composer update --with-all-dependencies -v -o --ansi --no-dev
 
 completion:
 	rm -f provirted_completion

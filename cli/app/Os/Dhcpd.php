@@ -79,9 +79,10 @@ class Dhcpd
 
     /**
     * regenerates the dhcpd.conf file
-    * @param bool $useAll defaults to false, optional true for qs
+    * @param bool $useAll defaults to false, true for qs
+    * @param bool $display defaults to false, true to display file contents instead of write them
     */
-    public static function rebuildConf($useAll = false) {
+    public static function rebuildConf($useAll = false, $display = false) {
     	$host = Vps::getHostInfo($useAll);
 		$file = 'authoritative;
 option domain-name "interserver.net";
@@ -109,19 +110,27 @@ shared-network myvpn {
 }
 ';
 		$file .= '}';
-		file_put_contents(self::getConfFile(), $file);
+		if ($display === false)
+			file_put_contents(self::getConfFile(), $file);
+		else
+			echo 'cat > '.self::getConfFile().' <<EOF'.PHP_EOL.$file.PHP_EOL.'EOF'.PHP_EOL;
     }
 
     /**
     * regenerates the dhcpd.vps hosts file
-    * @param bool $useAll defaults to false, optional true for qs
+    * @param bool $useAll defaults to false, true for qs
+    * @param bool $display defaults to false, true to display file contents instead of write them
     */
-    public static function rebuildHosts($useAll = false) {
+    public static function rebuildHosts($useAll = false, $display = false) {
     	$host = Vps::getHostInfo($useAll);
 		$file = '';
 		foreach ($host['vps'] as $vps)
 			$file .= 'host '.$vps['vzid'].' { hardware ethernet '.$vps['mac'].'; fixed-address '.$vps['ip'].';}'.PHP_EOL;
 		file_put_contents(self::getFile(), $file);
+		if ($display === false)
+			file_put_contents(self::getFile(), $file);
+		else
+			echo 'cat > '.self::getFile().' <<EOF'.PHP_EOL.$file.PHP_EOL.'EOF'.PHP_EOL;
     }
 
     /**
