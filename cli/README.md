@@ -14,7 +14,9 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * add escapeshellarg() calls around any vars being passed through a exec type call
 * fix the restore script to work with kvmv2 os.qcow2 files
 * split off into its own github org/repo
+  * the repo is [provirted/provirted](https://github.com/provirted/provirted.github.io)
 * create public website on github
+  * the repo is [https://github.com/provirted/provirted.github.io](provirted/provirted.github.io)
 * add wiki entries
 * add lxc support
 * add **self-update** command for downloading the latest phar and replacing it

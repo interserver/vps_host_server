@@ -40,9 +40,27 @@ class Kvm
 		return $pool;
 	}
 
-	public static function getVps($vzid) {
+	/**
+	* gets the vps details in xml format
+	*
+	* @param string $vzid vps identifier
+	* @return string xml formatted vps informatoin
+	*/
+	public static function getVpsXml($vzid) {
 		$vzid = escapeshellarg($vzid);
-		$vps = XmlToArray::go(trim(Vps::runCommand("/usr/bin/virsh dumpxml {$vzid};")));
+		$xml = trim(Vps::runCommand("virsh dumpxml {$vzid};"));
+		return $xml;
+	}
+
+	/**
+	* gets the vps details in an array
+	*
+	* @param string $vzid vps identifier
+	* @return array the array of vps information
+	*/
+	public static function getVps($vzid) {
+		$xml = self::getVpsXml($vzid);
+		$vps = XmlToArray::go($xml);
 		return $vps;
 	}
 
@@ -71,7 +89,7 @@ class Kvm
 		Vps::getLogger()->error('Adding IP '.$ip.' to '.$vzid);
 		echo Vps::runCommand("virsh dumpxml --inactive --security-info {$vzid} > {$vzid}.xml");
 		echo Vps::runCommand("sed s#\"</filterref>\"#\"  <parameter name='IP' value='{$ip}'/>\\n    </filterref>\"#g -i {$vzid}.xml");
-		echo Vps::runCommand("/usr/bin/virsh define {$vzid}.xml");
+		echo Vps::runCommand("virsh define {$vzid}.xml");
 		echo Vps::runCommand("rm -f {$vzid}.xml");
 	}
 
@@ -92,10 +110,10 @@ class Kvm
 		$base = Vps::$base;
 		Vps::getLogger()->indent();
 		if (self::vpsExists($vzid)) {
-			echo Vps::runCommand("/usr/bin/virsh destroy {$vzid}");
+			echo Vps::runCommand("virsh destroy {$vzid}");
 			echo Vps::runCommand("virsh dumpxml {$vzid} > {$vzid}.xml");
 			echo Vps::runCommand("/bin/cp -f {$vzid}.xml {$vzid}.xml.backup");
-			echo Vps::runCommand("/usr/bin/virsh undefine {$vzid}");
+			echo Vps::runCommand("virsh undefine {$vzid}");
 			echo Vps::runCommand("mv -f {$vzid}.xml.backup {$vzid}.xml");
 		} else {
 			if ($pool != 'zfs') {
@@ -152,11 +170,11 @@ class Kvm
 			Vps::getLogger()->debug('Customizing SCSI controller');
 			echo Vps::runCommand("sed s#\"\(<controller type='scsi' index='0'.*\)>\"#\"\\1 model='virtio-scsi'>\\n      <driver queues='{$cpu}'/>\"#g -i  {$vzid}.xml;");
 		}
-		echo Vps::runCommand("/usr/bin/virsh define {$vzid}.xml", $return);
+		echo Vps::runCommand("virsh define {$vzid}.xml", $return);
 		echo Vps::runCommand("rm -f {$vzid}.xml");
-		//echo Vps::runCommand("/usr/bin/virsh setmaxmem {$vzid} $maxRam;");
-		//echo Vps::runCommand("/usr/bin/virsh setmem {$vzid} $ram;");
-		//echo Vps::runCommand("/usr/bin/virsh setvcpus {$vzid} $cpu;");
+		//echo Vps::runCommand("virsh setmaxmem {$vzid} $maxRam;");
+		//echo Vps::runCommand("virsh setmem {$vzid} $ram;");
+		//echo Vps::runCommand("virsh setvcpus {$vzid} $cpu;");
 		Vps::getLogger()->unIndent();
 		Dhcpd::setup($vzid, $ip, $mac);
 		return $return == 0;
@@ -181,7 +199,20 @@ class Kvm
 		}
 	}
 
-	public static function getVncPort($vzid) {
+	public static function getVpsRemotes($vzid) {
+		$xml = self::getVpsXml($vzid);
+		if (preg_match_all('/<graphics type=\'([^\']+)\'\s?.*\sport=\'([^\']+)\'/muU', $xml, $matches)) {
+			foreach ($matches[1] as $idx => $type) {
+				$port = $matches[2][$idx];
+				if (in_array($port, ['-1', '' ,'0']))
+					continue;
+				$remotes[$type] = $port;
+			}
+		}
+		return $remotes;
+	}
+
+	public static function  getVncPort($vzid) {
 		$vncPort = trim(Vps::runCommand("virsh vncdisplay {$vzid} | cut -d: -f2 | head -n 1"));
 		if ($vncPort == '') {
 			sleep(2);
@@ -234,19 +265,19 @@ class Kvm
 
 	public static function enableAutostart($vzid) {
 		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("/usr/bin/virsh autostart {$vzid}");
+		echo Vps::runCommand("virsh autostart {$vzid}");
 	}
 
 	public static function disableAutostart($vzid) {
 		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("/usr/bin/virsh autostart --disable {$vzid}");
+		echo Vps::runCommand("virsh autostart --disable {$vzid}");
 	}
 
 	public static function startVps($vzid) {
 		Vps::getLogger()->info('Starting the VPS');
 		Xinetd::remove($vzid);
 		Xinetd::restart();
-		echo Vps::runCommand("/usr/bin/virsh start {$vzid}");
+		echo Vps::runCommand("virsh start {$vzid}");
 		self::runBuildEbtables();
 	}
 
@@ -256,7 +287,7 @@ class Kvm
 		$stopped = false;
 		if ($fast === false) {
 			Vps::getLogger()->info('Sending Softwawre Power-Off');
-			echo Vps::runCommand("/usr/bin/virsh shutdown {$vzid}");
+			echo Vps::runCommand("virsh shutdown {$vzid}");
 			$waited = 0;
 			$maxWait = 120;
 			$sleepTime = 5;
@@ -266,7 +297,7 @@ class Kvm
 					sleep($sleepTime);
 					$waited += $sleepTime;
 					if ($waited % 15 == 0)
-						Vps::runCommand("/usr/bin/virsh shutdown {$vzid}");
+						Vps::runCommand("virsh shutdown {$vzid}");
 				} else {
 					Vps::getLogger()->info('appears to have cleanly shutdown');
 					$stopped = true;
@@ -275,7 +306,7 @@ class Kvm
 		}
 		if ($stopped === false) {
 			Vps::getLogger()->info('Sending Hardware Power-Off');
-			echo Vps::runCommand("/usr/bin/virsh destroy {$vzid};");
+			echo Vps::runCommand("virsh destroy {$vzid};");
 		}
 		Xinetd::remove($vzid);
 		Xinetd::restart();
