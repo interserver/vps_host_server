@@ -5,8 +5,9 @@ use App\Vps;
 use App\Vps\Kvm;
 use App\Vps\OpenVz;
 use App\Vps\Virtuozzo;
+use App\Os\Os;
 use App\Os\Xinetd;
-use APp\Os\Dhcpd;
+use App\Os\Dhcpd;
 /**
 * Xinetd Service Management Class
 */
@@ -98,6 +99,7 @@ service NAME
 					$serviceName = $matches[1][$idx];
 					$serviceSettings = $matches[2][$idx];
 					$services[$serviceName] = [];
+					$services[$serviceName]['filename'] = $fileName;
 					if (preg_match_all('/^\s*(\w+)\s+(=|\+=|\-=)\s+(\S.*\S)\s*$/muU', $serviceSettings, $attribMatches)) {
 						foreach ($attribMatches[1] as $attribIdx => $attribute) {
 							$assignment = [2][$attribIdx];
@@ -112,7 +114,8 @@ service NAME
 	}
 
 	public static function rebuild() {
-        // get a list of all vms  + vnc infos (virtguozzo) or get a list of all vms and iterate them getting vnc info on each
+		$allVms = Vps::getAllVps();
+        // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
         $runningVms = Vps::getRunningVps();
 		$usedPorts = [];
         foreach ($runningVps as $vzid) {
@@ -123,13 +126,43 @@ service NAME
         // we should now have a list of in use ports mapped to vps names/vzids
 		$services = self::parseEntries();
 		foreach ($services as $serviceName => $serviceData) {
+			$removeFile = false;
 			// look for things using ports 5900-6500
 			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
-
+				$removeFile = true;
 			}
 			// look for things using vps names/vzids
+			if (preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
+				$removeFile = true;
+			}
+			if ($removeFile === true) {
+				unlink($serviceData['filename']);
+			}
+		}
+		foreach ($usedPorts as $port => $portData) {
+			$type = $portData['type'];
+			$vzid = $portData['vzid'];
 
 		}
+	}
+
+	public static function setup($vzid, $port, $ip) {
+		$hostIp = Os::getIp();
+		$template = 'service '.$vzid.'
+{
+	type        = UNLISTED
+	disable     = no
+	socket_type = stream
+	wait        = no
+	user        = nobody
+	redirect    = 127.0.0.1 '.$port.'
+	bind        = '.$hostIp.'
+	only_from   = '.$ip.' 66.45.240.196 192.64.80.216/29
+	port        = '.$port.'
+	nice        = 10
+}
+';
+		file_put_contents('/etc/xinetd.d/'.$vzid, $template);
 	}
 
 	/**

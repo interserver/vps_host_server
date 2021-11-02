@@ -1,15 +1,13 @@
 service NAME
 {
-		type                    = UNLISTED
-		disable                 = no
-		socket_type             = stream
-		wait                    = no
-		user                    = nobody
-		redirect                = 127.0.0.1 PORT
-		bind                    = MYIP
-		only_from               = IP 66.45.240.196 192.64.80.216/29
-		port                    = PORT
-		nice                    = 10
-
+	type        = UNLISTED
+	disable     = no
+	socket_type = stream
+	wait        = no
+	user        = nobody
+	redirect    = 127.0.0.1 PORT
+	bind        = MYIP
+	only_from   = IP 66.45.240.196 192.64.80.216/29
+	port        = PORT
+	nice        = 10
 }
-

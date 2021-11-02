@@ -6,6 +6,12 @@ use App\Vps;
 class Os
 {
 
+	public static function getIp() {
+		$defaultRoute = trim(Vps::runCommand('ip route list | grep "^default" | sed s#"^default.*dev "#""#g | head -n 1 | cut -d" " -f1'));
+		$ip = trim(Vps::runCommand("ifconfig {$defaultRoute} | grep inet | grep -v inet6 | awk '{ print $2 }' | cut -d: -f2"));
+		return $ip;
+	}
+
 	public static function isRedhatBased() {
 		return file_exists('/etc/redhat-release');
 	}
