@@ -62,12 +62,14 @@ service NAME
 	}
 
 	public static function unlock() {
-		echo Vps::runCommand("rm -f /tmp/_securexinetd;");
+		unlink('/tmp/_securexinetd');
 	}
 
 	public static function remove($vzid) {
-		$vzid = escapeshellarg($vzid);
-		echo Vps::runCommand("rm -f /etc/xinetd.d/{$vzid} /etc/xinetd.d/{$vzid}-spice");
+		if (file_exists('/etc/xinetd.d/'.$vzid))
+			unlink('/etc/xinetd.d/'.$vzid);
+		if (file_exists('/etc/xinetd.d/'.$vzid.'-spice'))
+			unlink('/etc/xinetd.d/'.$vzid.'-spice');
 	}
 
 	public static function restart() {
@@ -116,13 +118,13 @@ service NAME
         foreach ($runningVps as $vzid) {
 			$remotes = Kvm::getVpsRemotes($vzid);
 			foreach ($remotes as $type => $port)
-				$usedPorts[] = $port;
+				$usedPorts[$port] = ['type' => $type, 'vzid' => $vzid];
         }
         // we should now have a list of in use ports mapped to vps names/vzids
 		$services = self::parseEntries();
-		foreach ($services as $$serviceName => $serviceData) {
+		foreach ($services as $serviceName => $serviceData) {
 			// look for things using ports 5900-6500
-			if (isset($serviceData['port'])) {
+			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
 
 			}
 			// look for things using vps names/vzids
