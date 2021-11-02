@@ -26,46 +26,26 @@ class Xinetd
         "port": "5934",
         "nice": "10"
     },
-    "vps456305": {
-        "type": "UNLISTED",
-        "disable": "no",
-        "socket_type": "stream",
-        "wait": "no",
-        "user": "nobody",
-        "redirect": "127.0.0.1 5911",
-        "bind": "69.10.36.142",
-        "only_from": "66.45.228.251 66.45.240.196 192.64.80.216\/29",
-        "port": "5911",
-        "nice": "10"
-    }
 } */
 
-
-/* xinetd template
-service NAME
-{
-		type                    = UNLISTED
-		disable                 = no
-		socket_type             = stream
-		wait                    = no
-		user                    = nobody
-		redirect                = 127.0.0.1 PORT
-		bind                    = MYIP
-		only_from               = IP 66.45.240.196 192.64.80.216/29
-		port                    = PORT
-		nice                    = 10
-
-}
-*/
-
+    /**
+    * create the xinetd lock file
+    */
 	public static function lock() {
 		touch('/tmp/_securexinetd');
 	}
 
+	/**
+	* remove the xinetd lock file
+	*/
 	public static function unlock() {
 		unlink('/tmp/_securexinetd');
 	}
 
+	/**
+	* remove an xinetd.d entry
+	* @param string $vzid vzid to remove
+	*/
 	public static function remove($vzid) {
 		if (file_exists('/etc/xinetd.d/'.$vzid))
 			unlink('/etc/xinetd.d/'.$vzid);
@@ -73,6 +53,9 @@ service NAME
 			unlink('/etc/xinetd.d/'.$vzid.'-spice');
 	}
 
+	/**
+	* restart xinetd services
+	*/
 	public static function restart() {
 		echo Vps::runCommand("service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null");
 	}
@@ -113,6 +96,9 @@ service NAME
 		return $services;
 	}
 
+	/**
+	* cleans up and recreates all the xinetd vps entries
+	*/
 	public static function rebuild() {
 		$allVms = Vps::getAllVps();
         // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
@@ -139,6 +125,19 @@ service NAME
 				unlink($serviceData['filename']);
 			}
 		}
+    	$host = Vps::getHostInfo($useAll);
+		foreach ($host['vps'] as $vps) {
+/* $vps = {
+    "id": "2324459",
+    "hostname": "vps2324459",
+    "vzid": "vps2324459",
+    "mac": "00:16:3e:23:77:eb",
+    "ip": "208.73.202.209",
+    "status": "active",
+    "server_status": "running",
+    "vnc": "79.156.208.231"
+} */
+		}
 		foreach ($usedPorts as $port => $portData) {
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
@@ -146,6 +145,12 @@ service NAME
 		}
 	}
 
+    /**
+    * creates a xinetd. entry for a given vzid
+    * @param string $vzid service name
+    * @param int $port port number
+    * @param string $ip ip address
+    */
 	public static function setup($vzid, $port, $ip) {
 		$hostIp = Os::getIp();
 		$template = 'service '.$vzid.'
