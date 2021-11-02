@@ -51,8 +51,8 @@ class Os
 	}
 
     /**
-    * gets hte usable memory in kb (70% of total memory)
-    * @return float usable memory in kdb
+    * gets the usable memory in kb (70% of total memory)
+    * @return float usable memory in kb
     */
 	public static function getUsableRam() {
 		$ram = floor(self::getTotalRam() / 100 * 70);

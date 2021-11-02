@@ -13,20 +13,6 @@ use App\Os\Dhcpd;
 */
 class Xinetd
 {
-/* {
-    "vps450552": {
-        "type": "UNLISTED",
-        "disable": "no",
-        "socket_type": "stream",
-        "wait": "no",
-        "user": "nobody",
-        "redirect": "127.0.0.1 5934",
-        "bind": "69.10.36.142",
-        "only_from": "66.45.240.196 192.64.80.216\/29",
-        "port": "5934",
-        "nice": "10"
-    },
-} */
 
     /**
     * create the xinetd lock file
@@ -90,6 +76,21 @@ class Xinetd
 							$services[$serviceName][$attribute] = array_key_exists($attribute, $services[$serviceName]) ? $services[$serviceName][$attribute].' '.$value : $value;
 						}
 					}
+					/* {
+					    "vps450552": {
+					    	"filename": "/etc/xinetd.d/vps450552",
+					        "type": "UNLISTED",
+					        "disable": "no",
+					        "socket_type": "stream",
+					        "wait": "no",
+					        "user": "nobody",
+					        "redirect": "127.0.0.1 5934",
+					        "bind": "69.10.36.142",
+					        "only_from": "66.45.240.196 192.64.80.216\/29",
+					        "port": "5934",
+					        "nice": "10"
+					    },
+					} */
 				}
 			}
 		}
@@ -126,22 +127,18 @@ class Xinetd
 			}
 		}
     	$host = Vps::getHostInfo($useAll);
+    	$usedVzids = [];
 		foreach ($host['vps'] as $vps) {
-/* $vps = {
-    "id": "2324459",
-    "hostname": "vps2324459",
-    "vzid": "vps2324459",
-    "mac": "00:16:3e:23:77:eb",
-    "ip": "208.73.202.209",
-    "status": "active",
-    "server_status": "running",
-    "vnc": "79.156.208.231"
-} */
+			if (isset($vps['vnc']) && trim($vps['vnc']) != '') {
+				$usedVzids[$vps['id']] = $vps['vnc'];
+				$usedVzids[$vps['hostname']] = $vps['vnc'];
+				$usedVzids[$vps['vzid']] = $vps['vnc'];
+			}
 		}
 		foreach ($usedPorts as $port => $portData) {
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
-
+			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false);
 		}
 	}
 
@@ -151,7 +148,7 @@ class Xinetd
     * @param int $port port number
     * @param string $ip ip address
     */
-	public static function setup($vzid, $port, $ip) {
+	public static function setup($vzid, $port, $ip = false) {
 		$hostIp = Os::getIp();
 		$template = 'service '.$vzid.'
 {
@@ -162,7 +159,7 @@ class Xinetd
 	user        = nobody
 	redirect    = 127.0.0.1 '.$port.'
 	bind        = '.$hostIp.'
-	only_from   = '.$ip.' 66.45.240.196 192.64.80.216/29
+	only_from   = '.($ip !== false ? $ip.' ' : '').'66.45.240.196 192.64.80.216/29
 	port        = '.$port.'
 	nice        = 10
 }

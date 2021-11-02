@@ -116,6 +116,12 @@ class Vps
 		self::$virtType = $virt;
 	}
 
+	/**
+	* returns an array containing information about the host server, vlans, and vps's
+	*
+	* @param bool $useAll true for quickservers
+	* @return array the host info
+	*/
 	public static function getHostInfo($useAll = false) {
 		$response = trim(self::runCommand('curl -s '.escapeshellarg(self::getUrl($useAll).'?action=get_info')));
 		$host = json_decode($response, true);
@@ -123,6 +129,17 @@ class Vps
 			self::getLogger()->error("invalid response getting host info:".$response);
 			return false;
 		}
+		/* $vps = {
+			"id": "2324459",
+			"hostname": "vps2324459",
+			"vzid": "vps2324459",
+			"mac": "00:16:3e:23:77:eb",
+			"ip": "208.73.202.209",
+			"status": "active",
+			"server_status": "running",
+			"vnc": "79.156.208.231"
+		} */
+
         @mkdir($_SERVER['HOME'].'/.provirted', 0750, true);
         file_put_contents($_SERVER['HOME'].'/.provirted/host.json', $response);
         return $host;
