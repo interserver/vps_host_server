@@ -122,26 +122,21 @@ class Xinetd
 		$services = self::parseEntries();
 		$configuredPorts = [];
 		foreach ($services as $serviceName => $serviceData) {
-			$removeFile = false;
-			// look for things using ports 5900-6500
-			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
-				if (array_key_exists($serviceData['port'], $usedPorts)
-					&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
-					&& $serviceData['only_from'] == (array_key_exists($serviceName, $usedVzids) ? $usedVzids[$serviceName].' ' : '').'66.45.240.196 192.64.80.216/29'
-				) {
-					echo "keeping {$serviceData['filename']}\n";
-					$configuredPorts[] = $serviceData['port'];
+			if (array_key_exists($serviceData['port'], $usedPorts)
+				&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
+				&& $serviceData['only_from'] == (array_key_exists($serviceName, $usedVzids) ? $usedVzids[$serviceName].' ' : '').'66.45.240.196 192.64.80.216/29'
+			) {
+				echo "keeping {$serviceData['filename']}\n";
+				$configuredPorts[] = $serviceData['port'];
+			} else {
+				// look for things using ports 5900-6500 and look for things using vps names/vzids
+				if ((isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500)
+					|| preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
+					echo "removing {$serviceData['filename']}\n";
+					//unlink($serviceData['filename']);
 				} else {
-					$removeFile = true;
+					echo "skipping service not using port in vncable range and not usinb a vzid name\n";
 				}
-			}
-			// look for things using vps names/vzids
-			if (preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
-				$removeFile = true;
-			}
-			if ($removeFile === true) {
-				echo "removing {$serviceData['filename']}\n";
-				//unlink($serviceData['filename']);
 			}
 		}
 		$hostIp = Os::getIp();
