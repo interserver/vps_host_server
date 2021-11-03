@@ -81,6 +81,7 @@ class GenerateInternalsCommand extends Command {
 
 	public function execute() {
 		$templateFile = __DIR__.'/../Resources/InternalCommand.php.tpl';
+		$templateClassFile = __DIR__.'/../Resources/InternalCommandClass.php.tpl';
 		$smarty = new \Smarty();
 		$smarty->setTemplateDir(['.'])
 			->setCompileDir('/home/my/logs/smarty_templates_c')
@@ -106,6 +107,7 @@ class GenerateInternalsCommand extends Command {
 				$smarty->assign('className', $className);
 				$smarty->assign('classFullName', $classFullName);
 				$dirName = __DIR__.'/InternalsCommand/'.$className.'Command';
+				file_put_contents($dirName.'.php', $smarty->fetch($templateClassFile));
 				@mkdir($dirName, 0775, true);
 				/** @var \phpDocumentor\Reflection\Php\Method_ $method */
 				foreach ($class->getMethods() as $methodFullName => $method) {
