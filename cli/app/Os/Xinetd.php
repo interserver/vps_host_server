@@ -85,7 +85,7 @@ class Xinetd
 					$services[$serviceName]['filename'] = $fileName;
 					if (preg_match_all('/^\s*(\w+)\s+(=|\+=|\-=)\s+(\S.*\S)\s*$/muU', $serviceSettings, $attribMatches)) {
 						foreach ($attribMatches[1] as $attribIdx => $attribute) {
-							$assignment = [2][$attribIdx];
+							$assignment = $attribMatches[2][$attribIdx];
 							$value = $attribMatches[3][$attribIdx];
 							$services[$serviceName][$attribute] = array_key_exists($attribute, $services[$serviceName]) ? $services[$serviceName][$attribute].' '.$value : $value;
 						}
@@ -99,10 +99,10 @@ class Xinetd
 	/**
 	* cleans up and recreates all the xinetd vps entries
 	*/
-	public static function rebuild() {
+	public static function rebuild($useAll = false) {
 		$allVms = Vps::getAllVps();
         // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
-        $runningVms = Vps::getRunningVps();
+        $runningVps = Vps::getRunningVps();
 		$usedPorts = [];
         foreach ($runningVps as $vzid) {
 			$remotes = Kvm::getVpsRemotes($vzid);
