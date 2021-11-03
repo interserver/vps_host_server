@@ -92,47 +92,54 @@ class GenerateInternalsCommand extends Command {
 		$smarty->assign('type', 'json');
 		$smarty->assign('method', 'somecall()');
 		echo $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl');
+		$files = [];
+		foreach (array_merge(glob('app/Vps.php'), glob('app/Os/*.php'), glob('app/Vps/*.php')) as $fileName)
+			$files[] = new \phpDocumentor\Reflection\File\LocalFile($fileName);
 		$projectFactory = \phpDocumentor\Reflection\Php\ProjectFactory::createInstance();
-		$files = [ new \phpDocumentor\Reflection\File\LocalFile('app/Vps.php') ];
 		/** @var Project $project */
 		$project = $projectFactory->create('MyProject', $files);
-		/** @var \phpDocumentor\Reflection\Php\Class_ $class */
-		foreach ($project->getFiles()['app/Vps.php']->getClasses() as $classFullName => $class) {
-			$className = $class->getFqsen()->getName();
-			echo "- {$classFullName}\n";
-			/** @var \phpDocumentor\Reflection\Php\Method_ $method */
-			foreach ($class->getMethods() as $methodFullName => $method) {
-				$docblock = $method->getDocBlock();
-				$methodName = $method->getName();
-				$arguments = $method->getArguments();
-				$returnType = $method->getReturnType();
-				echo "  - normal name: {$methodName}\n";
-				echo "  - {$methodFullName}\n";
-				if (!is_null($docblock)) {
-					$context = $docblock->getContext();
-					$description = $docblock->getDescription();
-					$summary = $docblock->getSummary();
-					$smarty->assign('brief', $summary);
-					$smarty->assign('pascal', $this->pascalCase($methodName));
-					$smarty->assign('camel', $this->camelCase($methodName));
-					$smarty->assign('camel', $this->camelCase($methodName));
-					$smarty->assign('snake', $this->snakeCase($methodName));
-					$smarty->assign('kebab', $this->kebabCase($methodName));
-					$smarty->assign('method', str_replace('\\App\\Vps', 'Vps', $methodFullName));
-					file_put_contents(__DIR__.'/InternalsCommand/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl'));
-					//echo "    - context: {$context}\n";
-					//echo "    - description: {$description}\n";
-					//echo "    - summary: {$summary}\n";
-					$tags = $docblock->getTags();
-					/*
-					$tags = $docblock->getTags();
-					$tag = $tags[0];
-					$tag->getName();
-					$tag->getType();
-					$desc = $tag->getDescription();
-					$desc->getBodyTemplate();
-					$desc->getTags();
-					*/
+		//var_dump($project->getFiles());exit;
+		/** @var \phpDocumentor\Reflection\Php\File $file */
+		foreach ($project->getFiles() as $fileName => $file) {
+			echo "File - {$fileName}\n";
+			/** @var \phpDocumentor\Reflection\Php\Class_ $class */
+			foreach ($file->getClasses() as $classFullName => $class) {
+				$className = $class->getFqsen()->getName();
+				echo "- {$classFullName} ({$className})\n";
+				/** @var \phpDocumentor\Reflection\Php\Method_ $method */
+				foreach ($class->getMethods() as $methodFullName => $method) {
+					$docblock = $method->getDocBlock();
+					$methodName = $method->getName();
+					$arguments = $method->getArguments();
+					$returnType = $method->getReturnType();
+					echo "  - normal name: {$methodName}\n";
+					echo "  - {$methodFullName}\n";
+					if (!is_null($docblock)) {
+						$context = $docblock->getContext();
+						$description = $docblock->getDescription();
+						$summary = $docblock->getSummary();
+						$smarty->assign('brief', $summary);
+						$smarty->assign('pascal', $this->pascalCase($methodName));
+						$smarty->assign('camel', $this->camelCase($methodName));
+						$smarty->assign('camel', $this->camelCase($methodName));
+						$smarty->assign('snake', $this->snakeCase($methodName));
+						$smarty->assign('kebab', $this->kebabCase($methodName));
+						$smarty->assign('method', str_replace('\\App\\Vps', 'Vps', $methodFullName));
+						//file_put_contents(__DIR__.'/InternalsCommand/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl'));
+						//echo "    - context: {$context}\n";
+						//echo "    - description: {$description}\n";
+						//echo "    - summary: {$summary}\n";
+						$tags = $docblock->getTags();
+						/*
+						$tags = $docblock->getTags();
+						$tag = $tags[0];
+						$tag->getName();
+						$tag->getType();
+						$desc = $tag->getDescription();
+						$desc->getBodyTemplate();
+						$desc->getTags();
+						*/
+					}
 				}
 			}
 		}
