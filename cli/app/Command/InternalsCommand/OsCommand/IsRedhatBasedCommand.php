@@ -33,7 +33,7 @@ class IsRedhatBasedCommand extends Command
 		} elseif ($php == true) {
 			$this->getLogger()->write(var_export($response, true));
 		} else {
-			echo $response.PHP_EOL;
+			echo ($response === true ? 'true' : 'false').PHP_EOL;
 		}
 	}
 }

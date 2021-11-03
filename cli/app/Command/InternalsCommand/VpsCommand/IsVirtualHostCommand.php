@@ -33,17 +33,7 @@ class IsVirtualHostCommand extends Command
 		} elseif ($php == true) {
 			$this->getLogger()->write(var_export($response, true));
 		} else {
-			if (count($response) == 0) {
-				$this->getLogger()->error('This machine does not appear to have any virtualization setup installed.');
-				return 1;
-			}
-			$table = new Table;
-			$table->setStyle(new MarkdownTableStyle());
-			$table->setHeaders(['vps']);
-			$formatter = new Formatter;
-			foreach ($response as $line)
-				$table->addRow([$line]);
-			echo $table->render();
+			echo ($response === true ? 'true' : 'false').PHP_EOL;
 		}
 	}
 }

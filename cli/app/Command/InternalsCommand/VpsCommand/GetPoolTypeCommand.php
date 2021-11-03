@@ -33,7 +33,7 @@ class GetPoolTypeCommand extends Command
 		} elseif ($php == true) {
 			$this->getLogger()->write(var_export($response, true));
 		} else {
-			echo ($response === true ? 'true' : 'false').PHP_EOL;
+			echo $response.PHP_EOL;
 		}
 	}
 }
