@@ -57,6 +57,20 @@ class Xinetd
 
 	/**
 	* parses all the files in /etc/xinetd.d loading all service defintions into a nicely structured array
+	*
+	* "vps450552": {
+	* 	"filename": "/etc/xinetd.d/vps450552",
+	* 	"type": "UNLISTED",
+	* 	"disable": "no",
+	* 	"socket_type": "stream",
+	* 	"wait": "no",
+	* 	"user": "nobody",
+	* 	"redirect": "127.0.0.1 5934",
+	* 	"bind": "69.10.36.142",
+	* 	"only_from": "70.10.23.33 66.45.240.196 192.64.80.216\/29",
+	* 	"port": "5934",
+	* 	"nice": "10"
+	* },
 	* @return array the parsed array of xinetd entreis
 	*/
 	public static function parseEntries() {
@@ -76,21 +90,6 @@ class Xinetd
 							$services[$serviceName][$attribute] = array_key_exists($attribute, $services[$serviceName]) ? $services[$serviceName][$attribute].' '.$value : $value;
 						}
 					}
-					/* {
-					    "vps450552": {
-					    	"filename": "/etc/xinetd.d/vps450552",
-					        "type": "UNLISTED",
-					        "disable": "no",
-					        "socket_type": "stream",
-					        "wait": "no",
-					        "user": "nobody",
-					        "redirect": "127.0.0.1 5934",
-					        "bind": "69.10.36.142",
-					        "only_from": "66.45.240.196 192.64.80.216\/29",
-					        "port": "5934",
-					        "nice": "10"
-					    },
-					} */
 				}
 			}
 		}
@@ -123,7 +122,8 @@ class Xinetd
 				$removeFile = true;
 			}
 			if ($removeFile === true) {
-				unlink($serviceData['filename']);
+				echo "removing {$serviceData['filename']}\n";
+				//unlink($serviceData['filename']);
 			}
 		}
     	$host = Vps::getHostInfo($useAll);
@@ -139,7 +139,8 @@ class Xinetd
 		foreach ($usedPorts as $port => $portData) {
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
-			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
+			echo "setting up {$type} on {$vzid} port {$port} host {$hostIp}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
+			//self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
 		}
 	}
 

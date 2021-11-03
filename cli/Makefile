@@ -1,4 +1,4 @@
-all: update completion phar
+all: update internals completion phar
 
 update:
 	composer update --with-all-dependencies -v -o --ansi --dev
@@ -21,4 +21,5 @@ install:
 	ln -fs /root/cpaneldirect/cli/provirted.phar /usr/local/bin/provirted
 
 internals:
+	rm -rf app/Command/InternalsCommand
 	php provirted.php generate-internals
