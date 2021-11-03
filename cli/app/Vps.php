@@ -263,6 +263,7 @@ class Vps
     *
     * @param int $id
     * @param bool $useAll
+    * @return string
     */
 	public static function convertIdToMac($id, $useAll) {
 		$prefix = $useAll == true ? '00:0C:29' : '00:16:3E';

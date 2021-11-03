@@ -89,6 +89,8 @@ class GenerateInternalsCommand extends Command {
 			->setCacheDir('/home/my/logs/smarty_cache')
 			->setCaching(false);
 		$smarty->setDebugging(false);
+		$dirName = __DIR__.'/InternalsCommand/';
+		@mkdir($dirName, 0775, true);
 		$files = [];
 		foreach (array_merge(glob('app/Vps.php'), glob('app/Os/*.php'), glob('app/Vps/*.php')) as $fileName)
 			$files[] = new \phpDocumentor\Reflection\File\LocalFile($fileName);
@@ -104,8 +106,11 @@ class GenerateInternalsCommand extends Command {
 			foreach ($file->getClasses() as $classFullName => $class) {
 				$className = $class->getFqsen()->getName();
 				echo "- {$classFullName} ({$className})\n";
-				$smarty->assign('className', $className);
-				$smarty->assign('classFullName', $classFullName);
+				$classAssign = [
+					'name' => $className,
+					'fullName' => $classFullName,
+				];
+				$smarty->assign('class', $classAssign);
 				$dirName = __DIR__.'/InternalsCommand/'.$className.'Command';
 				file_put_contents($dirName.'.php', $smarty->fetch($templateClassFile));
 				@mkdir($dirName, 0775, true);
@@ -118,24 +123,25 @@ class GenerateInternalsCommand extends Command {
 					echo "  - normal name: {$methodName}\n";
 					echo "  - {$methodFullName}\n";
 					//echo "  - return type: {$returnType}\n";
-					$smarty->assign('methodName', $methodName);
-					$smarty->assign('pascalCase', $this->pascalCase($methodName));
-					$smarty->assign('camelCase', $this->camelCase($methodName));
-					$smarty->assign('snakeCase', $this->snakeCase($methodName));
-					$smarty->assign('kebabCase', $this->kebabCase($methodName));
+					$methodAssign = [
+						'name' => $methodName,
+						'pascal' => $this->pascalCase($methodName),
+						'camel' => $this->camelCase($methodName),
+						'snake' => $this->snakeCase($methodName),
+						'kebab' => $this->kebabCase($methodName),
+					];
 					if (!is_null($docblock)) {
 						//$context = $docblock->getContext();
 						$description = $docblock->getDescription();
 						$summary = $docblock->getSummary();
-						$smarty->assign('summary', $summary);
-						file_put_contents($dirName.'/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch($templateFile));
+						$methodAssign['summary'] = $summary;
 						//echo "    - context: ".var_export($context, true)."\n";
 						echo "    - description: {$description}\n";
 						echo "    - summary: {$summary}\n";
 						$returnTags = $docblock->getTagsByName('return');
 						if (count($returnTags) > 0) {
 							$returnType = $returnTags[0]->getType();
-							$smarty->assign('returnType', $returnType);
+							$methodAssign['returnType'] = $returnType;
 						}
 						//echo "		return tags: ".var_export($returnTags,true)."\n";
 						$tags = $docblock->getTags();
@@ -148,6 +154,9 @@ class GenerateInternalsCommand extends Command {
 							echo "		tag desc body template {$descBody}\n";
 						}
 					}
+					$smarty->assign('class', $classAssign);
+					$smarty->assign('method', $methodAssign);
+					file_put_contents($dirName.'/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch($templateFile));
 				}
 			}
 		}

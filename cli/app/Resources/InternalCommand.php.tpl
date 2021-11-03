@@ -1,18 +1,20 @@
 <?php
-namespace App\Command\InternalsCommand\{$className}Command;
+namespace App\Command\InternalsCommand\{$class.name}Command;
 
-use {$classFullName};
+use {$class.fullName};
 use CLIFramework\Command;
 use CLIFramework\Component\Table\Table;
 use CLIFramework\Component\Table\MarkdownTableStyle;
 
+{if isset($method.summary)}
 /**
-* {$summary}
+* {$method.summary}
 */
-class {$pascalCase}Command extends Command
+{/if}
+class {$method.pascal}Command extends Command
 {
 	public function brief() {
-		return "{$summary}";
+		return "{if isset($method.summary)}{$method.summary}{else}{$class.name}{/if}";
 	}
 
     /** @param \GetOptionKit\OptionCollection $opts */
@@ -27,13 +29,13 @@ class {$pascalCase}Command extends Command
 		$opts = $this->getOptions();
 		$json = array_key_exists('json', $opts->keys) && $opts->keys['json']->value == 1;
 		$php = array_key_exists('php', $opts->keys) && $opts->keys['php']->value == 1;
-		$response = {$className}::{$methodName}();
+		$response = {$class.name}::{$method.name}();
 		if ($json == true) {
 			$this->getLogger()->write(json_encode($response, JSON_PRETTY_PRINT));
 		} elseif ($php == true) {
 			$this->getLogger()->write(var_export($response, true));
 		} else {
-{if isset($returnType) && $returnType == 'array'}
+{if isset($method.returnType) && $method.returnType == 'array'}
 			if (count($response) == 0) {
 				$this->getLogger()->error('This machine does not appear to have any virtualization setup installed.');
 				return 1;
@@ -45,7 +47,7 @@ class {$pascalCase}Command extends Command
 			foreach ($response as $line)
 				$table->addRow([$line]);
 			echo $table->render();
-{elseif isset($returnType) && $returnType == 'bool'}
+{elseif isset($method.returnType) && $method.returnType == 'bool'}
 			echo ($response === true ? 'true' : 'false').PHP_EOL;
 {else}
 			echo $response.PHP_EOL;
