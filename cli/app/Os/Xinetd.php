@@ -135,21 +135,22 @@ class Xinetd
 				$usedVzids[$vps['vzid']] = $vps['vnc'];
 			}
 		}
+		$hostIp = Os::getIp();
 		foreach ($usedPorts as $port => $portData) {
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
-			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false);
+			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
 		}
 	}
 
     /**
-    * creates a xinetd. entry for a given vzid
+    * creates a xinetd.d entry for a given vzid
     * @param string $vzid service name
     * @param int $port port number
     * @param string $ip ip address
+    * @param string $hostIp host ip address
     */
-	public static function setup($vzid, $port, $ip = false) {
-		$hostIp = Os::getIp();
+	public static function setup($vzid, $port, $ip = false, $hostIp = false) {
 		$template = 'service '.$vzid.'
 {
 	type        = UNLISTED
@@ -158,7 +159,7 @@ class Xinetd
 	wait        = no
 	user        = nobody
 	redirect    = 127.0.0.1 '.$port.'
-	bind        = '.$hostIp.'
+	bind        = '.($hostIp === false ? Os::getIp() : $hostIp).'
 	only_from   = '.($ip !== false ? $ip.' ' : '').'66.45.240.196 192.64.80.216/29
 	port        = '.$port.'
 	nice        = 10
