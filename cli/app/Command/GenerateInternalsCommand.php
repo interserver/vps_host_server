@@ -80,6 +80,7 @@ class GenerateInternalsCommand extends Command {
 
 
 	public function execute() {
+		$templateFile = __DIR__.'/../Resources/InternalCommand.php.tpl';
 		$smarty = new \Smarty();
 		$smarty->setTemplateDir(['.'])
 			->setCompileDir('/home/my/logs/smarty_templates_c')
@@ -102,10 +103,15 @@ class GenerateInternalsCommand extends Command {
 		/** @var \phpDocumentor\Reflection\Php\File $file */
 		foreach ($project->getFiles() as $fileName => $file) {
 			echo "File - {$fileName}\n";
+			$smarty->assign('fileName', $fileName);
 			/** @var \phpDocumentor\Reflection\Php\Class_ $class */
 			foreach ($file->getClasses() as $classFullName => $class) {
 				$className = $class->getFqsen()->getName();
 				echo "- {$classFullName} ({$className})\n";
+				$smarty->assign('className', $className);
+				$smarty->assign('classFullName', $classFullName);
+				$dirName = __DIR__.'/InternalsCommand/'.$className.'Command';
+				@mkdir($dirName, 0775, true);
 				/** @var \phpDocumentor\Reflection\Php\Method_ $method */
 				foreach ($class->getMethods() as $methodFullName => $method) {
 					$docblock = $method->getDocBlock();
@@ -114,31 +120,31 @@ class GenerateInternalsCommand extends Command {
 					$returnType = $method->getReturnType();
 					echo "  - normal name: {$methodName}\n";
 					echo "  - {$methodFullName}\n";
+					$smarty->assign('methodName', $methodName);
+					$smarty->assign('pascalCase', $this->pascalCase($methodName));
+					$smarty->assign('camelCase', $this->camelCase($methodName));
+					$smarty->assign('snakeCase', $this->snakeCase($methodName));
+					$smarty->assign('kebabCase', $this->kebabCase($methodName));
 					if (!is_null($docblock)) {
 						$context = $docblock->getContext();
 						$description = $docblock->getDescription();
 						$summary = $docblock->getSummary();
-						$smarty->assign('brief', $summary);
-						$smarty->assign('pascal', $this->pascalCase($methodName));
-						$smarty->assign('camel', $this->camelCase($methodName));
-						$smarty->assign('camel', $this->camelCase($methodName));
-						$smarty->assign('snake', $this->snakeCase($methodName));
-						$smarty->assign('kebab', $this->kebabCase($methodName));
-						$smarty->assign('method', str_replace('\\App\\Vps', 'Vps', $methodFullName));
-						//file_put_contents(__DIR__.'/InternalsCommand/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl'));
-						//echo "    - context: {$context}\n";
-						//echo "    - description: {$description}\n";
-						//echo "    - summary: {$summary}\n";
+						$smarty->assign('summary', $summary);
+						file_put_contents($dirName.'/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch($templateFile));
+						echo "    - context: {$context}\n";
+						echo "    - description: {$description}\n";
+						echo "    - summary: {$summary}\n";
 						$tags = $docblock->getTags();
-						/*
-						$tags = $docblock->getTags();
-						$tag = $tags[0];
-						$tag->getName();
-						$tag->getType();
-						$desc = $tag->getDescription();
-						$desc->getBodyTemplate();
-						$desc->getTags();
-						*/
+						foreach ($tags as $idx => $tag) {
+							$tagName = $tag->getName();
+							$tagType = $tag->getType();
+							$tagDesc = $tag->getDescription();
+							$descBody = $desc->getBodyTemplate();
+							$descTags = $desc->getTags();
+							echo "		Tag {$tagName} type {$tagType}\n";
+							echo "		tag desc body template {$descBody}\n";
+							echo "		tag desc tags ".var_dump($descTags, true)."\n";
+						}
 					}
 				}
 			}

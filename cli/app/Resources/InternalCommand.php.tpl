@@ -1,18 +1,18 @@
 <?php
-namespace App\Command\InternalsCommand;
+namespace App\Command\InternalsCommand\{$className}Command;
 
-{$use}
+use {$classFullName};
 use CLIFramework\Command;
 use CLIFramework\Component\Table\Table;
 use CLIFramework\Component\Table\MarkdownTableStyle;
 
 /**
-* {$brief}
+* {$summary}
 */
-class {$pascal}Command extends Command
+class {$pascalCase}Command extends Command
 {
 	public function brief() {
-		return "{$brief}";
+		return "{$summary}";
 	}
 
     /** @param \GetOptionKit\OptionCollection $opts */
@@ -27,7 +27,7 @@ class {$pascal}Command extends Command
 		$opts = $this->getOptions();
 		$json = array_key_exists('json', $opts->keys) && $opts->keys['json']->value == 1;
 		$php = array_key_exists('php', $opts->keys) && $opts->keys['php']->value == 1;
-		$response = {$method};
+		$response = {$className}::{$methodName}();
 		if ($json == true) {
 			$this->getLogger()->write(json_encode($response, JSON_PRETTY_PRINT));
 		} elseif ($php == true) {
