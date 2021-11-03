@@ -100,6 +100,15 @@ class Xinetd
 	* cleans up and recreates all the xinetd vps entries
 	*/
 	public static function rebuild($useAll = false) {
+    	$host = Vps::getHostInfo($useAll);
+    	$usedVzids = [];
+		foreach ($host['vps'] as $vps) {
+			if (isset($vps['vnc']) && trim($vps['vnc']) != '') {
+				$usedVzids[$vps['id']] = $vps['vnc'];
+				$usedVzids[$vps['hostname']] = $vps['vnc'];
+				$usedVzids[$vps['vzid']] = $vps['vnc'];
+			}
+		}
 		$allVms = Vps::getAllVps();
         // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
         $runningVps = Vps::getRunningVps();
@@ -111,11 +120,20 @@ class Xinetd
         }
         // we should now have a list of in use ports mapped to vps names/vzids
 		$services = self::parseEntries();
+		$configuredPorts = [];
 		foreach ($services as $serviceName => $serviceData) {
 			$removeFile = false;
 			// look for things using ports 5900-6500
 			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
-				$removeFile = true;
+				if (array_key_exists($serviceData['port'], $usedPorts)
+					&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
+					&& $serviceData['only_from'] == (array_key_exists($serviceName, $usedVzids) ? $usedVzids[$serviceName].' ' : '').'66.45.240.196 192.64.80.216/29'
+				) {
+					echo "keeping {$serviceData['filename']}\n";
+					$configuredPorts[] = $serviceData['port'];
+				} else {
+					$removeFile = true;
+				}
 			}
 			// look for things using vps names/vzids
 			if (preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
@@ -126,17 +144,10 @@ class Xinetd
 				//unlink($serviceData['filename']);
 			}
 		}
-    	$host = Vps::getHostInfo($useAll);
-    	$usedVzids = [];
-		foreach ($host['vps'] as $vps) {
-			if (isset($vps['vnc']) && trim($vps['vnc']) != '') {
-				$usedVzids[$vps['id']] = $vps['vnc'];
-				$usedVzids[$vps['hostname']] = $vps['vnc'];
-				$usedVzids[$vps['vzid']] = $vps['vnc'];
-			}
-		}
 		$hostIp = Os::getIp();
 		foreach ($usedPorts as $port => $portData) {
+			if (in_array($port, $configuredPorts))
+				continue;
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
 			echo "setting up {$type} on {$vzid} port {$port} host {$hostIp}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
