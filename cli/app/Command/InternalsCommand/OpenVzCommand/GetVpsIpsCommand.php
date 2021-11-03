@@ -3,6 +3,7 @@ namespace App\Command\InternalsCommand\OpenVzCommand;
 
 use \App\Vps\OpenVz;
 use CLIFramework\Command;
+use CLIFramework\Formatter;
 use CLIFramework\Component\Table\Table;
 use CLIFramework\Component\Table\MarkdownTableStyle;
 

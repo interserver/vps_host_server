@@ -3,6 +3,7 @@ namespace App\Command\InternalsCommand\VpsCommand;
 
 use \App\Vps;
 use CLIFramework\Command;
+use CLIFramework\Formatter;
 use CLIFramework\Component\Table\Table;
 use CLIFramework\Component\Table\MarkdownTableStyle;
 

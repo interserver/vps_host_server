@@ -120,8 +120,7 @@ class GenerateInternalsCommand extends Command {
 					$methodName = $method->getName();
 					$arguments = $method->getArguments();
 					$returnType = $method->getReturnType();
-					echo "  - normal name: {$methodName}\n";
-					echo "  - {$methodFullName}\n";
+					echo "  - {$methodName}\n";
 					//echo "  - return type: {$returnType}\n";
 					$methodAssign = [
 						'name' => $methodName,

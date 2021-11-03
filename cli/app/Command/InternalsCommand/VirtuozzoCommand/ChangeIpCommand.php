@@ -3,6 +3,7 @@ namespace App\Command\InternalsCommand\VirtuozzoCommand;
 
 use \App\Vps\Virtuozzo;
 use CLIFramework\Command;
+use CLIFramework\Formatter;
 use CLIFramework\Component\Table\Table;
 use CLIFramework\Component\Table\MarkdownTableStyle;
 
