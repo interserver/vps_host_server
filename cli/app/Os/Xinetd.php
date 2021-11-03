@@ -129,7 +129,7 @@ class Xinetd
 			if ($force === false
 				&& array_key_exists($serviceData['port'], $usedPorts)
 				&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
-				&& trim($serviceData['only_from']) == (array_key_exists($serviceName, $usedVzids) ? $usedVzids[$serviceName].' ' : '').'66.45.240.196 192.64.80.216/29'
+				&& trim($serviceData['only_from']) == (array_key_exists(str_replace('-spice', '', $serviceName), $usedVzids) ? $usedVzids[str_replace('-spice', '', $serviceName)].' ' : '').'66.45.240.196 192.64.80.216/29'
 			) {
 				echo "keeping {$serviceData['filename']}\n";
 				$configuredPorts[] = $serviceData['port'];
