@@ -71,6 +71,7 @@ class Xinetd
 	* 	"port": "5934",
 	* 	"nice": "10"
 	* },
+	*
 	* @return array the parsed array of xinetd entreis
 	*/
 	public static function parseEntries() {
@@ -98,8 +99,11 @@ class Xinetd
 
 	/**
 	* cleans up and recreates all the xinetd vps entries
+	*
+	* @param bool $useAll true for QS hosts, default false
+	* @param bool $force true to force rebuilding all entries, default false to reuse unchanged entries
 	*/
-	public static function rebuild($useAll = false) {
+	public static function rebuild($useAll = false, $force = false) {
     	$host = Vps::getHostInfo($useAll);
     	$usedVzids = [];
 		foreach ($host['vps'] as $vps) {
@@ -122,7 +126,8 @@ class Xinetd
 		$services = self::parseEntries();
 		$configuredPorts = [];
 		foreach ($services as $serviceName => $serviceData) {
-			if (array_key_exists($serviceData['port'], $usedPorts)
+			if ($force === false
+				&& array_key_exists($serviceData['port'], $usedPorts)
 				&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
 				&& trim($serviceData['only_from']) == (array_key_exists($serviceName, $usedVzids) ? $usedVzids[$serviceName].' ' : '').'66.45.240.196 192.64.80.216/29'
 			) {
@@ -133,7 +138,7 @@ class Xinetd
 				if ((isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500)
 					|| preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
 					echo "removing {$serviceData['filename']}\n";
-					//unlink($serviceData['filename']);
+					unlink($serviceData['filename']);
 				} else {
 					echo "skipping service not using port in vncable range and not usinb a vzid name\n";
 				}
@@ -145,8 +150,8 @@ class Xinetd
 				continue;
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
-			echo "setting up {$type} on {$vzid} port {$port} host {$hostIp}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
-			//self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
+			echo "setting up {$type} on {$vzid} port {$port}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
+			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
 		}
 	}
 
