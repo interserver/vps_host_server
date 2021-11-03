@@ -33,7 +33,7 @@ class {$pascalCase}Command extends Command
 		} elseif ($php == true) {
 			$this->getLogger()->write(var_export($response, true));
 		} else {
-{if $type == 'array'}
+{if isset($returnType) && $returnType == 'array'}
 			if (count($response) == 0) {
 				$this->getLogger()->error('This machine does not appear to have any virtualization setup installed.');
 				return 1;
@@ -45,7 +45,7 @@ class {$pascalCase}Command extends Command
 			foreach ($response as $line)
 				$table->addRow([$line]);
 			echo $table->render();
-{elseif $type == 'bool'}
+{elseif isset($returnType) && $returnType == 'bool'}
 			echo ($response === true ? 'true' : 'false').PHP_EOL;
 {else}
 			echo $response.PHP_EOL;

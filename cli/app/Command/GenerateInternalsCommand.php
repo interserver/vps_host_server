@@ -88,11 +88,6 @@ class GenerateInternalsCommand extends Command {
 			->setCacheDir('/home/my/logs/smarty_cache')
 			->setCaching(false);
 		$smarty->setDebugging(false);
-		$smarty->assign('use', 'use App\\Vps;');
-		$smarty->assign('brief', 'briefing');
-		$smarty->assign('type', 'json');
-		$smarty->assign('method', 'somecall()');
-		echo $smarty->fetch(__DIR__.'/InternalsCommand/internals.tpl');
 		$files = [];
 		foreach (array_merge(glob('app/Vps.php'), glob('app/Os/*.php'), glob('app/Vps/*.php')) as $fileName)
 			$files[] = new \phpDocumentor\Reflection\File\LocalFile($fileName);
@@ -120,30 +115,35 @@ class GenerateInternalsCommand extends Command {
 					$returnType = $method->getReturnType();
 					echo "  - normal name: {$methodName}\n";
 					echo "  - {$methodFullName}\n";
+					//echo "  - return type: {$returnType}\n";
 					$smarty->assign('methodName', $methodName);
 					$smarty->assign('pascalCase', $this->pascalCase($methodName));
 					$smarty->assign('camelCase', $this->camelCase($methodName));
 					$smarty->assign('snakeCase', $this->snakeCase($methodName));
 					$smarty->assign('kebabCase', $this->kebabCase($methodName));
 					if (!is_null($docblock)) {
-						$context = $docblock->getContext();
+						//$context = $docblock->getContext();
 						$description = $docblock->getDescription();
 						$summary = $docblock->getSummary();
 						$smarty->assign('summary', $summary);
 						file_put_contents($dirName.'/'.$this->pascalCase($methodName).'Command.php', $smarty->fetch($templateFile));
-						echo "    - context: {$context}\n";
+						//echo "    - context: ".var_export($context, true)."\n";
 						echo "    - description: {$description}\n";
 						echo "    - summary: {$summary}\n";
+						$returnTags = $docblock->getTagsByName('return');
+						if (count($returnTags) > 0) {
+							$returnType = $returnTags[0]->getType();
+							$smarty->assign('returnType', $returnType);
+						}
+						//echo "		return tags: ".var_export($returnTags,true)."\n";
 						$tags = $docblock->getTags();
 						foreach ($tags as $idx => $tag) {
 							$tagName = $tag->getName();
 							$tagType = $tag->getType();
 							$tagDesc = $tag->getDescription();
-							$descBody = $desc->getBodyTemplate();
-							$descTags = $desc->getTags();
+							$descBody = $tagDesc->getBodyTemplate();
 							echo "		Tag {$tagName} type {$tagType}\n";
 							echo "		tag desc body template {$descBody}\n";
-							echo "		tag desc tags ".var_dump($descTags, true)."\n";
 						}
 					}
 				}
