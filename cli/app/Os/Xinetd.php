@@ -118,7 +118,7 @@ class Xinetd
         $runningVps = Vps::getRunningVps();
 		$usedPorts = [];
         foreach ($runningVps as $vzid) {
-			$remotes = Kvm::getVpsRemotes($vzid);
+			$remotes = Vps::getVpsRemotes($vzid);
 			foreach ($remotes as $type => $port)
 				$usedPorts[$port] = ['type' => $type, 'vzid' => $vzid];
         }

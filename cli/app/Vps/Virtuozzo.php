@@ -127,6 +127,14 @@ class Virtuozzo
 		return $return == 0;
 	}
 
+	public static function getVpsRemotes($vzid) {
+		$vps = self::getVps($vzid);
+		$remotes = [];
+		if (isset($vps['Remote display']['port']))
+			$remotes['vnc'] = intval($vps['Remote display']['port']);
+		return $remotes;
+	}
+
 	public static function getVncPort($vzid) {
 		$vpsList = self::getList();
 		$vncPort = '';

@@ -273,6 +273,19 @@ class Vps
 	}
 
     /**
+    * gets the vnc/spice ports for a vps
+    *
+    * @param int|string $vzid
+    * @return array
+    */
+	public static function getVpsRemotes($vzid) {
+		if (self::getVirtType() == 'virtuozzo')
+			return Virtuozzo::getVpsRemotes($vzid);
+		else
+			return Kvm::getVpsRemotes($vzid);
+	}
+
+    /**
     * gets the vnc port for a vps
     *
     * @param int|string $vzid

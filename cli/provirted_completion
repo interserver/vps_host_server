@@ -14276,6 +14276,134 @@ local argument_min_length=0
         fi
     fi
 };
+___provirted_phar_complete_internals.virtuozzo.get-vps-remotes ()
+{
+local comp_prefix=___provirted_phar
+
+        local cur words cword prev
+        _get_comp_words_by_ref -n =: cur words cword prev
+
+        local command_signature=$1
+        local command_index=$2
+
+        ((command_index++))
+
+        # Output application command alias mapping 
+        # aliases[ alias ] = command
+        declare -A subcommand_alias
+
+        # Define the command names
+        declare -A subcommands
+
+        declare -A subcommand_signs
+
+        # option names defines the available options of this command
+        declare -A options
+        # options_require_value: defines the required completion type for each
+        # option that requires a value.
+        declare -A options_require_value
+        subcommands=()
+subcommand_alias=()
+subcommand_signs=()
+options=(["-v"]="1" ["--verbose"]="1" ["-j"]="1" ["--json"]="1" ["-p"]="1" ["--php"]="1" )
+options_require_value=()
+local argument_min_length=0
+
+    # Get the command name chain of the current input, e.g.
+    # 
+    #     app asset install [arg1] [arg2] [arg3]
+    #     app commit add
+    #  
+    # The subcommand dispatch should be done in the command complete function,
+    # not in the root completion function. 
+    # We should pass the argument index to the complete function.
+
+    # command_index=1 start from the first argument, not the application name
+    # Find the command position
+    local argument_index=0
+    local i
+    local command
+    local found_options=0
+
+    # echo "[DEBUG] command_index: [$command_signature] [$command_index]"
+
+    while [ $command_index -lt $cword ]; do
+        i="${words[command_index]}"
+        case "$i" in
+            # Ignore options
+            --=*) found_options=1 ;;
+            --*) found_options=1 ;;
+            -*) found_options=1 ;;
+            *)
+                # looks like my command, that's break the loop and dispatch to the next complete function
+                if [[ -n "$i" && -n "${subcommands[$i]}" ]] ; then
+                    command="$i"
+                    break
+                elif [[ -n "$i" && -n "${subcommand_alias[$i]}" ]] ; then
+                    command="$i"
+                    break
+                elif [[ $command_index -gt 1 ]] ; then
+                    # If the command is not found, check if the previous argument is an option expecting a value
+                    # or it is an argument
+
+                    # the previous argument (might be)
+                    p="${words[command_index-1]}"
+
+                    # not an option value, push to the argument list
+                    if [[ -z "${options_require_value[$p]}" ]] ; then
+                        # echo "[DEBUG] argument_index++ because of [$i]"
+                        ((argument_index++))
+                    fi
+                fi
+            ;;
+        esac
+        ((command_index++))
+    done
+
+    # If the first command name is not found, we do complete...
+    if [[ -z "$command" ]] ; then
+        case "$cur" in
+            # If the current argument $cur looks like an option, then we should complete
+            -*)
+                __mycomp "${!options[*]}"
+                return
+            ;;
+            *)
+                # The argument here can be an option value. e.g. --output-dir /tmp
+                # The the previous one...
+                if [[ -n "$prev" && -n "${options_require_value[$prev]}" ]] ; then
+                    # TODO: local complete_type="${options_require_value[$prev]"}
+                  __complete_meta "$command_signature" "opt" "${prev##*(-)}" "valid-values"
+          return
+      fi
+      # If the command requires at least $argument_min_length to run, we check the argument
+
+                # If there is no argument support, then user is supposed to give a subcommand name or an option
+                __mycomp "${!options[*]} ${!subcommands[*]} ${!subcommand_alias[*]}"
+                return
+            ;;
+        esac
+
+    else
+        # We just found the first command, we are going to dispatch the completion handler to the next level...
+        # Rewrite command alias to command name to get the correct response
+        if [[ -n "${subcommand_alias[$command]}" ]] ; then
+            command="${subcommand_alias[$command]}"
+        fi
+
+        if [[ -n "${subcommand_signs[$command]}" ]] ; then
+            local suffix="${subcommand_signs[$command]}"
+            local completion_func="${comp_prefix}_complete_${suffix//-/_}"
+
+            # Declare the completion function name and dispatch rest arguments to the complete function
+            command_signature="${command_signature}.${command}"
+            declare -f $completion_func >/dev/null && \
+                $completion_func $command_signature $command_index && return
+        else
+            echo "Command '$command' not found"
+        fi
+    fi
+};
 ___provirted_phar_complete_internals.virtuozzo.remove-ip ()
 {
 local comp_prefix=___provirted_phar
@@ -15326,9 +15454,9 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["add-ip"]="Virtuozzo" ["block-smtp"]="Virtuozzo" ["change-ip"]="Virtuozzo" ["define-vps"]="Virtuozzo" ["destroy-vps"]="Virtuozzo" ["disable-autostart"]="Virtuozzo" ["enable-autostart"]="Virtuozzo" ["get-all-vps"]="Virtuozzo" ["get-list"]="Virtuozzo" ["get-running-vps"]="Virtuozzo" ["get-vnc-port"]="Virtuozzo" ["get-vps"]="Virtuozzo" ["get-vps-ips"]="Virtuozzo" ["remove-ip"]="Virtuozzo" ["setup-cpanel"]="Virtuozzo" ["setup-routing"]="Virtuozzo" ["setup-vnc"]="Virtuozzo" ["setup-webuzo"]="Virtuozzo" ["start-vps"]="Virtuozzo" ["stop-vps"]="Virtuozzo" ["vps-exists"]="Virtuozzo" )
+        subcommands=(["add-ip"]="Virtuozzo" ["block-smtp"]="Virtuozzo" ["change-ip"]="Virtuozzo" ["define-vps"]="Virtuozzo" ["destroy-vps"]="Virtuozzo" ["disable-autostart"]="Virtuozzo" ["enable-autostart"]="Virtuozzo" ["get-all-vps"]="Virtuozzo" ["get-list"]="Virtuozzo" ["get-running-vps"]="Virtuozzo" ["get-vnc-port"]="Virtuozzo" ["get-vps"]="Virtuozzo" ["get-vps-ips"]="Virtuozzo" ["get-vps-remotes"]="Virtuozzo" ["remove-ip"]="Virtuozzo" ["setup-cpanel"]="Virtuozzo" ["setup-routing"]="Virtuozzo" ["setup-vnc"]="Virtuozzo" ["setup-webuzo"]="Virtuozzo" ["start-vps"]="Virtuozzo" ["stop-vps"]="Virtuozzo" ["vps-exists"]="Virtuozzo" )
 subcommand_alias=()
-subcommand_signs=(["add-ip"]="internals.virtuozzo.add-ip" ["block-smtp"]="internals.virtuozzo.block-smtp" ["change-ip"]="internals.virtuozzo.change-ip" ["define-vps"]="internals.virtuozzo.define-vps" ["destroy-vps"]="internals.virtuozzo.destroy-vps" ["disable-autostart"]="internals.virtuozzo.disable-autostart" ["enable-autostart"]="internals.virtuozzo.enable-autostart" ["get-all-vps"]="internals.virtuozzo.get-all-vps" ["get-list"]="internals.virtuozzo.get-list" ["get-running-vps"]="internals.virtuozzo.get-running-vps" ["get-vnc-port"]="internals.virtuozzo.get-vnc-port" ["get-vps"]="internals.virtuozzo.get-vps" ["get-vps-ips"]="internals.virtuozzo.get-vps-ips" ["remove-ip"]="internals.virtuozzo.remove-ip" ["setup-cpanel"]="internals.virtuozzo.setup-cpanel" ["setup-routing"]="internals.virtuozzo.setup-routing" ["setup-vnc"]="internals.virtuozzo.setup-vnc" ["setup-webuzo"]="internals.virtuozzo.setup-webuzo" ["start-vps"]="internals.virtuozzo.start-vps" ["stop-vps"]="internals.virtuozzo.stop-vps" ["vps-exists"]="internals.virtuozzo.vps-exists" )
+subcommand_signs=(["add-ip"]="internals.virtuozzo.add-ip" ["block-smtp"]="internals.virtuozzo.block-smtp" ["change-ip"]="internals.virtuozzo.change-ip" ["define-vps"]="internals.virtuozzo.define-vps" ["destroy-vps"]="internals.virtuozzo.destroy-vps" ["disable-autostart"]="internals.virtuozzo.disable-autostart" ["enable-autostart"]="internals.virtuozzo.enable-autostart" ["get-all-vps"]="internals.virtuozzo.get-all-vps" ["get-list"]="internals.virtuozzo.get-list" ["get-running-vps"]="internals.virtuozzo.get-running-vps" ["get-vnc-port"]="internals.virtuozzo.get-vnc-port" ["get-vps"]="internals.virtuozzo.get-vps" ["get-vps-ips"]="internals.virtuozzo.get-vps-ips" ["get-vps-remotes"]="internals.virtuozzo.get-vps-remotes" ["remove-ip"]="internals.virtuozzo.remove-ip" ["setup-cpanel"]="internals.virtuozzo.setup-cpanel" ["setup-routing"]="internals.virtuozzo.setup-routing" ["setup-vnc"]="internals.virtuozzo.setup-vnc" ["setup-webuzo"]="internals.virtuozzo.setup-webuzo" ["start-vps"]="internals.virtuozzo.start-vps" ["stop-vps"]="internals.virtuozzo.stop-vps" ["vps-exists"]="internals.virtuozzo.vps-exists" )
 options=()
 options_require_value=()
 local argument_min_length=0
@@ -15454,9 +15582,9 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["add-ip"]="Virtuozzo" ["block-smtp"]="Virtuozzo" ["change-ip"]="Virtuozzo" ["define-vps"]="Virtuozzo" ["destroy-vps"]="Virtuozzo" ["disable-autostart"]="Virtuozzo" ["enable-autostart"]="Virtuozzo" ["get-all-vps"]="Virtuozzo" ["get-list"]="Virtuozzo" ["get-running-vps"]="Virtuozzo" ["get-vnc-port"]="Virtuozzo" ["get-vps"]="Virtuozzo" ["get-vps-ips"]="Virtuozzo" ["remove-ip"]="Virtuozzo" ["setup-cpanel"]="Virtuozzo" ["setup-routing"]="Virtuozzo" ["setup-vnc"]="Virtuozzo" ["setup-webuzo"]="Virtuozzo" ["start-vps"]="Virtuozzo" ["stop-vps"]="Virtuozzo" ["vps-exists"]="Virtuozzo" )
+        subcommands=(["add-ip"]="Virtuozzo" ["block-smtp"]="Virtuozzo" ["change-ip"]="Virtuozzo" ["define-vps"]="Virtuozzo" ["destroy-vps"]="Virtuozzo" ["disable-autostart"]="Virtuozzo" ["enable-autostart"]="Virtuozzo" ["get-all-vps"]="Virtuozzo" ["get-list"]="Virtuozzo" ["get-running-vps"]="Virtuozzo" ["get-vnc-port"]="Virtuozzo" ["get-vps"]="Virtuozzo" ["get-vps-ips"]="Virtuozzo" ["get-vps-remotes"]="Virtuozzo" ["remove-ip"]="Virtuozzo" ["setup-cpanel"]="Virtuozzo" ["setup-routing"]="Virtuozzo" ["setup-vnc"]="Virtuozzo" ["setup-webuzo"]="Virtuozzo" ["start-vps"]="Virtuozzo" ["stop-vps"]="Virtuozzo" ["vps-exists"]="Virtuozzo" )
 subcommand_alias=()
-subcommand_signs=(["add-ip"]="internals.virtuozzo.add-ip" ["block-smtp"]="internals.virtuozzo.block-smtp" ["change-ip"]="internals.virtuozzo.change-ip" ["define-vps"]="internals.virtuozzo.define-vps" ["destroy-vps"]="internals.virtuozzo.destroy-vps" ["disable-autostart"]="internals.virtuozzo.disable-autostart" ["enable-autostart"]="internals.virtuozzo.enable-autostart" ["get-all-vps"]="internals.virtuozzo.get-all-vps" ["get-list"]="internals.virtuozzo.get-list" ["get-running-vps"]="internals.virtuozzo.get-running-vps" ["get-vnc-port"]="internals.virtuozzo.get-vnc-port" ["get-vps"]="internals.virtuozzo.get-vps" ["get-vps-ips"]="internals.virtuozzo.get-vps-ips" ["remove-ip"]="internals.virtuozzo.remove-ip" ["setup-cpanel"]="internals.virtuozzo.setup-cpanel" ["setup-routing"]="internals.virtuozzo.setup-routing" ["setup-vnc"]="internals.virtuozzo.setup-vnc" ["setup-webuzo"]="internals.virtuozzo.setup-webuzo" ["start-vps"]="internals.virtuozzo.start-vps" ["stop-vps"]="internals.virtuozzo.stop-vps" ["vps-exists"]="internals.virtuozzo.vps-exists" )
+subcommand_signs=(["add-ip"]="internals.virtuozzo.add-ip" ["block-smtp"]="internals.virtuozzo.block-smtp" ["change-ip"]="internals.virtuozzo.change-ip" ["define-vps"]="internals.virtuozzo.define-vps" ["destroy-vps"]="internals.virtuozzo.destroy-vps" ["disable-autostart"]="internals.virtuozzo.disable-autostart" ["enable-autostart"]="internals.virtuozzo.enable-autostart" ["get-all-vps"]="internals.virtuozzo.get-all-vps" ["get-list"]="internals.virtuozzo.get-list" ["get-running-vps"]="internals.virtuozzo.get-running-vps" ["get-vnc-port"]="internals.virtuozzo.get-vnc-port" ["get-vps"]="internals.virtuozzo.get-vps" ["get-vps-ips"]="internals.virtuozzo.get-vps-ips" ["get-vps-remotes"]="internals.virtuozzo.get-vps-remotes" ["remove-ip"]="internals.virtuozzo.remove-ip" ["setup-cpanel"]="internals.virtuozzo.setup-cpanel" ["setup-routing"]="internals.virtuozzo.setup-routing" ["setup-vnc"]="internals.virtuozzo.setup-vnc" ["setup-webuzo"]="internals.virtuozzo.setup-webuzo" ["start-vps"]="internals.virtuozzo.start-vps" ["stop-vps"]="internals.virtuozzo.stop-vps" ["vps-exists"]="internals.virtuozzo.vps-exists" )
 options=()
 options_require_value=()
 local argument_min_length=0
@@ -18244,6 +18372,134 @@ local argument_min_length=0
         fi
     fi
 };
+___provirted_phar_complete_internals.vps.get-vps-remotes ()
+{
+local comp_prefix=___provirted_phar
+
+        local cur words cword prev
+        _get_comp_words_by_ref -n =: cur words cword prev
+
+        local command_signature=$1
+        local command_index=$2
+
+        ((command_index++))
+
+        # Output application command alias mapping 
+        # aliases[ alias ] = command
+        declare -A subcommand_alias
+
+        # Define the command names
+        declare -A subcommands
+
+        declare -A subcommand_signs
+
+        # option names defines the available options of this command
+        declare -A options
+        # options_require_value: defines the required completion type for each
+        # option that requires a value.
+        declare -A options_require_value
+        subcommands=()
+subcommand_alias=()
+subcommand_signs=()
+options=(["-v"]="1" ["--verbose"]="1" ["-j"]="1" ["--json"]="1" ["-p"]="1" ["--php"]="1" )
+options_require_value=()
+local argument_min_length=0
+
+    # Get the command name chain of the current input, e.g.
+    # 
+    #     app asset install [arg1] [arg2] [arg3]
+    #     app commit add
+    #  
+    # The subcommand dispatch should be done in the command complete function,
+    # not in the root completion function. 
+    # We should pass the argument index to the complete function.
+
+    # command_index=1 start from the first argument, not the application name
+    # Find the command position
+    local argument_index=0
+    local i
+    local command
+    local found_options=0
+
+    # echo "[DEBUG] command_index: [$command_signature] [$command_index]"
+
+    while [ $command_index -lt $cword ]; do
+        i="${words[command_index]}"
+        case "$i" in
+            # Ignore options
+            --=*) found_options=1 ;;
+            --*) found_options=1 ;;
+            -*) found_options=1 ;;
+            *)
+                # looks like my command, that's break the loop and dispatch to the next complete function
+                if [[ -n "$i" && -n "${subcommands[$i]}" ]] ; then
+                    command="$i"
+                    break
+                elif [[ -n "$i" && -n "${subcommand_alias[$i]}" ]] ; then
+                    command="$i"
+                    break
+                elif [[ $command_index -gt 1 ]] ; then
+                    # If the command is not found, check if the previous argument is an option expecting a value
+                    # or it is an argument
+
+                    # the previous argument (might be)
+                    p="${words[command_index-1]}"
+
+                    # not an option value, push to the argument list
+                    if [[ -z "${options_require_value[$p]}" ]] ; then
+                        # echo "[DEBUG] argument_index++ because of [$i]"
+                        ((argument_index++))
+                    fi
+                fi
+            ;;
+        esac
+        ((command_index++))
+    done
+
+    # If the first command name is not found, we do complete...
+    if [[ -z "$command" ]] ; then
+        case "$cur" in
+            # If the current argument $cur looks like an option, then we should complete
+            -*)
+                __mycomp "${!options[*]}"
+                return
+            ;;
+            *)
+                # The argument here can be an option value. e.g. --output-dir /tmp
+                # The the previous one...
+                if [[ -n "$prev" && -n "${options_require_value[$prev]}" ]] ; then
+                    # TODO: local complete_type="${options_require_value[$prev]"}
+                  __complete_meta "$command_signature" "opt" "${prev##*(-)}" "valid-values"
+          return
+      fi
+      # If the command requires at least $argument_min_length to run, we check the argument
+
+                # If there is no argument support, then user is supposed to give a subcommand name or an option
+                __mycomp "${!options[*]} ${!subcommands[*]} ${!subcommand_alias[*]}"
+                return
+            ;;
+        esac
+
+    else
+        # We just found the first command, we are going to dispatch the completion handler to the next level...
+        # Rewrite command alias to command name to get the correct response
+        if [[ -n "${subcommand_alias[$command]}" ]] ; then
+            command="${subcommand_alias[$command]}"
+        fi
+
+        if [[ -n "${subcommand_signs[$command]}" ]] ; then
+            local suffix="${subcommand_signs[$command]}"
+            local completion_func="${comp_prefix}_complete_${suffix//-/_}"
+
+            # Declare the completion function name and dispatch rest arguments to the complete function
+            command_signature="${command_signature}.${command}"
+            declare -f $completion_func >/dev/null && \
+                $completion_func $command_signature $command_index && return
+        else
+            echo "Command '$command' not found"
+        fi
+    fi
+};
 ___provirted_phar_complete_internals.vps.init ()
 {
 local comp_prefix=___provirted_phar
@@ -20830,9 +21086,9 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["add-ip"]="Vps" ["block-smtp"]="Vps" ["change-ip"]="Vps" ["convert-id-to-mac"]="converts an order id into a mac address" ["define-vps"]="Vps" ["delete-vps"]="Vps" ["destroy-vps"]="Vps" ["disable-autostart"]="Vps" ["enable-autostart"]="Vps" ["get-all-vps-all-virts"]="return a list of all the vps on all installed virtualization types" ["get-all-vps"]="return a list of all the vps" ["get-host-info"]="returns an array containing information about the host server, vlans, and vps's" ["get-installed-virts"]="returns an array of installed virtualization types" ["get-logger"]="" ["get-pool-type"]="gets the type of storage pool" ["get-running-vps"]="return a list of the running vps" ["get-url"]="Vps" ["get-virt-type"]="gets the type of virtualization we'll be using" ["get-vnc-port"]="gets the vnc port for a vps" ["get-vps-ips"]="gets the ips configured on a vps" ["get-vps-mac"]="gets the mac address of a vps" ["init"]="" ["install-template"]="Vps" ["is-virtual-host"]="determins if the host is setup for virtualization or not" ["is-vps-running"]="determins if a vps is running or not" ["remove-ip"]="Vps" ["restart-vps"]="Vps" ["run-command"]="Vps" ["set-logger"]="" ["set-virt-type"]="Vps" ["setup-cgroups"]="Vps" ["setup-cpanel"]="Vps" ["setup-routing"]="Vps" ["setup-storage"]="Vps" ["setup-vnc"]="Vps" ["setup-webuzo"]="Vps" ["start-vps"]="Vps" ["stop-vps"]="Vps" ["vnc-screenshot"]="Vps" ["vnc-screenshot-swift"]="Vps" ["vps-exists"]="determines if a vps exists or not" )
+        subcommands=(["add-ip"]="Vps" ["block-smtp"]="Vps" ["change-ip"]="Vps" ["convert-id-to-mac"]="converts an order id into a mac address" ["define-vps"]="Vps" ["delete-vps"]="Vps" ["destroy-vps"]="Vps" ["disable-autostart"]="Vps" ["enable-autostart"]="Vps" ["get-all-vps-all-virts"]="return a list of all the vps on all installed virtualization types" ["get-all-vps"]="return a list of all the vps" ["get-host-info"]="returns an array containing information about the host server, vlans, and vps's" ["get-installed-virts"]="returns an array of installed virtualization types" ["get-logger"]="" ["get-pool-type"]="gets the type of storage pool" ["get-running-vps"]="return a list of the running vps" ["get-url"]="Vps" ["get-virt-type"]="gets the type of virtualization we'll be using" ["get-vnc-port"]="gets the vnc port for a vps" ["get-vps-ips"]="gets the ips configured on a vps" ["get-vps-mac"]="gets the mac address of a vps" ["get-vps-remotes"]="gets the vnc/spice ports for a vps" ["init"]="" ["install-template"]="Vps" ["is-virtual-host"]="determins if the host is setup for virtualization or not" ["is-vps-running"]="determins if a vps is running or not" ["remove-ip"]="Vps" ["restart-vps"]="Vps" ["run-command"]="Vps" ["set-logger"]="" ["set-virt-type"]="Vps" ["setup-cgroups"]="Vps" ["setup-cpanel"]="Vps" ["setup-routing"]="Vps" ["setup-storage"]="Vps" ["setup-vnc"]="Vps" ["setup-webuzo"]="Vps" ["start-vps"]="Vps" ["stop-vps"]="Vps" ["vnc-screenshot"]="Vps" ["vnc-screenshot-swift"]="Vps" ["vps-exists"]="determines if a vps exists or not" )
 subcommand_alias=()
-subcommand_signs=(["add-ip"]="internals.vps.add-ip" ["block-smtp"]="internals.vps.block-smtp" ["change-ip"]="internals.vps.change-ip" ["convert-id-to-mac"]="internals.vps.convert-id-to-mac" ["define-vps"]="internals.vps.define-vps" ["delete-vps"]="internals.vps.delete-vps" ["destroy-vps"]="internals.vps.destroy-vps" ["disable-autostart"]="internals.vps.disable-autostart" ["enable-autostart"]="internals.vps.enable-autostart" ["get-all-vps-all-virts"]="internals.vps.get-all-vps-all-virts" ["get-all-vps"]="internals.vps.get-all-vps" ["get-host-info"]="internals.vps.get-host-info" ["get-installed-virts"]="internals.vps.get-installed-virts" ["get-logger"]="internals.vps.get-logger" ["get-pool-type"]="internals.vps.get-pool-type" ["get-running-vps"]="internals.vps.get-running-vps" ["get-url"]="internals.vps.get-url" ["get-virt-type"]="internals.vps.get-virt-type" ["get-vnc-port"]="internals.vps.get-vnc-port" ["get-vps-ips"]="internals.vps.get-vps-ips" ["get-vps-mac"]="internals.vps.get-vps-mac" ["init"]="internals.vps.init" ["install-template"]="internals.vps.install-template" ["is-virtual-host"]="internals.vps.is-virtual-host" ["is-vps-running"]="internals.vps.is-vps-running" ["remove-ip"]="internals.vps.remove-ip" ["restart-vps"]="internals.vps.restart-vps" ["run-command"]="internals.vps.run-command" ["set-logger"]="internals.vps.set-logger" ["set-virt-type"]="internals.vps.set-virt-type" ["setup-cgroups"]="internals.vps.setup-cgroups" ["setup-cpanel"]="internals.vps.setup-cpanel" ["setup-routing"]="internals.vps.setup-routing" ["setup-storage"]="internals.vps.setup-storage" ["setup-vnc"]="internals.vps.setup-vnc" ["setup-webuzo"]="internals.vps.setup-webuzo" ["start-vps"]="internals.vps.start-vps" ["stop-vps"]="internals.vps.stop-vps" ["vnc-screenshot"]="internals.vps.vnc-screenshot" ["vnc-screenshot-swift"]="internals.vps.vnc-screenshot-swift" ["vps-exists"]="internals.vps.vps-exists" )
+subcommand_signs=(["add-ip"]="internals.vps.add-ip" ["block-smtp"]="internals.vps.block-smtp" ["change-ip"]="internals.vps.change-ip" ["convert-id-to-mac"]="internals.vps.convert-id-to-mac" ["define-vps"]="internals.vps.define-vps" ["delete-vps"]="internals.vps.delete-vps" ["destroy-vps"]="internals.vps.destroy-vps" ["disable-autostart"]="internals.vps.disable-autostart" ["enable-autostart"]="internals.vps.enable-autostart" ["get-all-vps-all-virts"]="internals.vps.get-all-vps-all-virts" ["get-all-vps"]="internals.vps.get-all-vps" ["get-host-info"]="internals.vps.get-host-info" ["get-installed-virts"]="internals.vps.get-installed-virts" ["get-logger"]="internals.vps.get-logger" ["get-pool-type"]="internals.vps.get-pool-type" ["get-running-vps"]="internals.vps.get-running-vps" ["get-url"]="internals.vps.get-url" ["get-virt-type"]="internals.vps.get-virt-type" ["get-vnc-port"]="internals.vps.get-vnc-port" ["get-vps-ips"]="internals.vps.get-vps-ips" ["get-vps-mac"]="internals.vps.get-vps-mac" ["get-vps-remotes"]="internals.vps.get-vps-remotes" ["init"]="internals.vps.init" ["install-template"]="internals.vps.install-template" ["is-virtual-host"]="internals.vps.is-virtual-host" ["is-vps-running"]="internals.vps.is-vps-running" ["remove-ip"]="internals.vps.remove-ip" ["restart-vps"]="internals.vps.restart-vps" ["run-command"]="internals.vps.run-command" ["set-logger"]="internals.vps.set-logger" ["set-virt-type"]="internals.vps.set-virt-type" ["setup-cgroups"]="internals.vps.setup-cgroups" ["setup-cpanel"]="internals.vps.setup-cpanel" ["setup-routing"]="internals.vps.setup-routing" ["setup-storage"]="internals.vps.setup-storage" ["setup-vnc"]="internals.vps.setup-vnc" ["setup-webuzo"]="internals.vps.setup-webuzo" ["start-vps"]="internals.vps.start-vps" ["stop-vps"]="internals.vps.stop-vps" ["vnc-screenshot"]="internals.vps.vnc-screenshot" ["vnc-screenshot-swift"]="internals.vps.vnc-screenshot-swift" ["vps-exists"]="internals.vps.vps-exists" )
 options=()
 options_require_value=()
 local argument_min_length=0
@@ -20958,9 +21214,9 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["add-ip"]="Vps" ["block-smtp"]="Vps" ["change-ip"]="Vps" ["convert-id-to-mac"]="converts an order id into a mac address" ["define-vps"]="Vps" ["delete-vps"]="Vps" ["destroy-vps"]="Vps" ["disable-autostart"]="Vps" ["enable-autostart"]="Vps" ["get-all-vps-all-virts"]="return a list of all the vps on all installed virtualization types" ["get-all-vps"]="return a list of all the vps" ["get-host-info"]="returns an array containing information about the host server, vlans, and vps's" ["get-installed-virts"]="returns an array of installed virtualization types" ["get-logger"]="" ["get-pool-type"]="gets the type of storage pool" ["get-running-vps"]="return a list of the running vps" ["get-url"]="Vps" ["get-virt-type"]="gets the type of virtualization we'll be using" ["get-vnc-port"]="gets the vnc port for a vps" ["get-vps-ips"]="gets the ips configured on a vps" ["get-vps-mac"]="gets the mac address of a vps" ["init"]="" ["install-template"]="Vps" ["is-virtual-host"]="determins if the host is setup for virtualization or not" ["is-vps-running"]="determins if a vps is running or not" ["remove-ip"]="Vps" ["restart-vps"]="Vps" ["run-command"]="Vps" ["set-logger"]="" ["set-virt-type"]="Vps" ["setup-cgroups"]="Vps" ["setup-cpanel"]="Vps" ["setup-routing"]="Vps" ["setup-storage"]="Vps" ["setup-vnc"]="Vps" ["setup-webuzo"]="Vps" ["start-vps"]="Vps" ["stop-vps"]="Vps" ["vnc-screenshot"]="Vps" ["vnc-screenshot-swift"]="Vps" ["vps-exists"]="determines if a vps exists or not" )
+        subcommands=(["add-ip"]="Vps" ["block-smtp"]="Vps" ["change-ip"]="Vps" ["convert-id-to-mac"]="converts an order id into a mac address" ["define-vps"]="Vps" ["delete-vps"]="Vps" ["destroy-vps"]="Vps" ["disable-autostart"]="Vps" ["enable-autostart"]="Vps" ["get-all-vps-all-virts"]="return a list of all the vps on all installed virtualization types" ["get-all-vps"]="return a list of all the vps" ["get-host-info"]="returns an array containing information about the host server, vlans, and vps's" ["get-installed-virts"]="returns an array of installed virtualization types" ["get-logger"]="" ["get-pool-type"]="gets the type of storage pool" ["get-running-vps"]="return a list of the running vps" ["get-url"]="Vps" ["get-virt-type"]="gets the type of virtualization we'll be using" ["get-vnc-port"]="gets the vnc port for a vps" ["get-vps-ips"]="gets the ips configured on a vps" ["get-vps-mac"]="gets the mac address of a vps" ["get-vps-remotes"]="gets the vnc/spice ports for a vps" ["init"]="" ["install-template"]="Vps" ["is-virtual-host"]="determins if the host is setup for virtualization or not" ["is-vps-running"]="determins if a vps is running or not" ["remove-ip"]="Vps" ["restart-vps"]="Vps" ["run-command"]="Vps" ["set-logger"]="" ["set-virt-type"]="Vps" ["setup-cgroups"]="Vps" ["setup-cpanel"]="Vps" ["setup-routing"]="Vps" ["setup-storage"]="Vps" ["setup-vnc"]="Vps" ["setup-webuzo"]="Vps" ["start-vps"]="Vps" ["stop-vps"]="Vps" ["vnc-screenshot"]="Vps" ["vnc-screenshot-swift"]="Vps" ["vps-exists"]="determines if a vps exists or not" )
 subcommand_alias=()
-subcommand_signs=(["add-ip"]="internals.vps.add-ip" ["block-smtp"]="internals.vps.block-smtp" ["change-ip"]="internals.vps.change-ip" ["convert-id-to-mac"]="internals.vps.convert-id-to-mac" ["define-vps"]="internals.vps.define-vps" ["delete-vps"]="internals.vps.delete-vps" ["destroy-vps"]="internals.vps.destroy-vps" ["disable-autostart"]="internals.vps.disable-autostart" ["enable-autostart"]="internals.vps.enable-autostart" ["get-all-vps-all-virts"]="internals.vps.get-all-vps-all-virts" ["get-all-vps"]="internals.vps.get-all-vps" ["get-host-info"]="internals.vps.get-host-info" ["get-installed-virts"]="internals.vps.get-installed-virts" ["get-logger"]="internals.vps.get-logger" ["get-pool-type"]="internals.vps.get-pool-type" ["get-running-vps"]="internals.vps.get-running-vps" ["get-url"]="internals.vps.get-url" ["get-virt-type"]="internals.vps.get-virt-type" ["get-vnc-port"]="internals.vps.get-vnc-port" ["get-vps-ips"]="internals.vps.get-vps-ips" ["get-vps-mac"]="internals.vps.get-vps-mac" ["init"]="internals.vps.init" ["install-template"]="internals.vps.install-template" ["is-virtual-host"]="internals.vps.is-virtual-host" ["is-vps-running"]="internals.vps.is-vps-running" ["remove-ip"]="internals.vps.remove-ip" ["restart-vps"]="internals.vps.restart-vps" ["run-command"]="internals.vps.run-command" ["set-logger"]="internals.vps.set-logger" ["set-virt-type"]="internals.vps.set-virt-type" ["setup-cgroups"]="internals.vps.setup-cgroups" ["setup-cpanel"]="internals.vps.setup-cpanel" ["setup-routing"]="internals.vps.setup-routing" ["setup-storage"]="internals.vps.setup-storage" ["setup-vnc"]="internals.vps.setup-vnc" ["setup-webuzo"]="internals.vps.setup-webuzo" ["start-vps"]="internals.vps.start-vps" ["stop-vps"]="internals.vps.stop-vps" ["vnc-screenshot"]="internals.vps.vnc-screenshot" ["vnc-screenshot-swift"]="internals.vps.vnc-screenshot-swift" ["vps-exists"]="internals.vps.vps-exists" )
+subcommand_signs=(["add-ip"]="internals.vps.add-ip" ["block-smtp"]="internals.vps.block-smtp" ["change-ip"]="internals.vps.change-ip" ["convert-id-to-mac"]="internals.vps.convert-id-to-mac" ["define-vps"]="internals.vps.define-vps" ["delete-vps"]="internals.vps.delete-vps" ["destroy-vps"]="internals.vps.destroy-vps" ["disable-autostart"]="internals.vps.disable-autostart" ["enable-autostart"]="internals.vps.enable-autostart" ["get-all-vps-all-virts"]="internals.vps.get-all-vps-all-virts" ["get-all-vps"]="internals.vps.get-all-vps" ["get-host-info"]="internals.vps.get-host-info" ["get-installed-virts"]="internals.vps.get-installed-virts" ["get-logger"]="internals.vps.get-logger" ["get-pool-type"]="internals.vps.get-pool-type" ["get-running-vps"]="internals.vps.get-running-vps" ["get-url"]="internals.vps.get-url" ["get-virt-type"]="internals.vps.get-virt-type" ["get-vnc-port"]="internals.vps.get-vnc-port" ["get-vps-ips"]="internals.vps.get-vps-ips" ["get-vps-mac"]="internals.vps.get-vps-mac" ["get-vps-remotes"]="internals.vps.get-vps-remotes" ["init"]="internals.vps.init" ["install-template"]="internals.vps.install-template" ["is-virtual-host"]="internals.vps.is-virtual-host" ["is-vps-running"]="internals.vps.is-vps-running" ["remove-ip"]="internals.vps.remove-ip" ["restart-vps"]="internals.vps.restart-vps" ["run-command"]="internals.vps.run-command" ["set-logger"]="internals.vps.set-logger" ["set-virt-type"]="internals.vps.set-virt-type" ["setup-cgroups"]="internals.vps.setup-cgroups" ["setup-cpanel"]="internals.vps.setup-cpanel" ["setup-routing"]="internals.vps.setup-routing" ["setup-storage"]="internals.vps.setup-storage" ["setup-vnc"]="internals.vps.setup-vnc" ["setup-webuzo"]="internals.vps.setup-webuzo" ["start-vps"]="internals.vps.start-vps" ["stop-vps"]="internals.vps.stop-vps" ["vnc-screenshot"]="internals.vps.vnc-screenshot" ["vnc-screenshot-swift"]="internals.vps.vnc-screenshot-swift" ["vps-exists"]="internals.vps.vps-exists" )
 options=()
 options_require_value=()
 local argument_min_length=0
