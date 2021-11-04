@@ -2,6 +2,7 @@
 namespace App\Command\VncCommand;
 
 use App\Vps;
+use App\Os\Xinetd;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -32,10 +33,6 @@ class RemoveCommand extends Command {
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
-		if (!Vps::vpsExists($vzid)) {
-			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
-			return 1;
-		}
-		Vps::setupVnc($vzid, $ip);
+		Xinetd::remove($vzid);
 	}
 }

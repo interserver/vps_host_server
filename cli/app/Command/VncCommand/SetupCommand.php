@@ -2,6 +2,7 @@
 namespace App\Command\VncCommand;
 
 use App\Vps;
+use App\Os\Xinetd;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
 use CLIFramework\Logger\ActionLogger;
@@ -37,6 +38,7 @@ class SetupCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		Vps::setupVnc($vzid, $ip);
+
+		Xinetd::setup($vzid, $port, $ip);
 	}
 }
