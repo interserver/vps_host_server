@@ -9,5 +9,23 @@ class VncCommand extends Command {
 	}
 
 	public function execute() {
+        echo '
+SYNTAX
+
+provirted.phar vnc <subcommand>
+
+SUBCOMMANDS
+	setup <vzid> [ip]         create a new mapping
+	remove <vzid>             remove a mapping
+	restart                   restart the xinetd service
+	rebuild [--dry]           removes old and bad entries to maintain security, and recreates all port mappings
+
+EXAMPLES
+	provirted.phar vnc setup vps4000 8.8.8.8
+	provirted.phar vnc remove vps4000
+	provirted.phar vnc restart
+	provirted.phar vnc rebuild --dry
+	provirted.phar vnc rebuild
+';
 	}
 }

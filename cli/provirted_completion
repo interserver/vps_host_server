@@ -25246,134 +25246,6 @@ local argument_min_length=0
         fi
     fi
 };
-___provirted_phar_complete_vnc.refresh ()
-{
-local comp_prefix=___provirted_phar
-
-        local cur words cword prev
-        _get_comp_words_by_ref -n =: cur words cword prev
-
-        local command_signature=$1
-        local command_index=$2
-
-        ((command_index++))
-
-        # Output application command alias mapping 
-        # aliases[ alias ] = command
-        declare -A subcommand_alias
-
-        # Define the command names
-        declare -A subcommands
-
-        declare -A subcommand_signs
-
-        # option names defines the available options of this command
-        declare -A options
-        # options_require_value: defines the required completion type for each
-        # option that requires a value.
-        declare -A options_require_value
-        subcommands=()
-subcommand_alias=()
-subcommand_signs=()
-options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" ["-a"]="1" ["--all"]="1" ["-d"]="1" ["--dry"]="1" )
-options_require_value=(["-t"]="1" ["--virt"]="1" )
-local argument_min_length=0
-
-    # Get the command name chain of the current input, e.g.
-    # 
-    #     app asset install [arg1] [arg2] [arg3]
-    #     app commit add
-    #  
-    # The subcommand dispatch should be done in the command complete function,
-    # not in the root completion function. 
-    # We should pass the argument index to the complete function.
-
-    # command_index=1 start from the first argument, not the application name
-    # Find the command position
-    local argument_index=0
-    local i
-    local command
-    local found_options=0
-
-    # echo "[DEBUG] command_index: [$command_signature] [$command_index]"
-
-    while [ $command_index -lt $cword ]; do
-        i="${words[command_index]}"
-        case "$i" in
-            # Ignore options
-            --=*) found_options=1 ;;
-            --*) found_options=1 ;;
-            -*) found_options=1 ;;
-            *)
-                # looks like my command, that's break the loop and dispatch to the next complete function
-                if [[ -n "$i" && -n "${subcommands[$i]}" ]] ; then
-                    command="$i"
-                    break
-                elif [[ -n "$i" && -n "${subcommand_alias[$i]}" ]] ; then
-                    command="$i"
-                    break
-                elif [[ $command_index -gt 1 ]] ; then
-                    # If the command is not found, check if the previous argument is an option expecting a value
-                    # or it is an argument
-
-                    # the previous argument (might be)
-                    p="${words[command_index-1]}"
-
-                    # not an option value, push to the argument list
-                    if [[ -z "${options_require_value[$p]}" ]] ; then
-                        # echo "[DEBUG] argument_index++ because of [$i]"
-                        ((argument_index++))
-                    fi
-                fi
-            ;;
-        esac
-        ((command_index++))
-    done
-
-    # If the first command name is not found, we do complete...
-    if [[ -z "$command" ]] ; then
-        case "$cur" in
-            # If the current argument $cur looks like an option, then we should complete
-            -*)
-                __mycomp "${!options[*]}"
-                return
-            ;;
-            *)
-                # The argument here can be an option value. e.g. --output-dir /tmp
-                # The the previous one...
-                if [[ -n "$prev" && -n "${options_require_value[$prev]}" ]] ; then
-                    # TODO: local complete_type="${options_require_value[$prev]"}
-                  __complete_meta "$command_signature" "opt" "${prev##*(-)}" "valid-values"
-          return
-      fi
-      # If the command requires at least $argument_min_length to run, we check the argument
-
-                # If there is no argument support, then user is supposed to give a subcommand name or an option
-                __mycomp "${!options[*]} ${!subcommands[*]} ${!subcommand_alias[*]}"
-                return
-            ;;
-        esac
-
-    else
-        # We just found the first command, we are going to dispatch the completion handler to the next level...
-        # Rewrite command alias to command name to get the correct response
-        if [[ -n "${subcommand_alias[$command]}" ]] ; then
-            command="${subcommand_alias[$command]}"
-        fi
-
-        if [[ -n "${subcommand_signs[$command]}" ]] ; then
-            local suffix="${subcommand_signs[$command]}"
-            local completion_func="${comp_prefix}_complete_${suffix//-/_}"
-
-            # Declare the completion function name and dispatch rest arguments to the complete function
-            command_signature="${command_signature}.${command}"
-            declare -f $completion_func >/dev/null && \
-                $completion_func $command_signature $command_index && return
-        else
-            echo "Command '$command' not found"
-        fi
-    fi
-};
 ___provirted_phar_complete_vnc.remove ()
 {
 local comp_prefix=___provirted_phar
@@ -25802,9 +25674,9 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["rebuild"]="cleans up and recreates all the xinetd vps entries" ["refresh"]="cleans up and recreates all the xinetd vps entries" ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
+        subcommands=(["rebuild"]="cleans up and recreates all the xinetd vps entries" ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
 subcommand_alias=()
-subcommand_signs=(["rebuild"]="vnc.rebuild" ["refresh"]="vnc.refresh" ["remove"]="vnc.remove" ["restart"]="vnc.restart" ["setup"]="vnc.setup" )
+subcommand_signs=(["rebuild"]="vnc.rebuild" ["remove"]="vnc.remove" ["restart"]="vnc.restart" ["setup"]="vnc.setup" )
 options=()
 options_require_value=()
 local argument_min_length=0
@@ -25930,9 +25802,9 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["rebuild"]="cleans up and recreates all the xinetd vps entries" ["refresh"]="cleans up and recreates all the xinetd vps entries" ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
+        subcommands=(["rebuild"]="cleans up and recreates all the xinetd vps entries" ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
 subcommand_alias=()
-subcommand_signs=(["rebuild"]="vnc.rebuild" ["refresh"]="vnc.refresh" ["remove"]="vnc.remove" ["restart"]="vnc.restart" ["setup"]="vnc.setup" )
+subcommand_signs=(["rebuild"]="vnc.rebuild" ["remove"]="vnc.remove" ["restart"]="vnc.restart" ["setup"]="vnc.setup" )
 options=()
 options_require_value=()
 local argument_min_length=0
