@@ -27,7 +27,7 @@ class SetupCommand extends Command {
 		$args->add('ip')->desc('IP Address')->isa('ip');
 	}
 
-	public function execute($vzid, $ip) {
+	public function execute($vzid, $ip = '') {
 		Vps::init($this->getOptions(), ['vzid' => $vzid, 'ip' => $ip]);
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
@@ -38,7 +38,15 @@ class SetupCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-
-		Xinetd::setup($vzid, $port, $ip);
+        $remotes = Vps::getVpsRemotes($vzid);
+        if (Vps::getVirtType() == 'virtuozzo') {
+        	$vps = Virtuozzo::getVps($vzid);
+        	$vzid = $vps['EnvID'];
+        }
+		foreach ($remotes as $type => $port) {
+			echo "setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n";
+			if ($dryRun === false)
+				Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
+		}
 	}
 }
