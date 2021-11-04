@@ -113,12 +113,34 @@ class Xinetd
 				$usedVzids[$vps['vzid']] = $vps['vnc'];
 			}
 		}
+        if (Vps::getVirtType() == 'virtuozzo') {
+			$allVpsData = Virtuozzo::getList();
+	        $map = [
+        		'name' => ['uuid' => [], 'veid' => []],
+        		'uuid' => ['name' => [], 'veid' => []],
+        		'veid' => ['name' => [], 'uuid' => []]
+	        ];
+			foreach ($allVpsData as $idx => $vps) {
+				if (isset($usedVzids[$vps['Name']]))
+					$usedVzids[$vps['EnvID']] = $usedVzids[$vps['Name']];
+				if (isset($usedVzids[$vps['ID']]))
+					$usedVzids[$vps['EnvID']] = $usedVzids[$vps['ID']];
+				$map['uuid']['name'][$vps['ID']] = $vps['Name'];
+				$map['uuid']['veid'][$vps['ID']] = $vps['EnvID'];
+				$map['name']['uuid'][$vps['Name']] = $vps['ID'];
+				$map['name']['veid'][$vps['Name']] = $vps['EnvID'];
+				$map['veid']['name'][$vps['EnvID']] = $vps['Name'];
+				$map['veid']['uuid'][$vps['EnvID']] = $vps['ID'];
+			}
+        }
 		$allVms = Vps::getAllVps();
         // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
         $runningVps = Vps::getRunningVps();
 		$usedPorts = [];
         foreach ($runningVps as $vzid) {
 			$remotes = Vps::getVpsRemotes($vzid);
+			if (Vps::getVirtType() == 'virtuozzo' && array_key_exists($vzid, $map['name']['veid']))
+				$vzid = $map['name']['veid'][$vzid];
 			foreach ($remotes as $type => $port)
 				$usedPorts[$port] = ['type' => $type, 'vzid' => $vzid];
         }
@@ -127,20 +149,21 @@ class Xinetd
 		$configuredPorts = [];
 		foreach ($services as $serviceName => $serviceData) {
 			if ($force === false
+				&& isset($serviceData['port'])
 				&& array_key_exists($serviceData['port'], $usedPorts)
 				&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
 				&& trim($serviceData['only_from']) == (array_key_exists(str_replace('-spice', '', $serviceName), $usedVzids) ? $usedVzids[str_replace('-spice', '', $serviceName)].' ' : '').'66.45.240.196 192.64.80.216/29'
 			) {
-				echo "keeping {$serviceData['filename']}\n";
+				echo "keeping {$serviceData['filename']} its port and ip info still match\n";
 				$configuredPorts[] = $serviceData['port'];
 			} else {
 				// look for things using ports 5900-6500 and look for things using vps names/vzids
 				if ((isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500)
 					|| preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
 					echo "removing {$serviceData['filename']}\n";
-					unlink($serviceData['filename']);
+					//unlink($serviceData['filename']);
 				} else {
-					echo "skipping service not using port in vncable range and not usinb a vzid name\n";
+					echo "skipping service {$serviceName} not using port in vncable range and not usinb a vzid name\n";
 				}
 			}
 		}
@@ -151,7 +174,7 @@ class Xinetd
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
 			echo "setting up {$type} on {$vzid} port {$port}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
-			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
+			//self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
 		}
 	}
 
