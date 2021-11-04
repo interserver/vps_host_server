@@ -6,6 +6,23 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 ## TODO
 
+* dhcpd class
+  * need to
+    * setup frontend command
+  * finished
+    * function to rebuild dhcpd.vps
+    * function to rebuild dhcpd.conf
+* xinetd class and vnc replacement
+  * need to
+    * setup frontend commands and help
+    * replace our calls with the new calls including securexinetd
+    * speed up the virtuozzo rebuild
+    * move old files to the unused dir
+    * replace setup-vnc with vnc setup
+  * finished
+    * rebuild xinetd.d entries
+    * clear old entries / secure dir
+    * create new entry
 * store vzid only in the vzid field not hostname for kvm
   * it looks like we can grab information about the vm by using virt-inspector --no-applications -d <vzid> to get a xml formatted output of basic os info including hostnmae
 * fix **reset-password** command adding in detection of windows and skipping if not
