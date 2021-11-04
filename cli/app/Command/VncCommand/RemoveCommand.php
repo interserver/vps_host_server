@@ -33,6 +33,9 @@ class RemoveCommand extends Command {
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
+		Xinetd::lock();
 		Xinetd::remove($vzid);
+		Xinetd::unlock();
+		Xinetd::restart();
 	}
 }

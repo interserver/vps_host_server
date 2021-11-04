@@ -38,6 +38,7 @@ class SetupCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
+		Xinetd::lock();
         $remotes = Vps::getVpsRemotes($vzid);
         if (Vps::getVirtType() == 'virtuozzo') {
         	$vps = Virtuozzo::getVps($vzid);
@@ -48,5 +49,7 @@ class SetupCommand extends Command {
 			if ($dryRun === false)
 				Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
 		}
+		Xinetd::unlock();
+		Xinetd::restart();
 	}
 }
