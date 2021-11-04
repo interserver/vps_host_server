@@ -25147,9 +25147,9 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" )
+options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" ["-a"]="1" ["--all"]="1" ["-d"]="1" ["--dry"]="1" )
 options_require_value=(["-t"]="1" ["--virt"]="1" )
-local argument_min_length=2
+local argument_min_length=0
 
     # Get the command name chain of the current input, e.g.
     # 
@@ -25219,16 +25219,6 @@ local argument_min_length=2
           return
       fi
       # If the command requires at least $argument_min_length to run, we check the argument
-if [[ $argument_min_length > 0 ]] ; then
-  case $argument_index in
-      0)
-      __complete_meta "$command_signature" "arg" 0 "valid-values"
-      return
-      ;;
-      1)
-      ;;
-  esac
-  fi
 
                 # If there is no argument support, then user is supposed to give a subcommand name or an option
                 __mycomp "${!options[*]} ${!subcommands[*]} ${!subcommand_alias[*]}"
@@ -25285,9 +25275,9 @@ local comp_prefix=___provirted_phar
         subcommands=()
 subcommand_alias=()
 subcommand_signs=()
-options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" )
+options=(["-v"]="1" ["--verbose"]="1" ["-t"]="1" ["--virt"]="1" ["-a"]="1" ["--all"]="1" ["-d"]="1" ["--dry"]="1" )
 options_require_value=(["-t"]="1" ["--virt"]="1" )
-local argument_min_length=2
+local argument_min_length=0
 
     # Get the command name chain of the current input, e.g.
     # 
@@ -25357,16 +25347,6 @@ local argument_min_length=2
           return
       fi
       # If the command requires at least $argument_min_length to run, we check the argument
-if [[ $argument_min_length > 0 ]] ; then
-  case $argument_index in
-      0)
-      __complete_meta "$command_signature" "arg" 0 "valid-values"
-      return
-      ;;
-      1)
-      ;;
-  esac
-  fi
 
                 # If there is no argument support, then user is supposed to give a subcommand name or an option
                 __mycomp "${!options[*]} ${!subcommands[*]} ${!subcommand_alias[*]}"
@@ -25822,7 +25802,7 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["rebuild"]="Setup VNC Allowed IP on a Virtual Machine." ["refresh"]="Setup VNC Allowed IP on a Virtual Machine." ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
+        subcommands=(["rebuild"]="cleans up and recreates all the xinetd vps entries" ["refresh"]="cleans up and recreates all the xinetd vps entries" ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
 subcommand_alias=()
 subcommand_signs=(["rebuild"]="vnc.rebuild" ["refresh"]="vnc.refresh" ["remove"]="vnc.remove" ["restart"]="vnc.restart" ["setup"]="vnc.setup" )
 options=()
@@ -25950,7 +25930,7 @@ local comp_prefix=___provirted_phar
         # options_require_value: defines the required completion type for each
         # option that requires a value.
         declare -A options_require_value
-        subcommands=(["rebuild"]="Setup VNC Allowed IP on a Virtual Machine." ["refresh"]="Setup VNC Allowed IP on a Virtual Machine." ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
+        subcommands=(["rebuild"]="cleans up and recreates all the xinetd vps entries" ["refresh"]="cleans up and recreates all the xinetd vps entries" ["remove"]="Remove Xinetd VNC Mapping for a VPS" ["restart"]="Restart Xinetd Service" ["setup"]="Setup VNC Allowed IP on a Virtual Machine." )
 subcommand_alias=()
 subcommand_signs=(["rebuild"]="vnc.rebuild" ["refresh"]="vnc.refresh" ["remove"]="vnc.remove" ["restart"]="vnc.restart" ["setup"]="vnc.setup" )
 options=()
