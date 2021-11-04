@@ -101,9 +101,10 @@ class Xinetd
 	* cleans up and recreates all the xinetd vps entries
 	*
 	* @param bool $useAll true for QS hosts, default false
+	* @param bool $dryRun true to disable actual removing or writing of files, default false to actually perform the rebuild
 	* @param bool $force true to force rebuilding all entries, default false to reuse unchanged entries
 	*/
-	public static function rebuild($useAll = false, $force = false) {
+	public static function rebuild($useAll = false, $dryRun = false, $force = false) {
     	$host = Vps::getHostInfo($useAll);
     	$usedVzids = [];
 		foreach ($host['vps'] as $vps) {
@@ -161,7 +162,8 @@ class Xinetd
 				if ((isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500)
 					|| preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
 					echo "removing {$serviceData['filename']}\n";
-					unlink($serviceData['filename']);
+					if ($dryRun === false)
+						unlink($serviceData['filename']);
 				} else {
 					echo "skipping service {$serviceName} not using port in vncable range and not usinb a vzid name\n";
 				}
@@ -174,7 +176,8 @@ class Xinetd
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
 			echo "setting up {$type} on {$vzid} port {$port}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
-			self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
+			if ($dryRun === false)
+				self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
 		}
 	}
 
