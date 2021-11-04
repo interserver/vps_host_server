@@ -6,6 +6,8 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 ## TODO
 
+* Add template exists checks to the create code
+* Check your passwords beginning with hyphens interfere with the option parsing and that if a double dash will resolve the issue
 * dhcpd class
   * need to
     * setup frontend command
@@ -15,6 +17,7 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * xinetd class and vnc replacement
   * need to
     * setup frontend commands and help
+    * Set up the VNC command so it displays the subcommands information about them examples
     * replace our calls with the new calls including securexinetd
     * speed up the virtuozzo rebuild
     * move old files to the unused dir
