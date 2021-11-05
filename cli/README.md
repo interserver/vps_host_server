@@ -16,16 +16,10 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
     * function to rebuild dhcpd.conf
 * xinetd class and vnc replacement
   * need to
-    * setup frontend commands and help
-    * Set up the VNC command so it displays the subcommands information about them examples
     * replace our calls with the new calls including securexinetd
     * speed up the virtuozzo rebuild
     * move old files to the unused dir
     * replace setup-vnc with vnc setup
-  * finished
-    * rebuild xinetd.d entries
-    * clear old entries / secure dir
-    * create new entry
 * history command
   * need to
     * store command history

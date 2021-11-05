@@ -105,7 +105,9 @@ class Xinetd
 	* @param bool $force true to force rebuilding all entries, default false to reuse unchanged entries
 	*/
 	public static function rebuild($useAll = false, $dryRun = false, $force = false) {
+		echo 'Geting Host Info...';
     	$host = Vps::getHostInfo($useAll);
+    	echo 'done'.PHP_EOL;
     	$usedVzids = [];
 		foreach ($host['vps'] as $vps) {
 			if (isset($vps['vnc']) && trim($vps['vnc']) != '') {
@@ -115,7 +117,9 @@ class Xinetd
 			}
 		}
         if (Vps::getVirtType() == 'virtuozzo') {
+        	echo 'Getting Virtuozzo List...';
 			$allVpsData = Virtuozzo::getList();
+			echo 'done'.PHP_EOL;
 	        $map = [
         		'name' => ['uuid' => [], 'veid' => []],
         		'uuid' => ['name' => [], 'veid' => []],
@@ -134,9 +138,13 @@ class Xinetd
 				$map['veid']['uuid'][$vps['EnvID']] = $vps['ID'];
 			}
         }
+        echo 'Getting All VMs...';
 		$allVms = Vps::getAllVps();
+		echo 'done'.PHP_EOL;
         // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
+        echo 'Getting Running VMs...';
         $runningVps = Vps::getRunningVps();
+        echo 'done'.PHP_EOL;
 		$usedPorts = [];
         foreach ($runningVps as $vzid) {
 			$remotes = Vps::getVpsRemotes($vzid);
@@ -146,7 +154,9 @@ class Xinetd
 				$usedPorts[$port] = ['type' => $type, 'vzid' => $vzid];
         }
         // we should now have a list of in use ports mapped to vps names/vzids
+        echo 'Parsing Services...';
 		$services = self::parseEntries();
+		echo 'done'.PHP_EOL;
 		$configuredPorts = [];
 		foreach ($services as $serviceName => $serviceData) {
 			if ($force === false
