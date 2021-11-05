@@ -125,7 +125,9 @@ class Xinetd
         		'uuid' => ['name' => [], 'veid' => []],
         		'veid' => ['name' => [], 'uuid' => []]
 	        ];
+	        $allRemotes = [];
 			foreach ($allVpsData as $idx => $vps) {
+				$allRemotes[$vps['Name']] = isset($vps['Remote display']['port']) ? ['vnc' => intval($vps['Remote display']['port'])] : [];
 				if (isset($usedVzids[$vps['Name']]))
 					$usedVzids[$vps['EnvID']] = $usedVzids[$vps['Name']];
 				if (isset($usedVzids[$vps['ID']]))
@@ -148,7 +150,7 @@ class Xinetd
 		$usedPorts = [];
 		echo 'Getting VPS Remotes...';
         foreach ($runningVps as $vzid) {
-			$remotes = Vps::getVpsRemotes($vzid);
+			$remotes = Vps::getVirtType() == 'virtuozzo' ? $allRemotes[$vzid] : Vps::getVpsRemotes($vzid);
 			if (Vps::getVirtType() == 'virtuozzo' && array_key_exists($vzid, $map['name']['veid']))
 				$vzid = $map['name']['veid'][$vzid];
 			foreach ($remotes as $type => $port)
