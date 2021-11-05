@@ -55,8 +55,7 @@ class SetupCommand extends Command {
 		}
 		foreach ($remotes as $type => $port) {
 			echo "setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n";
-			if ($dryRun === false)
-				Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
+			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
 		}
 		Xinetd::unlock();
 		Xinetd::restart();
