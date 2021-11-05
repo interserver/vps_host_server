@@ -109,6 +109,10 @@ class Xinetd
 		echo 'Geting Host Info...';
     	$host = Vps::getHostInfo($useAll);
     	echo 'done'.PHP_EOL;
+    	if (!is_array($host) || !isset($host['vps'])) {
+			echo 'There appears to have been a problem with the host info, perhaps try again?'.PHP_EOL;
+			return;
+    	}
     	$usedVzids = [];
 		foreach ($host['vps'] as $vps) {
 			if (isset($vps['vnc']) && trim($vps['vnc']) != '') {
