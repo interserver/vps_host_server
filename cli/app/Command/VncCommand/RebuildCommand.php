@@ -39,7 +39,7 @@ class RebuildCommand extends Command {
 		$useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
 		$dryRun = array_key_exists('dry', $opts->keys) && $opts->keys['dry']->value == 1;
 		Xinetd::lock();
-		Xinetd::rebuild($UseAll, $dryRun);
+		Xinetd::rebuild($useAll, $dryRun);
 		Xinetd::unlock();
 		Xinetd::restart();
 	}

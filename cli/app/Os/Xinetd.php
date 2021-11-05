@@ -146,6 +146,7 @@ class Xinetd
         $runningVps = Vps::getRunningVps();
         echo 'done'.PHP_EOL;
 		$usedPorts = [];
+		echo 'Getting VPS Remotes...';
         foreach ($runningVps as $vzid) {
 			$remotes = Vps::getVpsRemotes($vzid);
 			if (Vps::getVirtType() == 'virtuozzo' && array_key_exists($vzid, $map['name']['veid']))
@@ -153,6 +154,7 @@ class Xinetd
 			foreach ($remotes as $type => $port)
 				$usedPorts[$port] = ['type' => $type, 'vzid' => $vzid];
         }
+        echo 'done'.PHP_EOL;
         // we should now have a list of in use ports mapped to vps names/vzids
         echo 'Parsing Services...';
 		$services = self::parseEntries();
