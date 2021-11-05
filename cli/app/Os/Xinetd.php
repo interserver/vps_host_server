@@ -99,6 +99,52 @@ class Xinetd
 	}
 
 	/**
+	* cleans up old and invalid xinetd entries
+	*
+	* @param bool $dryRun true to disable actual removing or writing of files, default false to actually perform the rebuild
+	*/
+	public static function secure($dryRun = false) {
+        if (Vps::getVirtType() == 'virtuozzo') {
+        	echo 'Getting Virtuozzo List...';
+			$allVpsData = Virtuozzo::getList();
+			echo 'done'.PHP_EOL;
+			$usedPorts = [];
+			foreach ($allVpsData as $idx => $vps) {
+				if ($vps['State'] == 'running' && $vps['Remote display state'] == 'running' && isset($vps['Remote display']['port']))
+					$usedPorts[$vps['Remote display']['port']] = isset($vps['EnvID']) ? $vps['EnvID'] : $vps['Name'];
+			}
+        } else {
+	        // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
+	        echo 'Getting Running VMs...';
+	        $runningVps = Vps::getRunningVps();
+	        echo 'done'.PHP_EOL;
+			echo 'Getting VPS Remotes...';
+	        foreach ($runningVps as $vzid) {
+				$remotes = Vps::getVpsRemotes($vzid);
+				foreach ($remotes as $type => $port)
+					$usedPorts[$port] = $type == 'vnc' ? $vzid : $vzid.'-spice';
+	        }
+	        echo 'done'.PHP_EOL;
+        }
+        echo 'Parsing Services...';
+		$services = self::parseEntries();
+		echo 'done'.PHP_EOL;
+		foreach ($services as $serviceName => $serviceData) {
+			// look for things using ports 5900-6500 and look for things using vps names/vzids
+			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
+				if (array_key_exists($serviceData['port'], $usedPorts) && $serviceName == $usedPorts[$serviceData['port']]) {
+					echo "keeping {$serviceData['filename']} it s name and port match up with one of the current valid name and port combinationsits\n";
+				} else {
+					echo "removing {$serviceData['filename']} as its using port {$serviceData['port']} in the vnc range but doesnt match up\n";
+					unlink($serviceData['filename']);
+				}
+			} else {
+				echo "skipping xinetd service which does not4 create port mapping/forwarding\n";
+			}
+		}
+	}
+
+	/**
 	* cleans up and recreates all the xinetd vps entries
 	*
 	* @param bool $useAll true for QS hosts, default false
