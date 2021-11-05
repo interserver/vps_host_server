@@ -126,7 +126,12 @@ class Xinetd
         		'veid' => ['name' => [], 'uuid' => []]
 	        ];
 	        $allRemotes = [];
+	        $allVms = [];
+	        $runningVps = [];
 			foreach ($allVpsData as $idx => $vps) {
+				$allVms[] = $vps['Name'];
+				if ($vps['State'] == 'running')
+					$runningVps[] = $vps['Name'];
 				$allRemotes[$vps['Name']] = isset($vps['Remote display']['port']) ? ['vnc' => intval($vps['Remote display']['port'])] : [];
 				if (isset($usedVzids[$vps['Name']]))
 					$usedVzids[$vps['EnvID']] = $usedVzids[$vps['Name']];
@@ -139,14 +144,15 @@ class Xinetd
 				$map['veid']['name'][$vps['EnvID']] = $vps['Name'];
 				$map['veid']['uuid'][$vps['EnvID']] = $vps['ID'];
 			}
+        } else {
+	        echo 'Getting All VMs...';
+			$allVms = Vps::getAllVps();
+			echo 'done'.PHP_EOL;
+	        // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
+	        echo 'Getting Running VMs...';
+	        $runningVps = Vps::getRunningVps();
+	        echo 'done'.PHP_EOL;
         }
-        echo 'Getting All VMs...';
-		$allVms = Vps::getAllVps();
-		echo 'done'.PHP_EOL;
-        // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
-        echo 'Getting Running VMs...';
-        $runningVps = Vps::getRunningVps();
-        echo 'done'.PHP_EOL;
 		$usedPorts = [];
 		echo 'Getting VPS Remotes...';
         foreach ($runningVps as $vzid) {
