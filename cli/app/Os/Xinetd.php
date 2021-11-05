@@ -43,6 +43,7 @@ class Xinetd
 	* restart xinetd services
 	*/
 	public static function restart() {
+		echo 'Restarting xinetd'.PHP_EOL;
 		echo Vps::runCommand("service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null");
 	}
 
