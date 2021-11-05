@@ -48,7 +48,8 @@ class SetupCommand extends Command {
 		$services = Xinetd::parseEntries();
 		echo 'done'.PHP_EOL;
 		foreach ($services as $serviceName => $serviceData) {
-			if (str_replace('-spice', '', $serviceName) == $vzid || (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
+			if (in_array($serviceName, [$vzid, $vzid.'-spice'])
+				|| (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
 				echo "removing {$serviceData['filename']}\n";
 				unlink($serviceData['filename']);
 			}

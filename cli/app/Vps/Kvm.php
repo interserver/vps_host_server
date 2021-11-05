@@ -204,6 +204,8 @@ class Kvm
 		if (preg_match_all('/<graphics type=\'([^\']+)\'\s?.*\sport=\'([^\']+)\'/muU', $xml, $matches)) {
 			foreach ($matches[1] as $idx => $type) {
 				$port = $matches[2][$idx];
+				if (is_numeric($port))
+					$port = intval($port);
 				if (in_array($port, ['-1', '' ,'0']))
 					continue;
 				$remotes[$type] = $port;
