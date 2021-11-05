@@ -10,7 +10,7 @@ use CLIFramework\Debug\LineIndicator;
 use CLIFramework\Debug\ConsoleDebug;
 use CLIFramework\Component\Progress\ProgressBar;
 
-class InternalsCommand extends Command {
+class ApiCommand extends Command {
 	public function brief() {
 		return "Run internal api calls";
 	}
