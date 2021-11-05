@@ -45,7 +45,7 @@ class SetupCommand extends Command {
         	$vzid = $vps['EnvID'];
         }
         echo 'Parsing Services...';
-		$services = self::parseEntries();
+		$services = Xinetd::parseEntries();
 		echo 'done'.PHP_EOL;
 		foreach ($services as $serviceName => $serviceData) {
 			if ($serviceName == $vzid || (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
