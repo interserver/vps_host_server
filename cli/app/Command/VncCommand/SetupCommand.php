@@ -44,6 +44,15 @@ class SetupCommand extends Command {
         	$vps = Virtuozzo::getVps($vzid);
         	$vzid = $vps['EnvID'];
         }
+        echo 'Parsing Services...';
+		$services = self::parseEntries();
+		echo 'done'.PHP_EOL;
+		foreach ($services as $serviceName => $serviceData) {
+			if ($serviceName == $vzid || (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
+				echo "removing {$serviceData['filename']}\n";
+				unlink($serviceData['filename']);
+			}
+		}
 		foreach ($remotes as $type => $port) {
 			echo "setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n";
 			if ($dryRun === false)
