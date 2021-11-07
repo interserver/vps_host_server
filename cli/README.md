@@ -31,7 +31,7 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * split off into its own github org/repo [provirted/provirted](https://github.com/provirted/provirted.github.io)
 * create public website on github [https://github.com/provirted/provirted.github.io](provirted/provirted.github.io)
 * add wiki entries
-* add lxc support
+* add lxc support  [https://linuxcontainers.org/lxd/docs/master/](LXD Docs)
 * add **self-update** command for downloading the latest phar and replacing it
 * add **install** command - Installs PreRequisites, Configures Software for our setup
 * add **config** command - Management of the various settings
@@ -143,8 +143,13 @@ if [ -e /etc/redhat-release ]; then
     yum install http://rpms.remirepo.net/enterprise/remi-release-7.rpm -y;
     yum-config-manager --enable remi-php74;
     yum update -y;
-    yum install php74 php74-php-{bcmath,cli,pdo,devel,gd,intl,json,mbstring,opcache,pear,pecl-ev,pecl-event,pecl-eio,pecl-inotify,xz,xml,xmlrpc,sodium,soap,snmp,process,pecl-zip,pecl-xattr,pecl-yaml,pecl-ssh2,mysqlnd,pecl-igbinary,pecl-imagick} -y
-    ln -s /usr/bin/php74 /usr/local/bin/php;
+    yum install php74 php74-php-{bcmath,cli,pdo,devel,gd,intl,json,mbstring} \
+      php74-php-{opcache,pear,pecl-ev,pecl-event,pecl-eio,pecl-inotify,xz,xml} \
+      php74-php-{xmlrpc,sodium,soap,snmp,process,pecl-zip,pecl-xattr} \
+      php74-php-{pecl-yaml,pecl-ssh2,mysqlnd,pecl-igbinary,pecl-imagick} -y;
+    for i in /opt/remi/php74/root/usr/bin/*; do
+      ln -s "$i" /usr/local/bin/;
+    done;
   fi;
 fi
 ```

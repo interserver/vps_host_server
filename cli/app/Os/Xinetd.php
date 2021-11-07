@@ -236,7 +236,7 @@ class Xinetd
 					if ($dryRun === false)
 						unlink($serviceData['filename']);
 				} else {
-					echo "skipping service {$serviceName} not using port in vncable range and not usinb a vzid name\n";
+					echo "skipping service {$serviceName} not using port in vnc-able range and does not have a service name conflicting with a vps name\n";
 				}
 			}
 		}
