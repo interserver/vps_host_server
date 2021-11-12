@@ -15,7 +15,7 @@ SYNTAX
 provirted.phar vnc <subcommand>
 
 SUBCOMMANDS
-	secure
+	secure [--dry]            removes old and bad entries to maintain security
 	setup <vzid> [ip]         create a new mapping
 	remove <vzid>             remove a mapping
 	restart                   restart the xinetd service

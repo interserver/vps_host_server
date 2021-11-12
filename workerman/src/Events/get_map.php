@@ -32,7 +32,7 @@ return function ($stdObject, $maps) {
 			foreach ($lines as $vps) {
 				if (preg_match("/^(.*{$vps}):(.*)$/m", $maps['vnc'], $matches)) {
 					if (!file_exists('/etc/xinetd.d/'.$matches[0])) {
-						Worker::safeEcho(exec("sh {$dir}vps_kvm_setup_vnc.sh {$matches[0]} {$matches[1]}"));
+						Worker::safeEcho(exec("{$dir}/cli/provirted.phar vnc setup {$matches[0]} {$matches[1]}"));
 					}
 				}
 			}

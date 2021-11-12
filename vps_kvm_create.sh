@@ -438,7 +438,7 @@ else
         fi;
         ${base}/tclimit $ip;
         if [ "$clientip" != "" ]; then
-            ${base}/vps_kvm_setup_vnc.sh $name "$clientip";
+            ${base}/cli/provirted.phar vnc setup $name "$clientip";
         fi;
         ${base}/vps_refresh_vnc.sh $name
         vnc="$((5900 + $(virsh vncdisplay $name | cut -d: -f2 | head -n 1)))";
