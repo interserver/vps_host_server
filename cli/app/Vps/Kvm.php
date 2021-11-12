@@ -345,19 +345,6 @@ class Kvm
 		echo Vps::runCommand("/admin/kvmenable blocksmtp {$vzid}");
 	}
 
-	public static function setupVnc($vzid, $clientIp) {
-		Vps::getLogger()->info('Setting up VNC');
-		Xinetd::lock();
-		$base = Vps::$base;
-		if ($clientIp != '') {
-			$clientIp = escapeshellarg($clientIp);
-			echo Vps::runCommand("{$base}/vps_kvm_setup_vnc.sh {$vzid} {$clientIp};");
-		}
-		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$vzid};");
-		Xinetd::unlock();
-		Xinetd::restart();
-	}
-
 	public static function installTemplateV2($vzid, $template, $password, $device, $hd, $kpartxOpts) {
 		// kvmv2
 		$base = Vps::$base;
