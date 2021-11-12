@@ -19,7 +19,6 @@ class SecureCommand extends Command {
 		parent::options($opts);
 		$opts->add('v|verbose', 'increase output verbosity (stacked..use multiple times for even more output)')->isa('number')->incremental();
 		$opts->add('t|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
-		$opts->add('a|all', 'QS host using all resources in a single vps');
 		$opts->add('d|dry', 'perms a dry run, no files removed or written only messages saying they would have been');
 	}
 
@@ -36,10 +35,9 @@ class SecureCommand extends Command {
 		}
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
 		$opts = $this->getOptions();
-		$useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
 		$dryRun = array_key_exists('dry', $opts->keys) && $opts->keys['dry']->value == 1;
 		Xinetd::lock();
-		Xinetd::rebuild($useAll, $dryRun);
+		Xinetd::secure($dryRun);
 		Xinetd::unlock();
 		Xinetd::restart();
 	}

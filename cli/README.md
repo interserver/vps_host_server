@@ -153,3 +153,31 @@ if [ -e /etc/redhat-release ]; then
   fi;
 fi
 ```
+
+### Personal Notes
+
+Updating the host
+
+```
+ssh my@mynew php /home/my/scripts/vps/qs_list.php all|grep -v 'Now using' > servers.csv ; \
+ssh my@mynew php /home/my/scripts/vps/vps_list.php sshable |grep -v 'Now using' >> servers.csv  ; \
+tvps;
+tsessrun 'cd /root/cpaneldirect && \
+git pull --all && \
+/bin/cp -fv /root/cpaneldirect/cli/provirted_completion /etc/bash_completion.d/ && \
+if [ -e /etc/apt ]; then
+  apt-get update && \
+  apt-get autoremove -y --purge && \
+  apt-get dist-upgrade -y && \
+  apt-get autoremove -y --purge && \
+  apt-get clean && \
+  if [ $(php -v|head -n 1|cut -c5) -ge 7 ]; then
+    exit;
+  fi;
+else
+  yum update -y && \
+  if [ $(php -v|head -n 1|cut -c5) -ge 7 ]; then
+    exit;
+  fi;
+fi;'
+```

@@ -15,6 +15,7 @@ SYNTAX
 provirted.phar vnc <subcommand>
 
 SUBCOMMANDS
+	secure
 	setup <vzid> [ip]         create a new mapping
 	remove <vzid>             remove a mapping
 	restart                   restart the xinetd service
@@ -23,6 +24,7 @@ SUBCOMMANDS
 EXAMPLES
 	provirted.phar vnc setup vps4000 8.8.8.8
 	provirted.phar vnc remove vps4000
+	provirted.phar vnc secure
 	provirted.phar vnc restart
 	provirted.phar vnc rebuild --dry
 	provirted.phar vnc rebuild

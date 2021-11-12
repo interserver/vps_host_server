@@ -133,10 +133,11 @@ class Xinetd
 			// look for things using ports 5900-6500 and look for things using vps names/vzids
 			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
 				if (array_key_exists($serviceData['port'], $usedPorts) && $serviceName == $usedPorts[$serviceData['port']]) {
-					echo "keeping {$serviceData['filename']} it s name and port match up with one of the current valid name and port combinationsits\n";
+					echo "keeping {$serviceData['filename']} its name and port match up with one of the current valid name and port combinationsits\n";
 				} else {
 					echo "removing {$serviceData['filename']} as its using port {$serviceData['port']} in the vnc range but doesnt match up\n";
-					unlink($serviceData['filename']);
+					if ($dryRun === false)
+						unlink($serviceData['filename']);
 				}
 			} else {
 				echo "skipping xinetd service which does not4 create port mapping/forwarding\n";
