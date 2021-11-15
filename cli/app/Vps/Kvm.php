@@ -316,10 +316,14 @@ class Kvm
 	}
 
 	public static function destroyVps($vzid) {
-		echo Vps::runCommand("virsh managedsave-remove {$vzid}");
-		echo Vps::runCommand("virsh undefine {$vzid}");
-		self::removeStorage($vzid);
-		Dhcpd::remove($vzid);
+		if (Vps::isVpsRunning($vzid)) {
+			echo "VPS is running please stop first.\n";
+		} else {
+			echo Vps::runCommand("virsh managedsave-remove {$vzid}");
+			echo Vps::runCommand("virsh undefine {$vzid}");
+			self::removeStorage($vzid);
+			Dhcpd::remove($vzid);
+		}
 	}
 
 	public static function installTemplate($vzid, $template, $password, $device, $pool, $hd, $kpartxOpts) {

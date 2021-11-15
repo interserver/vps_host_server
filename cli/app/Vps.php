@@ -379,7 +379,7 @@ class Vps
 	}
 
 	public static function destroyVps($vzid) {
-		Vps::deleteVps($vzid);
+		//Vps::deleteVps($vzid);
 		if (self::getVirtType() == 'kvm')
 			Kvm::destroyVps($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
