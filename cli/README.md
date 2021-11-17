@@ -8,8 +8,6 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 * Add template exists checks to the create code
 * Check your passwords beginning with hyphens interfere with the option parsing and that if a double dash will resolve the issue
-* dhcpd class
-    * setup frontend command
 * xinetd class and vnc replacement
     * replace our calls with the new calls including securexinetd
     * move old files to the unused dir
@@ -29,8 +27,8 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * add escapeshellarg() calls around any vars being passed through a exec type call
 * fix the restore script to work with kvmv2 os.qcow2 files
 * split off into its own github org/repo [provirted/provirted](https://github.com/provirted/provirted.github.io)
-* create public website on github [https://github.com/provirted/provirted.github.io](provirted/provirted.github.io)
-* add wiki entries
+  * create public website on github [https://github.com/provirted/provirted.github.io](provirted/provirted.github.io)
+  * add wiki entries
 * add lxc support  [https://linuxcontainers.org/lxd/docs/master/](LXD Docs)
 * add **self-update** command for downloading the latest phar and replacing it
 * add **install** command - Installs PreRequisites, Configures Software for our setup
@@ -55,7 +53,6 @@ vps_kvm_setup_password_clear.sh
 vps_kvm_screenshot.sh
 vps_kvm_screenshot_swift.sh
 vps_refresh_vnc.sh
-vps_kvm_setup_vnc.sh
 vps_virtuozzo_setup_vnc.sh
 
 
