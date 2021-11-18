@@ -201,6 +201,7 @@ class Kvm
 
 	public static function getVpsRemotes($vzid) {
 		$xml = self::getVpsXml($vzid);
+		$remotes = [];
 		if (preg_match_all('/<graphics type=\'([^\']+)\'\s?.*\sport=\'([^\']+)\'/muU', $xml, $matches)) {
 			foreach ($matches[1] as $idx => $type) {
 				$port = $matches[2][$idx];
