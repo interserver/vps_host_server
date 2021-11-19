@@ -28,10 +28,13 @@ class Logger extends \CLIFramework\Logger
     /**
     * adds to the history log
     *
-    * @param string|array $data output string or array for command data
+    * @param array $data output string or array for command data
     */
     public function addHistory($data) {
-		$this->history[] = $data;
+    	if ($this->history[count($this->history) - 1]['type'] == $data['type'] && in_array($data['type'], ['output', 'error']))
+    		$this->history[count($this->history) - 1]['text'] .= $data['text'];
+    	else
+			$this->history[] = $data;
     }
 
     /**
