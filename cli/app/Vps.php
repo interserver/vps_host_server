@@ -506,7 +506,7 @@ class Vps
 		$history = [
 			'type' => 'command',
 			'command' => $cmd,
-			'output' => implode("\n", $stdout),
+			'output' => $stdout,
 			'return' => $return
 		];
 		if ($strderr != '') {
