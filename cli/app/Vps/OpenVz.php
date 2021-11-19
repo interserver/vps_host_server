@@ -60,7 +60,7 @@ class OpenVz
 			return false;
 		}
 		Vps::getLogger()->error('Adding IP '.$ip.' to '.$vzid);
-		echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --ipadd {$ip}");
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --setmode restart --ipadd {$ip}"));
 		return true;
 	}
 
@@ -73,7 +73,7 @@ class OpenVz
 			return false;
 		}
 		Vps::getLogger()->error('Removing IP '.$ip.' from '.$vzid);
-		echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --ipdel {$ips[$ip]}");
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --setmode restart --ipdel {$ips[$ip]}"));
 		return true;
 	}
 
@@ -90,39 +90,39 @@ class OpenVz
 		if ($ipOld == $ips[0] && count($ips) > 1) {
 			Vps::getLogger()->info("Changing IP from '{$ipOld}' to '{$ipNew}'");
 			Vps::getLogger()->info("Removing all existing IPs and adding '{$ipNew}' to ensure it is still a primary IP");
-			echo Vps::runCommand("vzctl set {$vzid} --ipdel all --ipadd {$ipNew}");
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --ipdel all --ipadd {$ipNew}"));
 			for ($x = 1; $x <= count($ips); $x++) {
 				Vps::getLogger()->info("Adding IP {$ips[$x]} to {$vzid}");
-				echo Vps::runCommand("vzctl set {$vzid} --ipadd {$ips[$x]}");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --ipadd {$ips[$x]}"));
 			}
 		} else {
 			Vps::getLogger()->info("Removing Old IP {$ipOld} to {$vzid}");
-			echo Vps::runCommand("vzctl set {$vzid} --ipdel {$ipOld}");
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --ipdel {$ipOld}"));
 			Vps::getLogger()->info("Adding New IP {$ipNew} to {$vzid}");
-			echo Vps::runCommand("vzctl set {$vzid} --ipadd {$ipNew}");
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --ipadd {$ipNew}"));
 		}
 		Vps::getLogger()->info("Restarting Virtual Machine '{$vzid}'");
-		echo Vps::runCommand("vzctl restart {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("vzctl restart {$vzid}"));
 		return true;
 	}
 
 	public static function defineVps($vzid, $hostname, $template, $ip, $extraIps, $ram, $cpu, $hd, $password) {
 		if (!file_exists('/vz/template/cache/'.$template)) { // if tempolate doesnt exist download it
 			if (strpos($template, '://') !== false) { // if web url
-				echo Vps::runCommand("wget -O /vz/template/cache/{$template} {$template}");
+				Vps::getLogger()->write(Vps::runCommand("wget -O /vz/template/cache/{$template} {$template}"));
 			} else {
-				echo Vps::runCommand("vztmpl-dl --gpg-check --update {$vps_os}");
+				Vps::getLogger()->write(Vps::runCommand("vztmpl-dl --gpg-check --update {$vps_os}"));
 			}
 		}
 		$pathInfo = pathinfo($template);
 		if ($pathInfo['extension'] == 'xz') { // if template is .xz recompress it to .gz
 			if (file_exists('/vz/template/cache/'.str_replace('.xz', '.gz', $template))) {
-				echo "Already Exists in .gz, not changing anything";
+				Vps::getLogger()->write("Already Exists in .gz, not changing anything");
 			} else {
-				echo "Recompressing {$vps_os} to .gz";
-    			echo Vps::runCommand("xz -d --keep '/vz/template/cache/{$template}'");
+				Vps::getLogger()->write("Recompressing {$vps_os} to .gz");
+    			Vps::getLogger()->write(Vps::runCommand("xz -d --keep '/vz/template/cache/{$template}'"));
     			$uncompressed = escapeshellarg('/vz/template/cache/'.$pathInfo['filename']);
-    			echo Vps::runCommand("gzip -9 {$uncompressed}");
+    			Vps::getLogger()->write(Vps::runCommand("gzip -9 {$uncompressed}"));
 			}
 		}
 		$uname = posix_uname();
@@ -141,7 +141,7 @@ class OpenVz
 		if ($return != 0) {
 			Vps::runCommand("vzctl destroy {$vzid}");
 			$layout = $layout == '--layout ploop' ? '--layout simfs' : $layout;
-			echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return);
+			Vps::getLogger()->write(Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return));
 		}
         @mkdir('/vz/root/'.$vzid, 0777, true);
 		$slices = $cpu;
@@ -185,59 +185,59 @@ class OpenVz
 		$diskSpace = $hd * 1024;
 		$diskSpaceB = $diskSpace;
 		$ram = floor($ram / 1024);
-		echo Vps::runCommand("vzctl set {$vzid} --save {$force} --cpuunits {$cpuUnits} --cpus {$cpu} --diskspace {$diskSpace}:{$diskSpaceB} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmGuarPages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomGuarPages}:{$limit} --privvmpages {$privVmPages}:{$privVmPagesB} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dCacheSize}:{$dCacheSizeB} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1");
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save {$force} --cpuunits {$cpuUnits} --cpus {$cpu} --diskspace {$diskSpace}:{$diskSpaceB} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmGuarPages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomGuarPages}:{$limit} --privvmpages {$privVmPages}:{$privVmPagesB} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dCacheSize}:{$dCacheSizeB} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1"));
 		if (file_exists('/proc/vz/vswap')) {
-			echo Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup");
-			echo Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup");
-			echo Vps::runCommand("/bin/rm -f /etc/vz/conf/{$vzid}.conf.backup");
-			echo Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save");
-			echo Vps::runCommand("vzctl set {$vzid} --reset_ub");
+			Vps::getLogger()->write(Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup"));
+			Vps::getLogger()->write(Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup"));
+			Vps::getLogger()->write(Vps::runCommand("/bin/rm -f /etc/vz/conf/{$vzid}.conf.backup"));
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save"));
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --reset_ub"));
 		}
 		if (file_exists('/usr/sbin/vzcfgvalidate')) // validate vps
-			echo Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf");
-		echo Vps::runCommand("vzctl set {$vzid} --save --devices c:1:3:rw --devices c:10:200:rw --capability net_admin:on");
-		echo Vps::runCommand("vzctl set {$vzid} --save --nameserver '8.8.8.8 64.20.34.50' --searchdomain interserver.net --onboot yes");
-		echo Vps::runCommand("vzctl set {$vzid} --save --noatime yes 2>/dev/null");
+			Vps::getLogger()->write(Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --devices c:1:3:rw --devices c:10:200:rw --capability net_admin:on"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --nameserver '8.8.8.8 64.20.34.50' --searchdomain interserver.net --onboot yes"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --noatime yes 2>/dev/null"));
 		foreach ($extraIps as $extraIp) // setup ips
-			echo Vps::runCommand("vzctl set {$vzid} --save --ipadd {$extraIp} 2>&1");
-		echo Vps::runCommand("vzctl start {$vzid} 2>&1");
-		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
-		echo Vps::runCommand("vzctl exec {$vzid} mkdir -p /dev/net");
-		echo Vps::runCommand("vzctl exec {$vzid} mknod /dev/net/tun c 10 200");
-		echo Vps::runCommand("vzctl exec {$vzid} chmod 600 /dev/net/tun");
-		echo Vps::runCommand("/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh");
-		echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1");
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --ipadd {$extraIp} 2>&1"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl start {$vzid} 2>&1"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} mkdir -p /dev/net"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} mknod /dev/net/tun c 10 200"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} chmod 600 /dev/net/tun"));
+		Vps::getLogger()->write(Vps::runCommand("/root/cpaneldirect/vzopenvztc.sh > /root/vzopenvztc.sh && sh /root/vzopenvztc.sh"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --userpasswd root:{$password} 2>&1"));
 		$sshCnf = glob('/etc/*ssh/sshd_config');
 		if (count($sshCnf) > 0) { // setup ssh
 			$sshCnf = $sshCnf[0];
 			if (isset($sshKey)) { // install ssh key
-				echo Vps::runCommand("vzctl exec {$vzid} \"mkdir -p /root/.ssh\"");
-				echo Vps::runCommand("vzctl exec {$vzid} \"echo {$ssh_key} >> /root/.ssh/authorized_keys2\"");
-				echo Vps::runCommand("vzctl exec {$vzid} \"chmod go-w /root; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys2\"");
+				Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} \"mkdir -p /root/.ssh\""));
+				Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} \"echo {$ssh_key} >> /root/.ssh/authorized_keys2\""));
+				Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} \"chmod go-w /root; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys2\""));
 			}
 			$sshCnfData = file_get_contents($sshCnf);
 			if (!preg_match('/^PermitRootLogin/', $sshCnfData)) {
-				echo 'Adding PermitRootLogin line to '.$sshCnf;
+				Vps::getLogger()->write('Adding PermitRootLogin line to '.$sshCnf);
 				$sshCnfData .= PHP_EOL.'PermitRootLogin yes'.PHP_EOL;
 				file_put_contents($sshCnf, $sshCnfData);
-				echo Vps::runCommand('kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]'.$vzid.'[[:space:]]" | sed s#"'.$vzid.'.*ssh.*$"#""#g)');
+				Vps::getLogger()->write(Vps::runCommand('kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]'.$vzid.'[[:space:]]" | sed s#"'.$vzid.'.*ssh.*$"#""#g)'));
 			} elseif (preg_match('/^PermitRootLogin (.*)$/m', $sshCnfData, $matches) && $matches[1] != 'yes') {
-				echo 'Replacing PermitRootLogin line options in '.$sshCnf;
+				Vps::getLogger()->write('Replacing PermitRootLogin line options in '.$sshCnf);
 				$sshCnfData = str_replace($matches[0], str_replace($matches[1], 'yes', $matches[0]), $sshCnfData);
 				file_put_contents($sshCnf, $sshCnfData);
-				echo Vps::runCommand('kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]'.$vzid.'[[:space:]]" | sed s#"'.$vzid.'.*ssh.*$"#""#g)');
+				Vps::getLogger()->write(Vps::runCommand('kill -HUP $(vzpid $(pidof sshd) |grep "[[:space:]]'.$vzid.'[[:space:]]" | sed s#"'.$vzid.'.*ssh.*$"#""#g)'));
 			}
 		}
 		if ($template == 'centos-7-x86_64-breadbasket') {
-    		echo "Sleeping for a minute to workaround an ish";
+    		Vps::getLogger()->write("Sleeping for a minute to workaround an ish");
     		sleep(60);
-    		echo "That was a pleasant nap.. back to the grind...";
+    		Vps::getLogger()->write("That was a pleasant nap.. back to the grind...");
 		}
 		if ($template == 'centos-7-x86_64-nginxwordpress') {
-			echo Vps::runCommand("vzctl exec {$vzid} /root/change.sh {$password} 2>&1");
+			Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} /root/change.sh {$password} 2>&1"));
 		}
 		if ($template == 'ubuntu-15.04-x86_64-xrdp') {
-			echo Vps::runCommand("vzctl set {$vzid} --save --userpasswd kvm:{$password} 2>&1");
+			Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --userpasswd kvm:{$password} 2>&1"));
 		}
 		self::blockSmtp($vzid);
 		return $return == 0;
@@ -245,28 +245,28 @@ class OpenVz
 
 	public static function enableAutostart($vzid) {
 		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("vzctl set {$vzid} --save --onboot yes");
-		echo Vps::runCommand("vzctl set {$vzid} --save --disabled no");
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --onboot yes"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --disabled no"));
 	}
 
 	public static function disableAutostart($vzid) {
 		Vps::getLogger()->info('Disabling On-Boot Automatic Startup of the VPS');
-		echo Vps::runCommand("vzctl set {$vzid} --save --onboot no");
-		echo Vps::runCommand("vzctl set {$vzid} --save --disabled yes");
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --onboot no"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --disabled yes"));
 	}
 
 	public static function startVps($vzid) {
 		Vps::getLogger()->info('Starting the VPS');
-		echo Vps::runCommand("vzctl start {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("vzctl start {$vzid}"));
 	}
 
 	public static function stopVps($vzid, $fast = false) {
 		Vps::getLogger()->info('Stopping the VPS');
-		echo Vps::runCommand("vzctl stop {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("vzctl stop {$vzid}"));
 	}
 
 	public static function destroyVps($vzid) {
-		echo Vps::runCommand("vzctl destroy {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("vzctl destroy {$vzid}"));
 	}
 
 	public static function setupRouting($vzid, $id) {
@@ -274,16 +274,16 @@ class OpenVz
 	}
 
 	public static function blockSmtp($vzid, $id = false) {
-		echo Vps::runCommand("/admin/vzenable blocksmtp {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("/admin/vzenable blocksmtp {$vzid}"));
 	}
 
 	public static function setupWebuzo($vzid) {
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y update'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y remove httpd sendmail xinetd firewalld samba samba-libs samba-common-tools samba-client samba-common samba-client-libs samba-common-libs rpcbind; userdel apache'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install nano net-tools'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin;/admin/yumcron;echo \"/usr/local/emps/bin/php /usr/local/webuzo/cron.php\" > /etc/cron.daily/wu.sh && chmod +x /etc/cron.daily/wu.sh'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'wget -N http://files.webuzo.com/install.sh -O /install.sh'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'chmod +x /install.sh;bash -l /install.sh;rm -f /install.sh'");
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y update'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y remove httpd sendmail xinetd firewalld samba samba-libs samba-common-tools samba-client samba-common samba-client-libs samba-common-libs rpcbind; userdel apache'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y install nano net-tools'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin;/admin/yumcron;echo \"/usr/local/emps/bin/php /usr/local/webuzo/cron.php\" > /etc/cron.daily/wu.sh && chmod +x /etc/cron.daily/wu.sh'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'wget -N http://files.webuzo.com/install.sh -O /install.sh'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'chmod +x /install.sh;bash -l /install.sh;rm -f /install.sh'"));
 		Vps::getLogger()->info("Sleeping for a minute to workaround an ish");
 		sleep(10);
 		Vps::getLogger()->info("That was a pleasant nap.. back to the grind...");
@@ -293,18 +293,18 @@ class OpenVz
 		Vps::getLogger()->info("Sleeping for a minute to workaround an ish");
 		sleep(10);
 		Vps::getLogger()->info("That was a pleasant nap.. back to the grind...");
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install perl nano screen wget psmisc net-tools'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'wget http://layer1.cpanel.net/latest'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'systemctl disable firewalld.service; systemctl mask firewalld.service; rpm -e firewalld xinetd httpd'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'bash -l latest'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y remove ea-apache24-mod_ruid2'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'killall httpd; if [ -e /bin/systemctl ]; then systemctl stop httpd.service; else service httpd stop; fi'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install ea-apache24-mod_headers ea-apache24-mod_lsapi ea-liblsapi ea-apache24-mod_env ea-apache24-mod_deflate ea-apache24-mod_expires ea-apache24-mod_suexec'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'yum -y install ea-php72-php-litespeed ea-php72-php-opcache ea-php72-php-mysqlnd ea-php72-php-mcrypt ea-php72-php-gd ea-php72-php-mbstring'");
-		echo Vps::runCommand("vzctl exec {$vzid} '/usr/local/cpanel/bin/rebuild_phpconf  --default=ea-php72 --ea-php72=lsapi'");
-		echo Vps::runCommand("vzctl exec {$vzid} '/usr/sbin/whmapi1 php_ini_set_directives directive-1=post_max_size%3A32M directive-2=upload_max_filesize%3A128M directive-3=memory_limit%3A256M version=ea-php72'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'cd /opt/cpanel; for i in \$(find * -maxdepth 0 -name \"ea-php*\"); do /usr/local/cpanel/bin/rebuild_phpconf --default=ea-php72 --\$i=lsapi; done'");
-		echo Vps::runCommand("vzctl exec {$vzid} '/scripts/restartsrv_httpd'");
-		echo Vps::runCommand("vzctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin && cd /etc/cron.daily && ln -s /admin/wp/webuzo_wp_cli_auto.sh /etc/cron.daily/webuzo_wp_cli_auto.sh'");
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y install perl nano screen wget psmisc net-tools'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'wget http://layer1.cpanel.net/latest'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'systemctl disable firewalld.service; systemctl mask firewalld.service; rpm -e firewalld xinetd httpd'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'bash -l latest'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y remove ea-apache24-mod_ruid2'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'killall httpd; if [ -e /bin/systemctl ]; then systemctl stop httpd.service; else service httpd stop; fi'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y install ea-apache24-mod_headers ea-apache24-mod_lsapi ea-liblsapi ea-apache24-mod_env ea-apache24-mod_deflate ea-apache24-mod_expires ea-apache24-mod_suexec'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'yum -y install ea-php72-php-litespeed ea-php72-php-opcache ea-php72-php-mysqlnd ea-php72-php-mcrypt ea-php72-php-gd ea-php72-php-mbstring'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} '/usr/local/cpanel/bin/rebuild_phpconf  --default=ea-php72 --ea-php72=lsapi'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} '/usr/sbin/whmapi1 php_ini_set_directives directive-1=post_max_size%3A32M directive-2=upload_max_filesize%3A128M directive-3=memory_limit%3A256M version=ea-php72'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'cd /opt/cpanel; for i in \$(find * -maxdepth 0 -name \"ea-php*\"); do /usr/local/cpanel/bin/rebuild_phpconf --default=ea-php72 --\$i=lsapi; done'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} '/scripts/restartsrv_httpd'"));
+		Vps::getLogger()->write(Vps::runCommand("vzctl exec {$vzid} 'rsync -a rsync://rsync.is.cc/admin /admin && cd /etc/cron.daily && ln -s /admin/wp/webuzo_wp_cli_auto.sh /etc/cron.daily/webuzo_wp_cli_auto.sh'"));
 	}
 }

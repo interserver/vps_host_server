@@ -310,9 +310,9 @@ class Vps
 			$vncPort = self::getVncPort($vzid);
 			$vncPort -= 5900;
 			$base = self::$base;
-			echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
+			self::getLogger()->write(self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";"));
 			sleep(2);
-			echo self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";");
+			self::getLogger()->write(self::runCommand("{$base}/vps_kvm_screenshot.sh \"{$vncPort}\" \"{$url}?action=screenshot&name={$vzid}\";"));
 			$vncPort += 5900;
 		}
 	}
@@ -323,7 +323,7 @@ class Vps
 			$base = Vps::$base;
 			if ($vncPort != '' && intval($vncPort) > 1000) {
 				$vncPort -= 5900;
-				echo Vps::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}");
+				self::getLogger()->write(Vps::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}"));
 			}
 		}
 	}
