@@ -479,14 +479,14 @@ class Kvm
 		if ($adjust_partitions == 1) {
 			$sects = trim(Vps::runCommand("fdisk -l -u {$device}  | grep sectors$ | sed s#\"^.* \([0-9]*\) sectors$\"#\"\\1\"#g"));
 			$t = trim(Vps::runCommand("fdisk -l -u {$device} | sed s#\"\*\"#\"\"#g | grep \"^{$device}\" | tail -n 1"));
-			$p = trim(Vps::runCommand("Vps::getLogger()->write({$t} | awk '{ print $1 }'")));
-			$fs = trim(Vps::runCommand("Vps::getLogger()->write({$t} | awk '{ print $5 }'")));
+			$p = trim(Vps::runCommand("echo {$t} | awk '{ print $1 }'"));
+			$fs = trim(Vps::runCommand("echo {$t} | awk '{ print $5 }'"));
 			if (trim(Vps::runCommand("echo \"{$fs}\" | grep \"[A-Z]\"")) != '') {
-				$fs = trim(Vps::runCommand("Vps::getLogger()->write({$t} | awk '{ print $6 }'")));
+				$fs = trim(Vps::runCommand("echo {$t} | awk '{ print $6 }'"));
 			}
-			$pn = trim(Vps::runCommand("Vps::getLogger()->write(\"{$p}\" | sed s#\"{$device}[p]*\"#\"\"#g")));
+			$pn = trim(Vps::runCommand("echo \"{$p}\" | sed s#\"{$device}[p]*\"#\"\"#g"));
 			$pt = $pn > 4 ? 'l' : 'p';
-			$start = trim(Vps::runCommand("Vps::getLogger()->write({$t} | awk '{ print $2 }'")));
+			$start = trim(Vps::runCommand("echo {$t} | awk '{ print $2 }'"));
 			if ($fs == 83) {
 				Vps::getLogger()->info("Resizing Last Partition To Use All Free Space (Sect {$sects} P {$p} FS {$fs} PN {$pn} PT {$pt} Start {$start}");
 				Vps::getLogger()->write(Vps::runCommand("echo -e \"d\n{$pn}\nn\n{$pt}\n{$pn}\n{$start}\n\n\nw\nprint\nq\n\" | fdisk -u {$device}"));
