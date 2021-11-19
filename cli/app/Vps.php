@@ -486,6 +486,7 @@ class Vps
 			self::getLogger()->debug('out:'.$line);
 		self::getLogger()->unIndent();
 		$response = implode("\n", $output);
+		Vps::getLogger()->addHistory(['type' => 'command', 'text' => implode("\n", $output), 'return' => $return]);
 		return $response;
 	}
 }
