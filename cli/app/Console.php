@@ -28,10 +28,12 @@ class Console extends Application
     public function finish() {
         parent::finish();
         $history = Vps::getLogger()->getHistory();
-        $history[0]['end'] = time();
-        @mkdir($_SERVER['HOME'].'/.provirted', 0750, true);
-		$allHistory = file_exists($_SERVER['HOME'].'/.provirted/history.json') ? json_decode(file_get_contents($_SERVER['HOME'].'/.provirted/history.json'), true) : [];
-		$allHistory[] = $history;
-        file_put_contents($_SERVER['HOME'].'/.provirted/history.json', json_encode($allHistory, JSON_PRETTY_PRINT));
+        if (count($history) > 1) {
+	        $history[0]['end'] = time();
+	        @mkdir($_SERVER['HOME'].'/.provirted', 0750, true);
+			$allHistory = file_exists($_SERVER['HOME'].'/.provirted/history.json') ? json_decode(file_get_contents($_SERVER['HOME'].'/.provirted/history.json'), true) : [];
+			$allHistory[] = $history;
+	        file_put_contents($_SERVER['HOME'].'/.provirted/history.json', json_encode($allHistory, JSON_PRETTY_PRINT));
+		}
     }
 }

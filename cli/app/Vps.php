@@ -320,10 +320,10 @@ class Vps
 	public static function vncScreenshotSwift($vzid) {
 		if (in_array(self::getVirtType(), ['kvm', 'virtuozzo'])) {
 			$vncPort = self::getVncPort($vzid);
-			$base = Vps::$base;
+			$base = self::$base;
 			if ($vncPort != '' && intval($vncPort) > 1000) {
 				$vncPort -= 5900;
-				self::getLogger()->write(Vps::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}"));
+				self::getLogger()->write(self::runCommand("{$base}/vps_kvm_screenshot_swift.sh {$vncPort} {$vzid}"));
 			}
 		}
 	}
@@ -373,13 +373,13 @@ class Vps
 	}
 
 	public static function deleteVps($vzid) {
-		Vps::vncScreenshotSwift($vzid);
-		Vps::stopVps($vzid);
-		Vps::disableAutostart($vzid);
+		self::vncScreenshotSwift($vzid);
+		self::stopVps($vzid);
+		self::disableAutostart($vzid);
 	}
 
 	public static function destroyVps($vzid) {
-		//Vps::deleteVps($vzid);
+		//self::deleteVps($vzid);
 		if (self::getVirtType() == 'kvm')
 			Kvm::destroyVps($vzid);
 		elseif (self::getVirtType() == 'virtuozzo')
@@ -476,6 +476,11 @@ class Vps
 			OpenVz::setupCpanel($vzid);
 	}
 
+	public static function getHistoryChoices() {
+		$return = self::getLogger()->getHistory();
+		array_unshift($return, -1);
+	}
+
 	public static function runCommand($cmd, &$return = 0) {
 		$descs = [
 			0 => ['pipe','r'],
@@ -524,7 +529,7 @@ class Vps
 		self::getLogger()->debug('exit:'.$return);
 		$response = implode("\n", $output);
 		*/
-		Vps::getLogger()->addHistory($history);
+		self::getLogger()->addHistory($history);
 		return $stdout.$stderr;
 	}
 }
