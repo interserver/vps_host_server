@@ -137,7 +137,7 @@ class OpenVz
 		$template = str_replace(['.tar.gz', '.tar.xz'], ['', ''], $template);
 		$passsword = escapeshellarg($password);
 		$hostname = escapeshellarg($hostname);
-		echo Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return); // create vps
+		Vps::getLogger()->write(Vps::runCommand("vzctl create {$vzid} --ostemplate {$template} {$layout} {$config} --ipadd {$ip} --hostname {$hostname}", $return)); // create vps
 		if ($return != 0) {
 			Vps::runCommand("vzctl destroy {$vzid}");
 			$layout = $layout == '--layout ploop' ? '--layout simfs' : $layout;
