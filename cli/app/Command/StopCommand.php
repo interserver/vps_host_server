@@ -18,7 +18,7 @@ class StopCommand extends Command {
 		parent::options($opts);
 		$opts->add('v|verbose', 'increase output verbosity (stacked..use multiple times for even more output)')->isa('number')->incremental();
 		$opts->add('t|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
-		$opts->add('f|fast:', 'Fast shutdown');
+		$opts->add('q|quick:', 'Fast shutdown');
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -28,7 +28,8 @@ class StopCommand extends Command {
 
 	public function execute($vzid) {
 		Vps::init($this->getOptions(), ['vzid' => $vzid]);
-		$fast = array_key_exists('fast', $opts->keys) && $opts->keys['fast']->value == 1;
+		$opts = $this->getOptions();
+		$fast = array_key_exists('quick', $opts->keys) && $opts->keys['quick']->value == 1;
 		if (!Vps::isVirtualHost()) {
 			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
 			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
