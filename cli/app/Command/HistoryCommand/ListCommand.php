@@ -33,7 +33,7 @@ class ListCommand extends Command {
 			return;
         }
         foreach ($allHistory as $id => $data) {
-			echo "{$id}		{$data[0]['text']}\n";
+			echo "{$id}	{$data[0]['text']}\n";
         }
 	}
 }

@@ -36,6 +36,25 @@ class ShowCommand extends Command {
 			return;
         }
         $data = $allHistory[$id];
-        print_r($data);
+        $lastType = '';
+        foreach ($data as $idx => $line) {
+			if ($line['type'] == 'program') {
+				echo "[Command Line] {$line['text']}\n";
+				echo "[Started at] ".date('Y-m-d H:i:s', $line['start'])."\n";
+				echo "[Ended at] ".date('Y-m-d H:i:s', $line['start'])."\n";
+				echo "[Ran for] ".($line['end'] - $line['start'])." seconds\n";
+			} elseif ($line['type'] == 'output') {
+				if ($lastType != 'output')
+					echo "\n";
+				echo $line['text'];
+			} elseif ($line['type'] == 'error') {
+				echo "\n[Error] ".rtrim($line['text'])."\n";
+			} elseif ($line['type'] == 'command') {
+				echo "\n[Command] {$line['command']} [Return: {$line['return']}] [Output: {$line['output']}]".(isset($line['error']) ? ' [Error: '.$line['error'].']' : '')."\n";
+			}
+			$lastType = $line['type'];
+        }
+        if ($lastType == $output && rtrim($line['text']) != $line['text'])
+        	echo "\n";
 	}
 }
