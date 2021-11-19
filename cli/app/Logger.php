@@ -31,7 +31,7 @@ class Logger extends \CLIFramework\Logger
     * @param array $data output string or array for command data
     */
     public function addHistory($data) {
-    	if ($this->history[count($this->history) - 1]['type'] == $data['type'] && in_array($data['type'], ['output', 'error']))
+    	if (count($this->history) > 0 && $this->history[count($this->history) - 1]['type'] == $data['type'] && in_array($data['type'], ['output', 'error']))
     		$this->history[count($this->history) - 1]['text'] .= $data['text'];
     	else
 			$this->history[] = $data;
