@@ -54,7 +54,7 @@ class ShowCommand extends Command {
 			}
 			$lastType = $line['type'];
         }
-        if ($lastType == $output && rtrim($line['text']) != $line['text'])
+        if ($lastType == 'output' && rtrim($line['text']) != $line['text'])
         	echo "\n";
 	}
 }
