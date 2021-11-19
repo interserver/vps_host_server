@@ -477,16 +477,53 @@ class Vps
 	}
 
 	public static function runCommand($cmd, &$return = 0) {
+		$descs = [
+			0 => ['pipe','r'],
+			1 => ['pipe','w'],
+			2 => ['pipe','w']
+		];
+		$stdout = '';
+		$stderr = '';
+		$proc = proc_open($cmd, $descs, $pipes);
+		if (is_resource($proc)) {
+			while (!feof($pipes[1])) {
+				$stdout .= fgets($pipes[1]);
+			}
+			while (!feof($pipes[2])) {
+				$stderr .= fgets($pipes[2]);
+			}
+			fclose($pipes[0]);
+			fclose($pipes[1]);
+			fclose($pipes[2]);
+			$status = proc_get_status($proc);
+			$return = proc_close($proc);
+			$return = isset($status['running']) ? $return : $status['exitcode'];
+		} else {
+			$stderr = 'couldnt run';
+		}
 		self::getLogger()->info2('cmd:'.$cmd);
-		self::getLogger()->indent();
+		self::getLogger()->debug('out:'.$stdout);
+		$history = [
+			'type' => 'command',
+			'command' => $cmd,
+			'output' => implode("\n", $output),
+			'return' => $return
+		];
+		if ($strderr != '') {
+			$history['error'] = $stderr;
+			self::getLogger()->debug('error:'.$stderr);
+		}
+		/*
 		$output = [];
 		exec($cmd, $output, $return);
-		self::getLogger()->debug('exit:'.$return);
+		self::getLogger()->indent();
 		foreach ($output as $line)
 			self::getLogger()->debug('out:'.$line);
 		self::getLogger()->unIndent();
+		self::getLogger()->debug('exit:'.$return);
 		$response = implode("\n", $output);
-		Vps::getLogger()->addHistory(['type' => 'command', 'command' => $cmd, 'output' => implode("\n", $output), 'return' => $return]);
+		*/
+		Vps::getLogger()->addHistory($history);
 		return $response;
 	}
 }
