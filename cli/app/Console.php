@@ -22,11 +22,16 @@ class Console extends Application
     	$this->topic('examples');
     	//Vps::setLogger($this->getLogger());
     	Vps::setLogger(new Logger());
+    	Vps::getLogger()->addHistory(['type' => 'program', 'text' => implode(' ', $_SERVER['argv']), 'start' => time()]);
     }
 
     public function finish() {
         parent::finish();
-        //echo "Displaying History:".PHP_EOL;
-        //print_r(Vps::getLogger()->getHistory());
+        $history = Vps::getLogger()->getHistory();
+        $history[0]['end'] = time();
+        @mkdir($_SERVER['HOME'].'/.provirted', 0750, true);
+		$allHistory = file_exists($_SERVER['HOME'].'/.provirted/history.json') ? json_decode(file_get_contents($_SERVER['HOME'].'/.provirted/history.json'), true) : [];
+		$allHistory[] = $history;
+        file_put_contents($_SERVER['HOME'].'/.provirted/history.json', json_encode($allHistory, JSON_PRETTY_PRINT));
     }
 }
