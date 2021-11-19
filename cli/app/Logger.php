@@ -83,8 +83,10 @@ class Logger extends \CLIFramework\Logger
      * @param string $text text to write by `writer`
      */
     public function write($text) {
-    	$this->addHistory(['type' => 'output', 'text' => $text]);
-        echo $text;
+    	if ($text != '') {
+    		$this->addHistory(['type' => 'output', 'text' => $text]);
+        	echo $text;
+		}
     }
 
     /**
