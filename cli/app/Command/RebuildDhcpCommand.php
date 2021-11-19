@@ -32,13 +32,13 @@ class RebuildDhcpCommand extends Command {
 		$useAll = false;
 		Vps::init($this->getOptions(), ['what' => $what]);
 		if (!Vps::isVirtualHost()) {
-			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
-			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
+			Vps::getLogger()->error("This machine does not appear to have any virtualization setup installed.");
+			Vps::getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
 		if (!in_array($what, ['conf', 'vps', 'all'])) {
-			$this->getLogger()->error("Invalid or missing <what> value");
-			$this->getLogger()->error("<what> can be 'conf', 'vps', or 'all' to regenerate the config file, host assignmetns file, or both (respectivly)");
+			Vps::getLogger()->error("Invalid or missing <what> value");
+			Vps::getLogger()->error("<what> can be 'conf', 'vps', or 'all' to regenerate the config file, host assignmetns file, or both (respectivly)");
 			return 1;
 		}
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */

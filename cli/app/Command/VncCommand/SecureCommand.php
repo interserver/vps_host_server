@@ -29,8 +29,8 @@ class SecureCommand extends Command {
 	public function execute() {
 		Vps::init($this->getOptions(), []);
 		if (!Vps::isVirtualHost()) {
-			$this->getLogger()->error("This machine does not appear to have any virtualization setup installed.");
-			$this->getLogger()->error("Check the help to see how to prepare a virtualization environment.");
+			Vps::getLogger()->error("This machine does not appear to have any virtualization setup installed.");
+			Vps::getLogger()->error("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */

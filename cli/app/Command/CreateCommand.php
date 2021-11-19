@@ -62,13 +62,13 @@ HELP;
 	public function execute($vzid, $hostname, $ip, $template, $hd = 25, $ram = 1024, $cpu = 1, $password = '') {
 		Vps::init($this->getOptions(), ['vzid' => $vzid, 'hostname' => $hostname, 'ip' => $ip, 'template' => $template, 'hd' => $hd, 'ram' => $ram, 'cpu' => $cpu, 'password' => $password]);
 		if (!Vps::isVirtualHost()) {
-			$this->getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
-			$this->getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
+			Vps::getLogger()->writeln("This machine does not appear to have any virtualization setup installed.");
+			Vps::getLogger()->writeln("Check the help to see how to prepare a virtualization environment.");
 			return 1;
 		}
 		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
 		$opts = $this->getOptions();
-		$this->getLogger()->info('Initializing Variables and process Options and Arguments');
+		Vps::getLogger()->info('Initializing Variables and process Options and Arguments');
 		$error = 0;
         $useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
         $extraIps = array_key_exists('add-ip', $opts->keys) ? $opts->keys['add-ip']->value : [];
@@ -130,7 +130,7 @@ HELP;
 			}
 		}
 		if ($error == 0) {
-			$this->getLogger()->info('Enabling and Starting up the VPS');
+			Vps::getLogger()->info('Enabling and Starting up the VPS');
 			Vps::enableAutostart($vzid);
 			Vps::startVps($vzid);
 			$this->progress(85, $url, $orderId);
@@ -153,6 +153,6 @@ HELP;
     public function progress($progress, $url, $orderId) {
     	$progress = escapeshellarg($progress);
     	Vps::runCommand("curl --connect-timeout 10 --max-time 20 -k -d action=install_progress -d progress={$progress} -d server={$orderId} '{$url}' < /dev/null > /dev/null 2>&1;");
-		$this->getLogger()->writeln($progress.'%');
+		Vps::getLogger()->writeln($progress.'%');
     }
 }
