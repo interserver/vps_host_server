@@ -500,7 +500,7 @@ class Vps
 			$return = $status['running'] ? $retVal : $status['exitcode'];
 		} else {
 			$stderr = 'couldnt run';
-			$return = -1;
+			$return = 1;
 		}
 		self::getLogger()->info2('cmd:'.$cmd);
 		self::getLogger()->debug('out:'.$stdout);
