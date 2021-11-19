@@ -28,7 +28,7 @@ class Vps
 		'/proc/cpuinfo' => 'egrep "svm|vmx" /proc/cpuinfo',
 		'virt-host-validate'
 	];
-	/** @var \CLIFramework\Logger */
+	/** @var \App\Logger */
 	protected static $logger;
 	/** @var array */
 	protected static $args;
@@ -36,14 +36,14 @@ class Vps
 	protected static $opts;
 
 	/**
-	* @param \CLIFramework\Logger $logger
+	* @param \App\Logger $logger
 	*/
 	public static function setLogger($logger) {
 		self::$logger = $logger;
 	}
 
 	/**
-	* @return \CLIFramework\Logger
+	* @return \App\Logger
 	*/
 	public static function getLogger() {
 		return self::$logger;

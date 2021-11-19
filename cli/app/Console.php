@@ -3,6 +3,7 @@ namespace App;
 
 use CLIFramework\Application;
 use App\Vps;
+use App\Logger;
 
 class Console extends Application
 {
@@ -19,6 +20,13 @@ class Console extends Application
         $this->commandGroup("Development Commands", ['generate-internals', 'source'])->setId('dev');
     	$this->topic('basic');
     	$this->topic('examples');
-    	Vps::setLogger($this->getLogger());
+    	//Vps::setLogger($this->getLogger());
+    	Vps::setLogger(new Logger());
+    }
+
+    public function finish() {
+        parent::finish();
+        //echo "Displaying History:".PHP_EOL;
+        //print_r(Vps::getLogger()->getHistory());
     }
 }

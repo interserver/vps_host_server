@@ -5,7 +5,7 @@ namespace App;
 /**
 * Provides logging interface
 */
-class Logger
+class Logger extends \CLIFramework\Logger
 {
     public $logLevels = [
 		'critical' => 1,
@@ -20,28 +20,27 @@ class Logger
     public $level = 4;
     protected $indent = 0;
     protected $indentCharacter = '  ';
+    protected $history = [];
 
-    public function __construct() {
+    public function __construct(ServiceContainer $container = null) {
     }
 
-    public function setLevel($level, $indent = 0) {
-        $this->level = $level;
+    /**
+    * adds to the history log
+    *
+    * @param string|array $data output string or array for command data
+    */
+    public function addHistory($data) {
+		$this->history[] = $data;
     }
 
-    public function getLevel() {
-        return $this->level;
-    }
-
-    public function indent($level = 1) {
-        $this->indent += $level;
-    }
-
-    public function unIndent($level = 1) {
-        $this->indent = max(0, $this->indent - $level);
-    }
-
-    public function resetIndent() {
-        $this->indent = 0;
+    /**
+    * returns the history data
+    *
+    * @return array the history data
+    */
+    public function getHistory() {
+		return $this->history;
     }
 
     /**
@@ -50,7 +49,8 @@ class Logger
      * @param string $msg
      */
     public function error($msg) {
-        $level = $this->getLevelByName('error');
+        $level = $this->logLevels['error'];
+    	$this->addHistory(['type' => 'error', 'text' => $msg]);
         if ($level > $this->level)
             return;
         fprintf(STDERR, $msg.PHP_EOL);
@@ -59,7 +59,7 @@ class Logger
     public function __call($method, $args) {
         $msg = $args[0];
         $indent = isset($args[1]) ? $args[1] : 0;
-        $level = $this->getLevelByName($method);
+        $level = $this->logLevels[$method];
         if ($level > $this->level) // do not print.
             return;
         if ($this->indent)
@@ -83,14 +83,15 @@ class Logger
      * @param string $text text to write by `writer`
      */
     public function write($text) {
-        $this->write($text);
+    	$this->addHistory(['type' => 'output', 'text' => $text]);
+        echo $text;
     }
 
     /**
      * @param string $text write text and append a newline charactor.
      */
     public function writeln($text) {
-        $this->writeln($text);
+        $this->write($text.PHP_EOL);
     }
 
     /**

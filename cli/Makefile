@@ -1,4 +1,4 @@
-all: nodev completion phar
+all: nodev phar completion
 
 update:
 	composer update --with-all-dependencies -v -o --ansi --dev
