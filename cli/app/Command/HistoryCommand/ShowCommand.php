@@ -42,7 +42,7 @@ class ShowCommand extends Command {
 				echo "[Command Line] {$line['text']}\n";
 				echo "[Started at] ".date('Y-m-d H:i:s', $line['start'])."\n";
 				echo "[Ended at] ".date('Y-m-d H:i:s', $line['start'])."\n";
-				echo "[Ran for] ".($line['end'] - $line['start'])." seconds\n";
+				echo "[Ran for] ".($line['end'] - $line['start'])." seconds";
 			} elseif ($line['type'] == 'output') {
 				if ($lastType != 'output')
 					echo "\n";
