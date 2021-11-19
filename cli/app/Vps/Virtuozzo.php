@@ -140,7 +140,7 @@ class Virtuozzo
 		$vncPort = '';
 		foreach ($vpsList as $vps) {
 			//if (!isset($vps['Hostname']))
-			//Vps::getLogger()->write(Vps::getLogger()->info("No Hostname but got: ".json_encode($vps)));
+			//	Vps::getLogger()->info("No Hostname but got: ".json_encode($vps));
 			if ($vps['ID'] == $vzid || $vps['EnvID'] == $vzid || $vps['Name'] == $vzid || (isset($vps['Hostname']) && $vps['Hostname'] == $vzid))
 				if (isset($vps['Remote display']['port']))
 					$vncPort = intval($vps['Remote display']['port']);
