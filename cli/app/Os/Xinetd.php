@@ -43,8 +43,8 @@ class Xinetd
 	* restart xinetd services
 	*/
 	public static function restart() {
-		echo 'Restarting xinetd'.PHP_EOL;
-		echo Vps::runCommand("service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null");
+		Vps::getLogger()->write('Restarting xinetd'.PHP_EOL);
+		Vps::getLogger()->write(Vps::runCommand("service xinetd restart 2>/dev/null || /etc/init.d/xinetd restart 2>/dev/null"));
 	}
 
     /**
@@ -52,7 +52,7 @@ class Xinetd
     * @return bool
     */
 	public static function isRunning() {
-		echo Vps::runCommand('pidof xinetd >/dev/null', $return);
+		Vps::getLogger()->write(Vps::runCommand('pidof xinetd >/dev/null', $return));
 		return $return == 0;
 	}
 
@@ -105,9 +105,9 @@ class Xinetd
 	*/
 	public static function secure($dryRun = false) {
         if (Vps::getVirtType() == 'virtuozzo') {
-        	echo 'Getting Virtuozzo List...';
+        	Vps::getLogger()->write('Getting Virtuozzo List...');
 			$allVpsData = Virtuozzo::getList();
-			echo 'done'.PHP_EOL;
+			Vps::getLogger()->write('done'.PHP_EOL);
 			$usedPorts = [];
 			foreach ($allVpsData as $idx => $vps) {
 				if ($vps['State'] == 'running' && $vps['Remote display state'] == 'running' && isset($vps['Remote display']['port']))
@@ -115,32 +115,32 @@ class Xinetd
 			}
         } else {
 	        // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
-	        echo 'Getting Running VMs...';
+	        Vps::getLogger()->write('Getting Running VMs...');
 	        $runningVps = Vps::getRunningVps();
-	        echo 'done'.PHP_EOL;
-			echo 'Getting VPS Remotes...';
+	        Vps::getLogger()->write('done'.PHP_EOL);
+			Vps::getLogger()->write('Getting VPS Remotes...');
 	        foreach ($runningVps as $vzid) {
 				$remotes = Vps::getVpsRemotes($vzid);
 				foreach ($remotes as $type => $port)
 					$usedPorts[$port] = $type == 'vnc' ? $vzid : $vzid.'-spice';
 	        }
-	        echo 'done'.PHP_EOL;
+	        Vps::getLogger()->write('done'.PHP_EOL);
         }
-        echo 'Parsing Services...';
+        Vps::getLogger()->write('Parsing Services...');
 		$services = self::parseEntries();
-		echo 'done'.PHP_EOL;
+		Vps::getLogger()->write('done'.PHP_EOL);
 		foreach ($services as $serviceName => $serviceData) {
 			// look for things using ports 5900-6500 and look for things using vps names/vzids
 			if (isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500) {
 				if (array_key_exists($serviceData['port'], $usedPorts) && $serviceName == $usedPorts[$serviceData['port']]) {
-					echo "keeping {$serviceData['filename']} its name and port match up with one of the current valid name and port combinationsits\n";
+					Vps::getLogger()->write("keeping {$serviceData['filename']} its name and port match up with one of the current valid name and port combinationsits\n");
 				} else {
-					echo "removing {$serviceData['filename']} as its using port {$serviceData['port']} in the vnc range but doesnt match up\n";
+					Vps::getLogger()->write("removing {$serviceData['filename']} as its using port {$serviceData['port']} in the vnc range but doesnt match up\n");
 					if ($dryRun === false)
 						unlink($serviceData['filename']);
 				}
 			} else {
-				echo "skipping xinetd service which does not4 create port mapping/forwarding\n";
+				Vps::getLogger()->write("skipping xinetd service which does not4 create port mapping/forwarding\n");
 			}
 		}
 	}
@@ -153,11 +153,11 @@ class Xinetd
 	* @param bool $force true to force rebuilding all entries, default false to reuse unchanged entries
 	*/
 	public static function rebuild($useAll = false, $dryRun = false, $force = false) {
-		echo 'Geting Host Info...';
+		Vps::getLogger()->write('Geting Host Info...');
     	$host = Vps::getHostInfo($useAll);
-    	echo 'done'.PHP_EOL;
+    	Vps::getLogger()->write('done'.PHP_EOL);
     	if (!is_array($host) || !isset($host['vps'])) {
-			echo 'There appears to have been a problem with the host info, perhaps try again?'.PHP_EOL;
+			Vps::getLogger()->write('There appears to have been a problem with the host info, perhaps try again?'.PHP_EOL);
 			return;
     	}
     	$usedVzids = [];
@@ -169,9 +169,9 @@ class Xinetd
 			}
 		}
         if (Vps::getVirtType() == 'virtuozzo') {
-        	echo 'Getting Virtuozzo List...';
+        	Vps::getLogger()->write('Getting Virtuozzo List...');
 			$allVpsData = Virtuozzo::getList();
-			echo 'done'.PHP_EOL;
+			Vps::getLogger()->write('done'.PHP_EOL);
 	        $map = [
         		'name' => ['uuid' => [], 'veid' => []],
         		'uuid' => ['name' => [], 'veid' => []],
@@ -197,16 +197,16 @@ class Xinetd
 				$map['veid']['uuid'][$vps['EnvID']] = $vps['ID'];
 			}
         } else {
-	        echo 'Getting All VMs...';
+	        Vps::getLogger()->write('Getting All VMs...');
 			$allVms = Vps::getAllVps();
-			echo 'done'.PHP_EOL;
+			Vps::getLogger()->write('done'.PHP_EOL);
 	        // get a list of all vms  + vnc infos (virtuozzo) or get a list of all vms and iterate them getting vnc info on each
-	        echo 'Getting Running VMs...';
+	        Vps::getLogger()->write('Getting Running VMs...');
 	        $runningVps = Vps::getRunningVps();
-	        echo 'done'.PHP_EOL;
+	        Vps::getLogger()->write('done'.PHP_EOL);
         }
 		$usedPorts = [];
-		echo 'Getting VPS Remotes...';
+		Vps::getLogger()->write('Getting VPS Remotes...');
         foreach ($runningVps as $vzid) {
 			$remotes = Vps::getVirtType() == 'virtuozzo' ? $allRemotes[$vzid] : Vps::getVpsRemotes($vzid);
 			if (Vps::getVirtType() == 'virtuozzo' && array_key_exists($vzid, $map['name']['veid']))
@@ -214,11 +214,11 @@ class Xinetd
 			foreach ($remotes as $type => $port)
 				$usedPorts[$port] = ['type' => $type, 'vzid' => $vzid];
         }
-        echo 'done'.PHP_EOL;
+        Vps::getLogger()->write('done'.PHP_EOL);
         // we should now have a list of in use ports mapped to vps names/vzids
-        echo 'Parsing Services...';
+        Vps::getLogger()->write('Parsing Services...');
 		$services = self::parseEntries();
-		echo 'done'.PHP_EOL;
+		Vps::getLogger()->write('done'.PHP_EOL);
 		$configuredPorts = [];
 		foreach ($services as $serviceName => $serviceData) {
 			if ($force === false
@@ -227,17 +227,17 @@ class Xinetd
 				&& $usedPorts[$serviceData['port']]['vzid'] == str_replace('-'.$usedPorts[$serviceData['port']]['type'], '', $serviceName)
 				&& trim($serviceData['only_from']) == (array_key_exists(str_replace('-spice', '', $serviceName), $usedVzids) ? $usedVzids[str_replace('-spice', '', $serviceName)].' ' : '').'66.45.240.196 192.64.80.216/29'
 			) {
-				echo "keeping {$serviceData['filename']} its port and ip info still match\n";
+				Vps::getLogger()->write("keeping {$serviceData['filename']} its port and ip info still match\n");
 				$configuredPorts[] = $serviceData['port'];
 			} else {
 				// look for things using ports 5900-6500 and look for things using vps names/vzids
 				if ((isset($serviceData['port']) && intval($serviceData['port']) >= 5900 && intval($serviceData['port']) <= 6500)
 					|| preg_match('/^vps(\d+|\d+-\w+)$/', $serviceName) || in_array(str_replace('-spice', '', $serviceName), $allVms)) {
-					echo "removing {$serviceData['filename']}\n";
+					Vps::getLogger()->write("removing {$serviceData['filename']}\n");
 					if ($dryRun === false)
 						unlink($serviceData['filename']);
 				} else {
-					echo "skipping service {$serviceName} not using port in vnc-able range and does not have a service name conflicting with a vps name\n";
+					Vps::getLogger()->write("skipping service {$serviceName} not using port in vnc-able range and does not have a service name conflicting with a vps name\n");
 				}
 			}
 		}
@@ -247,7 +247,7 @@ class Xinetd
 				continue;
 			$type = $portData['type'];
 			$vzid = $portData['vzid'];
-			echo "setting up {$type} on {$vzid} port {$port}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n";
+			Vps::getLogger()->write("setting up {$type} on {$vzid} port {$port}".(isset($usedVzids[$vzid]) ? " ip {$usedVzids[$vzid]}" : "")."\n");
 			if ($dryRun === false)
 				self::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, isset($usedVzids[$vzid]) ? $usedVzids[$vzid] : false, $hostIp);
 		}

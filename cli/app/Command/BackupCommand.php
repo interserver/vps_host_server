@@ -39,6 +39,6 @@ class BackupCommand extends Command {
 			return 1;
 		}
 		$email = escapeshellarg($email);
-		echo Vps::runCommand("/admin/swift/vpsbackup {$id} {$email}");
+		Vps::getLogger()->write(Vps::runCommand("/admin/swift/vpsbackup {$id} {$email}"));
 	}
 }

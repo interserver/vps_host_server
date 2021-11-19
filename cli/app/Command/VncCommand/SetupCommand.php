@@ -44,18 +44,18 @@ class SetupCommand extends Command {
         	$vps = Virtuozzo::getVps($vzid);
         	$vzid = $vps['EnvID'];
         }
-        echo 'Parsing Services...';
+        Vps::getLogger()->write('Parsing Services...');
 		$services = Xinetd::parseEntries();
-		echo 'done'.PHP_EOL;
+		Vps::getLogger()->write('done'.PHP_EOL);
 		foreach ($services as $serviceName => $serviceData) {
 			if (in_array($serviceName, [$vzid, $vzid.'-spice'])
 				|| (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
-				echo "removing {$serviceData['filename']}\n";
+				Vps::getLogger()->write("removing {$serviceData['filename']}\n");
 				unlink($serviceData['filename']);
 			}
 		}
 		foreach ($remotes as $type => $port) {
-			echo "setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n";
+			Vps::getLogger()->write("setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n");
 			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
 		}
 		Xinetd::unlock();

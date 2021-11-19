@@ -13,7 +13,7 @@ class Dhcpd
     * @return bool
     */
 	public static function isRunning() {
-		echo self::runCommand('pidof dhcpd >/dev/null', $return);
+		Vps::getLogger()->write(self::runCommand('pidof dhcpd >/dev/null', $return));
 		return $return == 0;
 	}
 
@@ -70,10 +70,10 @@ class Dhcpd
 		Vps::getLogger()->info('Setting up DHCPD');
 		$mac = Vps::getVpsMac($vzid);
 		$dhcpVps = self::getFile();
-		echo Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;");
-    	echo Vps::runCommand("grep -v -e \"host {$vzid} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}");
-    	echo Vps::runCommand("echo \"host {$vzid} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}");
-    	echo Vps::runCommand("rm -f {$dhcpVps}.backup;");
+		Vps::getLogger()->write(Vps::runCommand("/bin/cp -f {$dhcpVps} {$dhcpVps}.backup;"));
+    	Vps::getLogger()->write(Vps::runCommand("grep -v -e \"host {$vzid} \" -e \"fixed-address {$ip};\" {$dhcpVps}.backup > {$dhcpVps}"));
+    	Vps::getLogger()->write(Vps::runCommand("echo \"host {$vzid} { hardware ethernet {$mac}; fixed-address {$ip}; }\" >> {$dhcpVps}"));
+    	Vps::getLogger()->write(Vps::runCommand("rm -f {$dhcpVps}.backup;"));
 		self::restart();
     }
 
@@ -113,7 +113,7 @@ shared-network myvpn {
 		if ($display === false)
 			file_put_contents(self::getConfFile(), $file);
 		else
-			echo 'cat > '.self::getConfFile().' <<EOF'.PHP_EOL.$file.PHP_EOL.'EOF'.PHP_EOL;
+			Vps::getLogger()->write('cat > '.self::getConfFile().' <<EOF'.PHP_EOL.$file.PHP_EOL.'EOF'.PHP_EOL);
     }
 
     /**
@@ -131,7 +131,7 @@ shared-network myvpn {
 		if ($display === false)
 			file_put_contents(self::getFile(), $file);
 		else
-			echo 'cat > '.self::getFile().' <<EOF'.PHP_EOL.$file.PHP_EOL.'EOF'.PHP_EOL;
+			Vps::getLogger()->write('cat > '.self::getFile().' <<EOF'.PHP_EOL.$file.PHP_EOL.'EOF'.PHP_EOL);
     }
 
     /**
@@ -140,7 +140,7 @@ shared-network myvpn {
     */
     public static function remove($vzid) {
 		$dhcpVps = self::getFile();
-		echo Vps::runCommand("sed s#\"^host {$vzid} .*$\"#\"\"#g -i {$dhcpVps}");
+		Vps::getLogger()->write(Vps::runCommand("sed s#\"^host {$vzid} .*$\"#\"\"#g -i {$dhcpVps}"));
     	self::restart();
     }
 
@@ -149,6 +149,6 @@ shared-network myvpn {
     */
     public static function restart() {
 		$dhcpService = self::getService();
-		echo Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null");
+		Vps::getLogger()->write(Vps::runCommand("systemctl restart {$dhcpService} 2>/dev/null || service {$dhcpService} restart 2>/dev/null || /etc/init.d/{$dhcpService} restart 2>/dev/null"));
     }
 }
