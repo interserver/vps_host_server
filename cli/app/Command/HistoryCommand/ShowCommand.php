@@ -50,7 +50,7 @@ class ShowCommand extends Command {
 			} elseif ($line['type'] == 'error') {
 				echo "\n[Error] ".rtrim($line['text']);
 			} elseif ($line['type'] == 'command') {
-				echo "\n[Command] {$line['command']} [Return: {$line['return']}] [Output: {$line['output']}]".(isset($line['error']) ? ' [Error: '.$line['error'].']' : '');
+				echo "\n[Command] {$line['command']} [Return: {$line['return']}] [Output: ".rtrim($line['output'])."]".(isset($line['error']) ? ' [Error: '.rtrim($line['error']).']' : '');
 			}
 			$lastType = $line['type'];
         }
