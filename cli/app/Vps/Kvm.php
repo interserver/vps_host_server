@@ -215,6 +215,28 @@ class Kvm
 		return $remotes;
 	}
 
+	public static function setupVnc($vzid, $clientIp) {
+		Xinetd::lock();
+        $remotes = Vps::getVpsRemotes($vzid);
+        echo 'Parsing Services...';
+		$services = Xinetd::parseEntries();
+		echo 'done'.PHP_EOL;
+		foreach ($services as $serviceName => $serviceData) {
+			if (in_array($serviceName, [$vzid, $vzid.'-spice'])
+				|| (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
+				echo "removing {$serviceData['filename']}\n";
+				unlink($serviceData['filename']);
+			}
+		}
+		foreach ($remotes as $type => $port) {
+			echo "setting up {$type} on {$vzid} port {$port}".(trim($clientIp) != '' ? " ip {$clientIp}" : "")."\n";
+			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($clientIp) != '' ? $clientIp : false);
+		}
+		Xinetd::unlock();
+		Xinetd::restart();
+
+	}
+
 	public static function  getVncPort($vzid) {
 		$vncPort = trim(Vps::runCommand("virsh vncdisplay {$vzid} | cut -d: -f2 | head -n 1"));
 		if ($vncPort == '') {
