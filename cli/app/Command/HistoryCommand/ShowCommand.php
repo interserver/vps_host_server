@@ -48,9 +48,9 @@ class ShowCommand extends Command {
 					echo "\n";
 				echo $line['text'];
 			} elseif ($line['type'] == 'error') {
-				echo "\n[Error] ".rtrim($line['text'])."\n";
+				echo "\n[Error] ".rtrim($line['text']);
 			} elseif ($line['type'] == 'command') {
-				echo "\n[Command] {$line['command']} [Return: {$line['return']}] [Output: {$line['output']}]".(isset($line['error']) ? ' [Error: '.$line['error'].']' : '')."\n";
+				echo "\n[Command] {$line['command']} [Return: {$line['return']}] [Output: {$line['output']}]".(isset($line['error']) ? ' [Error: '.$line['error'].']' : '');
 			}
 			$lastType = $line['type'];
         }
