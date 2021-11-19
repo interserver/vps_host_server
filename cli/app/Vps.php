@@ -509,7 +509,7 @@ class Vps
 			'output' => $stdout,
 			'return' => $return
 		];
-		if ($strderr != '') {
+		if ($stderr != '') {
 			$history['error'] = $stderr;
 			self::getLogger()->debug('error:'.$stderr);
 		}
@@ -524,6 +524,6 @@ class Vps
 		$response = implode("\n", $output);
 		*/
 		Vps::getLogger()->addHistory($history);
-		return $response;
+		return $stdout.$stderr;
 	}
 }
