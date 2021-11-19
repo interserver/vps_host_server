@@ -41,10 +41,10 @@ class EnableCommand extends Command {
 			$this->getLogger()->error("Skipping Setup, CD-ROM Drive already exists in VPS configuration");
 		} else {
 			if ($url == '') {
-				echo Vps::runCommand("virsh attach-disk {$vzid} - hda --targetbus ide --type cdrom --sourcetype file --config");
-				echo Vps::runCommand("virsh change-media {$vzid} hda --eject --config");
+				Vps::getLogger()->write(Vps::runCommand("virsh attach-disk {$vzid} - hda --targetbus ide --type cdrom --sourcetype file --config"));
+				Vps::getLogger()->write(Vps::runCommand("virsh change-media {$vzid} hda --eject --config"));
 			} else {
-				echo Vps::runCommand("virsh attach-disk {$vzid} \"{$url}\" hda --targetbus ide --type cdrom --sourcetype file --config");
+				Vps::getLogger()->write(Vps::runCommand("virsh attach-disk {$vzid} \"{$url}\" hda --targetbus ide --type cdrom --sourcetype file --config"));
 			}
 			Vps::restartVps($vzid);
 

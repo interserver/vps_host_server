@@ -42,10 +42,10 @@ class ChangeTimezoneCommand extends Command {
 			return 1;
 		}
 		Vps::stopVps($vzid);
-		echo Vps::runCommand("virsh dumpxml {$vzid} > {$vzid}.xml");
-		echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml");
-		echo Vps::runCommand("virsh define {$vzid}.xml");
-		echo Vps::runCommand("rm -f {$vzid}.xml");
+		Vps::getLogger()->write(Vps::runCommand("virsh dumpxml {$vzid} > {$vzid}.xml"));
+		Vps::getLogger()->write(Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml"));
+		Vps::getLogger()->write(Vps::runCommand("virsh define {$vzid}.xml"));
+		Vps::getLogger()->write(Vps::runCommand("rm -f {$vzid}.xml"));
 		Vps::startVps($vzid);
 	}
 }

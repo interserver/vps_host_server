@@ -50,15 +50,15 @@ class ChangeHostnameCommand extends Command {
 			$pool = Vps::getPoolType();
 			Vps::stopVps($vzid);
 			if ($pool == 'zfs') {
-				echo Vps::runCommand("zfs rename vz/{$vzid} vz/{$newname}");
+				Vps::getLogger()->write(Vps::runCommand("zfs rename vz/{$vzid} vz/{$newname}"));
 			} else {
-				echo Vps::runCommand("lvrename /dev/vz/{$vzid} vz/{$newname}");
+				Vps::getLogger()->write(Vps::runCommand("lvrename /dev/vz/{$vzid} vz/{$newname}"));
 			}
-			echo Vps::runCommand("virsh domrename {$vzid} {$newname}");
-			echo Vps::runCommand("virsh dumpxml {$newname} > {$base}/vps.xml");
-			echo Vps::runCommand("sed s#\"{$vzid}\"#{$newname}#g -i {$base}/vps.xml");
-			echo Vps::runCommand("virsh define {$base}/vps.xml");
-			echo Vps::runCommand("rm -fv {$base}/vps.xml");
+			Vps::getLogger()->write(Vps::runCommand("virsh domrename {$vzid} {$newname}"));
+			Vps::getLogger()->write(Vps::runCommand("virsh dumpxml {$newname} > {$base}/vps.xml"));
+			Vps::getLogger()->write(Vps::runCommand("sed s#\"{$vzid}\"#{$newname}#g -i {$base}/vps.xml"));
+			Vps::getLogger()->write(Vps::runCommand("virsh define {$base}/vps.xml"));
+			Vps::getLogger()->write(Vps::runCommand("rm -fv {$base}/vps.xml"));
 		}
 		foreach (['/etc/dhcpd.vps', '/etc/dhcp/dhcpd.vps', $base.'/vps.ipmap', $base.'/vps.mainips', $base.'/vps.slicemap', $base.'/vps.vncmap'] as $file) {
 			if (file_exists($file)) {
@@ -71,10 +71,10 @@ class ChangeHostnameCommand extends Command {
 		if (Vps::getVirtType() == 'kvm') {
 			Dhcpd::restart();
 		} elseif (Vps::getVirtType() == 'virtuozzo') {
-			echo Vps::runCommand("prlctl set {$vzid} --hostname {$newname}");
+			Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --hostname {$newname}"));
 		}
 		Vps::startVps($newname);
-		echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$newname}");
+		Vps::getLogger()->write(Vps::runCommand("{$base}/vps_refresh_vnc.sh {$newname}"));
 
 	}
 

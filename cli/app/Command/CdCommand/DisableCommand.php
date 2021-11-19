@@ -39,10 +39,10 @@ class DisableCommand extends Command {
 		if (trim(Vps::runCommand("virsh dumpxml {$vzid}|grep \"disk.*cdrom\"")) == "") {
 			$this->getLogger()->error("Skipping Removal, No CD-ROM Drive exists in VPS configuration");
 		} else {
-			echo Vps::runCommand("virsh detach-disk {$vzid} hda --config");
+			Vps::getLogger()->write(Vps::runCommand("virsh detach-disk {$vzid} hda --config"));
 			Vps::restartVps($vzid);
 			$base = Vps::$base;
-			echo Vps::runCommand("{$base}/vps_refresh_vnc.sh {$vzid}");
+			Vps::getLogger()->write(Vps::runCommand("{$base}/vps_refresh_vnc.sh {$vzid}"));
 		}
 	}
 

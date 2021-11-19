@@ -77,7 +77,7 @@ class Os
     	if (self::isRedhatBased() && self::getRedhatVersion() < 7) {
 			if (self::getE2fsprogsVersion() <= 1.41) {
 				if (!file_exists('/opt/e2fsprogs/sbin/e2fsck')) {
-					echo Vps::runCommand("/admin/ports/install e2fsprogs");
+					Vps::getLogger()->write(Vps::runCommand("/admin/ports/install e2fsprogs"));
 				}
 			}
     	}

@@ -40,6 +40,6 @@ class RestoreCommand extends Command {
 			return 1;
 		}
 		$base = Vps::$base;
-		echo Vps::runCommand("{$base}/vps_swift_restore.sh {$source} {$name} {$vzid} && curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php || curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php");
+		Vps::getLogger()->write(Vps::runCommand("{$base}/vps_swift_restore.sh {$source} {$name} {$vzid} && curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php || curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id={$id} https://myvps.interserver.net/vps_queue.php"));
 	}
 }

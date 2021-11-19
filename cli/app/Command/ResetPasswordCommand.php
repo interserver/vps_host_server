@@ -37,6 +37,6 @@ class ResetPasswordCommand extends Command {
 			return 1;
 		}
 		$base = Vps::$base;
-		echo Vps::runCommand("{$base}/vps_kvm_setup_password_clear.sh {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("{$base}/vps_kvm_setup_password_clear.sh {$vzid}"));
 	}
 }

@@ -67,35 +67,35 @@ class UpdateCommand extends Command
 				$pool = Vps::getPoolType();
 				if ($pool == 'zfs') {
 					$this->getLogger()->info('Attempting to set ZFS volume size to '.$hd.'MB');
-					echo Vps::runCommand("zfs set volsize={$hd}M vz/{$vzid}");
+					Vps::getLogger()->write(Vps::runCommand("zfs set volsize={$hd}M vz/{$vzid}"));
 					$this->getLogger()->info('Attempting to resize qcow2 image to '.$hd.'MB');
-					echo Vps::runCommand("qemu-img resize /vz/{$vzid}/os.qcow2 {$hd}M");
+					Vps::getLogger()->write(Vps::runCommand("qemu-img resize /vz/{$vzid}/os.qcow2 {$hd}M"));
 				} else {
 					$this->getLogger()->info('Attempting to resize LVM volume to '.$hd.'MB');
-					echo Vps::runCommand("sh {$base}/vps_kvm_lvmresize.sh {$vzid} {$hd}");
+					Vps::getLogger()->write(Vps::runCommand("sh {$base}/vps_kvm_lvmresize.sh {$vzid} {$hd}"));
 				}
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
-				echo Vps::runCommand("prlctl set {$vzid} --device-set hdd0 --size {$hd}");
+				Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --device-set hdd0 --size {$hd}"));
 				$hdG = ceil($hd / 1024);
-				echo Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save"));
 			} elseif (Vps::getVirtType() == 'openvz') {
 				$hdG = ceil($hd / 1024);
-				echo Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid}  --diskspace {$hdG}G --save"));
 			}
 		}
 		if ($updateQuota === true) {
 			$quota = $opts->keys['quota']->value;
 			if ($quota == 'on') {
 				if (Vps::getVirtType() == 'virtuozzo') {
-					echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 200 --save --setmode restart");
+					Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 200 --save --setmode restart"));
 				} elseif (Vps::getVirtType() == 'openvz') {
-					echo Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 200 --save --setmode restart");
+					Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 200 --save --setmode restart"));
 				}
 			} elseif ($quota == 'off') {
 				if (Vps::getVirtType() == 'virtuozzo') {
-					echo Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
+					Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --quotaugidlimit 0 --save --setmode restart"));
 				} elseif (Vps::getVirtType() == 'openvz') {
-					echo Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 0 --save --setmode restart");
+					Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --quotaugidlimit 0 --save --setmode restart"));
 				}
 			} else {
 				$this->getLogger()->error('Invalid Quotas Option, must be on or off');
@@ -107,22 +107,22 @@ class UpdateCommand extends Command
 			$password = $opts->keys['password']->value;
 			$password = escapeshellarg($password);
 			if (Vps::getVirtType() == 'virtuozzo') {
-				echo Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}");
+				Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --userpasswd {$username}:{$password}"));
 			} elseif (Vps::getVirtType() == 'openvz') {
-				echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --userpasswd {$username}:{$password}");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --setmode restart --userpasswd {$username}:{$password}"));
 			} elseif (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password};");
+				Vps::getLogger()->write(Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password};"));
 			}
 		}
 		if ($updateHostname === true) {
 			$hostname = $opts->keys['hostname']->value;
 			$hostname = escapeshellarg($hostname);
 			if (Vps::getVirtType() == 'virtuozzo') {
-				echo Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}");
+				Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --hostname {$hostname}"));
 			} elseif (Vps::getVirtType() == 'openvz') {
-				echo Vps::runCommand("vzctl set {$vzid} --save --setmode restart --hostname {$hostname}");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --setmode restart --hostname {$hostname}"));
 			} elseif (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("virt-customize -d {$vzid} --hostname {$hostname};");
+				Vps::getLogger()->write(Vps::runCommand("virt-customize -d {$vzid} --hostname {$hostname};"));
 			}
 		}
 		if ($updateCpu === true || $updateRam === true || $updateTimezone === true) {
@@ -134,13 +134,13 @@ class UpdateCommand extends Command
 			$maxCpu = $cpu > 8 ? $cpu : 8;
 			$this->getLogger()->debug('Setting CPU limits');
 			if (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$vzid}.xml;");
+				Vps::getLogger()->write(Vps::runCommand("sed s#\"<\(vcpu.*\)>.*</vcpu>\"#\"<vcpu placement='static' current='{$cpu}'>{$maxCpu}</vcpu>\"#g -i {$vzid}.xml;"));
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
 				$cpuUnits = 1500 * $cpu;
-				echo Vps::runCommand("prlctl set {$vzid} --cpus {$cpu} --cpuunits {$cpuUnits}");
+				Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --cpus {$cpu} --cpuunits {$cpuUnits}"));
 			} elseif (Vps::getVirtType() == 'openvz') {
 				$cpuUnits = 1500 * $cpu;
-				echo Vps::runCommand("vzctl set {$vzid} --save --cpus {$cpu} --cpuunits {$cpuUnits}");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save --cpus {$cpu} --cpuunits {$cpuUnits}"));
 			}
 		}
 		if ($updateRam === true) {
@@ -149,12 +149,12 @@ class UpdateCommand extends Command
 			$maxRam = $ram > 16384000 ? $ram : 16384000;
 			$this->getLogger()->debug('Setting Max Memory limits');
 			if (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$vzid}.xml;");
+				Vps::getLogger()->write(Vps::runCommand("sed s#\"<memory.*memory>\"#\"<memory unit='KiB'>{$maxRam}</memory>\"#g -i {$vzid}.xml;"));
 				$this->getLogger()->debug('Setting Memory limits');
-				echo Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$vzid}.xml;");
+				Vps::getLogger()->write(Vps::runCommand("sed s#\"<currentMemory.*currentMemory>\"#\"<currentMemory unit='KiB'>{$ram}</currentMemory>\"#g -i {$vzid}.xml;"));
 			} elseif (Vps::getVirtType() == 'virtuozzo') {
 				$ramM = ceil($ram / 1024);
-				echo Vps::runCommand("prlctl set {$vzid} --swappages 1G --memsize {$ramM}M");
+				Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --swappages 1G --memsize {$ramM}M"));
 			} elseif (Vps::getVirtType() == 'openvz') {
 				$ramM = ceil($ram / 1024);
 
@@ -198,28 +198,28 @@ class UpdateCommand extends Command
 				$diskSpace = $hd * 1024;
 				$diskSpaceB = $diskSpace;
 				$ram = floor($ram / 1024);
-				echo Vps::runCommand("vzctl set {$vzid} --save {$force} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmGuarPages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomGuarPages}:{$limit} --privvmpages {$privVmPages}:{$privVmPagesB} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dCacheSize}:{$dCacheSizeB} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1");
+				Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --save {$force} --numproc {$numProc}:{$numProcB} --numtcpsock {$numTcpSock}:{$numTcpSockB} --numothersock {$numOtherSock}:{$numOtherSockB} --vmguarpages {$vmGuarPages}:{$limit} --kmemsize unlimited:unlimited --tcpsndbuf {$tcpSndBuf}:{$tcpSndBufB} --tcprcvbuf {$tcpRcvBuf}:{$tcpRcvBufB} --othersockbuf {$otherSockBuf}:{$otherSockBufB} --dgramrcvbuf {$dgramRcvBuf}:{$dgramRcvBufB} --oomguarpages {$oomGuarPages}:{$limit} --privvmpages {$privVmPages}:{$privVmPagesB} --numfile {$numFile}:{$numFileB} --numflock {$numFlock}:{$numFlockB} --physpages 0:{$limit} --dcachesize {$dCacheSize}:{$dCacheSizeB} --numiptent {$numIptent}:{$numIptentB} --avnumproc {$avNumProc}:{$avNumProc} --numpty {$numPty}:{$numPtyB} --shmpages {$shmPages}:{$shmPagesB} 2>&1"));
 				if (file_exists('/proc/vz/vswap')) {
-					echo Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup");
-					echo Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup");
-					echo Vps::runCommand("/bin/rm -f /etc/vz/conf/{$vzid}.conf.backup");
-					echo Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save");
-					echo Vps::runCommand("vzctl set {$vzid} --reset_ub");
+					Vps::getLogger()->write(Vps::runCommand("/bin/mv -f /etc/vz/conf/{$vzid}.conf /etc/vz/conf/{$vzid}.conf.backup"));
+					Vps::getLogger()->write(Vps::runCommand("grep -Ev '^(KMEMSIZE|PRIVVMPAGES)=' > /etc/vz/conf/{$vzid}.conf <  /etc/vz/conf/{$vzid}.conf.backup"));
+					Vps::getLogger()->write(Vps::runCommand("/bin/rm -f /etc/vz/conf/{$vzid}.conf.backup"));
+					Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --ram {$ram}M --swap {$ram}M --save"));
+					Vps::getLogger()->write(Vps::runCommand("vzctl set {$vzid} --reset_ub"));
 				}
 				if (file_exists('/usr/sbin/vzcfgvalidate')) // validate vps
-					echo Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf");
+					Vps::getLogger()->write(Vps::runCommand("/usr/sbin/vzcfgvalidate -r /etc/vz/conf/{$vzid}.conf"));
 
 
 			}
 		}
 		if ($updateTimezone === true) {
 			$timezone = $opts->keys['timezone']->value;
-			echo Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml");
+			Vps::getLogger()->write(Vps::runCommand("sed s#\"<clock.*$\"#\"<clock offset='timezone' timezone='{$timezone}'/>\"#g -i {$vzid}.xml"));
 		}
 		if ($updateCpu === true || $updateRam === true || $updateTimezone === true) {
 			if (Vps::getVirtType() == 'kvm') {
-				echo Vps::runCommand("virsh define {$vzid}.xml;");
-				echo Vps::runCommand("rm -f {$vzid}.xml");
+				Vps::getLogger()->write(Vps::runCommand("virsh define {$vzid}.xml;"));
+				Vps::getLogger()->write(Vps::runCommand("rm -f {$vzid}.xml"));
 			}
 		}
 		if ($updateCpu === true || $updateRam === true || $updateHd === true || $updateTimezone === true || $updateHostname === true || $updatePassword === true || $updatePasswordReset === true)

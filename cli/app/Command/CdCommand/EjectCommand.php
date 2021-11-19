@@ -36,7 +36,7 @@ class EjectCommand extends Command {
 			$this->getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		echo Vps::runCommand("virsh change-media {$vzid} hda --eject --live");
-		echo Vps::runCommand("virsh change-media {$vzid} hda --eject --config");
+		Vps::getLogger()->write(Vps::runCommand("virsh change-media {$vzid} hda --eject --live"));
+		Vps::getLogger()->write(Vps::runCommand("virsh change-media {$vzid} hda --eject --config"));
 	}
 }

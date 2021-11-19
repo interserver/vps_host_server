@@ -126,7 +126,7 @@ HELP;
 			if (Vps::getVirtType() == 'kvm') {
 				$password = escapeshellarg($password);
 				$hostname = escapeshellarg($hostname);
-				echo Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password} --hostname {$hostname};");
+				Vps::getLogger()->write(Vps::runCommand("virt-customize -d {$vzid} --root-password password:{$password} --hostname {$hostname};"));
 			}
 		}
 		if ($error == 0) {

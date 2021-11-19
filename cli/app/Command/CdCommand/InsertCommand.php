@@ -52,10 +52,10 @@ class InsertCommand extends Command {
   </source>
 </disk>";
 		file_put_contents("{$base}/disk.xml", $str);
-		echo Vps::runCommand("virsh update-device {$vzid} {$base}/disk.xml --live");
-		echo Vps::runCommand("virsh update-device {$vzid} {$base}/disk.xml --config");
-		echo Vps::runCommand("rm -f {$base}/disk.xml");
-		echo Vps::runCommand("virsh reboot {$vzid}");
+		Vps::getLogger()->write(Vps::runCommand("virsh update-device {$vzid} {$base}/disk.xml --live"));
+		Vps::getLogger()->write(Vps::runCommand("virsh update-device {$vzid} {$base}/disk.xml --config"));
+		Vps::getLogger()->write(Vps::runCommand("rm -f {$base}/disk.xml"));
+		Vps::getLogger()->write(Vps::runCommand("virsh reboot {$vzid}"));
 	}
 
 }
