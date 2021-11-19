@@ -23,15 +23,14 @@ class ShowCommand extends Command {
 
     /** @param \CLIFramework\ArgInfoList $args */
 	public function arguments($args) {
-		$args->add('id')->desc('History id to use, -1 is always the latest entry')->isa('number')->validValues([Vps::class, 'getHistoryChoices']);
+		$args->add('id')->desc('History id to use or "last" for the latest entry')->isa('string')->validValues([Vps::class, 'getHistoryChoices']);
 	}
 
 	public function execute($id) {
 		Vps::init($this->getOptions(), ['id' => $id]);
         $allHistory = file_exists($_SERVER['HOME'].'/.provirted/history.json') ? json_decode(file_get_contents($_SERVER['HOME'].'/.provirted/history.json'), true) : [];
-        $id = intval($id);
-        if ($id < 0)
-        	$id = count($allHistory) + $id;
+        if ($id == 'last')
+        	$id = count($allHistory) - 1;
         if (!array_key_exists($id, $allHistory)) {
 			echo 'Invalid ID';
 			return;

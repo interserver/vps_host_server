@@ -478,7 +478,7 @@ class Vps
 
 	public static function getHistoryChoices() {
 		$return = self::getLogger()->getHistory();
-		array_unshift($return, -1);
+		array_unshift($return, 'last');
 	}
 
 	public static function runCommand($cmd, &$return = 0) {
