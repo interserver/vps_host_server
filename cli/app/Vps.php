@@ -496,10 +496,11 @@ class Vps
 			fclose($pipes[1]);
 			fclose($pipes[2]);
 			$status = proc_get_status($proc);
-			$return = proc_close($proc);
-			$return = isset($status['running']) ? $return : $status['exitcode'];
+			$retVal = proc_close($proc);
+			$return = $status['running'] ? $retVal : $status['exitcode'];
 		} else {
 			$stderr = 'couldnt run';
+			$return = -1;
 		}
 		self::getLogger()->info2('cmd:'.$cmd);
 		self::getLogger()->debug('out:'.$stdout);
