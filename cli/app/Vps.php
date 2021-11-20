@@ -3,6 +3,7 @@ namespace App;
 
 use App\XmlToArray;
 use App\Os\Os;
+use App\Os\Xinetd;
 use App\Vps\Kvm;
 use App\Vps\Lxc;
 use App\Vps\Virtuozzo;
@@ -299,10 +300,34 @@ class Vps
 	}
 
 	public static function setupVnc($vzid, $clientIp = '') {
+		/*
 		if (self::getVirtType() == 'kvm')
 			Kvm::setupVnc($vzid, $clientIp);
 		elseif (self::getVirtType() == 'virtuozzo')
 			Virtuozzo::setupVnc($vzid, $clientIp);
+		*/
+		Xinetd::lock();
+        $remotes = self::getVpsRemotes($vzid);
+        if (self::getVirtType() == 'virtuozzo') {
+        	$vps = Virtuozzo::getVps($vzid);
+        	$vzid = $vps['EnvID'];
+		}
+        self::getLogger()->write('Parsing Services...');
+		$services = Xinetd::parseEntries();
+		self::getLogger()->write('done'.PHP_EOL);
+		foreach ($services as $serviceName => $serviceData) {
+			if (in_array($serviceName, [$vzid, $vzid.'-spice'])
+				|| (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
+				self::getLogger()->write("removing {$serviceData['filename']}\n");
+				unlink($serviceData['filename']);
+			}
+		}
+		foreach ($remotes as $type => $port) {
+			self::getLogger()->write("setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n");
+			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
+		}
+		Xinetd::unlock();
+		Xinetd::restart();
 	}
 
 	public static function vncScreenshot($vzid, $url) {

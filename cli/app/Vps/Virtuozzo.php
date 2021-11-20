@@ -160,31 +160,6 @@ class Virtuozzo
 		return $vncPort;
 	}
 
-	public static function setupVnc($vzid, $clientIp) {
-		Vps::getLogger()->info('Setting up VNC');
-		$vncPort = self::getVncPort($vzid);
-		$base = Vps::$base;
-		if ($vncPort == '' || $vncPort < 5901) {
-			$vpsList = self::getList();
-			$ports = [];
-			foreach ($vpsList as $vps)
-				if (isset($vps['Remote display']['port']))
-					$ports[] = intval($vps['Remote display']['port']);
-				$vncPort = 5901;
-			while (in_array($vncPort, $ports))
-				$vncPort++;
-			Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1"));
-		}
-		Xinetd::lock();
-		if ($clientIp != '') {
-			$clientIp = escapeshellarg($clientIp);
-			Vps::getLogger()->write(Vps::runCommand("{$base}/vps_virtuozzo_setup_vnc.sh {$vzid} {$clientIp};"));
-		}
-		Vps::getLogger()->write(Vps::runCommand("{$base}/vps_refresh_vnc.sh {$vzid};"));
-		Xinetd::unlock();
-		Xinetd::restart();
-	}
-
 	public static function enableAutostart($vzid) {
 		Vps::getLogger()->info('Enabling On-Boot Automatic Startup of the VPS');
 		Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --onboot yes --autostart on"));

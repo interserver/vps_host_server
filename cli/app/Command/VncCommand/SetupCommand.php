@@ -39,27 +39,6 @@ class SetupCommand extends Command {
 			Vps::getLogger()->error("The VPS '{$vzid}' you specified does not appear to exist, check the name and try again.");
 			return 1;
 		}
-		Xinetd::lock();
-        $remotes = Vps::getVpsRemotes($vzid);
-        if (Vps::getVirtType() == 'virtuozzo') {
-        	$vps = Virtuozzo::getVps($vzid);
-        	$vzid = $vps['EnvID'];
-		}
-        Vps::getLogger()->write('Parsing Services...');
-		$services = Xinetd::parseEntries();
-		Vps::getLogger()->write('done'.PHP_EOL);
-		foreach ($services as $serviceName => $serviceData) {
-			if (in_array($serviceName, [$vzid, $vzid.'-spice'])
-				|| (isset($serviceData['port']) && in_array(intval($serviceData['port']), array_values($remotes)))) {
-				Vps::getLogger()->write("removing {$serviceData['filename']}\n");
-				unlink($serviceData['filename']);
-			}
-		}
-		foreach ($remotes as $type => $port) {
-			Vps::getLogger()->write("setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n");
-			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
-		}
-		Xinetd::unlock();
-		Xinetd::restart();
+		Vps::setupVnc($vzid, $ip);
 	}
 }
