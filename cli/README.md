@@ -12,12 +12,6 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
     * replace our calls with the new calls including securexinetd
     * move old files to the unused dir
     * replace setup-vnc with vnc setup
-* history command
-    * store command history
-    * store output of each command
-    * list
-    * view
-    * rerun
 * store vzid only in the vzid field not hostname for kvm
   * it looks like we can grab information about the vm by using virt-inspector --no-applications -d <vzid> to get a xml formatted output of basic os info including hostnmae
 * rename internals command to api command and update generation scripts acccordingly
@@ -34,7 +28,6 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 * add **install** command - Installs PreRequisites, Configures Software for our setup
 * add **config** command - Management of the various settings
 * add server option to **test** command to perform various self diagnostics to check on the health and prepairedness of the system
-* remove unused scripts
 * remove reliance on local scripts
 
 buildebtablesrules
@@ -54,7 +47,6 @@ vps_kvm_screenshot.sh
 vps_kvm_screenshot_swift.sh
 vps_refresh_vnc.sh
 vps_virtuozzo_setup_vnc.sh
-
 
 ## Commands
 
@@ -82,25 +74,6 @@ vps_virtuozzo_setup_vnc.sh
 
 you can add -v to increase verbosity by 1 and see all the commands being run, or a second time to also see the output and exit status of each command
 
-## Building
-
-### Setup Bash Completion
-
-```bash
-php provirted.php bash --bind provirted --program provirted > /etc/bash_completion.d/provirted
-```
-
-### Compile the code into a PHAR
-
-```bash
-php provirted.php archive --composer=composer.json --app-bootstrap --executable --compress=gz provirted.phar
-```
-
-Some Install Code
-```bash
-cd /root/cpaneldirect && git pull --all && /bin/cp -fv /root/cpaneldirect/cli/provirted_completion /etc/bash_completion.d/ && if [ -e /etc/apt ]; then apt-get update &&  apt-get autoremove -y --purge && apt-get dist-upgrade -y && apt-get autoremove -y --purge && apt-get clean && if [ "$(php -v|head -n 1|cut -c5)" = 7 ]; then exit; fi; else yum update -y && if [ "$(php -v|head -n 1|cut -c5)" = 7 ]; then exit; fi; fi
-```
-
 ## Developer Links
 
 * [c9s/CLIFramework](https://github.com/c9s/CLIFramework) CLIFramework GitHub repo
@@ -116,10 +89,10 @@ cd /root/cpaneldirect && git pull --all && /bin/cp -fv /root/cpaneldirect/cli/pr
 * [php-school/cli-menu](https://github.com/php-school/cli-menu) Build beautiful PHP CLI menus. Simple yet Powerful. Expressive DSL.
 
 
-## Fixing CentOS 6/7 Hosts
+## Dev Notes/Code
 
+Fixing CentOS 6/7 Hosts
 This fixs several issues with CentOS 6 and CentOS 7 servers
-
 ```bash
 if [ -e /etc/redhat-release ]; then
   rhver="$(cat /etc/redhat-release |sed s#"^.*release \([0-9][^ ]*\).*$"#"\1"#g)"
@@ -151,11 +124,11 @@ if [ -e /etc/redhat-release ]; then
 fi
 ```
 
-### Personal Notes
-
 Updating the host
+```bash
+cd /root/cpaneldirect && git pull --all && /bin/cp -fv /root/cpaneldirect/cli/provirted_completion /etc/bash_completion.d/ && if [ -e /etc/apt ]; then apt-get update &&  apt-get autoremove -y --purge && apt-get dist-upgrade -y && apt-get autoremove -y --purge && apt-get clean && if [ "$(php -v|head -n 1|cut -c5)" = 7 ]; then exit; fi; else yum update -y && if [ "$(php -v|head -n 1|cut -c5)" = 7 ]; then exit; fi; fi
 
-```
+
 ssh my@mynew php /home/my/scripts/vps/qs_list.php all|grep -v 'Now using' > servers.csv ; \
 ssh my@mynew php /home/my/scripts/vps/vps_list.php sshable |grep -v 'Now using' >> servers.csv  ; \
 tvps;

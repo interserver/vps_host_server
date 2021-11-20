@@ -13,14 +13,3 @@ VPS Hosting Server Daemon for provisioning, monitoring, and communications with 
 * OpenVZ
 * Virtuozzo 7
 * HyperV
-
-# New Daemon Update
-
-
-
-## http rest api
-
-## cli tool
-
-* needs to be able to configure connection/security/authentiation type options
-* needs to be able to start/stop/check the daemon
