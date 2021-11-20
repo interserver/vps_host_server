@@ -46,7 +46,6 @@ vps_kvm_setup_password_clear.sh
 vps_kvm_screenshot.sh
 vps_kvm_screenshot_swift.sh
 vps_refresh_vnc.sh
-vps_virtuozzo_setup_vnc.sh
 
 ## Commands
 
