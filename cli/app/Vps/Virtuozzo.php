@@ -142,7 +142,7 @@ class Virtuozzo
 			while (in_array($vncPort, $ports))
 				$vncPort++;
 			Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1"));
-			$remotes[] = ['type' => 'vnc', 'port' => $vncPort];
+			$remotes['vnc'] = $vncPort;
 		}
 		return $remotes;
 	}
