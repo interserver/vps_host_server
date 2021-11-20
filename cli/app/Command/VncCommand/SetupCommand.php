@@ -2,6 +2,7 @@
 namespace App\Command\VncCommand;
 
 use App\Vps;
+use App\Vps\Virtuozzo;
 use App\Os\Xinetd;
 use CLIFramework\Command;
 use CLIFramework\Formatter;
