@@ -4,17 +4,17 @@
 require_once(dirname(__FILE__).'/xml2array.php');
 
 /**
- * get_vps_list()
- *
- * @return
- */
+* get_vps_list()
+*
+* @return
+*/
 function get_vps_list()
 {
 	$dir = __DIR__;
 	$url = 'https://mynew.interserver.net/vps_queue.php';
 	$curl_cmd = '';
 	$servers = array();
-    $ips = array();
+	$ips = array();
 	if (file_exists('/usr/bin/lxc')) {
 		$lines = trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`);
 		if ($lines != '') {
@@ -40,7 +40,7 @@ function get_vps_list()
 	}
 	if (file_exists('/usr/bin/virsh')) {
 		$cmd = 'export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh list --all | grep -v -e "State$" -e "------$" -e "^$" | awk "{ print \$2 \" \" \$3 }"';
-		    //echo "Running $cmd\n";
+		//echo "Running $cmd\n";
 		$out = trim(`$cmd`);
 		$lines = explode("\n", $out);
 		$cmd = '';
@@ -81,9 +81,9 @@ function get_vps_list()
 					$disk = trim(`{$dir}/vps_kvm_disk_usage.sh $name`);
 					if ($disk != '')
 					{
-						$dparts = explode(':', $disk);
-						$server['diskused'] = $dparts[2];
-						$server['diskmax'] = $dparts[1];
+					$dparts = explode(':', $disk);
+					$server['diskused'] = $dparts[2];
+					$server['diskmax'] = $dparts[1];
 					}
 					*/
 					if (isset($server['vnc'])) {
@@ -92,9 +92,9 @@ function get_vps_list()
 							// vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
 							/*
 							$cmd .= "if [ -e /usr/bin/timeout ]; then
-								timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+							timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 							else
-								./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
+							./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
 							fi;\n";
 							*/
 						}
@@ -139,7 +139,7 @@ function get_vps_list()
 			}
 		}
 		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
-//			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
+		//			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
 		//echo "CMD:$cmd\n";
 		//echo `$cmd`;
 	}
@@ -159,8 +159,8 @@ function get_vps_list()
 		}
 		// build a list of servers, and then send an update command to make usre that the server has information on all servers
 		foreach ($matches['ctid'] as $key => $id) {
-            if ($id == '-' && isset($matches['vzid'][$key]))
-                $id = $matches['vzid'][$key];
+			if ($id == '-' && isset($matches['vzid'][$key]))
+				$id = $matches['vzid'][$key];
 			$server = array(
 				'type' => $type,
 				'veid' => $id,
@@ -228,13 +228,13 @@ function get_vps_list()
 			$json_servers = json_decode(`prlctl list -a -j`, true);
 			foreach ($json_servers as $json_server) {
 				$servers[$json_server['name']]['ip'] = $json_server['ip_configured'];
-                //$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
+				//$servers[$json_server['uuid']]['ip'] = $json_server['ip_configured'];
 			}
 			$json_servers = json_decode(`prlctl list -a -i -j`, true);
 			foreach ($json_servers as $json_server) {
 				if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port'])) {
 					$servers[$json_server['Name']]['vnc'] = $json_server['Remote display']['port'];
-                    //$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
+					//$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
 				}
 			}
 		}
@@ -242,21 +242,21 @@ function get_vps_list()
 			if ($id == 0) {
 				continue;
 			}
-            unset($file);
-            if (file_exists('/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml'))
-                $file = '/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml';
-            elseif (isset($servers[$id]['uuid']) && file_exists('/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml'))
-                $file = '/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml';
-            if (isset($file)) {
-			    $cmd = "export PATH=\"/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e {$file} ];then ploop info {$file} 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
-			    //echo "Running $cmd\n";
-			    $out = trim(`$cmd`);
-			    if ($out != '') {
-				    $disk = explode(' ', $out);
-				    $servers[$id]['diskused'] = $disk[0];
-				    $servers[$id]['diskmax'] = $disk[1];
-			    }
-            }
+			unset($file);
+			if (file_exists('/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml'))
+				$file = '/vz/private/'.$id.'/root.hdd/DiskDescriptor.xml';
+			elseif (isset($servers[$id]['uuid']) && file_exists('/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml'))
+				$file = '/vz/private/'.$servers[$id]['uuid'].'/root.hdd/DiskDescriptor.xml';
+			if (isset($file)) {
+				$cmd = "export PATH=\"/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin\";if [ -e {$file} ];then ploop info {$file} 2>/dev/null | grep blocks | awk '{ print \$3 \" \" \$2 }'; else vzquota stat $id 2>/dev/null | grep blocks | awk '{ print \$2 \" \" \$3 }'; fi;";
+				//echo "Running $cmd\n";
+				$out = trim(`$cmd`);
+				if ($out != '') {
+					$disk = explode(' ', $out);
+					$servers[$id]['diskused'] = $disk[0];
+					$servers[$id]['diskmax'] = $disk[1];
+				}
+			}
 		}
 		if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
 			foreach ($cpu_usage as $id => $cpu_data) {
@@ -264,7 +264,6 @@ function get_vps_list()
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-		//print_r($servers);
 		$tips = trim(`{$dir}/vps_get_ip_assignments.sh`);
 		if ($tips != '') {
 			$tips = explode("\n", $tips);
@@ -357,8 +356,6 @@ function get_vps_list()
 		$cmd = 'ethtool $(brctl show $(ip route |grep ^default | sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g) 2>/dev/null |grep -v "bridge id" | awk \'{ print $4 }\') |grep Speed: | sed -e s#"^.* \([0-9]*\).*$"#"\1"#g';
 		$speed = trim(`{$cmd}`);
 	}
-	//echo "Running {$cmd}\n";
-	//echo "Got Speed {$speed}\n";
 	$cpuinfo = explode("\n", file_get_contents('/proc/cpuinfo'));
 	$found = false;
 	$lines = sizeof($cpuinfo);
@@ -389,12 +386,10 @@ function get_vps_list()
 	);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=server_list -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 	. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
-//	. ($cpu_data != '' ? ' -F cpu_usage="'.base64_encode(gzcompress($cpu_data, 9)).'" ' : '')
+	//	. ($cpu_data != '' ? ' -F cpu_usage="'.base64_encode(gzcompress($cpu_data, 9)).'" ' : '')
 	. $curl_cmd.' "'.$url.'" 2>/dev/null;';
-//		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=server_list -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'" $curlcmd "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
-	//echo "OK now doing something else on " . __LINE__.PHP_EOL;
 	echo trim(`$cmd`);
 }
 

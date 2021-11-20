@@ -25,8 +25,8 @@ function update_vps_info()
 	$dir = __DIR__;
 	$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 	//if ($root_used > 90) {
-		//$hostname = trim(`hostname;`);
-		//mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
+	//$hostname = trim(`hostname;`);
+	//mail('hardware@interserver.net', $root_used.'% Disk Usage on '.$hostname, $root_used.'% Disk Usage on '.$hostname);
 	//}
 	//$url = 'https://mynew.interserver.net/vps_queue.php';
 	$url = 'http://mynew.interserver.net:55151/queue.php';
@@ -103,28 +103,28 @@ function update_vps_info()
 		$server['iowait'] = trim(`iostat -c  |grep -v "^$" | tail -n 1 | awk '{ print $4 }';`);
 	}
 	$cmd = 'if [ "$(which vzctl 2>/dev/null)" = "" ]; then
-	  iodev="/$(pvdisplay -c |grep :vz:|cut -d/ -f2- |cut -d: -f1|head -n 1)";
+	iodev="/$(pvdisplay -c |grep :vz:|cut -d/ -f2- |cut -d: -f1|head -n 1)";
 	else
-	  iodev=/vz;
+	iodev=/vz;
 	fi;
 	ioping -c 3 -s 100m -D -i 0 ${iodev} -B | cut -d" " -f2;';
 	$server['ioping'] = trim(`$cmd`);
-    if (file_exists('/sbin/zpool') || file_exists('/usr/sbin/zpool')) {
-        $out = trim(`zpool list -Hp vz 2>/dev/null`);
-        if ($out != '') {
-            $parts = explode('	', $out);
+	if (file_exists('/sbin/zpool') || file_exists('/usr/sbin/zpool')) {
+		$out = trim(`zpool list -Hp vz 2>/dev/null`);
+		if ($out != '') {
+			$parts = explode('	', $out);
 
-            $totalb = $parts[1];
-            $usedb = $parts[2];
-            $freeb = $parts[3];
-            $totalg = ceil($totalb / 1073741824);
-            $freeg = ceil($freeb / 1073741824);
-            $usedg = ceil($usedb / 1073741824);
-            $out = $totalg.' '.$freeg;
-        } else {
-            unset($out);
-        }
-    }
+			$totalb = $parts[1];
+			$usedb = $parts[2];
+			$freeb = $parts[3];
+			$totalg = ceil($totalb / 1073741824);
+			$freeg = ceil($freeb / 1073741824);
+			$usedg = ceil($usedb / 1073741824);
+			$out = $totalg.' '.$freeg;
+		} else {
+			unset($out);
+		}
+	}
 	if (!isset($out) && file_exists('/usr/sbin/vzctl')) {
 		$out = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";df -B G /vz | grep -v ^Filesystem | awk '{ print \$2 " " \$4 }' |sed s#"G"#""#g;`);
 	} elseif (!isset($out) && file_exists('/usr/bin/lxc')) {

@@ -1,12 +1,12 @@
 #!/usr/bin/env php
 <?php
 /**
- * VPS Functionality
- * @author Joe Huss <detain@interserver.net>
- * @copyright 2018
- * @package MyAdmin
- * @category VPS
- */
+* VPS Functionality
+* @author Joe Huss <detain@interserver.net>
+* @copyright 2018
+* @package MyAdmin
+* @category VPS
+*/
 
 function validIp($ip, $display_errors = true, $support_ipv6 = false)
 {
@@ -219,22 +219,22 @@ function get_vps_iptables_traffic($ips)
 			}
 		}
 		/* foreach ($ips as $ip => $id) {
-			if (validIp($ip, false) == true) {
-				$veid = $vpsName2Veid[$id];
-				$line = explode(' ', trim(`vznetstat -c 1 -v "{$veid}"|tail -n 1|awk '{ print \$3 " " \$5 }'`));
-				list($in, $out) = $line;
-				if (isset($last[$ip]))
-					list($in_last, $out_last) = $last[$ip];
-				else
-					list($in_last, $out_last) = array(0,0);
-				$vpss[$ip] = array($in, $out);
-				$in = bcsub($in, $in_last, 0);
-				$out = bcsub($out, $out_last, 0);
-				$total = $in + $out;
-				if ($total > 0) {
-					$totals[$ip] = array('in' => $in, 'out' => $out);
-				}
-			}
+		if (validIp($ip, false) == true) {
+		$veid = $vpsName2Veid[$id];
+		$line = explode(' ', trim(`vznetstat -c 1 -v "{$veid}"|tail -n 1|awk '{ print \$3 " " \$5 }'`));
+		list($in, $out) = $line;
+		if (isset($last[$ip]))
+		list($in_last, $out_last) = $last[$ip];
+		else
+		list($in_last, $out_last) = array(0,0);
+		$vpss[$ip] = array($in, $out);
+		$in = bcsub($in, $in_last, 0);
+		$out = bcsub($out, $out_last, 0);
+		$total = $in + $out;
+		if ($total > 0) {
+		$totals[$ip] = array('in' => $in, 'out' => $out);
+		}
+		}
 		} */
 		if (sizeof($totals) > 0) {
 			file_put_contents('/root/.traffic.last', json_encode($vpss));
