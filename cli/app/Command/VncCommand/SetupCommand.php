@@ -43,18 +43,6 @@ class SetupCommand extends Command {
         if (Vps::getVirtType() == 'virtuozzo') {
         	$vps = Virtuozzo::getVps($vzid);
         	$vzid = $vps['EnvID'];
-        	if (count($remotes) == 0) {
-				$vpsList = self::getList();
-				$ports = [];
-				foreach ($vpsList as $vps)
-					if (isset($vps['Remote display']['port']))
-						$ports[] = intval($vps['Remote display']['port']);
-				$vncPort = 5901;
-				while (in_array($vncPort, $ports))
-					$vncPort++;
-				Vps::getLogger()->write(Vps::runCommand("prlctl set {$vzid} --vnc-mode manual --vnc-port {$vncPort} --vnc-nopasswd --vnc-address 127.0.0.1"));
-				$remotes[] = ['type' => 'vnc', 'port' => $vncPort];
-			}
 		}
         Vps::getLogger()->write('Parsing Services...');
 		$services = Xinetd::parseEntries();
