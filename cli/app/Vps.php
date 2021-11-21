@@ -300,12 +300,6 @@ class Vps
 	}
 
 	public static function setupVnc($vzid, $clientIp = '') {
-		/*
-		if (self::getVirtType() == 'kvm')
-			Kvm::setupVnc($vzid, $clientIp);
-		elseif (self::getVirtType() == 'virtuozzo')
-			Virtuozzo::setupVnc($vzid, $clientIp);
-		*/
 		Xinetd::lock();
         $remotes = self::getVpsRemotes($vzid);
         if (self::getVirtType() == 'virtuozzo') {
