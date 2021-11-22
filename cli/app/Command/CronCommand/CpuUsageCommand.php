@@ -103,9 +103,9 @@ class CpuUsageCommand extends Command {
 			echo "({$lastspent}s),Checking";
 			$lastspent = $new - $first;
 			$spent = $new - $start;
+			$speedy = $interval - $spent;
 			echo "({$lastspent}s)";
-			if ($lastspent < $interval) {
-				$speedy = $interval - $spent;
+			if ($lastspent < $interval && $speedy > 0) {
 				echo ",Sleeping({$speedy}s)";
 				sleep($speedy);
 				$spent = $spent + $speedy;
