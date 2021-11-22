@@ -29,8 +29,8 @@ class BwInfoCommand extends Command {
 		Vps::init($this->getOptions(), []);
 		//$url = 'https://mynew.interserver.net/vps_queue.php';
 		$url = 'http://mynew.interserver.net:55151/queue.php';
-		$ips = get_vps_ipmap();
-		$totals = get_vps_iptables_traffic($ips);
+		$ips = $this->get_vps_ipmap();
+		$totals = $this->get_vps_iptables_traffic($ips);
 		if (isset($_SERVER['argv'][1])) {
 			$module = $_SERVER['argv'][1];
 		} else {
@@ -44,36 +44,22 @@ class BwInfoCommand extends Command {
 		}
 	}
 
-	public function validIp($ip, $display_errors = true, $support_ipv6 = false)
+	public function validIp($ip, $support_ipv6 = false)
 	{
 		if (version_compare(PHP_VERSION, '5.2.0') >= 0) {
-			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
-				if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false)
+				if ($support_ipv6 === false || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)
 					return false;
-				}
-			}
 		} else {
-			if (!preg_match("/^[0-9\.]{7,15}$/", $ip)) {
-				// don't display errors cuz this gets called w/ a blank entry when people didn't even submit anything yet
-				//add_output('<font class="error">IP '.$ip.' Too short/long</font>');
+			if (!preg_match("/^[0-9\.]{7,15}$/", $ip))
 				return false;
-			}
 			$quads = explode('.', $ip);
 			$numquads = count($quads);
-			if ($numquads != 4) {
-				if ($display_errors) {
-					error_log('<font class="error">IP '.$ip.' Too many quads</font>');
-				}
+			if ($numquads != 4)
 				return false;
-			}
-			for ($i = 0; $i < 4; $i++) {
-				if ($quads[$i] > 255) {
-					if ($display_errors) {
-						error_log('<font class="error">IP '.$ip.' number '.$quads[$i].' too high</font>');
-					}
+			for ($i = 0; $i < 4; $i++)
+				if ($quads[$i] > 255)
 					return false;
-				}
-			}
 		}
 		return true;
 	}
@@ -120,7 +106,7 @@ class BwInfoCommand extends Command {
 			if (sizeof($parts) > 1) {
 				$id = $parts[0];
 				$ip = $parts[1];
-				if (validIp($ip, false) == true) {
+				if ($this->validIp($ip) == true) {
 					$extra = trim(`touch {$dir}/vps.ipmap ; export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";grep "^$ip:" {$dir}/vps.ipmap | cut -d: -f2`);
 					if ($extra != '') {
 						$parts = array_merge($parts, explode("\n", $extra));
@@ -141,7 +127,7 @@ class BwInfoCommand extends Command {
 		$vzctl = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 		$cmd = 'export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/sbin:/usr/sbin"; ';
 		foreach ($ips as $ip => $id) {
-			if (validIp($ip, false) == true) {
+			if ($this->validIp($ip, false) == true) {
 				if ($vzctl == '') {
 					$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-dst $ip 2>/dev/null; ";
 					$cmd .= "ebtables -t filter -D FORWARD -p IPv4 --ip-src $ip 2>/dev/null; ";
@@ -255,7 +241,7 @@ class BwInfoCommand extends Command {
 				}
 			}
 			/* foreach ($ips as $ip => $id) {
-			if (validIp($ip, false) == true) {
+			if ($this->validIp($ip, false) == true) {
 			$veid = $vpsName2Veid[$id];
 			$line = explode(' ', trim(`vznetstat -c 1 -v "{$veid}"|tail -n 1|awk '{ print \$3 " " \$5 }'`));
 			list($in, $out) = $line;
@@ -277,7 +263,7 @@ class BwInfoCommand extends Command {
 			}
 		} else {
 			foreach ($ips as $ip => $id) {
-				if (validIp($ip, false) == true) {
+				if ($this->validIp($ip, false) == true) {
 					$lines = explode("\n", trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; iptables -nvx -L FORWARD 2>/dev/null | grep -v DROP  | awk '{ print " " $7 " " $8 " " $2 }' | grep -vi "[a-z]" | sort -n | grep " $ip " | awk '{ print \$3 }'`));
 					//echo "$ip:$id:$lines\n";
 					if (sizeof($lines) == 2) {
@@ -290,7 +276,7 @@ class BwInfoCommand extends Command {
 				}
 			}
 			`PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/sbin:/usr/sbin"  iptables -Z`;
-			vps_iptables_traffic_rules($ips);
+			$this->vps_iptables_traffic_rules($ips);
 		}
 		return $totals;
 	}

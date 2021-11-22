@@ -1,4 +1,19 @@
 <?php
+/**
+* CPU Usage Updater - by Joe Huss <detain@interserver.net>
+* Updates the CPU Usage at periodic intervals (10).  It measures the time
+* spent each time getting + updating the usage, and if it ran faster than
+* the interval time, it sleeps for the difference.  It repeats this entire
+* process until a the total time spent is equal or greater than maxtime (60).
+*
+* How to get CPU Usage:
+* - read the first line of   /proc/stat
+* - discard the first word of that first line   (it's always cpu)
+* - sum all of the times found on that first line to get the total time
+* - divide the fourth column ("idle") by the total time, to get the fraction of time spent being idle
+* - subtract the previous fraction from 1.0 to get the time spent being   not   idle
+* - multiple by   100   to get a percentage
+*/
 namespace App\Command\CronCommand;
 
 use App\Vps;
@@ -27,53 +42,76 @@ class CpuUsageCommand extends Command {
 
 	public function execute() {
 		Vps::init($this->getOptions(), []);
-/*
-#!/bin/bash
-# CPU Usage Updater - by Joe Huss <detain@interserver.net>
-#  Updates the CPU Usage at periodic intervals (10).  It measures the time
-#  spent each time getting + updating the usage, and if it ran faster than
-#  the interval time, it sleeps for the difference.  It repeats this entire
-#  process until a the total time spent is equal or greater than maxtime (60).
-base="$(readlink -f "$(dirname "$0")")";
-start=$(date +%s);
-new=${start};
-last=${start};
-spent=0;
-interval=30;
-maxtime=35;
-showts=0;
-[ $showts -eq 1 ] && echo -n "${new} ";
-echo "Getitng CPU usage every ${interval} seconds for the next ${maxtime} seconds";
-while [ ${spent} -lt ${maxtime} ]; do
-	new=$(date +%s);
-	first=$new;
-	prev=$new;
-	[ $showts -eq 1 ] && echo -n "${new} ";
-	echo -n "Grabbing";
-	#cpu_usage="$(${base}/cpu_usage.sh -json| sed s#"\""#"\&quot;"#g)";
-	cpu_usage="$(${base}/cpu_usage.sh -json)";
-	new=$(date +%s);
-	lastspent=$((${new} - ${prev}));
-	prev=$new;
-	echo -n "(${lastspent}s),Sending";
-	#curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage=${cpu_usage}" "https://mynew.interserver.net/vps_queue.php" 2>/dev/null;
-	curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage=${cpu_usage}" "http://mynew.interserver.net:55151/queue.php" 2>/dev/null;
-	new=$(date +%s);
-	lastspent=$((${new} - ${prev}));
-	prev=$new;
-	echo -n "(${lastspent}s),Checking"
-	lastspent=$((${new} - ${first}));
-	spent=$((${new} - ${start}));
-	echo -n "(${lastspent}s)"
-	if [ ${lastspent} -lt ${interval} ]; then
-		speedy=$((${interval} - ${lastspent}));
-		echo -n ",Sleeping(${speedy}s)"
-		sleep ${speedy}s;
-		spent=$((${spent} + ${speedy}));
-	fi;
-	echo ",Overall(${spent}/${maxtime}s),Left($((${maxtime} - ${spent}))s)";
-	last=${new};
-done;
-*/
+		$last = $new = $start = time();
+		$spent = 0;
+		$interval = 30;
+		$maxtime = 35;
+		$showts = false;
+		if ($showts === true)
+			echo $new.' ';
+		echo "Getitng CPU usage every {$interval} seconds for the next {$maxtime} seconds\n";
+		while ($spent < $maxtime) {
+			$prev = $first = $new = time();
+			if ($showts === true)
+				echo $new.' ';
+			echo 'Grabbing';
+
+			$usageFile = $_SERVER['HOME'].'/.provirted/cpu_usage.json';
+			$usage = ['total' => [], 'idle' => []];
+			$lastUsage = file_exists($usageFile) ? json_decode(file_get_contents($usageFile), true) : $usage;
+			$cpu = [];
+			$files = [];
+			if (file_exists('/proc/vz/fairsched/cpu.proc.stat')) {
+				foreach (glob('/proc/vz/fairsched/*/cpu.proc.stat') as $file) {
+					$vzid = intval(basename(dirname($file)));
+					$files[$vzid] = $file;
+				}
+			}
+			$files[0] = '/proc/stat';
+			foreach ($files as $vzid => $file) {
+				$text = file_get_contents($file);
+				if (preg_match_all('/^(?P<cpu>cpu[0-9]*)\s+(?P<user>\d+)\s+(?P<nice>\d+)\s+(?P<system>\d+)\s+(?P<idle>\d+)\s+(?<iowait>\d+)\s+(?P<irq>\d+)\s+(?P<softirq>\d+)\s*(?P<steal>\d*)\s*(?P<guest>\d*)/m', $text, $matches)) {
+					$usage['total'][$vzid] = [];
+					$usage['idle'][$vzid] = [];
+					$cpu[$vzid] = [];
+					foreach ($matches[0] as $idx => $line) {
+						$cpu = $matches['cpu'][$idx];
+						$lastIdle = isset($lastUsage['total'][$vzid]) && isset($lastUsage['total'][$vzid][$cpu]) ? $lastUsage['total'][$vzid][$cpu] : 0;
+						$lastTotal = isset($lastUsage['idle'][$vzid]) && isset($lastUsage['idle'][$vzid][$cpu]) ? $lastUsage['idle'][$vzid][$cpu] : 0;
+						$totalTime = intval($matches['user'][$idx]) + intval($matches['nice'][$idx]) + intval($matches['system'][$idx]) + intval($matches['idle'][$idx]) + intval($matches['iowait'][$idx]) + intval($matches['irq'][$idx]) + intval($matches['softirq'][$idx]) + intval($matches['steal'][$idx]) + intval($matches['guest'][$idx]);
+						$idleTime = $matches['idle'][$idx];
+						$idleTimeFraction = ($idleTime - $lastIdle) / ($totalTime - $lastTotal);
+						$usedTime = 1.0 - $idleTime;
+						$usedPct = round(100 * $usedTime, 2);
+						$cpu[$vzid][$cpu] = $usedPct;
+						$usage['total'][$vzid][$cpu] = $totalTime;
+						$usage['total'][$vzid][$cpu] = $idleTime;
+					}
+				}
+			}
+			file_put_contents($usageFile, json_encode($usage));
+			$cpu_usage = json_encode($cpu);
+
+			$new = time();
+			$lastspent = $new - $prev;
+			$prev = $new;
+			echo "({$lastspent}s),Sending";
+			echo `curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage={$cpu_usage}" "http://mynew.interserver.net:55151/queue.php" 2>/dev/null`;
+			$new = time();
+			$lastspent = $new - $prev;
+			$prev = $new;
+			echo "({$lastspent}s),Checking";
+			$lastspent = $new - $first;
+			$spent = $new - $start;
+			echo "({$lastspent}s)";
+			if ($lastspent < $interval) {
+				$speedy = $interval - $lastspent;
+				echo ",Sleeping({$speedy}s})";
+				sleep($speedy);
+				$spent = $spent + $speedy;
+			}
+			echo ",Overall({$spent}/{$maxtime}s),Left(".($maxtime - $spent)."s)\n";
+			$last = $new;
+		}
 	}
 }
