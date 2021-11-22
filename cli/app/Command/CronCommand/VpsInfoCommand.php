@@ -282,7 +282,7 @@ class VpsInfoCommand extends Command {
 									break;
 								}
 							}
-							$ips[$name] = explode(' ', str_replace('/255.255.255.0', '', $data['IP_ADDRESS']));
+							$ips[$name] = explode(' ', str_replace('/255.255.255.0', '', trim($data['IP_ADDRESS'])));
 						}
 					}
 				}
