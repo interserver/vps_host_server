@@ -85,7 +85,7 @@ class CpuUsageCommand extends Command {
 						$usedPct = round(100 * $usedTime, 2);
 						$cpu[$vzid][$cpuName] = $usedPct;
 						$usage['total'][$vzid][$cpuName] = $totalTime;
-						$usage['total'][$vzid][$cpuName] = $idleTime;
+						$usage['idle'][$vzid][$cpuName] = $idleTime;
 					}
 				}
 			}
@@ -105,8 +105,8 @@ class CpuUsageCommand extends Command {
 			$spent = $new - $start;
 			echo "({$lastspent}s)";
 			if ($lastspent < $interval) {
-				$speedy = $interval - $lastspent;
-				echo ",Sleeping({$speedy}s})";
+				$speedy = $interval - $spent;
+				echo ",Sleeping({$speedy}s)";
 				sleep($speedy);
 				$spent = $spent + $speedy;
 			}
