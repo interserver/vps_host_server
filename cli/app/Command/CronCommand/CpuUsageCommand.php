@@ -109,6 +109,8 @@ class CpuUsageCommand extends Command {
 				echo ",Sleeping({$speedy}s)";
 				sleep($speedy);
 				$spent = $spent + $speedy;
+			} else {
+				continue;
 			}
 			echo ",Overall({$spent}/{$maxtime}s),Left(".($maxtime - $spent)."s)\n";
 			$last = $new;
