@@ -269,22 +269,24 @@ class VpsInfoCommand extends Command {
 					}
 				}
 			}
-			$tips = trim(`{$dir}/vps_get_ip_assignments.sh`);
-			if ($tips != '') {
-				$tips = explode("\n", $tips);
-				foreach ($tips as $line) {
-					$parts = explode(' ', $line);
-					$ips[$parts[0]] = array();
-					foreach ($parts as $idx => $ip) {
-						if ($idx == 0) {
-							continue;
+			if (trim(`which prlctl 2>/dev/null`) != '' || trim(`which vzctl 2>/dev/null`) != '') {
+				foreach (glob('/etc/vz/conf/*.conf') as $fileName) {
+					if (preg_match_all('/^(?P<field>[A-Z_]*)="(?P<value>.*)"/m', file_get_contents($fileName), $matches)) {
+						$data = ['FILENAME' => basename($fileName, '.conf')];
+						foreach ($matches[0] as $idx => $line)
+							$data[$matches['field'][$idx]] = $matches['value'][$idx];
+						if (array_key_exists('IP_ADDRESS', $data)) {
+							foreach (['VEID', 'NAME', 'UUID', 'FILENAME'] as $field) {
+								if (array_key_exists($field, $data)) {
+									$name = $data[$field];
+									break;
+								}
+							}
+							$ips[$name] = explode(' ', str_replace('/255.255.255.0', '', $data['IP_ADDRESS']));
 						}
-						$ips[$parts[0]][] = $ip;
 					}
-					//$servers[$id]['ips'] = $ips[$parts[0];
 				}
 			}
-		}
 		//if (preg_match_all("/^[ ]*(?P<dev>[\w]+):(?P<inbytes>[\d]+)[ ]+(?P<inpackets>[\d]+)[ ]+(?P<inerrs>[\d]+)[ ]+(?P<indrop>[\d]+)[ ]+(?P<infifo>[\d]+)[ ]+(?P<inframe>[\d]+)[ ]+(?P<incompressed>[\d]+)[ ]+(?P<inmulticast>[\d]+)[ ]+(?P<outbytes>[\d]+)[ ]+(?P<outpackets>[\d]+)[ ]+(?P<outerrs>[\d]+)[ ]+(?P<outdrop>[\d]+)[ ]+(?P<outfifo>[\d]+)[ ]+(?P<outcolls>[\d]+)[ ]+(?P<outcarrier>[\d]+)[ ]+(?P<outcompressed>[\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches))
 		if (preg_match_all("/^[ ]*([\w]+):\s*([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]+([\d]+)[ ]*$/im", file_get_contents('/proc/net/dev'), $matches)) {
 			$bw = array(time(), 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
@@ -391,9 +393,8 @@ class VpsInfoCommand extends Command {
 		);
 		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=server_list -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 		. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
-		. $curl_cmd.' "'.$url.'" 2>/dev/null;';
-		//echo "CMD: $cmd\n";
-		$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
+		. $curl_cmd.' "'.$url.'" 2>/dev/null; /bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
+		// echo $cmd.PHP_EOL;
 		echo trim(`$cmd`);
 
 	}
