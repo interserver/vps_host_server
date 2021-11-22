@@ -42,8 +42,6 @@ class CpuUsageCommand extends Command {
 
 	public function execute() {
 		Vps::init($this->getOptions(), []);
-		echo "Getitng CPU usage every {$interval} seconds for the next {$maxtime} seconds\n";
-		echo 'Grabbing';
 		$usageFile = $_SERVER['HOME'].'/.provirted/cpu_usage.json';
 		$usage = ['total' => [], 'idle' => []];
 		$lastUsage = file_exists($usageFile) ? json_decode(file_get_contents($usageFile), true) : $usage;
