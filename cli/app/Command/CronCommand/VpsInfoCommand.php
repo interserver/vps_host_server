@@ -120,12 +120,6 @@ class VpsInfoCommand extends Command {
 					$servers[$veid] = $server;
 				}
 			}
-			if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
-				foreach ($cpu_usage as $id => $cpu_data) {
-					//$servers[$id]['cpu_usage'] = serialize($cpu_data);
-					$servers[$id]['cpu_usage'] = $cpu_data;
-				}
-			}
 			if (file_exists('/etc/dhcp/dhcpd.vps')) {
 				$ipcmd = 'grep host /etc/dhcp/dhcpd.vps |sed s#"^.*host \([^ ]*\) .*fixed-address \([0-9\.]*\);.*$"#"\1:\2"#g';
 				$lines = explode("\n", trim(`$ipcmd`));
@@ -275,12 +269,6 @@ class VpsInfoCommand extends Command {
 					}
 				}
 			}
-			if ($cpu_usage = @unserialize(`bash {$dir}/cpu_usage.sh -serialize`)) {
-				foreach ($cpu_usage as $id => $cpu_data) {
-					//$servers[$id]['cpu_usage'] = serialize($cpu_data);
-					$servers[$id]['cpu_usage'] = $cpu_data;
-				}
-			}
 			$tips = trim(`{$dir}/vps_get_ip_assignments.sh`);
 			if ($tips != '') {
 				$tips = explode("\n", $tips);
@@ -403,7 +391,6 @@ class VpsInfoCommand extends Command {
 		);
 		$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=server_list -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 		. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
-		//	. ($cpu_data != '' ? ' -F cpu_usage="'.base64_encode(gzcompress($cpu_data, 9)).'" ' : '')
 		. $curl_cmd.' "'.$url.'" 2>/dev/null;';
 		//echo "CMD: $cmd\n";
 		$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
