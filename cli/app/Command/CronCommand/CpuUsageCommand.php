@@ -75,7 +75,7 @@ class CpuUsageCommand extends Command {
 					$usage['idle'][$vzid] = [];
 					$cpu[$vzid] = [];
 					foreach ($matches[0] as $idx => $line) {
-						$cpu = $matches['cpu'][$idx];
+						$cpuName = $matches['cpu'][$idx];
 						$lastIdle = isset($lastUsage['total'][$vzid]) && isset($lastUsage['total'][$vzid][$cpu]) ? $lastUsage['total'][$vzid][$cpu] : 0;
 						$lastTotal = isset($lastUsage['idle'][$vzid]) && isset($lastUsage['idle'][$vzid][$cpu]) ? $lastUsage['idle'][$vzid][$cpu] : 0;
 						$totalTime = intval($matches['user'][$idx]) + intval($matches['nice'][$idx]) + intval($matches['system'][$idx]) + intval($matches['idle'][$idx]) + intval($matches['iowait'][$idx]) + intval($matches['irq'][$idx]) + intval($matches['softirq'][$idx]) + intval($matches['steal'][$idx]) + intval($matches['guest'][$idx]);
@@ -83,9 +83,9 @@ class CpuUsageCommand extends Command {
 						$idleTimeFraction = ($idleTime - $lastIdle) / ($totalTime - $lastTotal);
 						$usedTime = 1.0 - $idleTime;
 						$usedPct = round(100 * $usedTime, 2);
-						$cpu[$vzid][$cpu] = $usedPct;
-						$usage['total'][$vzid][$cpu] = $totalTime;
-						$usage['total'][$vzid][$cpu] = $idleTime;
+						$cpu[$vzid][$cpuName] = $usedPct;
+						$usage['total'][$vzid][$cpuName] = $totalTime;
+						$usage['total'][$vzid][$cpuName] = $idleTime;
 					}
 				}
 			}
