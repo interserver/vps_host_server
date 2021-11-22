@@ -19,6 +19,7 @@ class BwInfoCommand extends Command {
 		parent::options($opts);
 		$opts->add('v|verbose', 'increase output verbosity (stacked..use multiple times for even more output)')->isa('number')->incremental();
 		$opts->add('t|virt:', 'Type of Virtualization, kvm, openvz, virtuozzo, lxc')->isa('string')->validValues(['kvm','openvz','virtuozzo','lxc']);
+		$opts->add('a|all', 'Use All Available HD, CPU Cores, and 70% RAM');
 	}
 
     /** @param \CLIFramework\ArgInfoList $args */
@@ -27,15 +28,14 @@ class BwInfoCommand extends Command {
 
 	public function execute() {
 		Vps::init($this->getOptions(), []);
+		/** @var {\GetOptionKit\OptionResult|GetOptionKit\OptionCollection} */
+		$opts = $this->getOptions();
+        $useAll = array_key_exists('all', $opts->keys) && $opts->keys['all']->value == 1;
 		//$url = 'https://mynew.interserver.net/vps_queue.php';
 		$url = 'http://mynew.interserver.net:55151/queue.php';
 		$ips = $this->get_vps_ipmap();
 		$totals = $this->get_vps_iptables_traffic($ips);
-		if (isset($_SERVER['argv'][1])) {
-			$module = $_SERVER['argv'][1];
-		} else {
-			$module = 'vps';
-		}
+		$module = $useAll === true ? 'quickservers' : 'vps';
 		if (sizeof($totals) > 0) {
 			//print_r($ips);print_r($totals);
 			$cmd = 'curl --connect-timeout 30 --max-time 60 -k -d module='.$module.' -d action=bandwidth -d servers="'.urlencode(base64_encode(gzcompress(json_encode($ips)))).'" -d bandwidth="'.urlencode(base64_encode(gzcompress(json_encode($totals)))).'" "'.$url.'" 2>/dev/null;';
