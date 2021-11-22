@@ -50,7 +50,7 @@ class CpuUsageCommand extends Command {
 		if ($showts === true)
 			echo $new.' ';
 		echo "Getitng CPU usage every {$interval} seconds for the next {$maxtime} seconds\n";
-		while ($spent < $interval) {
+		while ($spent < $maxtime) {
 			$prev = $first = $new = time();
 			if ($showts === true)
 				echo $new.' ';
@@ -105,7 +105,7 @@ class CpuUsageCommand extends Command {
 			$spent = $new - $start;
 			$speedy = $interval - $spent;
 			echo "({$lastspent}s)";
-			if ($lastspent < $interval && $speedy > 0) {
+			if ($spent < $interval && $speedy > 0) {
 				echo ",Sleeping({$speedy}s)";
 				sleep($speedy);
 				$spent = $spent + $speedy;
