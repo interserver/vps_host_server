@@ -42,78 +42,43 @@ class CpuUsageCommand extends Command {
 
 	public function execute() {
 		Vps::init($this->getOptions(), []);
-		$last = $new = $start = time();
-		$spent = 0;
-		$interval = 30;
-		$maxtime = 35;
-		$showts = false;
-		if ($showts === true)
-			echo $new.' ';
 		echo "Getitng CPU usage every {$interval} seconds for the next {$maxtime} seconds\n";
-		while ($spent < $maxtime) {
-			$prev = $first = $new = time();
-			if ($showts === true)
-				echo $new.' ';
-			echo 'Grabbing';
-
-			$usageFile = $_SERVER['HOME'].'/.provirted/cpu_usage.json';
-			$usage = ['total' => [], 'idle' => []];
-			$lastUsage = file_exists($usageFile) ? json_decode(file_get_contents($usageFile), true) : $usage;
-			$cpu = [];
-			$files = [];
-			if (file_exists('/proc/vz/fairsched/cpu.proc.stat')) {
-				foreach (glob('/proc/vz/fairsched/*/cpu.proc.stat') as $file) {
-					$vzid = intval(basename(dirname($file)));
-					$files[$vzid] = $file;
-				}
+		echo 'Grabbing';
+		$usageFile = $_SERVER['HOME'].'/.provirted/cpu_usage.json';
+		$usage = ['total' => [], 'idle' => []];
+		$lastUsage = file_exists($usageFile) ? json_decode(file_get_contents($usageFile), true) : $usage;
+		$cpu = [];
+		$files = [];
+		if (file_exists('/proc/vz/fairsched/cpu.proc.stat')) {
+			foreach (glob('/proc/vz/fairsched/*/cpu.proc.stat') as $file) {
+				$vzid = intval(basename(dirname($file)));
+				$files[$vzid] = $file;
 			}
-			$files[0] = '/proc/stat';
-			foreach ($files as $vzid => $file) {
-				$text = file_get_contents($file);
-				if (preg_match_all('/^(?P<cpu>cpu[0-9]*)\s+(?P<user>\d+)\s+(?P<nice>\d+)\s+(?P<system>\d+)\s+(?P<idle>\d+)\s+(?<iowait>\d+)\s+(?P<irq>\d+)\s+(?P<softirq>\d+)\s*(?P<steal>\d*)\s*(?P<guest>\d*)/m', $text, $matches)) {
-					$usage['total'][$vzid] = [];
-					$usage['idle'][$vzid] = [];
-					$cpu[$vzid] = [];
-					foreach ($matches[0] as $idx => $line) {
-						$cpuName = $matches['cpu'][$idx];
-						$lastIdle = array_key_exists($vzid, $lastUsage['total']) && array_key_exists($cpuName, $lastUsage['total'][$vzid]) ? $lastUsage['total'][$vzid][$cpuName] : 0;
-						$lastTotal = array_key_exists($vzid, $lastUsage['idle']) && array_key_exists($cpuName, $lastUsage['idle'][$vzid]) ? $lastUsage['idle'][$vzid][$cpuName] : 0;
-						$totalTime = intval($matches['user'][$idx]) + intval($matches['nice'][$idx]) + intval($matches['system'][$idx]) + intval($matches['idle'][$idx]) + intval($matches['iowait'][$idx]) + intval($matches['irq'][$idx]) + intval($matches['softirq'][$idx]) + intval($matches['steal'][$idx]) + intval($matches['guest'][$idx]);
-						$idleTime = $matches['idle'][$idx];
-						$idleTimeFraction = ($idleTime - $lastIdle) / ($totalTime - $lastTotal);
-						$usedTime = 1.0 - $idleTime;
-						$usedPct = round(100 * $usedTime, 2);
-						$cpu[$vzid][$cpuName] = $usedPct;
-						$usage['total'][$vzid][$cpuName] = $totalTime;
-						$usage['idle'][$vzid][$cpuName] = $idleTime;
-					}
-				}
-			}
-			file_put_contents($usageFile, json_encode($usage));
-			$cpu_usage = json_encode($cpu);
-
-			$new = time();
-			$lastspent = $new - $prev;
-			$prev = $new;
-			echo "({$lastspent}s),Sending";
-			echo `curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage={$cpu_usage}" "http://mynew.interserver.net:55151/queue.php" 2>/dev/null`;
-			$new = time();
-			$lastspent = $new - $prev;
-			$prev = $new;
-			echo "({$lastspent}s),Checking";
-			$lastspent = $new - $first;
-			$spent = $new - $start;
-			$speedy = $interval - $spent;
-			echo "({$lastspent}s)";
-			if ($spent < $interval && $speedy > 0) {
-				echo ",Sleeping({$speedy}s)";
-				sleep($speedy);
-				$spent = $spent + $speedy;
-			} else {
-				break;
-			}
-			echo ",Overall({$spent}/{$maxtime}s),Left(".($maxtime - $spent)."s)\n";
-			$last = $new;
 		}
+		$files[0] = '/proc/stat';
+		foreach ($files as $vzid => $file) {
+			$text = file_get_contents($file);
+			if (preg_match_all('/^(?P<cpu>cpu[0-9]*)\s+(?P<user>\d+)\s+(?P<nice>\d+)\s+(?P<system>\d+)\s+(?P<idle>\d+)\s+(?<iowait>\d+)\s+(?P<irq>\d+)\s+(?P<softirq>\d+)\s*(?P<steal>\d*)\s*(?P<guest>\d*)/m', $text, $matches)) {
+				$usage['total'][$vzid] = [];
+				$usage['idle'][$vzid] = [];
+				$cpu[$vzid] = [];
+				foreach ($matches[0] as $idx => $line) {
+					$cpuName = $matches['cpu'][$idx];
+					$lastIdle = array_key_exists($vzid, $lastUsage['total']) && array_key_exists($cpuName, $lastUsage['total'][$vzid]) ? $lastUsage['total'][$vzid][$cpuName] : 0;
+					$lastTotal = array_key_exists($vzid, $lastUsage['idle']) && array_key_exists($cpuName, $lastUsage['idle'][$vzid]) ? $lastUsage['idle'][$vzid][$cpuName] : 0;
+					$totalTime = intval($matches['user'][$idx]) + intval($matches['nice'][$idx]) + intval($matches['system'][$idx]) + intval($matches['idle'][$idx]) + intval($matches['iowait'][$idx]) + intval($matches['irq'][$idx]) + intval($matches['softirq'][$idx]) + intval($matches['steal'][$idx]) + intval($matches['guest'][$idx]);
+					$idleTime = intval($matches['idle'][$idx]);
+					$idleTimeFraction = ($idleTime - $lastIdle) / ($totalTime - $lastTotal);
+					$usedTime = 1.0 - $idleTime;
+					$usedPct = round(100 * $usedTime, 2);
+					$cpu[$vzid][$cpuName] = $usedPct;
+					$usage['total'][$vzid][$cpuName] = $totalTime;
+					$usage['idle'][$vzid][$cpuName] = $idleTime;
+				}
+			}
+		}
+		file_put_contents($usageFile, json_encode($usage));
+		$cpu_usage = json_encode($cpu);
+		echo `curl --connect-timeout 60 --max-time 600 -k -F action=cpu_usage -F "cpu_usage={$cpu_usage}" "http://mynew.interserver.net:55151/queue.php" 2>/dev/null`;
 	}
 }
