@@ -76,8 +76,8 @@ class CpuUsageCommand extends Command {
 					$cpu[$vzid] = [];
 					foreach ($matches[0] as $idx => $line) {
 						$cpuName = $matches['cpu'][$idx];
-						$lastIdle = array_key_exists($vzid, $lastUsage['total']) && array_key_exists($cpu, $lastUsage['total'][$vzid]) ? $lastUsage['total'][$vzid][$cpu] : 0;
-						$lastTotal = array_key_exists($vzid, $lastUsage['idle']) && array_key_exists($cpu, $lastUsage['idle'][$vzid]) ? $lastUsage['idle'][$vzid][$cpu] : 0;
+						$lastIdle = array_key_exists($vzid, $lastUsage['total']) && array_key_exists($cpuName, $lastUsage['total'][$vzid]) ? $lastUsage['total'][$vzid][$cpuName] : 0;
+						$lastTotal = array_key_exists($vzid, $lastUsage['idle']) && array_key_exists($cpuName, $lastUsage['idle'][$vzid]) ? $lastUsage['idle'][$vzid][$cpuName] : 0;
 						$totalTime = intval($matches['user'][$idx]) + intval($matches['nice'][$idx]) + intval($matches['system'][$idx]) + intval($matches['idle'][$idx]) + intval($matches['iowait'][$idx]) + intval($matches['irq'][$idx]) + intval($matches['softirq'][$idx]) + intval($matches['steal'][$idx]) + intval($matches['guest'][$idx]);
 						$idleTime = $matches['idle'][$idx];
 						$idleTimeFraction = ($idleTime - $lastIdle) / ($totalTime - $lastTotal);
