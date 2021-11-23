@@ -55,14 +55,16 @@ if [ $old_cron -eq 1 ]; then
 			#$dir/cpu_usage_updater.sh 2>$dir/cron.cpu_usage >&2 &
 			$dir/cli/provirted.phar cron cpu-usage 2>$dir/cron.cpu_usage >&2 &
 		fi;
-		$dir/qs_update_info.php >> $log 2>&1
+		#$dir/qs_update_info.php >> $log 2>&1
+		$dir/cli/provirted.phar cron host-info -a >> $log 2>&1
 		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_qs $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			echo "Get New VPS Running:    $(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
 		if [ ! -e /root/_disableqstraffic ]; then
-			$dir/qs_traffic.php >> $log 2>&1
+			#$dir/qs_traffic.php >> $log 2>&1
+			$dir/cli/provirted.phar cron bw-info -a >> $log 2>&1
 		fi
 		#$dir/vps_traffic_new.php quickservers >> $log 2>&1
 		curl -s --connect-timeout 10 --max-time 15 -d action=map http://mynew.interserver.net:55151/queue.php | bash
