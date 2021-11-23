@@ -167,7 +167,7 @@ class BwInfoCommand extends Command {
 				foreach ($vnetcounters as $line) {
 					list($vnet, $out, $in) = explode(' ', $line);
 					//echo "Got    VNet:$vnet   IN:$in    OUT:$out\n";
-					$vnets[$vnet] = array('in' => $in, 'out' => $out);
+					$vnets[$vnet] = array('in' => intval($in), 'out' => intval($out));
 				}
 				$cmd = 'grep -H -i fe /sys/devices/virtual/net/vnet*/address 2>/dev/null| sed s#"/sys/devices/virtual/net/\([^/]*\)/address:fe:\(.*\)$"#"\1 52:\2"#g';
 				$vnetmacs = trim(`$cmd`);
@@ -191,11 +191,11 @@ class BwInfoCommand extends Command {
 							$vpss[$vps] = $vnets[$macs[$mac]];
 							$vpss[$vps]['ip'] = $ip;
 							if (isset($last) && isset($vpss[$vps])) {
-								$in_new = bcsub($vpss[$vps]['in'], $last[$vps]['in'], 0);
-								$out_new = bcsub($vpss[$vps]['out'], $last[$vps]['out'], 0);
+								$in_new = $vpss[$vps]['in'] - intval($last[$vps]['in']);
+								$out_new = $vpss[$vps]['out'] - intval($last[$vps]['out']);
 							} elseif (isset($last)) {
-								$in_new = $last[$vps]['in'];
-								$out_new = $last[$vps]['out'];
+								$in_new = intval($last[$vps]['in']);
+								$out_new = intval($last[$vps]['out']);
 							} else {
 								$in_new = $vpss[$vps]['in'];
 								$out_new = $vpss[$vps]['out'];
@@ -221,8 +221,8 @@ class BwInfoCommand extends Command {
 			$vpss = array();
 			foreach ($matches['uuid'] as $idx => $uuid) {
 				if ($uuid != '0') {
-					$in = $matches['in_bytes'][$idx];
-					$out = $matches['out_bytes'][$idx];
+					$in = intval($matches['in_bytes'][$idx]);
+					$out = intval($matches['out_bytes'][$idx]);
 					if ((false !== $ip = array_search($uuid, $ips))
 					|| (array_key_exists($uuid, $vpsName2Veid) && false !== $ip = array_search($vpsName2Veid[$uuid], $ips))
 					|| (array_key_exists($uuid, $vpsVeid2Name) && false !== $ip = array_search($vpsVeid2Name[$uuid], $ips))) {
@@ -231,8 +231,8 @@ class BwInfoCommand extends Command {
 						else
 							list($in_last, $out_last) = array(0,0);
 						$vpss[$ip] = array($in, $out);
-						$in = bcsub($in, $in_last, 0);
-						$out = bcsub($out, $out_last, 0);
+						$in = $in - intval($in_last);
+						$out = $out - intval($out_last);
 						$total = $in + $out;
 						if ($total > 0) {
 							$totals[$ip] = array('in' => $in, 'out' => $out);
@@ -249,9 +249,9 @@ class BwInfoCommand extends Command {
 			list($in_last, $out_last) = $last[$ip];
 			else
 			list($in_last, $out_last) = array(0,0);
-			$vpss[$ip] = array($in, $out);
-			$in = bcsub($in, $in_last, 0);
-			$out = bcsub($out, $out_last, 0);
+			$vpss[$ip] = array(intval($in), intval($out));
+			$in = intval($in) - intval($in_last);
+			$out = intval($out) - intval($out_last);
 			$total = $in + $out;
 			if ($total > 0) {
 			$totals[$ip] = array('in' => $in, 'out' => $out);
@@ -268,9 +268,9 @@ class BwInfoCommand extends Command {
 					//echo "$ip:$id:$lines\n";
 					if (sizeof($lines) == 2) {
 						list($in, $out) = $lines;
-						$total = $in + $out;
+						$total = intval($in) + intval($out);
 						if ($total > 0) {
-							$totals[$ip] = array('in' => $in, 'out' => $out);
+							$totals[$ip] = array('in' => intval($in), 'out' => intval($out));
 						}
 					}
 				}

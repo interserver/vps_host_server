@@ -16,7 +16,7 @@ class Console extends Application
     	$this->commandGroup('Power', ['stop', 'start', 'restart']);
     	$this->commandGroup('Provisioning', ['config', 'create', 'destroy', 'enable', 'delete', 'backup', 'restore', 'test']);
     	$this->commandGroup('Maintanance', ['install-cpanel', 'reset-password', 'update', 'cd', 'block-smtp', 'add-ip', 'remove-ip', 'change-ip', 'rebuild-dhcp', 'vnc']);
-        $this->commandGroup("Development Commands", ['generate-internals', 'source'])->setId('dev');
+        $this->commandGroup("Development Commands", ['generate-internals'])->setId('dev');
     	$this->topic('basic');
     	$this->topic('examples');
     	//Vps::setLogger($this->getLogger());
