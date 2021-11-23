@@ -44,6 +44,7 @@ class CpuUsageCommand extends Command {
 		Vps::init($this->getOptions(), []);
 		$usageFile = $_SERVER['HOME'].'/.provirted/cpu_usage.json';
 		$usage = ['total' => [], 'idle' => []];
+		@mkdir($_SERVER['HOME'].'/.provirted', 0750, true);
 		$lastUsage = file_exists($usageFile) ? json_decode(file_get_contents($usageFile), true) : $usage;
 		$cpu = [];
 		$files = [];
