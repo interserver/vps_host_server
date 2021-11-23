@@ -30,10 +30,10 @@ class VirtuozzoUpdateCommand extends Command {
 		if (trim(Vps::runCommand('which vzpkg')) == '') {
 			mail('support@interserver.net', 'Cannot find vzpkg package for "provirted.phar cron virtuozzo-update" on '.gethostname(), 'Cannot find vzpkg package for update_virtuozzo.sh script on '.gethostname());
 		} else {
-			echo Vps::runCommand('vzpkg update metadata').PHP_EOL;
-			echo Vps::runCommand('vzpkg list -O | awk \'{ print $1 }\' | xargs -n 1 vzpkg fetch -O');
+			passthru('vzpkg update metadata');
+			passthru('vzpkg list -O | awk \'{ print $1 }\' | xargs -n 1 vzpkg fetch -O');
 			if ((time() - intval(filemtime(Vps::$base.'/.cron_weekly.age'))) > 604800) { // if older than a week
-				echo Vps::runCommand('vzpkg update cache --update-cache').PHP_EOL;
+				passthru('vzpkg update cache --update-cache');
 				touch(Vps::$base.'/.cron_weekly.age');
 			}
 		}
