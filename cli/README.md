@@ -8,13 +8,8 @@ Easy management of Virtualization technologies including KVM, OpenVZ and Virtuoz
 
 * Add template exists checks to the create code
 * Check your passwords beginning with hyphens interfere with the option parsing and that if a double dash will resolve the issue
-* xinetd class and vnc replacement
-    * replace our calls with the new calls including securexinetd
-    * move old files to the unused dir
-    * replace setup-vnc with vnc setup
 * store vzid only in the vzid field not hostname for kvm
   * it looks like we can grab information about the vm by using virt-inspector --no-applications -d <vzid> to get a xml formatted output of basic os info including hostnmae
-* rename internals command to api command and update generation scripts acccordingly
 * fix **reset-password** command adding in detection of windows and skipping if not
 * possibly utilize virt-resize in **update** call instead of qemu-img resize
 * add bash/zsh completion suggestions for ip fields (except client ip) having it show the ips on the host server excluding ones in use
@@ -59,10 +54,7 @@ vps_refresh_vnc.sh
 * **start** Starts a Virtual Machine.
 * **restart** Restarts a Virtual Machine.
 * **block-smtp** Blocks SMTP on a Virtual Machine.
-* **setup-vnc** Setup VNC Allowed IP on a Virtual Machine.
 * **update** Change the hd, cpu, memory, password, etc of a Virtual Machine.
-* **change-hostname** Change Hostname of a Virtual Machine.
-* **change-timezone** Change Timezone of a Virtual Machine.
 * **reset-password** Resets/Clears a Password on a Virtual Machine.
 * **add-ip** Adds an IP Address to a Virtual Machine.
 * **remove-ip** Removes an IP Address from a Virtual Machine.
