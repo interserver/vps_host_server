@@ -241,7 +241,7 @@ class VpsInfoCommand extends Command {
 			if (file_exists('/usr/bin/prlctl')) {
 				$json_servers = json_decode(`prlctl list -a -i -j`, true);
 				foreach ($json_servers as $json_server) {
-					$servers[$json_server['Name']]['ip'] = explode(' ', str_replace('/255.255.255.0', '', trim($json_server['Hardware']['venet0']['ips'])))[0];
+					$servers[$json_server['Name']]['ip'] = isset($json_server['Hardware']['venet0']['ips']) ? explode(' ', str_replace('/255.255.255.0', '', trim($json_server['Hardware']['venet0']['ips'])))[0] : [];
 					if (isset($json_server['Remote display']) && isset($json_server['Remote display']['port'])) {
 						$servers[$json_server['Name']]['vnc'] = $json_server['Remote display']['port'];
 						//$servers[$json_server['ID']]['vnc'] = $json_server['Remote display']['port'];
