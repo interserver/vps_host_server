@@ -146,7 +146,8 @@ class VpsInfoCommand extends Command {
 				$lines = explode("\n", $lines);
 				foreach ($lines as $line) {
 					list($mainIp, $addonIp) = explode(':', $line);
-					$ips[$ipIds[$mainIp]][] = $addonIp;
+					if (array_key_exists($mainIp, $ipIds))
+						$ips[$ipIds[$mainIp]][] = $addonIp;
 				}
 			}
 			$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
