@@ -27,7 +27,7 @@ class HostInfoCommand extends Command {
 
 	public function execute() {
 		Vps::init($this->getOptions(), []);
-		$dir = __DIR__;
+		$dir = Vps::$base;
 		$root_used = trim(`df -P /| awk '{ print $5 }' |grep % | sed s#"%"#""#g`);
 		//if ($root_used > 90) {
 		//$hostname = trim(`hostname;`);

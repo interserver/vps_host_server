@@ -27,7 +27,7 @@ class VpsInfoCommand extends Command {
 
 	public function execute() {
 		Vps::init($this->getOptions(), []);
-		$dir = __DIR__;
+		$dir = Vps::$base;
 		$url = 'https://mynew.interserver.net/vps_queue.php';
 		$curl_cmd = '';
 		$servers = array();

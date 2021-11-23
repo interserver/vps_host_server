@@ -69,7 +69,7 @@ class BwInfoCommand extends Command {
 		global $vpsName2Veid, $vpsVeid2Name;
 		$vpsName2Veid = array();
 		$vpsVeid2Name = array();
-		$dir = __DIR__;
+		$dir = Vps::$base;
 		$vzctl = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; which vzctl 2>/dev/null;`);
 		if ($vzctl == ''  && (file_exists('/etc/dhcpd.vps') || file_exists('/etc/dhcp/dhcpd.vps'))) {
 			$output = trim(`export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin"; if [ -e /etc/dhcp/dhcpd.vps ]; then DHCPVPS=/etc/dhcp/dhcpd.vps; else DHCPVPS=/etc/dhcpd.vps; fi;  if [ -e \$DHCPVPS ]; then grep "^host" \$DHCPVPS | tr \; " " | awk '{ print $2 " " $8 }'; fi;`);
