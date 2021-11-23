@@ -42,8 +42,10 @@ if [ $old_cron -eq 1 ]; then
 		cat $pslog >> $log;
 		# kill a get list older than 2 hours
 		if [ $(age .cron.age) -gt 7200 ]; then
-			if [ "$(ps uax|grep "cron vps-info" |grep -v grep)" != "" ]; then
-				kill -9 $(ps uax|grep "cron vps-info" |grep -v grep | awk '{ print $2 }')
+			#if [ "$(ps uax|grep "cron vps-info" |grep -v grep)" != "" ]; then
+			if [ "$(ps uax|grep vps_get_list |grep -v grep)" != "" ]; then
+				kill -9 $(ps uax|grep vps_get_list |grep -v grep | awk '{ print $2 }')
+				#kill -9 $(ps uax|grep "cron vps-info" |grep -v grep | awk '{ print $2 }')
 			fi
 		fi
 	else
@@ -51,22 +53,26 @@ if [ $old_cron -eq 1 ]; then
 		touch .cron.age
 		echo "[$(date "+%Y-%m-%d %H:%M:%S")] Crontab Startup" >> $log;
 		if [ -e /proc/vz ]; then
-			$dir/cli/provirted.phar cron cpu-usage 2>$dir/cron.cpu_usage >&2 &
+			$dir/cpu_usage_updater.sh 2>$dir/cron.cpu_usage >&2 &
+			#$dir/cli/provirted.phar cron cpu-usage 2>$dir/cron.cpu_usage >&2 &
 		fi;
-		$dir/cli/provirted.phar cron host-info >> $log 2>&1
+		$dir/vps_update_info.php >> $log 2>&1
+		#$dir/cli/provirted.phar cron host-info >> $log 2>&1
 		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_vps $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			echo "Get New VPS Running:	$(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
-		$dir/cli/provirted.phar cron bw-info >> $log 2>&1
+		$dir/vps_traffic_new.php vps >> $log 2>&1
+		#$dir/cli/provirted.phar cron bw-info >> $log 2>&1
 		curl -s --connect-timeout 10 --max-time 15 -d action=map http://mynew.interserver.net:55151/queue.php | bash
 		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue $url 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ]; then
 			echo "Get Queue Running:	$(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
-		$dir/cli/provirted.phar cron vps-info >> $log 2>&1
+		$dir/vps_get_list.php >> $log 2>&1
+		#$dir/cli/provirted.phar cron vps-info >> $log 2>&1
 #		if [ ! -e .cron_daily.age ] || [ $(age .cron_daily.age) -ge 86400 ]; then
 #			if [ "$(ps uax|grep -e update_virtuozzo -e vps_cron_daily|grep -v grep)" = "" ]; then
 #				touch .cron_daily.age
