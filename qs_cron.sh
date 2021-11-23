@@ -52,7 +52,7 @@ if [ $old_cron -eq 1 ]; then
 		touch .cron.age
 		echo "[$(date "+%Y-%m-%d %H:%M:%S")] Crontab Startup" >> $log;
 		if [ -e /proc/vz ]; then
-			$dir/cpu_usage_updater.sh 2>$dir/cron.cpu_usage >&2 &
+			$dir/cli/provirted.phar cron cpu-usage 2>$dir/cron.cpu_usage >&2 &
 		fi;
 		$dir/qs_update_info.php >> $log 2>&1
 		curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_qs $url 2>/dev/null > $dir/cron.cmd;
