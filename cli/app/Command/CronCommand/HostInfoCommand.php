@@ -96,7 +96,7 @@ class HostInfoCommand extends Command {
 				$parts = explode('; ', $matches[2]);
 			}
 			$zfs_status = trim(file_exists('/sbin/zpool') ? `/sbin/zpool status -x` : `/usr/sbin/zpool status -x`);
-			if ($matches[1] == 'OK') {
+			if (!isset($matches[1]) || $matches[1] == 'OK') {
 				if ($zfs_status != 'all pools are healthy') {
 					$matches[1] = 'WARNING';
 				}
