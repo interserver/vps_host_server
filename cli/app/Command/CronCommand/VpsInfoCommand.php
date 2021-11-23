@@ -273,7 +273,7 @@ class VpsInfoCommand extends Command {
 						foreach ($matches[0] as $idx => $line)
 							$data[$matches['field'][$idx]] = $matches['value'][$idx];
 						if (array_key_exists('IP_ADDRESS', $data)) {
-							foreach (['VEID', 'NAME', 'UUID', 'FILENAME'] as $field) {
+							foreach (['NAME', 'VEID', 'UUID', 'FILENAME'] as $field) {
 								if (array_key_exists($field, $data)) {
 									$ips[$data[$field]] = explode(' ', str_replace('/255.255.255.0', '', trim($data['IP_ADDRESS'])));
 									break;
