@@ -317,8 +317,8 @@ class Vps
 			}
 		}
 		foreach ($remotes as $type => $port) {
-			self::getLogger()->write("setting up {$type} on {$vzid} port {$port}".(trim($ip) != '' ? " ip {$ip}" : "")."\n");
-			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($ip) != '' ? $ip : false);
+			self::getLogger()->write("setting up {$type} on {$vzid} port {$port}".(trim($clientIp) != '' ? " ip {$clientIp}" : "")."\n");
+			Xinetd::setup($type == 'vnc' ? $vzid : $vzid.'-'.$type, $port, trim($clientIp) != '' ? $clientIp : false);
 		}
 		Xinetd::unlock();
 		Xinetd::restart();
