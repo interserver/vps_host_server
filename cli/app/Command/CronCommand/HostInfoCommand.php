@@ -99,6 +99,8 @@ class HostInfoCommand extends Command {
 			if (!isset($matches[1]) || $matches[1] == 'OK') {
 				if ($zfs_status != 'all pools are healthy') {
 					$matches[1] = 'WARNING';
+				} else {
+					$matches[1] = 'OK';
 				}
 			}
 			$parts[] = 'zfs:'.$zfs_status;
