@@ -24,7 +24,7 @@ class UpdateCommand extends Command
 		$opts->add('r|ram:', 'Ram Size in MB')->isa('number');
 		$opts->add('c|cpu:', 'Number of CPU/Cores')->isa('number');
 		$opts->add('g|cgroups:', 'Update CGroups to number of slices')->isa('number');
-		$opts->add('t|timezone:', 'changes the timezone')->isa('string');
+		$opts->add('z|timezone:', 'changes the timezone')->isa('string');
 		$opts->add('n|hostname:', 'changes the hostname')->isa('string');
 		$opts->add('p|password:', 'Sets the root/Administrator password')->isa('string');
 		$opts->add('password-reset', 'Sets the root/Administrator password');
