@@ -275,11 +275,10 @@ class VpsInfoCommand extends Command {
 						if (array_key_exists('IP_ADDRESS', $data)) {
 							foreach (['VEID', 'NAME', 'UUID', 'FILENAME'] as $field) {
 								if (array_key_exists($field, $data)) {
-									$name = $data[$field];
+									$ips[$data[$field]] = explode(' ', str_replace('/255.255.255.0', '', trim($data['IP_ADDRESS'])));
 									break;
 								}
 							}
-							$ips[$name] = explode(' ', str_replace('/255.255.255.0', '', trim($data['IP_ADDRESS'])));
 						}
 					}
 				}
