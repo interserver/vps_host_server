@@ -9,7 +9,7 @@ else
 	id="$(echo "$vps" | sed s#"[a-zA-Z]"#""#g)"
 	vnc="$(grep "^$id:" ${base}/vps.vncmap | cut -d: -f2)"
 	if [ "$vnc" != "" ]; then
-		${base}/cli/provirted.phar vnc setup $vps $vnc
+		${base}/provirted.phar vnc setup $vps $vnc
 	fi
 fi
 

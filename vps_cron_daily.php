@@ -15,11 +15,11 @@ if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron
 }
 $url = 'https://mynew.interserver.net/vps_queue.php';
 echo "[" . date('Y-m-d H:i:s') . "] Daily Crontab Startup\n";
-$cmd = dirname(__FILE__).'/cli/provirted.phar cron host-info-extra;';
+$cmd = dirname(__FILE__).'/provirted.phar cron host-info-extra;';
 //echo "Running Command: $cmd\n";
 echo `$cmd`;
 if (file_exists('/usr/bin/prlctl')) {
-	$cmd = dirname(__FILE__).'/cli/provirted.phar cron virtuozzo-update;';
+	$cmd = dirname(__FILE__).'/provirted.phar cron virtuozzo-update;';
 	echo `$cmd`;
 }
 $cmd = 'echo > '.__DIR__.'/workerman/stdout.log';

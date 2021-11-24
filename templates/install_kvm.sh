@@ -368,7 +368,7 @@ if [ $error -eq 0 ]; then
     fi;
     /root/cpaneldirect/tclimit $ip;
     if [ "${myip}" != "" ]; then
-        /root/cpaneldirect/cli/provirted.phar vnc setup ${vps} ${myip};
+        /root/cpaneldirect/provirted.phar vnc setup ${vps} ${myip};
     fi;
     /root/cpaneldirect/vps_refresh_vnc.sh ${vps}
     vnc="$((5900 + $(virsh vncdisplay ${vps} | cut -d: -f2 | head -n 1)))";
@@ -393,7 +393,7 @@ if [ $error -eq 0 ]; then
     service xinetd restart
 fi;
 rm -f /tmp/_securexinetd;
-/root/cpaneldirect/cli/provirted.phar vnc setup ${vps} ${myip}
+/root/cpaneldirect/provirted.phar vnc setup ${vps} ${myip}
 c=0
 found=0
 while [ $found -eq 0 ] && [ $c -le 100 ]; do
