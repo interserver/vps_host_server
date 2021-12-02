@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash 
+
+virt-builder --cache-all-templates
+
 IFS="
 "
 ext=qcow2
@@ -16,6 +19,7 @@ fi
 shift
 if [ "$1" != "" ]; then
 	templates="$(virt-builder -l|sort -n|grep "$1")"
+	shift
 else
 	templates="$(virt-builder -l|sort -n)"
 fi
@@ -26,7 +30,7 @@ for i in ${templates}; do
 	label="$(echo "$i"|sed s#"^[^ ]* *[^ ]* *"#""#g)"
 	os="$(echo "$tag"|cut -d- -f1)"
 	version="$(echo "$tag"|cut -d- -f2-)"
-	cmd="virt-builder -v --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext} --edit '/etc/ssh/sshd_config: s{^#PermitRootLogin}{PermitRootLogin}; s{^PermitRootLogin.*$}{PermitRootLogin yes};' --root-password 'password:interserver123' --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'  --hostname=${os}.is.cc"
+	cmd="virt-builder -v --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext} --edit '/etc/ssh/sshd_config: s{^#PermitRootLogin}{PermitRootLogin}; s{^PermitRootLogin.*$}{PermitRootLogin yes};' --root-password 'password:interserver123' --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'  --hostname=${os}.is.cc --firstboot-install nano,psmisc,wget,rsync,net-tools"
 	if [ "$arch" != "x86_64" ] || [ "$os" = "freebsd" ]; then
 		continue
 	fi;
@@ -51,10 +55,11 @@ for i in ${templates}; do
 			cmd="${cmd} --update";
 		fi;;
 	esac;
-	cmd="${cmd} ${tag}"
+	cmd="${cmd} ${tag} $*"
 	#echo "Building/Updating Tag: ${tag}  Arch: ${arch}  Label: ${label}  With:"
-	echo -e "$(echo "${cmd}"|sed s#" --"#" \\\\\n    --"#g)";
-	eval $cmd $*;
+	echo -e "${cmd}" >> commands.txt;
+	#echo -e "$(echo "${cmd}"|sed s#" --"#" \\\\\n    --"#g)";
+	eval $cmd || touch ${tag}.failed;
 	if [ ! -e "${tag}.${ext}" ]; then
 		echo $tag >> errors.txt
 	fi
@@ -66,20 +71,58 @@ done
 if [ "$format" = "qcow2" ]; then
 	for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debian-10; do
 		if [ -e ${i}.qcow2 ]; then
+			echo "Working in $i $format";
 			guestmount -i -w -a ${i}.qcow2 /mnt;
-			sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
-			sed s#ens2#ens3#g -i /mnt/etc/netplan/01-netcfg.yaml;
+			if [ -f /mnt/etc/network/interfaces ]; then
+                                sed s#ens2#eth0#g -i /mnt/etc/network/interfaces;
+                                sed s#ens3#eth0#g -i /mnt/etc/network/interfaces;
+				sed s#enp1s0#eth0#g -i /mnt/etc/network/interfaces;
+                        fi
+
+			if [ -f /mnt/etc/netplan/01-netcfg.yaml ]; then
+                        	sed s#ens2#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
+                        	sed s#ens3#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
+                                sed s#enp1s0#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
+
+			fi
+
+			guestunmount /mnt && sleep 2s && /vz/test/1 ${i}
+
+			 #virt-customize -a ${i}.qcow2 --edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 /' --run-command 'update-grub2'
+		fi
+	done
+
+	# centos
+	for i in centos-8.0 centos-8.2; do
+		if [ -e ${i}.qcow2 ]; then
+                        echo "Working in $i $format";
+
+			guestmount -i -w -a ${i}.qcow2 /mnt;
+			if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 ]; then
+				mv /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
+			fi
+			if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-ens3 ]; then
+				sed s#enp1s0#ens3#g -i /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
+			fi
+			sed s#SELINUX=enforcing#SELINUX=permissive#g -i /mnt/etc/selinux/config;
 			guestunmount /mnt;
 		fi
 	done
 else
 	for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debian-10; do
 		if [ -e ${i}.qcow2 ]; then
-#			gunzip ${i}.img.gz;
+#			gunzip ${i}.img.gz
+                        echo "Working in $i $format";
 			guestmount -i -w -a ${i}.img /mnt;
-			sed s#ens2#ens3#g -i /mnt/etc/network/interfaces;
-			sed s#ens2#ens3#g -i /mnt/etc/netplan/01-netcfg.yaml;
-			guestunmount /mnt;
+			if [ -f /mnt/etc/network/interfaces ]; then
+				sed s#ens2#eth0#g -i /mnt/etc/network/interfaces;
+	                        sed s#ens3#eth0#g -i /mnt/etc/network/interfaces;
+			fi
+
+			if [ -f /mnt/etc/netplan/01-netcfg.yaml ]; then
+				sed s#ens2#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
+                        	sed s#ens3#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
+			fi
 			gzip -9 ${i}.img;
 		fi
 	done
