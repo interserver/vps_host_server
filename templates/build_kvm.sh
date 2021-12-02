@@ -31,7 +31,7 @@ for i in ${templates}; do
 	os="$(echo "$tag"|cut -d- -f1)"
 	version="$(echo "$tag"|cut -d- -f2-)"
 	cmd="virt-builder -v --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext} --edit '/etc/ssh/sshd_config: s{^#PermitRootLogin}{PermitRootLogin}; s{^PermitRootLogin.*$}{PermitRootLogin yes};' --root-password 'password:interserver123' --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'  --hostname=${os}.is.cc --firstboot-install nano,psmisc,wget,rsync,net-tools"
-	if [ "$arch" != "x86_64" ] || [ "$os" = "freebsd" ]; then
+	if [ "$arch" != "x86_64" ]; then
 		continue
 	fi;
 	case $os in
@@ -48,7 +48,7 @@ for i in ${templates}; do
 			cmd="${cmd} --update";
 		fi;;
 	"scientificlinux")
-		h=ftp.scientificlinux.org cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --update";;
+		h=ftp.scientificlinux.org cmd="${cmd} --edit '/etc/yum.repos.d/sl-other.repo: s{linux/scientific}{linux/scientific/obsolete};' --edit '/etc/yum.repos.d/sl6x.repo: s{linux/scientific}{linux/scientific/obsolete};' --edit '/etc/yum.repos.d/sl.repo: s{linux/scientific}{linux/scientific/obsolete};' --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h' --update";;
 	"debian" | "ubuntu")
 		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
 		if [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
