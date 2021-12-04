@@ -97,7 +97,7 @@ for i in ${templates}; do
 	created="${created} ${tag} ";
 done
 
-for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debian-10; do
+for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-7 debian-8 debian-9 debian-10 debian-11; do
 	if [ "$(echo "${created}"|grep " ${i} ")" = "" ]; then
 		continue;
 	fi;
