@@ -9,9 +9,9 @@ IFS="
 "
 ext=qcow2
 format=qcow2
-export http_proxy=http://localhost:8000
-export https_proxy=http://localhost:8000
-export ftp_proxy=http://localhost:8000
+export http_proxy=http://64.20.46.218:8000
+export https_proxy=http://64.20.46.218:8000
+export ftp_proxy=http://64.20.46.218:8000
 if [ "$1" = "" ]; then
 	echo "$0 <raw|qcow2>"
 	echo " raw|qcow2 - specifies the output image format, defaults to qcow2, craetes .img/.qcow2 image files"
