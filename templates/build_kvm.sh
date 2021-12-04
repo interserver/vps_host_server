@@ -9,9 +9,9 @@ IFS="
 "
 ext=qcow2
 format=qcow2
-export http_proxy=http://64.20.46.218:8000
-export https_proxy=http://64.20.46.218:8000
-export ftp_proxy=http://64.20.46.218:8000
+#export http_proxy=http://64.20.46.218:8000
+#export https_proxy=http://64.20.46.218:8000
+#export ftp_proxy=http://64.20.46.218:8000
 if [ "$1" = "" ]; then
 	echo "$0 <raw|qcow2>"
 	echo " raw|qcow2 - specifies the output image format, defaults to qcow2, craetes .img/.qcow2 image files"
@@ -85,10 +85,8 @@ for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debia
 	if [ -e ${i}.${ext} ]; then
 		echo "Working on ${i}.${ext}";
 		virt-customize -a ${i}.${ext} \
-			--mkdir '/etc/netplan' --touch '/etc/netplan/01-netcfg.yaml' \
-			--mkdir '/etc/network' --touch '/etc/network/interfaces' \
-			--edit '/etc/network/interfaces: s/(ens2|ens3|enp1s0)/eth0/' \
-			--edit '/etc/netplan/01-netcfg.yaml: s/(ens2|ens3|enp1s0)/eth0/' \
+			--mkdir '/etc/netplan' --touch '/etc/netplan/01-netcfg.yaml' --edit '/etc/netplan/01-netcfg.yaml: s/(ens2|ens3|enp1s0)/eth0/' \
+			--mkdir '/etc/network' --touch '/etc/network/interfaces' --edit '/etc/network/interfaces: s/(ens2|ens3|enp1s0)/eth0/' \
 			--edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 /' \
 			--run-command 'update-grub2'
 	fi && \
