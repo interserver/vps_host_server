@@ -102,7 +102,7 @@ for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debia
 	if [ -e ${i}.${ext} ]; then
 		echo "Working on ${i}.${ext}";
 		cmd="virt-customize -a ${i}.${ext}"
-		cmd="${cmd} $(virt-ls -a ubuntu-20.04.qcow2 -R /etc|grep -e network/ -e netplan/|sed s#"^\(.*\)$"#"--edit '/etc\1: s/(ens2|ens3|enp1s0)/eth0/'"#g|tr "\n" " ")"
+		cmd="${cmd} $(virt-ls -a ${i}.${ext} -R /etc|grep -e network/ -e netplan/|sed s#"^\(.*\)$"#"--edit '/etc\1: s/(ens2|ens3|enp1s0)/eth0/'"#g|tr "\n" " ")"
 		cmd="${cmd} --edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"net.ifnames=0 biosdevname=0 /' --run-command 'update-grub2'"
 		eval ${cmd}
 	fi && \
