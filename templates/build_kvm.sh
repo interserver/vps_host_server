@@ -91,7 +91,7 @@ for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debia
 					sed s#${d}#eth0#g -i /mnt${f};
 				done
 			fi
-        fi && \
+        done && \
 		guestunmount /mnt && \
 		sleep 2s && \
 		virt-customize -a ${i}.${ext} \
