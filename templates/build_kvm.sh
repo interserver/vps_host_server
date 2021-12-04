@@ -86,7 +86,7 @@ for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debia
 		echo "Working on ${i}.${ext}";
 		guestmount -i -w -a ${i}.${ext} /mnt && \
 		for f in /etc/network/interfaces /etc/netplan/01-netcfg.yaml; do
-			if [ -f /mnt{$f} ]; then
+			if [ -f /mnt${f} ]; then
 				for d in ens2 ens3 enp1s0; do
 					sed s#${d}#eth0#g -i /mnt${f};
 				done
