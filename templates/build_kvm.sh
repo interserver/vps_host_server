@@ -71,7 +71,6 @@ for i in ${templates}; do
 			cmd="${cmd} --update";
 		fi;;
 	"scientificlinux")
-		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 		h=ftp.scientificlinux.org
 		cmd="${cmd} --edit '/etc/yum.repos.d/sl-other.repo: s{linux/scientific}{linux/scientific/obsolete};'"
 		cmd="${cmd} --edit '/etc/yum.repos.d/sl6x.repo: s{linux/scientific}{linux/scientific/obsolete};'"
