@@ -48,8 +48,8 @@ for i in ${templates}; do
 		cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};'"
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		cmd="${cmd} --append-line '/etc/sysconfig/network-scripts/ifcfg-eth0:DEVICE=eth0'";
-		cmd="${cmd} --selinux-relabel"
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 73 ]; then
+			cmd="${cmd} --selinux-relabel"
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 			cmd="${cmd} --update";
 		fi;;
