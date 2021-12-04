@@ -72,7 +72,7 @@ for i in ${templates}; do
 		cmd="${cmd} --update";;
 	"debian" | "ubuntu")
 		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
-		if [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
+		if [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
 		fi;;
 	esac;
