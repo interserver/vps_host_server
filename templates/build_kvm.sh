@@ -1,4 +1,7 @@
-#!/usr/bin/env bash 
+#!/usr/bin/env bash
+#
+# https://libguestfs.org/virt-builder.1.html
+#
 
 virt-builder --cache-all-templates
 
@@ -6,6 +9,9 @@ IFS="
 "
 ext=qcow2
 format=qcow2
+export http_proxy=http://localhost:8000
+export https_proxy=http://localhost:8000
+export ftp_proxy=http://localhost:8000
 if [ "$1" = "" ]; then
 	echo "$0 <raw|qcow2>"
 	echo " raw|qcow2 - specifies the output image format, defaults to qcow2, craetes .img/.qcow2 image files"
@@ -23,6 +29,7 @@ if [ "$1" != "" ]; then
 else
 	templates="$(virt-builder -l|sort -n)"
 fi
+created=""
 for i in ${templates}; do
 	tag="$(echo "$i"|cut -d" " -f1)"
 	arch="$(echo "$i"|awk '{ print $2 }')"
@@ -63,67 +70,60 @@ for i in ${templates}; do
 	if [ ! -e "${tag}.${ext}" ]; then
 		echo $tag >> errors.txt
 	fi
+	created="${created} ${tag} ";
 done
 
-# move templates to nginx system
-#for template in `ls /root | grep qcow2`; do mv -v $template /var/www/html/$template; done
-
-if [ "$format" = "qcow2" ]; then
-	for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debian-10; do
-		if [ -e ${i}.qcow2 ]; then
-			echo "Working in $i $format";
-			guestmount -i -w -a ${i}.qcow2 /mnt;
-			if [ -f /mnt/etc/network/interfaces ]; then
-                                sed s#ens2#eth0#g -i /mnt/etc/network/interfaces;
-                                sed s#ens3#eth0#g -i /mnt/etc/network/interfaces;
-				sed s#enp1s0#eth0#g -i /mnt/etc/network/interfaces;
-                        fi
-
-			if [ -f /mnt/etc/netplan/01-netcfg.yaml ]; then
-                        	sed s#ens2#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
-                        	sed s#ens3#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
-                                sed s#enp1s0#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
-
+for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debian-10; do
+	if [ "$(echo "${created}"|grep " ${i} ")" = "" ]; then
+		continue;
+	fi;
+	compressed=0;
+	if [ -e ${i}.${ext}.gz ]; then
+		compressed=1
+		gunzip ${i}.${ext}.gz
+	fi && \
+	if [ -e ${i}.${ext} ]; then
+		echo "Working on ${i}.${ext}";
+		guestmount -i -w -a ${i}.${ext} /mnt && \
+		for f in /etc/network/interfaces /etc/netplan/01-netcfg.yaml; do
+			if [ -f /mnt{$f} ]; then
+				for d in ens2 ens3 enp1s0; do
+					sed s#${d}#eth0#g -i /mnt${f};
+				done
 			fi
-
-			guestunmount /mnt && sleep 2s && /vz/test/1 ${i}
-
-			 #virt-customize -a ${i}.qcow2 --edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 /' --run-command 'update-grub2'
-		fi
-	done
-
-	# centos
-	for i in centos-8.0 centos-8.2; do
-		if [ -e ${i}.qcow2 ]; then
-                        echo "Working in $i $format";
-
-			guestmount -i -w -a ${i}.qcow2 /mnt;
-			if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 ]; then
-				mv /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
-			fi
-			if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-ens3 ]; then
-				sed s#enp1s0#ens3#g -i /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
-			fi
-			sed s#SELINUX=enforcing#SELINUX=permissive#g -i /mnt/etc/selinux/config;
-			guestunmount /mnt;
-		fi
-	done
-else
-	for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debian-10; do
-		if [ -e ${i}.qcow2 ]; then
-#			gunzip ${i}.img.gz
-                        echo "Working in $i $format";
-			guestmount -i -w -a ${i}.img /mnt;
-			if [ -f /mnt/etc/network/interfaces ]; then
-				sed s#ens2#eth0#g -i /mnt/etc/network/interfaces;
-	                        sed s#ens3#eth0#g -i /mnt/etc/network/interfaces;
-			fi
-
-			if [ -f /mnt/etc/netplan/01-netcfg.yaml ]; then
-				sed s#ens2#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
-                        	sed s#ens3#eth0#g -i /mnt/etc/netplan/01-netcfg.yaml;
-			fi
-			gzip -9 ${i}.img;
-		fi
-	done
-fi
+        fi && \
+		guestunmount /mnt && \
+		sleep 2s && \
+		virt-customize -a ${i}.${ext} \
+			--edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 /' \
+			--run-command 'update-grub2'
+	fi && \
+	if [ $compressed -eq 1 ]; then
+		gzip -9 ${i}.${ext}
+	fi
+done
+for i in centos-8.0 centos-8.2; do
+	if [ "$(echo "${created}"|grep " ${i} ")" = "" ]; then
+		continue;
+	fi;
+	compressed=0;
+	if [ -e ${i}.${ext}.gz ]; then
+		compressed=1
+		gunzip ${i}.${ext}.gz
+	fi && \
+	if [ -e ${i}.${ext} ]; then
+		echo "Working on ${i}.${ext}";
+		guestmount -i -w -a ${i}.${ext} /mnt && \
+		if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 ]; then
+			mv /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
+		fi && \
+		if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-ens3 ]; then
+			sed s#enp1s0#ens3#g -i /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
+		fi && \
+		sed s#SELINUX=enforcing#SELINUX=permissive#g -i /mnt/etc/selinux/config && \
+		guestunmount /mnt
+	fi && \
+	if [ $compressed -eq 1 ]; then
+		gzip -9 ${i}.${ext}
+	fi
+done
