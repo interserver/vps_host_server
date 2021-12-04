@@ -60,8 +60,8 @@ for i in ${templates}; do
 		done;
 		cmd="${cmd} --selinux-relabel"
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 20 ]; then
-			cmd="${cmd} --update";;
-		fi
+			cmd="${cmd} --update";
+		fi;;
 	"opensuse")
 		h=download.opensuse.org
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
