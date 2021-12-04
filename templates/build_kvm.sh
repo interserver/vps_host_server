@@ -21,10 +21,10 @@ if [ "$1" = "raw" ]; then
 fi
 shift
 if [ "$1" != "" ]; then
-	templates="$(virt-builder -l|sort -n|grep "$1")"
+	templates="$(virt-builder -l|sort|grep "$1")"
 	shift
 else
-	templates="$(virt-builder -l|sort -n)"
+	templates="$(virt-builder -l|sort)"
 fi
 created=""
 for i in ${templates}; do
