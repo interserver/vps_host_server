@@ -84,11 +84,10 @@ for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debia
 	fi && \
 	if [ -e ${i}.${ext} ]; then
 		echo "Working on ${i}.${ext}";
-		virt-customize -a ${i}.${ext} \
-			--mkdir '/etc/netplan' --touch '/etc/netplan/01-netcfg.yaml' --edit '/etc/netplan/01-netcfg.yaml: s/(ens2|ens3|enp1s0)/eth0/' \
-			--mkdir '/etc/network' --touch '/etc/network/interfaces' --edit '/etc/network/interfaces: s/(ens2|ens3|enp1s0)/eth0/' \
-			--edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 /' \
-			--run-command 'update-grub2'
+		cmd="virt-customize -a ${i}.${ext}"
+		cmd="${cmd} $(virt-ls -a ubuntu-20.04.qcow2 -R /etc|grep -e network/ -e netplan/|sed s#"^\(.*\)$"#"--edit '/etc\1: s/(ens2|ens3|enp1s0)/eth0/'"#g|tr "\n" " ")"
+		cmd="${cmd} --edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"net.ifnames=0 biosdevname=0 /' --run-command 'update-grub2'"
+		eval ${cmd}
 	fi && \
 	if [ $compressed -eq 1 ]; then
 		gzip -9 ${i}.${ext}
@@ -105,15 +104,13 @@ for i in centos-8.0 centos-8.2; do
 	fi && \
 	if [ -e ${i}.${ext} ]; then
 		echo "Working on ${i}.${ext}";
-		guestmount -i -w -a ${i}.${ext} /mnt && \
-		if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 ]; then
-			mv /mnt/etc/sysconfig/network-scripts/ifcfg-enp1s0 /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
-		fi && \
-		if [ -f /mnt/etc/sysconfig/network-scripts/ifcfg-ens3 ]; then
-			sed s#enp1s0#ens3#g -i /mnt/etc/sysconfig/network-scripts/ifcfg-ens3;
-		fi && \
-		sed s#SELINUX=enforcing#SELINUX=permissive#g -i /mnt/etc/selinux/config && \
-		guestunmount /mnt
+		cmd="virt-customize -a ${i}.${ext}"
+		cmd="${cmd} --edit '/etc/selinux/config: s/SELINUX=enforcing/SELINUX=permissive/'"
+		if [ "$(virt-ls -a ${i}.${ext} /etc/sysconfig/network-scripts/|grep ifcfg-enp1s0)" != "" ]; then
+			cmd="${cmd} --move '/etc/sysconfig/network-scripts/ifcfg-enp1s0:/etc/sysconfig/network-scripts/ifcfg-ens3'"
+			cmd="${cmd} --edit '/etc/sysconfig/network-scripts/ifcfg-ens3: s/enp1s0/ens3/'"
+			eval ${cmd}
+		fi;
 	fi && \
 	if [ $compressed -eq 1 ]; then
 		gzip -9 ${i}.${ext}
