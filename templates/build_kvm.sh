@@ -95,6 +95,9 @@ for i in ubuntu-16.04 ubuntu-18.04 ubuntu-20.04 debian-9 debian-8 debian-7 debia
 		guestunmount /mnt && \
 		sleep 2s && \
 		virt-customize -a ${i}.${ext} \
+			--mkdir '/etc/netplan' --touch '/etc/netplan/01-netcfg.yaml' \
+			--edit '/etc/network/interfaces: s/(ens2|ens3|enp1s0)/eth0/' \
+			--edit '/etc/netplan/01-netcfg.yaml: s/(ens2|ens3|enp1s0)/eth0/' \
 			--edit '/etc/default/grub: s/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 /' \
 			--run-command 'update-grub2'
 	fi && \
