@@ -127,7 +127,10 @@ for i in ${templates}; do
 		;;
 	"debian" | "ubuntu")
 		if [ "$version" = "10.04" ] || [ "$version" = "12.04" ] || [ "$version" = "14.04" ]; then
-			cmd="${cmd} --edit '/etc/apt/sources.list: s/(extras|security|us.archive).ubuntu.com/old-releases.ubuntu.com/'"
+			cmd="${cmd} --edit '/etc/apt/sources.list: s/extras.ubuntu.com/old-releases.ubuntu.com/'"
+			cmd="${cmd} --edit '/etc/apt/sources.list: s/security.ubuntu.com/old-releases.ubuntu.com/'"
+			cmd="${cmd} --edit '/etc/apt/sources.list: s/us.archive.ubuntu.com/old-releases.ubuntu.com/'"
+			cmd="${cmd} --edit '/etc/apt/sources.list: s/archive.ubuntu.com/old-releases.ubuntu.com/'"
 		fi
 		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
 		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
