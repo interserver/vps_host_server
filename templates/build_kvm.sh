@@ -31,11 +31,12 @@ format=$1
 ext=$1
 if [ "$1" = "raw" ]; then
 	ext=img
+	shift
 fi
 if [ "$1" = "-v" ]; then
 	verbose="-v"
+	shift
 fi
-shift
 if [ "$1" != "" ]; then
 	templates="$(virt-builder -l|sort|grep "$1")"
 	shift
