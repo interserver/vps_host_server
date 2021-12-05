@@ -68,7 +68,11 @@ for i in ${templates}; do
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 			cmd="${cmd} --update";
 		fi
-		cmd="${cmd} --selinux-relabel"
+		if [ "$version" = "31" ]; then
+			cmd="${cmd} --edit '/etc/selinux/config: s/SELINUX=enforcing/SELINUX=disabled/'"
+		else
+			cmd="${cmd} --selinux-relabel"
+		fi
 		;;
 	"opensuse")
 		h=download.opensuse.org
