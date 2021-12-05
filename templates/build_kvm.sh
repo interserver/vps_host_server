@@ -134,8 +134,12 @@ for i in ${templates}; do
 		fi
 		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
 		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools,qemu-guest-agent"
+			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 		#fi;
+		if [ "$version" != "10.04" ]; then
+			cmd="${cmd} --install qemu-guest-agent"
+		fi
+
 		#if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
 		#fi
