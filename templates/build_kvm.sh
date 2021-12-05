@@ -52,15 +52,15 @@ for i in ${templates}; do
 		else
 			# CentOS 6 doesnt support HTTPS repos so this is a fixed version
 			# Fix CentOS Vault repo
-			curl http://www.getpagespeed.com/files/centos6-eol.repo --output /tmp/cent6-fixed-vault.repo
+			curl -L http://www.getpagespeed.com/files/centos6-eol.repo --output /tmp/cent6-fixed-vault.repo
 			cmd="${cmd} --upload /tmp/cent6-fixed-vault.repo:/etc/yum.repos.d/CentOS-Base.repo";
 			## Fix EPEL repo
-			#curl http://www.getpagespeed.com/files/centos6-epel-eol.repo --output /tmp/cent6-fixed-epel.repo
+			#curl -L http://www.getpagespeed.com/files/centos6-epel-eol.repo --output /tmp/cent6-fixed-epel.repo
 			#cmd="${cmd} --upload /tmp/cent6-fixed-epel.repo:/etc/yum.repos.d/epel.repo";
 			## Fix SCLO repo
 			#yum -y install centos-release-scl
-			#curl http://www.getpagespeed.com/files/centos6-scl-eol.repo --output /tmp/cent6-fixed-scl.repo
-			#curl http://www.getpagespeed.com/files/centos6-scl-rh-eol.repo --output /tmp/cent6-fixed-scl-rh.repo
+			#curl -L http://www.getpagespeed.com/files/centos6-scl-eol.repo --output /tmp/cent6-fixed-scl.repo
+			#curl -L http://www.getpagespeed.com/files/centos6-scl-rh-eol.repo --output /tmp/cent6-fixed-scl-rh.repo
 			#cmd="${cmd} --upload /tmp/cent6-fixed-scl.repo:/etc/yum.repos.d/CentOS-SCLo-scl.repo";
 			#cmd="${cmd} --upload /tmp/cent6-fixed-scl-rh.repo:/etc/yum.repos.d/CentOS-SCLo-scl-rh.repo";
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
