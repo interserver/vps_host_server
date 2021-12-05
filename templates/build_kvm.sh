@@ -46,8 +46,10 @@ for i in ${templates}; do
 	fi;
 	case $os in
 	"centos")
-		if [ $(echo "$version"|sed "s#[^0-9]##g") -le 73 ]; then
+		if [ "$version" = "6" ]; then
 			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{https://}{http://}; s{mirror.centos.org}{linuxsoft.cern.ch/centos-vault};'"
+		elif [ $(echo "$version"|sed "s#[^0-9]##g") -le 73 ]; then
+			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{https://}{http://}; s{mirror.centos.org}{linuxsoft.cern.ch};'"
 		else
 			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};'"
 		fi;
