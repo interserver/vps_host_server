@@ -55,10 +55,10 @@ for i in ${templates}; do
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		cmd="${cmd} --append-line '/etc/sysconfig/network-scripts/ifcfg-eth0:DEVICE=eth0'";
 		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-		cmd="${cmd} --update";;
+		cmd="${cmd} --update";
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 73 ]; then
 			cmd="${cmd} --selinux-relabel"
-		fi;
+		fi;;
 	"fedora")
 		for h in mirrors.fedoraproject.org dl.fedoraproject.org mirrors.rit.edu mirrors.kernel.org; do
 			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
