@@ -50,10 +50,14 @@ for i in ${templates}; do
 		if [ "$version" != "6" ]; then
 			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};'"
 		else
+			rpmfile="$(curl -s https://vault.centos.org/6.10/os/x86_64/Packages/|grep ca-certificates|cut -d\" -f12)"
+			wget "https://vault.centos.org/6.10/os/x86_64/Packages/${rpmfile}" -O "/tmp/${rpmfile}"
+			cmd="${cmd} --upload '/tmp/${rpmfile}:/root/${rpmfile}' --run-command 'rpm -U /root/${rpmfile}'
+
 			# CentOS 6 doesnt support HTTPS repos so this is a fixed version
 			# Fix CentOS Vault repo
-			curl -L http://www.getpagespeed.com/files/centos6-eol.repo --output /tmp/cent6-fixed-vault.repo
-			cmd="${cmd} --upload /tmp/cent6-fixed-vault.repo:/etc/yum.repos.d/CentOS-Base.repo";
+			#curl -L http://www.getpagespeed.com/files/centos6-eol.repo --output /tmp/cent6-fixed-vault.repo
+			#cmd="${cmd} --upload /tmp/cent6-fixed-vault.repo:/etc/yum.repos.d/CentOS-Base.repo";
 			## Fix EPEL repo
 			#curl -L http://www.getpagespeed.com/files/centos6-epel-eol.repo --output /tmp/cent6-fixed-epel.repo
 			#cmd="${cmd} --upload /tmp/cent6-fixed-epel.repo:/etc/yum.repos.d/epel.repo";
@@ -63,8 +67,8 @@ for i in ${templates}; do
 			#curl -L http://www.getpagespeed.com/files/centos6-scl-rh-eol.repo --output /tmp/cent6-fixed-scl-rh.repo
 			#cmd="${cmd} --upload /tmp/cent6-fixed-scl.repo:/etc/yum.repos.d/CentOS-SCLo-scl.repo";
 			#cmd="${cmd} --upload /tmp/cent6-fixed-scl-rh.repo:/etc/yum.repos.d/CentOS-SCLo-scl-rh.repo";
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-			cmd="${cmd} --update";
+			#cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
+			#cmd="${cmd} --update";
 		fi;
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		cmd="${cmd} --append-line '/etc/sysconfig/network-scripts/ifcfg-eth0:DEVICE=eth0'";
