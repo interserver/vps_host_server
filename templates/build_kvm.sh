@@ -64,7 +64,7 @@ for i in ${templates}; do
 		for h in mirrors.fedoraproject.org dl.fedoraproject.org mirrors.rit.edu mirrors.kernel.org; do
 			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		done;
-		if [ $(echo "$version"|sed "s#[^0-9]##g") -ge 20 ]; then
+		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 20 ]; then
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 			cmd="${cmd} --update";
 		fi
