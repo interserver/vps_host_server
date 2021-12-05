@@ -59,28 +59,32 @@ for i in ${templates}; do
 		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 		cmd="${cmd} --update";
 		cmd="${cmd} --selinux-relabel"
+		;;
 	"fedora")
 		for h in mirrors.fedoraproject.org dl.fedoraproject.org mirrors.rit.edu mirrors.kernel.org; do
 			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		done;
-		cmd="${cmd} --selinux-relabel"
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 20 ]; then
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 			cmd="${cmd} --update";
-		fi;;
+		fi
+		cmd="${cmd} --selinux-relabel"
+		;;
 	"opensuse")
 		h=download.opensuse.org
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		if [ "$(echo ${version:0:1}|grep "[0-9]")" != "" ]; then
 			cmd="${cmd} --update";
-		fi;;
+		fi
+		;;
 	"scientificlinux")
 		h=ftp.scientificlinux.org
 		cmd="${cmd} --edit '/etc/yum.repos.d/sl-other.repo: s{linux/scientific}{linux/scientific/obsolete};'"
 		cmd="${cmd} --edit '/etc/yum.repos.d/sl6x.repo: s{linux/scientific}{linux/scientific/obsolete};'"
 		cmd="${cmd} --edit '/etc/yum.repos.d/sl.repo: s{linux/scientific}{linux/scientific/obsolete};'"
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'"
-		cmd="${cmd} --update";;
+		cmd="${cmd} --update"
+		;;
 	"debian" | "ubuntu")
 		if [ "$version" != "6" ] && [ "$version" != "7" ]; then
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
@@ -88,7 +92,8 @@ for i in ${templates}; do
 		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
 		if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
-		fi;;
+		fi
+		;;
 	esac;
 	cmd="${cmd} ${tag} $*"
 	#echo "Building/Updating Tag: ${tag}  Arch: ${arch}  Label: ${label}  With:"
