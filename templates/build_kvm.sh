@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 #
+# Links/Pages
 # https://libguestfs.org/virt-builder.1.html
+# https://arstech.net/centos-6-error-yumrepo-error-all-mirror-urls-are-not-using-ftp-http/
+# http://centosquestions.com/yum-update-giving-errno-14-problem-making-ssl-connection/
+# http://linuxsoft.cern.ch/centos-vault/6.10/os/x86_64/
+# https://unix.stackexchange.com/questions/109585/yum-update-fails-error-cannot-retrieve-repository-metadata-repomd-xml-for-re
+# https://unix.stackexchange.com/questions/225549/qemu-guest-agent-for-ubuntu-12-04-lts
+# https://launchpad.net/ubuntu/+source/qemu/2.0.0+dfsg-2ubuntu1.46
+# https://pve.proxmox.com/wiki/Qemu-guest-agent
+# https://wiki.qemu.org/Features/GuestAgent
+# https://wiki.libvirt.org/page/Qemu_guest_agent
+#
 #
 # Successfully Builds
-# CentOS 6, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.0, 8.2
-# Debian 6 7 8 9 10 11
-# Fedora 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35
-# openSuSe 13.1 13.2 42.1 tumbleweed
-# ScientificLinux 6
-# Ubuntu 10.04 12.04 14.04 16.04 18.04 20.04
+#  CentOS 6, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.0, 8.2
+#  Debian 6 7 8 9 10 11
+#  Fedora 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35
+#  openSuSe 13.1 13.2 42.1 tumbleweed
+#  ScientificLinux 6
+#  Ubuntu 10.04 12.04 14.04 16.04 18.04 20.04
 #
 # Unsuccessful Builds
-# Fedora 19 33
+#  Fedora 19 33
 #
 # Fedora grub2 boot lines
 #  load_video
@@ -70,7 +81,7 @@ for i in ${templates}; do
 	verInt="$(echo "$version"|sed -e "s#^([^\.]*)\..*$#\1#g" -e "s#[^0-9]##g")" 	# 12.04 => 12 (int)
 	cmd="virt-builder ${verbose} --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext}"
 	cmd="${cmd} --root-password 'password:interserver123'"
-	cmd="${cmd} --ssh-inject 'root:string:$(grep -h root@tech ~/.ssh/authorized_keys*)'" \
+	cmd="${cmd} --ssh-inject 'root:string:$(grep -h root@tech ~/.ssh/authorized_keys*)'"
 	if [ "$os" = "cirros" ]; then
 		continue;
 		cmd="${cmd} --edit '/etc/ssh/sshd_config: s{^#PermitRootLogin}{PermitRootLogin}; s{^PermitRootLogin.*$}{PermitRootLogin yes};'"
