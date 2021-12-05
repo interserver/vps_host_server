@@ -12,7 +12,22 @@
 #
 # Unsuccessful Builds
 # Fedora 19 33
-
+#
+# Fedora grub2 boot lines
+#  load_video
+#  set gfxpayload=keep
+#  insmod gzio
+#  linux ($root)/vmlinuz-<ver>.x86_64 root=UUID=<UUID> ro console=tty0 rd_NO_PLYMOUTH console=ttyS0,115200
+#  initrd ($root)/initramfs-<ver>.x86_64.img
+#
+# Kernels
+#  F33 5.14.18-100.fc33
+#  F34 5.15.6-100.fc34
+#
+# Qemu Agent Package Names
+#  Fedora		qemu-guest-agent
+#  Ubuntu		qemu-guest-agent
+#
 
 IFS="
 "
@@ -73,7 +88,7 @@ for i in ${templates}; do
 		h=mirror.trouble-free.net
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		cmd="${cmd} --append-line '/etc/sysconfig/network-scripts/ifcfg-eth0:DEVICE=eth0'";
-		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
+		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools,qemu-guest-agent"
 		cmd="${cmd} --update";
 		cmd="${cmd} --selinux-relabel"
 		;;
@@ -82,12 +97,12 @@ for i in ${templates}; do
 			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		done;
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 20 ]; then
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-			if [ "$version" != "33" ] && [ "$version" != "34" ]; then
+			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools,qemu-guest-agent"
+			#if [ "$version" != "33" ] && [ "$version" != "34" ]; then
 				cmd="${cmd} --update";
-			else
-				cmd="${cmd} --run-command 'yum update -y'"
-			fi
+			#else
+				#cmd="${cmd} --run-command 'yum update -y'"
+			#fi
 		fi
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -le 20 ] || [ $(echo "$version"|sed "s#[^0-9]##g") -ge 31 ]; then
 			cmd="${cmd} --edit '/etc/selinux/config: s/SELINUX=enforcing/SELINUX=disabled/'"
@@ -111,9 +126,9 @@ for i in ${templates}; do
 		cmd="${cmd} --update"
 		;;
 	"debian" | "ubuntu")
-		if [ "$version" != "6" ] && [ "$version" != "7" ]; then
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-		fi;
+		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
+			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools,qemu-guest-agent"
+		#fi;
 		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
 		if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
