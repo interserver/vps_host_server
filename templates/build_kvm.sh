@@ -50,9 +50,10 @@ for i in ${templates}; do
 		if [ "$version" != "6" ]; then
 			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};'"
 		else
-			rpmfile="$(curl -s https://vault.centos.org/6.10/os/x86_64/Packages/|grep ca-certificates|cut -d\" -f12)"
-			wget "https://vault.centos.org/6.10/os/x86_64/Packages/${rpmfile}" -O "/tmp/${rpmfile}"
-			cmd="${cmd} --upload '/tmp/${rpmfile}:/root/${rpmfile}' --run-command 'rpm -U /root/${rpmfile}'"
+			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{https://}{http://}; s{mirror.centos.org}{linuxsoft.cern.ch/centos-vault};'"
+			#rpmfile="$(curl -s https://vault.centos.org/6.10/os/x86_64/Packages/|grep ca-certificates|cut -d\" -f12)"
+			#wget "https://vault.centos.org/6.10/os/x86_64/Packages/${rpmfile}" -O "/tmp/${rpmfile}"
+			#cmd="${cmd} --upload '/tmp/${rpmfile}:/root/${rpmfile}' --run-command 'rpm -U /root/${rpmfile}'"
 
 			# CentOS 6 doesnt support HTTPS repos so this is a fixed version
 			# Fix CentOS Vault repo
