@@ -46,38 +46,19 @@ for i in ${templates}; do
 	fi;
 	case $os in
 	"centos")
-		h=mirror.trouble-free.net
-		if [ "$version" != "6" ]; then
-			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};'"
-		else
+		if [ $(echo "$version"|sed "s#[^0-9]##g") -le 73 ]; then
 			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{https://}{http://}; s{mirror.centos.org}{linuxsoft.cern.ch/centos-vault};'"
-			#rpmfile="$(curl -s https://vault.centos.org/6.10/os/x86_64/Packages/|grep ca-certificates|cut -d\" -f12)"
-			#wget "https://vault.centos.org/6.10/os/x86_64/Packages/${rpmfile}" -O "/tmp/${rpmfile}"
-			#cmd="${cmd} --upload '/tmp/${rpmfile}:/root/${rpmfile}' --run-command 'rpm -U /root/${rpmfile}'"
-
-			# CentOS 6 doesnt support HTTPS repos so this is a fixed version
-			# Fix CentOS Vault repo
-			#curl -L http://www.getpagespeed.com/files/centos6-eol.repo --output /tmp/cent6-fixed-vault.repo
-			#cmd="${cmd} --upload /tmp/cent6-fixed-vault.repo:/etc/yum.repos.d/CentOS-Base.repo";
-			## Fix EPEL repo
-			#curl -L http://www.getpagespeed.com/files/centos6-epel-eol.repo --output /tmp/cent6-fixed-epel.repo
-			#cmd="${cmd} --upload /tmp/cent6-fixed-epel.repo:/etc/yum.repos.d/epel.repo";
-			## Fix SCLO repo
-			#yum -y install centos-release-scl
-			#curl -L http://www.getpagespeed.com/files/centos6-scl-eol.repo --output /tmp/cent6-fixed-scl.repo
-			#curl -L http://www.getpagespeed.com/files/centos6-scl-rh-eol.repo --output /tmp/cent6-fixed-scl-rh.repo
-			#cmd="${cmd} --upload /tmp/cent6-fixed-scl.repo:/etc/yum.repos.d/CentOS-SCLo-scl.repo";
-			#cmd="${cmd} --upload /tmp/cent6-fixed-scl-rh.repo:/etc/yum.repos.d/CentOS-SCLo-scl-rh.repo";
-			#cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-			#cmd="${cmd} --update";
+		else
+			cmd="${cmd} --edit '/etc/yum.repos.d/CentOS-Base.repo: s{^mirrorlist=}{#mirrorlist=}; s{^#baseurl=}{baseurl=}; s{mirror.centos.org}{mirror.trouble-free.net};'"
 		fi;
+		h=mirror.trouble-free.net
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		cmd="${cmd} --append-line '/etc/sysconfig/network-scripts/ifcfg-eth0:DEVICE=eth0'";
+		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
+		cmd="${cmd} --update";;
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 73 ]; then
 			cmd="${cmd} --selinux-relabel"
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-			cmd="${cmd} --update";
-		fi;;
+		fi;
 	"fedora")
 		for h in mirrors.fedoraproject.org dl.fedoraproject.org mirrors.rit.edu mirrors.kernel.org; do
 			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
