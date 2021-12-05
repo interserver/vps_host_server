@@ -126,13 +126,16 @@ for i in ${templates}; do
 		cmd="${cmd} --update"
 		;;
 	"debian" | "ubuntu")
+		if [ "$version" = "10.04" ] || [ "$version" = "12.04" ] || [ "$version" = "14.04" ]; then
+			cmd="${cmd} --edit '/etc/apt/sources.list: s/(extras|security|us.archive).ubuntu.com/old-releases.ubuntu.com/'"
+		fi
+		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
 		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools,qemu-guest-agent"
 		#fi;
-		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
-		if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
+		#if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
-		fi
+		#fi
 		;;
 	esac;
 	cmd="${cmd} ${tag} $*"
