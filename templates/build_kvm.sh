@@ -126,7 +126,7 @@ for i in ${templates}; do
 		cmd="${cmd} --update"
 		;;
 	"debian" | "ubuntu")
-		if [ "$version" = "10.04" ] || [ "$version" = "12.04" ] || [ "$version" = "14.04" ]; then
+		if [ "$version" = "10.04" ] || [ "$version" = "12.04" ]; then
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/extras.ubuntu.com/old-releases.ubuntu.com/'"
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/security.ubuntu.com/old-releases.ubuntu.com/'"
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/us.archive.ubuntu.com/old-releases.ubuntu.com/'"
@@ -139,10 +139,13 @@ for i in ${templates}; do
 		if [ "$version" != "10.04" ]; then
 			cmd="${cmd} --install qemu-guest-agent"
 		fi
-
+		if
+        cmd="${cmd} --run-command 'apt-mark hold rsync'"
 		#if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
 		#fi
+		cmd="${cmd} --run-command 'apt-mark unhold rsync'"
+
 		;;
 	esac;
 	cmd="${cmd} ${tag} $*"
