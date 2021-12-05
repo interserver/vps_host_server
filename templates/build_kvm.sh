@@ -23,7 +23,7 @@ verbose=""
 #export https_proxy=http://64.20.46.218:8000
 #export ftp_proxy=http://64.20.46.218:8000
 if [ "$1" = "" ]; then
-	echo "$0 <raw|qcow2>"
+	echo "$0 <raw|qcow2> [-v] [os]"
 	echo " raw|qcow2 - specifies the output image format, defaults to qcow2, craetes .img/.qcow2 image files"
 	exit
 fi
@@ -31,9 +31,9 @@ format=$1
 ext=$1
 if [ "$1" = "raw" ]; then
 	ext=img
-	shift
 fi
-if [ "$1" = "-v" ]; then
+shift
+if [ "$1" = "verb" ]; then
 	verbose="-v"
 	shift
 fi
