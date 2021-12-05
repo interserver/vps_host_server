@@ -2,6 +2,18 @@
 #
 # https://libguestfs.org/virt-builder.1.html
 #
+# Successfully Builds
+# CentOS 6, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.0, 8.2
+# Debian 6 7 8 9 10 11
+# Fedora 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35
+# openSuSe 13.1 13.2 42.1 tumbleweed
+# ScientificLinux 6
+# Ubuntu 10.04 12.04 14.04 16.04 18.04 20.04
+#
+# Unsuccessful Builds
+# Fedora 19 33
+
+
 IFS="
 "
 ext=qcow2
@@ -66,7 +78,9 @@ for i in ${templates}; do
 		done;
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -gt 20 ]; then
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-			cmd="${cmd} --update";
+			if [ "$version" != "33" ] && [ "$version" != "34" ]; then
+				cmd="${cmd} --update";
+			fi
 		fi
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -le 20 ] || [ $(echo "$version"|sed "s#[^0-9]##g") -ge 31 ]; then
 			cmd="${cmd} --edit '/etc/selinux/config: s/SELINUX=enforcing/SELINUX=disabled/'"
