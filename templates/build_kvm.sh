@@ -81,7 +81,7 @@ for i in ${templates}; do
 			if [ "$version" != "33" ] && [ "$version" != "34" ]; then
 				cmd="${cmd} --update";
 			else
-				cmd="${cmd} --firstboot-command 'yum update -y'"
+				cmd="${cmd} --run-command 'yum update -y'"
 			fi
 		fi
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -le 20 ] || [ $(echo "$version"|sed "s#[^0-9]##g") -ge 31 ]; then
