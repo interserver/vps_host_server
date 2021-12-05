@@ -18,6 +18,7 @@ IFS="
 "
 ext=qcow2
 format=qcow2
+verbose=""
 #export http_proxy=http://64.20.46.218:8000
 #export https_proxy=http://64.20.46.218:8000
 #export ftp_proxy=http://64.20.46.218:8000
@@ -30,6 +31,9 @@ format=$1
 ext=$1
 if [ "$1" = "raw" ]; then
 	ext=img
+fi
+if [ "$1" = "-v" ]; then
+	verbose="-v"
 fi
 shift
 if [ "$1" != "" ]; then
@@ -46,7 +50,7 @@ for i in ${templates}; do
 	label="$(echo "$i"|sed s#"^[^ ]* *[^ ]* *"#""#g)"
 	os="$(echo "$tag"|cut -d- -f1)"
 	version="$(echo "$tag"|cut -d- -f2-)"
-	cmd="virt-builder --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext}"
+	cmd="virt-builder ${verbose} --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext}"
 	cmd="${cmd} --root-password 'password:interserver123'"
 	cmd="${cmd} --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'"
 	if [ "$os" != "cirros" ]; then
