@@ -64,11 +64,11 @@ for i in ${templates}; do
 		for h in mirrors.fedoraproject.org dl.fedoraproject.org mirrors.rit.edu mirrors.kernel.org; do
 			cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'";
 		done;
+		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
+		cmd="${cmd} --update";
 		if [ $(echo "$version"|sed "s#[^0-9]##g") -le 20 ] || [ $(echo "$version"|sed "s#[^0-9]##g") -ge 31 ]; then
 			cmd="${cmd} --edit '/etc/selinux/config: s/SELINUX=enforcing/SELINUX=disabled/'"
 		else
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-			cmd="${cmd} --update";
 			cmd="${cmd} --selinux-relabel"
 		fi
 		;;
