@@ -65,16 +65,19 @@ for i in ${templates}; do
 	archfile="$arch";
 	label="$(echo "$i"|sed s#"^[^ ]* *[^ ]* *"#""#g)"
 	os="$(echo "$tag"|cut -d- -f1)"
-	version="$(echo "$tag"|cut -d- -f2-)"
+	version="$(echo "$tag"|cut -d- -f2-)" 											# ie 12.04 (string)
+	verNum="$(echo "$version"|sed "s#[^0-9]##g")" 									# 12.04 => 1204 (int)
+	verInt="$(echo "$version"|sed -e "s#^([^\.]*)\..*$#\1#g" -e "s#[^0-9]##g")" 	# 12.04 => 12 (int)
 	cmd="virt-builder ${verbose} --network --colors -m 2048 --smp 8 --format ${format} --arch ${arch} -o ${tag}.${ext}"
 	cmd="${cmd} --root-password 'password:interserver123'"
-	cmd="${cmd} --ssh-inject 'root:string:from=\"66.45.228.251\" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAvuKNsgUCyIoXcpiYkfOikuzlY1TlGGKgU6jMqEu/abStxgncwIX6eV19F5WAl8WYFbpOaolIFAR1Slxd2t7FuSK9B9BGqLNYdhwOLd75EPK71gAbnE2proZvOkuVSNb6Eq6ZHzlWiRVISXZyeGfMiJWr8/BDaIOJQaUUJ5/PcLOcuvpQxqslCninf2usswNQ6feRgYRbebgY6ydBuWpvf1moTxBogAVkh5cvdmGFmFlK5L2OMnJJgfwaLHkE//F60CU5LTaZPMuK/DEM0TyPBKdNAR+4oNiw3NdX/CzCq8VPZyjaIpNkGCsMgZGC4gYcY7TXSOek+870ONGaPKKcQJVJe3IE48zeGQSAUe4FoZwoGVvOMuyM1Lh7986Q6Co8zLiGUOfvfD08kmsCtRuRhA04VigVKEEY/b1zS8T4wC1slb77HhbTL+Q0rF84rh0m0pZ2BFUDwpM64shsTfy7JVr8akN7A68UMA5yT/G7U0o3YsZW/Q0dmu/KaOv/s1sJ1Fhie/om5qsg31qZr1R9GyiOCq3qB5ZC8J8sH3ZKhHEH5ulO6nf6J02WIYJJUuIu2CSqlsvOWNwgp5z1H2T0HA407cetqRcGH+4ymBvXiLcPZTRi5wO/QGBX1NvyNP2MFaASeNm+EIvWXlQVVXnHIT5UdPLYHVv+L+YHkOT185k= root@tech.trouble-free.net'"
-	if [ "$os" != "cirros" ]; then
+	cmd="${cmd} --ssh-inject 'root:string:$(grep -h root@tech ~/.ssh/authorized_keys*)'" \
+	if [ "$os" = "cirros" ]; then
+		continue;
 		cmd="${cmd} --edit '/etc/ssh/sshd_config: s{^#PermitRootLogin}{PermitRootLogin}; s{^PermitRootLogin.*$}{PermitRootLogin yes};'"
 	fi
 	cmd="${cmd} --hostname=${os}.is.cc"
-	if [ "$arch" != "x86_64" ]; then
-		continue
+	if [ "$arch" != "x86_64" ] || [ "$os" = "cirros" ]; then
+		continue;  # only building 64bit templates, and cirros is just the kernel / barebones .. not even a package manager or ssh so skipping it
 	fi;
 	case $os in
 	"centos")
@@ -125,31 +128,36 @@ for i in ${templates}; do
 		cmd="${cmd} --append-line '/etc/hosts:$(host $h|grep "has address"|head -n 1|cut -d" " -f4) $h'"
 		cmd="${cmd} --update"
 		;;
-	"debian" | "ubuntu")
+	"debian")
+		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
+			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
+		#fi;
+		cmd="${cmd} --install qemu-guest-agent"
+		#if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ]; then
+			cmd="${cmd} --update";
+		#fi
+		firstBoot="dpkg-reconfigure openssh-server";
+		cmd="${cmd} --firstboot-command '${firstBoot}'";
+		;;
+	"ubuntu")
 		if [ "$version" = "10.04" ] || [ "$version" = "12.04" ]; then
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/extras.ubuntu.com/old-releases.ubuntu.com/'"
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/security.ubuntu.com/old-releases.ubuntu.com/'"
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/us.archive.ubuntu.com/old-releases.ubuntu.com/'"
 			cmd="${cmd} --edit '/etc/apt/sources.list: s/archive.ubuntu.com/old-releases.ubuntu.com/'"
 		fi
-		cmd="${cmd} --firstboot-command 'dpkg-reconfigure openssh-server'";
-		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
-			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
-		#fi;
+		cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 		if [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --install qemu-guest-agent"
 		fi
-		if [ "$version" = "10.04" ]; then
-        	#cmd="${cmd} --run-command 'apt-mark hold rsync'"
-        	cmd="${cmd} --run-command 'echo rsync hold | dpkg --set-selections'"
-        fi
-		#if [ "$version" != "6" ] && [ "$version" != "7" ] && [ "$version" != "8" ] && [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
+		if [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --update";
-		#fi
-		if [ "$version" = "10.04" ]; then
-			#cmd="${cmd} --run-command 'apt-mark unhold rsync'"
-        	cmd="${cmd} --run-command 'echo rsync install | dpkg --set-selections'"
 		fi
+		firstBoot="dpkg-reconfigure openssh-server";
+		if [ "$version" = "10.04" ]; then
+			firstBoot="${firstBoot};apt-get update; apt-get dist-upgrade -y; apt-get autoremove -y --purge; apt-get clean"
+        fi
+		cmd="${cmd} --firstboot-command '${firstBoot}'";
 		;;
 	esac;
 	cmd="${cmd} ${tag} $*"
