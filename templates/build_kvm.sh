@@ -136,7 +136,7 @@ for i in ${templates}; do
 		#if [ "$version" != "6" ] && [ "$version" != "7" ]; then
 			cmd="${cmd} --install nano,psmisc,wget,rsync,net-tools"
 		#fi;
-		if [ "$version" != "10.04" ]; then
+		if [ "$version" != "10.04" ] && [ "$version" != "12.04" ] && [ "$version" != "14.04" ]; then
 			cmd="${cmd} --install qemu-guest-agent"
 		fi
 		if [ "$version" = "10.04" ]; then
@@ -147,7 +147,7 @@ for i in ${templates}; do
 			cmd="${cmd} --update";
 		#fi
 		if [ "$version" = "10.04" ]; then
-			cmd="${cmd} --run-command 'apt-mark unhold rsync'"
+			#cmd="${cmd} --run-command 'apt-mark unhold rsync'"
         	cmd="${cmd} --run-command 'echo rsync install | dpkg --set-selections'"
 		fi
 		;;
