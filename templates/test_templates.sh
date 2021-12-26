@@ -1,6 +1,6 @@
 #!/bin/bash
-if [ ! -e ~/.provirtedc/test.env ]; then
-	echo "No ~/.provirtedc/test.env file exists, creating.."
+if [ ! -e ~/.provirted/test.env ]; then
+	echo "No ~/.provirted/test.env file exists, creating.."
 echo "# customize values below
 client_ip=1.2.3.4
 vps_vzid=vps100
@@ -10,7 +10,7 @@ vps_hd=50
 vps_ram=2048
 vps_cpu=2
 vps_password=password
-" > ~/.provirtedc/test.env
+" > ~/.provirted/test.env
 	echo "file created, please edit it to suit your needs"
 fi
 source ~/.provirted/test.env
