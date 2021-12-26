@@ -1,7 +1,8 @@
 #!/bin/bash
 if [ ! -e ~/.provirtedc/test.env ]; then
-	echo "No ~/.provirtedc/test.env file exists, creating..
-echo "client_ip=1.2.3.4
+	echo "No ~/.provirtedc/test.env file exists, creating.."
+echo "# customize values below
+client_ip=1.2.3.4
 vps_vzid=vps100
 vps_hostname=vps.server.com
 vps_ip=6.7.8.9
