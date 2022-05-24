@@ -10,7 +10,7 @@ export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/usr/sbin:/sbin:/bin:/usr/bin"
 prlctl stop ${vps};
 prlctl delete ${vps};
 function iprogress() {
-  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=$1 -d server=${vps} 'https://myvps2.interserver.net/vps_queue.php' < /dev/null > /dev/null 2>&1;
+  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=$1 -d server=${vps} 'https://mynew.interserver.net/vps_queue.php' < /dev/null > /dev/null 2>&1;
 }
 iprogress 10
 prlctl create ${vps} --vmtype ct --ostemplate ${template};

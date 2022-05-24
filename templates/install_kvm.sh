@@ -102,12 +102,12 @@ error=0
 adjust_partitions=1
 export PREPATH="";
 if [ "vps" = "quickservers" ]; then
-    export url="https://myquickserver2.interserver.net/qs_queue.php"
+    export url="https://mynew.interserver.net/qs_queue.php"
     export size=all
     export memory=$(echo "$(grep "^MemTotal" /proc/meminfo|awk "{ print \$2 }") / 100 * 70"|bc)
     export vcpu="$(lscpu |grep ^CPU\(s\) | awk ' { print $2 }')"
 else
-    export url="https://myvps2.interserver.net/vps_queue.php"
+    export url="https://mynew.interserver.net/vps_queue.php"
     export size=30720
     export memory=2097152
     export vcpu=1
