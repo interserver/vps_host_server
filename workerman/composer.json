@@ -24,7 +24,7 @@
 		"react/event-loop": "*",
 		"react/http": "*",
 		"roave/security-advisories": "dev-master",
-		"workerman/workerman": "dev-master",
+		"workerman/workerman": "^4.0@stable",
 		"workerman/globaldata": "dev-master"
 	},
 	"require-dev": {
