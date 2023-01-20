@@ -73,7 +73,8 @@ if [ $old_cron -eq 1 ]; then
 			echo "Get Queue Running:    $(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
-		$dir/qs_get_list.php >> $log 2>&1
+		#$dir/qs_get_list.php >> $log 2>&1
+		$dir/provirted.phar cron vps-info -a >> $log 2>&1
 #        if [ ! -e .cron_daily.age ] || [ $(age .cron_daily.age) -ge 86400 ]; then
 #            if [ "$(ps uax|grep -e update_virtuozzo -e qs_cron_daily|grep -v grep)" = "" ]; then
 #                touch .cron_daily.age
