@@ -30,6 +30,10 @@ elif [ -e /etc/debian_version ]; then
        else
                eth=eth0;
        fi
+       eth=$(ip route|grep default|sed s#"^.*dev \([^ ]*\) .*$"#"\1"#g)
+       if [ "$eth" = "br0" ]; then
+                eth=$(brctl show $eth |grep -v interface|head -n 1|awk '{ print $4 }')
+       fi;
 elif [ -e /etc/redhat-release ]; then
         if [ -e /sys/class/net/enp9s0f0 ]; then
                 eth=enp9s0f0;
