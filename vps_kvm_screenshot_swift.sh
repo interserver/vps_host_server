@@ -4,6 +4,10 @@ export base="$(readlink -f "$(dirname "$0")")";
 export TERM=linux;
 display=$1;
 vps=$2;
+if [ ! -e /root/.swift/config ]; then
+ echo no swift config file
+ exit
+fi
 if [ $# -lt 1 ]; then
  echo "Take Screenshot Of VNC Session"
  echo " Grabs screenshot, saves as shot.jpg"
