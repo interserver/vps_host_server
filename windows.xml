@@ -24,7 +24,7 @@
     <disk type='block' device='disk'>
       <driver name='qemu' type='raw' cache='none' io='native'/>
       <source dev='/dev/vz/windows'/>
-      <target dev='vda' bus='virtio'/>
+      <target dev='sda' bus='scsi'/>
     </disk>
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
