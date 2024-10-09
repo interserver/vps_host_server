@@ -152,7 +152,7 @@ function get_qs_list()
 		}
 	}
 	//print_r($servers);
-	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=server_list -d servers="'.urlencode(base64_encode(gzcompress(serialize($servers), 9))).'" "'.$url.'" 2>/dev/null;';
+	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -d action=server_list -d servers="'.urlencode(base64_encode(gzcompress(json_encode($servers), 9))).'" "'.$url.'" 2>/dev/null;';
 	//echo "CMD: $cmd\n";
 	echo trim(`$cmd`);
 }
