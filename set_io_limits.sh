@@ -1,7 +1,7 @@
 #!/bin/bash
 IFS="
 "
-eval declare -A adminvps=($(for i in $(curl -s https://mynew.interserver.net/adminvps.php); do echo -n "[$i]=1 ";done))
+eval declare -A adminvps=($(for i in $(curl -s https://my-web-2.interserver.net/adminvps.php); do echo -n "[$i]=1 ";done))
 eval declare -A runningvps=($(for i in $(virsh list --name); do echo "[$i]=1 ";done))
 for line in $(cat /root/cpaneldirect/vps.slicemap); do
   vps=$(echo $line|cut -d: -f1)

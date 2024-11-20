@@ -13,7 +13,7 @@ if (ini_get('date.timezone') == '') {
 if ((isset($_ENV['SHELL']) && $_ENV['SHELL'] == '/bin/sh') && file_exists('/cron.vps.disabled')) {
 	exit;
 }
-$url = 'https://mynew.interserver.net/vps_queue.php';
+$url = 'https://my-web-2.interserver.net/vps_queue.php';
 echo "[" . date('Y-m-d H:i:s') . "] Daily Crontab Startup\n";
 $cmd = dirname(__FILE__).'/provirted.phar cron host-info-extra;';
 //echo "Running Command: $cmd\n";
