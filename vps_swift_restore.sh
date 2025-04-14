@@ -8,7 +8,7 @@ if [ $# -lt 3 ]; then
 fi
 export TERM=linux;
 #set -x
-url="https://my-web-3.interserver.net/vps_queue.php"
+url="https://myvps.interserver.net/vps_queue.php"
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else

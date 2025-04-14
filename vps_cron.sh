@@ -1,7 +1,7 @@
 #!/bin/bash
 export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/bin:/usr/bin:/sbin:/usr/sbin"
 export base="$(readlink -f "$(dirname "$0")")";
-export url=https://my-web-3.interserver.net/vps_queue.php
+export url=https://myvps.interserver.net/vps_queue.php
 export dir=${base};
 export log=$dir/cron.output;
 export old_cron=1;
@@ -59,16 +59,16 @@ if [ $old_cron -eq 1 ]; then
 		#$dir/vps_update_info.php >> $log 2>&1
 		$dir/provirted.phar cron host-info >> $log 2>&1
 		#curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_vps $url 2>/dev/null > $dir/cron.cmd;
-        curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_vps http://my-web-3.interserver.net:55151/queue.php 2>/dev/null > $dir/cron.cmd;
+        curl -s --connect-timeout 60 --max-time 600 -k -d action=get_new_vps http://myvps.interserver.net:55151/queue.php 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ] && [ "$(grep "Session halted." $dir/cron.cmd)" = "" ]; then
 			echo "Get New VPS Running:	$(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
 		fi;
 		#$dir/vps_traffic_new.php vps >> $log 2>&1
 		$dir/provirted.phar cron bw-info >> $log 2>&1
-		curl -s --connect-timeout 10 --max-time 15 -d action=map http://my-web-3.interserver.net:55151/queue.php | bash
+		curl -s --connect-timeout 10 --max-time 15 -d action=map http://myvps.interserver.net:55151/queue.php | bash
 		#curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue $url 2>/dev/null > $dir/cron.cmd;
-        curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue http://my-web-3.interserver.net:55151/queue.php 2>/dev/null > $dir/cron.cmd;
+        curl -s --connect-timeout 60 --max-time 600 -k -d action=get_queue http://myvps.interserver.net:55151/queue.php 2>/dev/null > $dir/cron.cmd;
 		if [ "$(cat $dir/cron.cmd)" != "" ] && [ "$(grep "Session halted." $dir/cron.cmd)" = "" ]; then
 			echo "Get Queue Running:	$(cat $dir/cron.cmd)" >> $log;
 			. $dir/cron.cmd >> $log 2>&1;
