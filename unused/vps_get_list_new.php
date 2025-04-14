@@ -11,7 +11,7 @@ require_once(dirname(__FILE__).'/xml2array.php');
 function get_vps_list()
 {
 	$dir = __DIR__;
-	$url = 'https://mynew.interserver.net/vps_queue.php';
+	$url = 'https://myvps.interserver.net/vps_queue.php';
 	$curl_cmd = '';
 	$servers = array();
 	if (file_exists('/usr/bin/lxc')) {

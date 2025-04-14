@@ -32,7 +32,7 @@ function update_vps_extra_info()
 	$flagsnew = implode(' ', $flags);
 	$flags = $flagsnew;
 	unset($flagsnew);
-	$url = 'https://mynew.interserver.net/vps_queue.php';
+	$url = 'https://myvps.interserver.net/vps_queue.php';
 	$servers = array();
 	$servers['speed'] = $speed;
 	$servers['cpu_flags'] = $flags;

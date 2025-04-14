@@ -147,8 +147,8 @@ function get_qs_iptables_traffic($ips)
 	return $totals;
 }
 
-//$url = 'https://mynew.interserver.net/qs_queue.php';
-$url = 'http://mynew.interserver.net:55151/queue.php';
+//$url = 'https://myvps.interserver.net/qs_queue.php';
+$url = 'http://myvps.interserver.net:55151/queue.php';
 //if (file_exists('/usr/sbin/vzctl'))
 //{
 	$ips = get_qs_ipmap();
