@@ -380,11 +380,6 @@ if [ $error -eq 0 ]; then
             vnc="$(virsh dumpxml ${vps} |grep -i "graphics type='vnc'" | cut -d\' -f4)";
         fi;
     fi;
-    /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=${vps}";
-    sleep 1s;
-    /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=${vps}";
-    sleep 1s;
-    /root/cpaneldirect/vps_kvm_screenshot.sh "$(($vnc - 5900))" "$url?action=screenshot&name=${vps}";
     /admin/kvmenable blocksmtp ${vps}
     if [ "vps" = "vps" ]; then
         /admin/kvmenable ebflush;
