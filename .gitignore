@@ -10,3 +10,6 @@ workerman/stdout.log
 workerman/vendor
 workerman/src/myadmin.crt
 workerman/src/myadmin.key
+
+# Caliber local state
+.caliber/
