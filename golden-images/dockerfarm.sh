@@ -15,6 +15,7 @@ RESULTDIR="$WORKDIR/results"
 TOKEN_CACHE="/tmp/dockerfarm_tokens"
 
 MAX_RETRIES=5
+NO_API=0
 
 mkdir -p "$BUILDDIR" "$LOGDIR" "$RESULTDIR" "$TOKEN_CACHE"
 
@@ -28,6 +29,24 @@ DISTROS=(
   ubuntu debian fedora alpine archlinux
   amazonlinux oraclelinux rockylinux almalinux
 )
+
+############################
+# HARDCODED TAGS (NO API MODE)
+############################
+get_static_tags() {
+  case "$1" in
+    ubuntu) echo "24.04 22.04 20.04 18.04" ;;
+    debian) echo "12 11 10 9" ;;
+    fedora) echo "40 39 38 37" ;;
+    alpine) echo "3.20 3.19 3.18 3.17" ;;
+    archlinux) echo "latest" ;;
+    amazonlinux) echo "2023 2" ;;
+    oraclelinux) echo "9 8 7" ;;
+    rockylinux) echo "9 8" ;;
+    almalinux) echo "9 8" ;;
+    *) echo "" ;;
+  esac
+}
 
 ############################
 # DEP CHECK
@@ -64,7 +83,7 @@ get_token() {
 }
 
 ############################
-# PRE-VALIDATE TAG (KEY ADDITION)
+# VALIDATE TAG
 ############################
 validate_tag() {
   local repo=$1
@@ -77,12 +96,7 @@ validate_tag() {
     -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
     "https://registry-1.docker.io/v2/library/${repo}/manifests/${tag}")
 
-  # Only accept v2 manifests (200 OK)
-  if [[ "$code" == "200" ]]; then
-    return 0
-  fi
-
-  return 1
+  [[ "$code" == "200" ]]
 }
 
 ############################
@@ -90,6 +104,13 @@ validate_tag() {
 ############################
 fetch_tags() {
   local image=$1
+
+  if [[ "$NO_API" -eq 1 ]]; then
+    echo "[*] Using static tags for $image"
+    echo "$(get_static_tags "$image")"
+    return
+  fi
+
   local limit=10
   local url="https://hub.docker.com/v2/repositories/library/${image}/tags?page_size=100"
   local tags=()
@@ -321,8 +342,20 @@ run() {
     | xargs -P $PARALLELISM -I{} bash -c 'build_one "$@"' _ {}
 }
 
-case "${1:-}" in
+############################
+# ARG PARSING
+############################
+CMD="${1:-}"
+shift || true
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-api) NO_API=1 ;;
+  esac
+done
+
+case "$CMD" in
   init) init ;;
   run) run ;;
-  *) echo "Usage: $0 {init|run}" ;;
+  *) echo "Usage: $0 {init|run} [--no-api]" ;;
 esac
