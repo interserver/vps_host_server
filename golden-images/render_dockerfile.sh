@@ -50,12 +50,23 @@ RUN set -eux; \
   distro="\${ID:-unknown}"; \
   case "\$distro" in \
     ubuntu|debian) \
-      apt-get update; \
+      if [ "\$distro" = "debian" ]; then \
+        ver_id="\${VERSION_ID%%.*}"; \
+        if [ "\${ver_id:-0}" -le 10 ] 2>/dev/null; then \
+          sed -i 's|deb.debian.org|archive.debian.org|g; s|security.debian.org/debian-security|archive.debian.org/debian-security|g; s|security.debian.org|archive.debian.org|g' /etc/apt/sources.list; \
+          echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until; \
+        fi; \
+      fi; \
+      apt-get update \
+        || { [ "\$distro" = "ubuntu" ] && sed -i \
+             -e 's|http://archive.ubuntu.com|http://old-releases.ubuntu.com|g' \
+             -e 's|http://security.ubuntu.com|http://old-releases.ubuntu.com|g' \
+             /etc/apt/sources.list && apt-get update; }; \
       apt-get install -y --no-install-recommends openssh-server passwd ca-certificates; \
       rm -rf /var/lib/apt/lists/*; \
       ;; \
     alpine) \
-      apk add --no-cache openssh shadow; \
+      apk add --no-cache openssh; \
       ;; \
     fedora) \
       dnf install -y openssh-server shadow-utils passwd; \
@@ -73,6 +84,16 @@ RUN set -eux; \
       tdnf install -y openssh shadow; \
       tdnf clean all; \
       ;; \
+    mageia) \
+      if command -v dnf >/dev/null 2>&1; then \
+        dnf install -y openssh-server passwd; \
+        dnf clean all; \
+      elif command -v urpmi >/dev/null 2>&1; then \
+        urpmi --no-verify-rpm --auto openssh-server passwd; \
+      else \
+        echo "No supported package manager for mageia in ${BASE_IMAGE}" >&2; exit 20; \
+      fi; \
+      ;; \
     *) \
       echo "Unsupported distro ID '\$distro' in ${BASE_IMAGE}" >&2; \
       exit 20; \
@@ -86,7 +107,8 @@ RUN set -eux; \
   grep -q '^PasswordAuthentication ' /etc/ssh/sshd_config \
     && sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config \
     || echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config; \
-  echo "root:\${ROOT_PASSWORD}" | chpasswd
+  echo "root:\${ROOT_PASSWORD}" | chpasswd 2>/dev/null \
+    || echo "root:\${ROOT_PASSWORD}" | busybox chpasswd
 
 COPY provirted-ssh-entrypoint.sh /usr/local/bin/provirted-ssh-entrypoint.sh
 RUN chmod +x /usr/local/bin/provirted-ssh-entrypoint.sh
