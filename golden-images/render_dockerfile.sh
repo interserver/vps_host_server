@@ -38,6 +38,7 @@ ENTRYPOINT
 chmod +x "$OUTPUT_DIR/provirted-ssh-entrypoint.sh"
 
 cat > "$OUTPUT_DIR/Dockerfile" <<DOCKERFILE
+# check=skip=SecretsUsedInArgOrEnv
 FROM ${BASE_IMAGE}
 
 ARG ROOT_PASSWORD
@@ -62,7 +63,16 @@ RUN set -eux; \
              -e 's|http://archive.ubuntu.com|http://old-releases.ubuntu.com|g' \
              -e 's|http://security.ubuntu.com|http://old-releases.ubuntu.com|g' \
              /etc/apt/sources.list && apt-get update; }; \
-      apt-get install -y --no-install-recommends openssh-server passwd ca-certificates; \
+      apt_install="apt-get install -y --no-install-recommends"; \
+      if [ "\$distro" = "debian" ]; then \
+        deb_ver="\${VERSION_ID%%.*}"; \
+        if [ "\${deb_ver:-0}" -le 8 ] 2>/dev/null; then \
+          apt_install="\$apt_install --force-yes"; \
+        elif [ "\${deb_ver:-0}" -le 10 ] 2>/dev/null; then \
+          apt_install="\$apt_install --allow-unauthenticated"; \
+        fi; \
+      fi; \
+      \$apt_install openssh-server passwd ca-certificates; \
       rm -rf /var/lib/apt/lists/*; \
       ;; \
     alpine) \
@@ -73,6 +83,7 @@ RUN set -eux; \
       dnf clean all; \
       ;; \
     rocky|almalinux|centos|rhel|ol|amzn|amazon) \
+      (dnf clean all || yum clean all || true) 2>/dev/null; \
       (dnf install -y openssh-server shadow-utils passwd || yum install -y openssh-server shadow-utils passwd); \
       (dnf clean all || yum clean all || true); \
       ;; \
