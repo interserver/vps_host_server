@@ -7,25 +7,44 @@ set -euo pipefail
 ############################
 PARALLELISM=${PARALLELISM:-6}
 ROOT_PASSWORD="InterServer!23"
+
 WORKDIR="./dockerfarm"
-LOGDIR="$WORKDIR/logs"
 BUILDDIR="$WORKDIR/builds"
+LOGDIR="$WORKDIR/logs"
 RESULTDIR="$WORKDIR/results"
 TOKEN_CACHE="/tmp/dockerfarm_tokens"
+
 MAX_RETRIES=5
 
-mkdir -p "$LOGDIR" "$BUILDDIR" "$RESULTDIR" "$TOKEN_CACHE"
+mkdir -p "$BUILDDIR" "$LOGDIR" "$RESULTDIR" "$TOKEN_CACHE"
 
 RESULT_JSON="$RESULTDIR/results.json"
 ERROR_JSON="$RESULTDIR/errors.json"
 
-echo "[]" > "$RESULT_JSON"
-echo "{}" > "$ERROR_JSON"
+[[ -f "$RESULT_JSON" ]] || echo "[]" > "$RESULT_JSON"
+[[ -f "$ERROR_JSON" ]] || echo "{}" > "$ERROR_JSON"
 
 DISTROS=(
   ubuntu debian fedora alpine archlinux
   amazonlinux oraclelinux rockylinux almalinux
 )
+
+############################
+# DEP CHECK
+############################
+command -v jq >/dev/null || { echo "jq required"; exit 1; }
+command -v docker >/dev/null || { echo "docker required"; exit 1; }
+command -v sshpass >/dev/null || {
+  echo "[*] Installing sshpass..."
+  sudo apt-get install -y sshpass 2>/dev/null || sudo yum install -y sshpass || true
+}
+
+############################
+# UTIL
+############################
+sanitize() {
+  echo "$1" | tr '/:@' '___'
+}
 
 ############################
 # DOCKER AUTH
@@ -42,6 +61,28 @@ get_token() {
   token=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/${repo}:pull" | jq -r .token)
   echo "$token" > "$f"
   echo "$token"
+}
+
+############################
+# PRE-VALIDATE TAG (KEY ADDITION)
+############################
+validate_tag() {
+  local repo=$1
+  local tag=$2
+
+  token=$(get_token "$repo")
+
+  code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $token" \
+    -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+    "https://registry-1.docker.io/v2/library/${repo}/manifests/${tag}")
+
+  # Only accept v2 manifests (200 OK)
+  if [[ "$code" == "200" ]]; then
+    return 0
+  fi
+
+  return 1
 }
 
 ############################
@@ -63,10 +104,17 @@ fetch_tags() {
       | .name
     ')
 
-    while read -r t; do
-      tags+=("$t")
+    for t in $new; do
+      echo "[*] Validating $image:$t"
+
+      if validate_tag "$image" "$t"; then
+        tags+=("$t")
+      else
+        echo "[!] Skipping invalid tag $image:$t"
+      fi
+
       [[ ${#tags[@]} -ge $limit ]] && break
-    done <<< "$new"
+    done
 
     url=$(echo "$resp" | jq -r .next)
     [[ "$url" == "null" ]] && url=""
@@ -93,7 +141,7 @@ EOF
 }
 
 ############################
-# PLUGIN INSTALL
+# INSTALL LOGIC
 ############################
 install_cmd() {
   case "$1" in
@@ -121,7 +169,13 @@ install_cmd() {
 gen_dockerfile() {
   local distro=$1
   local tag=$2
-  local dir="$BUILDDIR/${distro}_${tag}"
+
+  [[ "$distro" =~ (busybox|cirros) ]] && return
+
+  local safe_tag
+  safe_tag=$(sanitize "$tag")
+  local name="${distro}_${safe_tag}"
+  local dir="$BUILDDIR/$name"
 
   mkdir -p "$dir"
 
@@ -143,69 +197,101 @@ EOF
 }
 
 ############################
-# JSON RECORDING
+# JSON (LOCKED)
 ############################
 record_result() {
-  tmp=$(mktemp)
-  jq ". += [$1]" "$RESULT_JSON" > "$tmp" && mv "$tmp" "$RESULT_JSON"
+  local data=$1
+  local tmp=$(mktemp)
+
+  (
+    flock 200
+    jq ". += [$data]" "$RESULT_JSON" > "$tmp" && mv "$tmp" "$RESULT_JSON"
+  ) 200>"$RESULT_JSON.lock"
 }
 
 record_error() {
-  tmp=$(mktemp)
-  jq --arg e "$1" --arg n "$2" '
-    .[$e] += [$n] // .[$e] = [$n]
-  ' "$ERROR_JSON" > "$tmp" && mv "$tmp" "$ERROR_JSON"
+  local err=$1
+  local name=$2
+  local tmp=$(mktemp)
+
+  (
+    flock 200
+    jq --arg e "$err" --arg n "$name" \
+      '.[$e] += [$n] // .[$e] = [$n]' \
+      "$ERROR_JSON" > "$tmp" && mv "$tmp" "$ERROR_JSON"
+  ) 200>"$ERROR_JSON.lock"
 }
 
 ############################
 # BUILD + TEST
 ############################
-build_one() {
+test_container() {
   local name=$1
-  local dir="$BUILDDIR/$name"
-  local log="$LOGDIR/$name.log"
 
-  for ((i=0;i<MAX_RETRIES;i++)); do
-    docker build "$dir" -t "df:$name" 2>&1 | tee "$log" && break
+  cid=$(docker run -d -p 0:22 "df:$name" 2>/dev/null || true)
 
-    if grep -Ei "429|toomanyrequests" "$log"; then
-      sleep 30
-    fi
-  done
+  [[ -z "$cid" ]] && {
+    record_result "{\"image\":\"$name\",\"status\":\"run_failed\",\"ssh\":false}"
+    record_error "run_failed" "$name"
+    return
+  }
 
-  cid=$(docker run -d -p 0:22 "df:$name")
   port=$(docker port "$cid" 22 | cut -d: -f2)
-
   sleep 5
 
   if sshpass -p "$ROOT_PASSWORD" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@127.0.0.1 -p "$port" "echo ok" &>/dev/null; then
     record_result "{\"image\":\"$name\",\"status\":\"success\",\"ssh\":true}"
   else
-    record_result "{\"image\":\"$name\",\"status\":\"failed\",\"ssh\":false}"
+    record_result "{\"image\":\"$name\",\"status\":\"ssh_failed\",\"ssh\":false}"
     record_error "ssh_failed" "$name"
   fi
 
-  docker rm -f "$cid" >/dev/null
+  docker rm -f "$cid" >/dev/null 2>&1
 }
 
-export -f build_one record_result record_error
+build_one() {
+  local name=$1
+  local dir="$BUILDDIR/$name"
+  local log="$LOGDIR/$name.log"
+
+  local built=0
+
+  for ((i=0;i<MAX_RETRIES;i++)); do
+    docker build "$dir" -t "df:$name" 2>&1 | tee "$log"
+    rc=${PIPESTATUS[0]}
+
+    [[ $rc -eq 0 ]] && { built=1; break; }
+
+    grep -Ei "429|toomanyrequests" "$log" && sleep 30 || sleep 5
+  done
+
+  [[ $built -ne 1 ]] && {
+    record_result "{\"image\":\"$name\",\"status\":\"build_failed\",\"ssh\":false}"
+    record_error "build_failed" "$name"
+    return
+  }
+
+  test_container "$name"
+}
+
+export -f build_one test_container record_result record_error
 
 ############################
-# TUI DASHBOARD
+# TUI
 ############################
 tui() {
   while true; do
     clear
     echo "==== DockerFarm Dashboard ===="
 
-    total=$(jq length "$RESULT_JSON")
-    ok=$(jq '[.[]|select(.status=="success")]|length' "$RESULT_JSON")
-    fail=$(jq '[.[]|select(.status=="failed")]|length' "$RESULT_JSON")
+    total=$(jq length "$RESULT_JSON" 2>/dev/null || echo 0)
+    ok=$(jq '[.[]|select(.status=="success")]|length' "$RESULT_JSON" 2>/dev/null || echo 0)
+    fail=$(jq '[.[]|select(.status!="success")]|length' "$RESULT_JSON" 2>/dev/null || echo 0)
 
     echo "Total: $total | OK: $ok | FAIL: $fail"
     echo ""
 
-    jq -r '.[-10:][]|"\(.image): \(.status)"' "$RESULT_JSON"
+    jq -r '.[-10:][]|"\(.image): \(.status)"' "$RESULT_JSON" 2>/dev/null || true
 
     echo ""
     echo "Errors:"
@@ -220,7 +306,9 @@ tui() {
 ############################
 init() {
   for d in "${DISTROS[@]}"; do
+    echo "[*] Processing $d"
     tags=$(fetch_tags "$d")
+
     for t in $tags; do
       gen_dockerfile "$d" "$t"
     done

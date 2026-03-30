@@ -52,7 +52,7 @@ gb_worker_run() {
       attempt=$((attempt + 1))
       _wstatus "building $base (attempt $attempt)"
 
-      if docker build --pull --network=host --dns 8.8.8.8 \
+      if docker build --pull --network=host \
            --build-arg ROOT_PASSWORD="$GB_ROOT_PASSWORD" \
            -t "$tag" "$out_dir" >> "$log_file" 2>&1; then
         build_ok=true

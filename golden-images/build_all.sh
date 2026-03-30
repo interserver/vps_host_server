@@ -190,7 +190,7 @@ run_worker() {
       fi
 
       # Build with log tee
-      if docker build --pull --network=host --dns 8.8.8.8 \
+      if docker build --pull --network=host \
            --build-arg ROOT_PASSWORD="$ROOT_PASSWORD" \
            -t "$tag" "$out_dir" 2>&1 | tee -a "$log_file"; then
         build_ok=true
@@ -824,7 +824,7 @@ else
       [[ $attempt -gt 1 ]] && log_info "[$tag] Retry $attempt/$((MAX_RETRIES + 1))"
       log_info "[$tag] Building..."
 
-      if docker build --pull --network=host --dns 8.8.8.8 \
+      if docker build --pull --network=host \
            --build-arg ROOT_PASSWORD="$ROOT_PASSWORD" \
            -t "$tag" "$out_dir" >> "$log_file" 2>&1; then
         build_ok=true
