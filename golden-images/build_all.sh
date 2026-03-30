@@ -6,13 +6,12 @@ RENDER_SCRIPT="$ROOT_DIR/render_dockerfile.sh"
 VERIFY_SCRIPT="$ROOT_DIR/verify_image.sh"
 
 MATRIX_FILE="${1:-$ROOT_DIR/images.matrix}"
-ROOT_PASSWORD="${ROOT_PASSWORD:-interser123}"
-REGISTRY_PREFIX="${REGISTRY_PREFIX:-interserver}"
+ROOT_PASSWORD="${ROOT_PASSWORD:-ChangeMeNow!}"
+REGISTRY_PREFIX="${REGISTRY_PREFIX:-provirted}"
 PUSH_IMAGES="${PUSH_IMAGES:-0}"
 VERIFY_IMAGES="${VERIFY_IMAGES:-1}"
-PARALLELISM="${PARALLELISM:-8}"
+PARALLELISM="${PARALLELISM:-4}"
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/build}"
-DNS_SERVERS="${DNS_SERVERS:-8.8.8.8,8.8.4.4}"
 
 if [[ ! -f "$MATRIX_FILE" ]]; then
   echo "ERROR: matrix file not found: $MATRIX_FILE" >&2
@@ -91,14 +90,8 @@ build_one() {
 
   "$RENDER_SCRIPT" "$base" "$tag" "$ROOT_PASSWORD" "$out_dir"
 
-  local dns_args=()
-  IFS=',' read -r -a dns_list <<< "$DNS_SERVERS"
-  for dns in "${dns_list[@]}"; do
-    dns_args+=(--dns "$dns")
-  done
-
   echo "==> Building $tag from $base"
-  docker build --pull "${dns_args[@]}" --build-arg ROOT_PASSWORD="$ROOT_PASSWORD" -t "$tag" "$out_dir"
+  docker build --pull --network=host --build-arg ROOT_PASSWORD="$ROOT_PASSWORD" -t "$tag" "$out_dir"
 
   if [[ "$VERIFY_IMAGES" == "1" ]]; then
     "$VERIFY_SCRIPT" "$tag" "$ROOT_PASSWORD"
@@ -112,7 +105,7 @@ build_one() {
   echo "DONE,$base,$tag"
 }
 
-export ROOT_DIR RENDER_SCRIPT VERIFY_SCRIPT ROOT_PASSWORD REGISTRY_PREFIX PUSH_IMAGES VERIFY_IMAGES WORK_DIR DNS_SERVERS
+export ROOT_DIR RENDER_SCRIPT VERIFY_SCRIPT ROOT_PASSWORD REGISTRY_PREFIX PUSH_IMAGES VERIFY_IMAGES WORK_DIR
 export -f build_one unsupported_family normalize_line_to_pairs
 
 plan_file="$WORK_DIR/build-plan.csv"
