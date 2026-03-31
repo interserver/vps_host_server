@@ -22,6 +22,17 @@ gb_dockerfile_generate() {
   local base="$1" tag="$2" outdir="$3"
   local family="${base%%:*}" version="${base#*:}"
 
+  # Normalize Docker Hub names for images that moved namespaces
+  case "$family" in
+    rockylinux)
+      local _major="${version%%.*}"
+      local _minor="${version#*.}"; _minor="${_minor%%.*}"
+      if [[ "${_major:-0}" -ge 9 ]] 2>/dev/null && [[ "${_minor:-0}" -ge 4 ]] 2>/dev/null; then
+        base="rockylinux/rockylinux:${version}"
+      fi
+      ;;
+  esac
+
   mkdir -p "$outdir"
 
   # Load the distro plugin
@@ -77,6 +88,8 @@ gb_dockerfile_generate() {
     || echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config; \
   if grep -q '^UsePAM ' /etc/ssh/sshd_config 2>/dev/null; then \
     sed -i 's/^UsePAM .*/UsePAM no/' /etc/ssh/sshd_config; \
+  else \
+    echo 'UsePAM no' >> /etc/ssh/sshd_config; \
   fi; \
 SSHCONF
     else
@@ -99,7 +112,7 @@ DBCONF
     echo ''
     echo 'EXPOSE 22'
     echo 'ENTRYPOINT ["/usr/local/bin/provirted-ssh-entrypoint.sh"]'
-    echo 'CMD ["sleep", "infinity"]'
+    echo 'CMD ["tail", "-f", "/dev/null"]'
   } > "$outdir/Dockerfile"
 
   # Build metadata

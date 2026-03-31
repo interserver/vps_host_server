@@ -19,6 +19,17 @@ mkdir -p "$OUTPUT_DIR"
 IMAGE_FAMILY="${BASE_IMAGE%%:*}"
 IMAGE_TAG="${BASE_IMAGE#*:}"
 
+# Normalize Docker Hub names for images that moved namespaces
+case "$IMAGE_FAMILY" in
+  rockylinux)
+    _major="${IMAGE_TAG%%.*}"
+    _minor="${IMAGE_TAG#*.}"; _minor="${_minor%%.*}"
+    if [ "${_major:-0}" -ge 9 ] 2>/dev/null && [ "${_minor:-0}" -ge 4 ] 2>/dev/null; then
+      BASE_IMAGE="rockylinux/rockylinux:${IMAGE_TAG}"
+    fi
+    ;;
+esac
+
 # ---------------------------------------------------------------------------
 # Entrypoint script -- shared by all families that use OpenSSH (not dropbear)
 # ---------------------------------------------------------------------------
@@ -139,7 +150,7 @@ RUN chmod +x /usr/local/bin/provirted-ssh-entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/provirted-ssh-entrypoint.sh"]
-CMD ["sleep", "infinity"]
+CMD ["tail", "-f", "/dev/null"]
 DOCKERFILE
 }
 
@@ -168,7 +179,7 @@ RUN chmod +x /usr/local/bin/provirted-ssh-entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/provirted-ssh-entrypoint.sh"]
-CMD ["sleep", "infinity"]
+CMD ["tail", "-f", "/dev/null"]
 DOCKERFILE
 }
 
@@ -341,6 +352,8 @@ RUN set -eux; \\
   # Disable PAM on distros where it interferes with password auth in containers \\
   if grep -q '^UsePAM ' /etc/ssh/sshd_config 2>/dev/null; then \\
     sed -i 's/^UsePAM .*/UsePAM no/' /etc/ssh/sshd_config; \\
+  else \\
+    echo 'UsePAM no' >> /etc/ssh/sshd_config; \\
   fi; \\
   echo "root:\${ROOT_PASSWORD}" | chpasswd 2>/dev/null \\
     || echo "root:\${ROOT_PASSWORD}" | busybox chpasswd
@@ -350,7 +363,7 @@ RUN chmod +x /usr/local/bin/provirted-ssh-entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/provirted-ssh-entrypoint.sh"]
-CMD ["sleep", "infinity"]
+CMD ["tail", "-f", "/dev/null"]
 DOCKERFILE
 }
 
