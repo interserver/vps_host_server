@@ -54,7 +54,8 @@ gb_dockerfile_generate() {
     echo 'RUN set -eux; \'
 
     # DNS fix — always inject working nameservers
-    echo '  printf '"'"'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'"'"' > /etc/resolv.conf 2>/dev/null || true; \'
+    echo '  rm -f /etc/resolv.conf 2>/dev/null || true; \'
+    echo '  printf '"'"'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'"'"' > /etc/resolv.conf; \'
 
     # Distro-specific: fix repos
     if type plugin_fix_repos &>/dev/null; then

@@ -169,8 +169,8 @@ SHELL ["/bin/sh", "-c"]
 
 RUN set -eux; \\
   # ── DNS fix ── ensure resolution works inside build \\
-  : > /etc/resolv.conf 2>/dev/null || true; \\
-  printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf 2>/dev/null || true; \\
+  rm -f /etc/resolv.conf 2>/dev/null || true; \\
+  printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf; \\
   \\
   if [ -f /etc/os-release ]; then . /etc/os-release; fi; \\
   distro="\${ID:-unknown}"; \\
