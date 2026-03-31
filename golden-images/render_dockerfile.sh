@@ -168,9 +168,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/sh", "-c"]
 
 RUN set -eux; \\
-  # ── DNS fix ── ensure resolution works inside build \\
-  rm -f /etc/resolv.conf 2>/dev/null || true; \\
-  printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf; \\
+  # ── DNS fix ── ensure resolution works inside build (tolerate read-only mount in BuildKit) \\
+  (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf) 2>/dev/null || true; \\
   \\
   if [ -f /etc/os-release ]; then . /etc/os-release; fi; \\
   distro="\${ID:-unknown}"; \\
