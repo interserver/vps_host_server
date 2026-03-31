@@ -118,8 +118,10 @@ set -eu
 if command -v ssh-keygen >/dev/null 2>&1; then
   ssh-keygen -A >/dev/null 2>&1 || true
 fi
-if command -v sshd >/dev/null 2>&1; then
-  sshd
+# sshd re-exec requires an absolute path
+SSHD_BIN=$(command -v sshd 2>/dev/null || true)
+if [ -x "${SSHD_BIN:-}" ]; then
+  "$SSHD_BIN"
 elif [ -x /usr/sbin/sshd ]; then
   /usr/sbin/sshd
 else

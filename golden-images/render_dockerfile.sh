@@ -31,8 +31,10 @@ if command -v ssh-keygen >/dev/null 2>&1; then
   ssh-keygen -A >/dev/null 2>&1 || true
 fi
 
-if command -v sshd >/dev/null 2>&1; then
-  sshd
+# sshd re-exec requires an absolute path
+SSHD_BIN=$(command -v sshd 2>/dev/null || true)
+if [ -x "${SSHD_BIN:-}" ]; then
+  "$SSHD_BIN"
 elif [ -x /usr/sbin/sshd ]; then
   /usr/sbin/sshd
 else
@@ -97,7 +99,8 @@ generate_busybox_dockerfile() {
 # check=skip=SecretsUsedInArgOrEnv
 # Multi-stage: grab dropbear + deps from Alpine, copy into busybox
 FROM alpine:latest AS ssh-builder
-RUN apk add --no-cache dropbear
+RUN apk add --no-cache dropbear; \
+    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true
 
 FROM ${BASE_IMAGE}
 ARG ROOT_PASSWORD
@@ -140,6 +143,8 @@ SHELL ["/bin/sh", "-c"]
 
 # cirros ships with dropbear; just configure it
 RUN set -eux; \\
+  # CirrOS may have /etc as a broken symlink — ensure it is a real directory \\
+  if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi; \\
   mkdir -p /etc/dropbear /var/run; \\
   if command -v dropbearkey >/dev/null 2>&1; then \\
     dropbearkey -t rsa    -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true; \\

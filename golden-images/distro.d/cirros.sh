@@ -12,7 +12,9 @@ plugin_fix_repos() {
 plugin_install_ssh() {
   local version="$1"
   # CirrOS ships with dropbear; just ensure dirs exist
+  # CirrOS may have /etc as a broken symlink — fix before mkdir
   cat <<'SHELL'
+  if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi; \
   mkdir -p /etc/dropbear /var/run; \
   if ! command -v dropbearkey >/dev/null 2>&1; then \
     echo "WARN: dropbearkey not found in cirros image" >&2; \
