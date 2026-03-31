@@ -60,6 +60,7 @@ workerman/update.sh
 ./golden-images/verify_image.sh       # verify a built image
 ./golden-images/dockerfarm.sh         # distributed docker build farm
 ./golden-images/render_dockerfile.sh  # render Dockerfile from distro.d/ template
+./golden-images/install_docker.sh     # install/reinstall Docker on Ubuntu
 ```
 
 ## Key Conventions
@@ -102,7 +103,6 @@ cd nagios-plugin-check_raid && make test
 ```
 
 Test data under `nagios-plugin-check_raid/t/data/`. Lib code in `nagios-plugin-check_raid/lib/App/Monitoring/`.
-
 
 ## Before Committing
 
