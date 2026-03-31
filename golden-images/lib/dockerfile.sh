@@ -147,9 +147,9 @@ ENTRY
 _dockerfile_write_dropbear_entrypoint() {
   cat > "$1/provirted-ssh-entrypoint.sh" <<'ENTRY'
 #!/bin/sh
-# Ensure /etc is a real directory (CirrOS may have it as symlink/file/missing)
-if [ ! -d /etc ]; then rm -f /etc 2>/dev/null; mkdir -p /etc; fi
-mkdir -p /etc/dropbear
+# Ensure /etc/dropbear exists (CirrOS may have non-standard /etc)
+rm -f /etc 2>/dev/null || true
+mkdir -p /etc/dropbear 2>/dev/null || mkdir -p /tmp/dropbear && ln -sf /tmp/dropbear /etc/dropbear 2>/dev/null || true
 for kt in rsa ecdsa ed25519; do
   kf="/etc/dropbear/dropbear_${kt}_host_key"
   [ -f "$kf" ] && continue

@@ -63,9 +63,9 @@ write_dropbear_entrypoint() {
   cat > "$OUTPUT_DIR/provirted-ssh-entrypoint.sh" <<'ENTRYPOINT'
 #!/bin/sh
 
-# Ensure /etc is a real directory (CirrOS may have it as symlink/file/missing)
-if [ ! -d /etc ]; then rm -f /etc 2>/dev/null; mkdir -p /etc; fi
-mkdir -p /etc/dropbear
+# Ensure /etc/dropbear exists (CirrOS may have non-standard /etc)
+rm -f /etc 2>/dev/null || true
+mkdir -p /etc/dropbear 2>/dev/null || mkdir -p /tmp/dropbear && ln -sf /tmp/dropbear /etc/dropbear 2>/dev/null || true
 
 # Generate host keys if missing
 for kt in rsa ecdsa ed25519; do
@@ -161,9 +161,13 @@ ARG ROOT_PASSWORD
 SHELL ["/bin/sh", "-c"]
 
 # cirros ships with dropbear; just configure it
-RUN set -eux; \\
-  if [ ! -d /etc ]; then rm -f /etc 2>/dev/null; mkdir -p /etc; fi; \\
-  mkdir -p /etc/dropbear /var/run; \\
+RUN set -x; \\
+  rm -f /etc 2>/dev/null || true; \\
+  mkdir -p /etc /etc/dropbear /var/run 2>/dev/null; \\
+  if [ ! -d /etc/dropbear ]; then \\
+    mkdir -p /tmp/dropbear 2>/dev/null; \\
+    ln -sf /tmp/dropbear /etc/dropbear 2>/dev/null || true; \\
+  fi; \\
   if command -v dropbearkey >/dev/null 2>&1; then \\
     dropbearkey -t rsa    -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true; \\
     dropbearkey -t ecdsa  -f /etc/dropbear/dropbear_ecdsa_host_key 2>/dev/null || true; \\
