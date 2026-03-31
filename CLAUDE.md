@@ -12,6 +12,7 @@ VPS Hosting Server Daemon — provisions, monitors, and communicates with `myvps
 - **Tasks**: `workerman/src/Tasks/vps_queue.php` · `workerman/src/Tasks/vps_get_list.php` · `workerman/src/Tasks/vps_update_info.php`
 - **Config**: `workerman/src/Config/settings.php` · `workerman/config.ini.dist`
 - **Stats**: `workerman/src/Stats/Network.php` · `workerman/src/Stats/Storage.php` · `workerman/src/Stats/System.php`
+- **Golden Images**: `golden-images/` — builds and verifies OS base images for VPS provisioning
 
 ## Virtualization Support
 
@@ -52,6 +53,13 @@ workerman/update.sh
 ./vps_refresh_vnc.sh <vps>
 ./vps_refresh_all_vnc.sh
 ./set_io_limits.sh
+
+# Golden Images
+./golden-images/golden-build          # main image build CLI
+./golden-images/build_all.sh          # build all images from images.matrix
+./golden-images/verify_image.sh       # verify a built image
+./golden-images/dockerfarm.sh         # distributed docker build farm
+./golden-images/render_dockerfile.sh  # render Dockerfile from distro.d/ template
 ```
 
 ## Key Conventions
@@ -67,6 +75,7 @@ workerman/update.sh
 - **Templates dir**: `templates/` — install and test scripts per virt type; `templates/test_*.sh` for smoke testing
 - **XML utility**: `xml2array.php` (root) and `workerman/src/Data/xml2array.php` — used to parse `virsh dumpxml` output
 - **KVM template XML**: `windows.xml` — base libvirt domain config cloned for new VPS
+- **Golden Images**: `golden-images/images.matrix` defines build targets; `golden-images/distro.d/` contains per-distro build scripts; `golden-images/golden-build.conf.default` is the config template
 
 ## Workerman Patterns
 
@@ -94,7 +103,7 @@ cd nagios-plugin-check_raid && make test
 
 Test data under `nagios-plugin-check_raid/t/data/`. Lib code in `nagios-plugin-check_raid/lib/App/Monitoring/`.
 
-<!-- caliber:managed:pre-commit -->
+
 ## Before Committing
 
 Run `caliber refresh` before creating git commits to keep docs in sync with code changes.
@@ -103,6 +112,28 @@ After it completes, stage any modified doc files before committing:
 ```bash
 caliber refresh && git add CLAUDE.md .claude/ .cursor/ .github/copilot-instructions.md AGENTS.md CALIBER_LEARNINGS.md 2>/dev/null
 ```
+## Session Learnings
+
+Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions.
+These are auto-extracted from real tool usage — treat them as project-specific rules.
+
+<!-- caliber:managed:pre-commit -->
+## Before Committing
+
+**IMPORTANT:** Before every git commit, you MUST ensure Caliber syncs agent configs with the latest code changes.
+
+First, check if the pre-commit hook is already installed:
+```bash
+grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"
+```
+
+- If **hook-active**: the hook handles sync automatically — just commit normally. Tell the user: "Caliber will sync your agent configs automatically via the pre-commit hook."
+- If **no-hook**: run Caliber manually before committing:
+  1. Tell the user: "Caliber: Syncing agent configs with your latest changes..."
+  2. Run: `caliber refresh && git add CLAUDE.md .claude/ .cursor/ .cursorrules .github/copilot-instructions.md .github/instructions/ AGENTS.md CALIBER_LEARNINGS.md .agents/ .opencode/ 2>/dev/null`
+  3. After it completes, briefly tell the user what Caliber updated. Then proceed with the commit.
+
+If `caliber` is not found, tell the user: "This project uses Caliber for agent config sync. Run /setup-caliber to get set up."
 <!-- /caliber:managed:pre-commit -->
 
 <!-- caliber:managed:learnings -->
@@ -111,3 +142,11 @@ caliber refresh && git add CLAUDE.md .claude/ .cursor/ .github/copilot-instructi
 Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions.
 These are auto-extracted from real tool usage — treat them as project-specific rules.
 <!-- /caliber:managed:learnings -->
+
+<!-- caliber:managed:sync -->
+## Context Sync
+
+This project uses [Caliber](https://github.com/caliber-ai-org/ai-setup) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
+Configs update automatically before each commit via `caliber refresh`.
+If the pre-commit hook is not set up, run `/setup-caliber` to configure everything automatically.
+<!-- /caliber:managed:sync -->
