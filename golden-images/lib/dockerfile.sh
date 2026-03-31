@@ -127,18 +127,17 @@ META
 _dockerfile_write_ssh_entrypoint() {
   cat > "$1/provirted-ssh-entrypoint.sh" <<'ENTRY'
 #!/bin/sh
-set -eu
 if command -v ssh-keygen >/dev/null 2>&1; then
   ssh-keygen -A >/dev/null 2>&1 || true
 fi
-# sshd re-exec requires an absolute path
+# sshd re-exec requires an absolute path; don't exit on failure so container stays up
 SSHD_BIN=$(command -v sshd 2>/dev/null || true)
 if [ -x "${SSHD_BIN:-}" ]; then
-  "$SSHD_BIN"
+  "$SSHD_BIN" || echo "WARNING: sshd exited with status $?" >&2
 elif [ -x /usr/sbin/sshd ]; then
-  /usr/sbin/sshd
+  /usr/sbin/sshd || echo "WARNING: sshd exited with status $?" >&2
 else
-  echo "ERROR: sshd not found" >&2; exit 1
+  echo "ERROR: sshd not found" >&2
 fi
 exec "$@"
 ENTRY
@@ -148,9 +147,8 @@ ENTRY
 _dockerfile_write_dropbear_entrypoint() {
   cat > "$1/provirted-ssh-entrypoint.sh" <<'ENTRY'
 #!/bin/sh
-set -eu
-# CirrOS may have /etc as a broken symlink
-if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi
+# Ensure /etc is a real directory (CirrOS may have it as symlink/file/missing)
+if [ ! -d /etc ]; then rm -f /etc 2>/dev/null; mkdir -p /etc; fi
 mkdir -p /etc/dropbear
 for kt in rsa ecdsa ed25519; do
   kf="/etc/dropbear/dropbear_${kt}_host_key"

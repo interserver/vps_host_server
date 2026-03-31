@@ -36,21 +36,19 @@ esac
 write_ssh_entrypoint() {
   cat > "$OUTPUT_DIR/provirted-ssh-entrypoint.sh" <<'ENTRYPOINT'
 #!/bin/sh
-set -eu
 
 if command -v ssh-keygen >/dev/null 2>&1; then
   ssh-keygen -A >/dev/null 2>&1 || true
 fi
 
-# sshd re-exec requires an absolute path
+# sshd re-exec requires an absolute path; don't exit on failure so container stays up
 SSHD_BIN=$(command -v sshd 2>/dev/null || true)
 if [ -x "${SSHD_BIN:-}" ]; then
-  "$SSHD_BIN"
+  "$SSHD_BIN" || echo "WARNING: sshd exited with status $?" >&2
 elif [ -x /usr/sbin/sshd ]; then
-  /usr/sbin/sshd
+  /usr/sbin/sshd || echo "WARNING: sshd exited with status $?" >&2
 else
   echo "ERROR: sshd not found in container" >&2
-  exit 1
 fi
 
 exec "$@"
@@ -64,10 +62,9 @@ ENTRYPOINT
 write_dropbear_entrypoint() {
   cat > "$OUTPUT_DIR/provirted-ssh-entrypoint.sh" <<'ENTRYPOINT'
 #!/bin/sh
-set -eu
 
-# CirrOS may have /etc as a broken symlink
-if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi
+# Ensure /etc is a real directory (CirrOS may have it as symlink/file/missing)
+if [ ! -d /etc ]; then rm -f /etc 2>/dev/null; mkdir -p /etc; fi
 mkdir -p /etc/dropbear
 
 # Generate host keys if missing
@@ -165,8 +162,7 @@ SHELL ["/bin/sh", "-c"]
 
 # cirros ships with dropbear; just configure it
 RUN set -eux; \\
-  # CirrOS may have /etc as a broken symlink — ensure it is a real directory \\
-  if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi; \\
+  if [ ! -d /etc ]; then rm -f /etc 2>/dev/null; mkdir -p /etc; fi; \\
   mkdir -p /etc/dropbear /var/run; \\
   if command -v dropbearkey >/dev/null 2>&1; then \\
     dropbearkey -t rsa    -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || true; \\
@@ -200,6 +196,21 @@ RUN set -eux; \\
   \\
   if [ -f /etc/os-release ]; then . /etc/os-release; fi; \\
   distro="\${ID:-unknown}"; \\
+  if [ "\$distro" = "unknown" ]; then \\
+    if [ -f /etc/redhat-release ]; then \\
+      rr=\$(cat /etc/redhat-release 2>/dev/null); \\
+      case "\$rr" in \\
+        Scientific*) distro="scientific" ;; \\
+        CentOS*) distro="centos" ;; \\
+        Red\\ Hat*|RHEL*) distro="rhel" ;; \\
+        Fedora*) distro="fedora" ;; \\
+        Oracle*) distro="ol" ;; \\
+        *) distro="centos" ;; \\
+      esac; \\
+    elif [ -f /etc/SuSE-release ]; then distro="opensuse"; \\
+    elif [ -f /etc/alpine-release ]; then distro="alpine"; \\
+    fi; \\
+  fi; \\
   case "\$distro" in \\
     ubuntu|debian) \\
       # ── Fix EOL / archive repos for Debian ── \\
@@ -292,13 +303,14 @@ RUN set -eux; \\
           sed -i 's|^mirrorlist=|#mirrorlist=|g; s|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true; \\
         fi; \\
       fi; \\
-      # ── Fix Scientific Linux repos ── \\
+      # ── Fix Scientific Linux repos (mirrors are dead, use CERN archive) ── \\
       if [ "\$distro" = "scientific" ]; then \\
-        sl_ver="\${VERSION_ID%%.*}"; \\
-        if [ "\${sl_ver:-0}" -le 7 ] 2>/dev/null; then \\
-          sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/sl*.repo 2>/dev/null || true; \\
-          sed -i "s|^#baseurl=http://ftp.scientificlinux.org/linux|baseurl=http://ftp.scientificlinux.org/linux|g" /etc/yum.repos.d/sl*.repo 2>/dev/null || true; \\
-        fi; \\
+        sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \\
+          -e 's|ftp.scientificlinux.org/linux/scientific|linuxsoft.cern.ch/scientific|g' \\
+          -e 's|ftp1.scientificlinux.org/linux/scientific|linuxsoft.cern.ch/scientific|g' \\
+          -e 's|ftp2.scientificlinux.org/linux/scientific|linuxsoft.cern.ch/scientific|g' \\
+          /etc/yum.repos.d/sl*.repo 2>/dev/null || true; \\
+        sed -i 's|^#baseurl=|baseurl=|g' /etc/yum.repos.d/sl*.repo 2>/dev/null || true; \\
       fi; \\
       # ── Fix Oracle Linux repos (ensure ol repo is enabled) ── \\
       if [ "\$distro" = "ol" ]; then \\
