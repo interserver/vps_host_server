@@ -136,14 +136,18 @@ _dockerfile_write_dropbear_entrypoint() {
   cat > "$1/provirted-ssh-entrypoint.sh" <<'ENTRY'
 #!/bin/sh
 set -eu
+# CirrOS may have /etc as a broken symlink
+if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi
 mkdir -p /etc/dropbear
 for kt in rsa ecdsa ed25519; do
   kf="/etc/dropbear/dropbear_${kt}_host_key"
   [ -f "$kf" ] && continue
   dropbearkey -t "$kt" -f "$kf" 2>/dev/null || true
 done
-if command -v dropbear >/dev/null 2>&1; then
-  dropbear -R -E -F -p 22 &
+# Use absolute path for dropbear
+DROPBEAR_BIN=$(command -v dropbear 2>/dev/null || true)
+if [ -x "${DROPBEAR_BIN:-}" ]; then
+  "$DROPBEAR_BIN" -R -E -F -p 22 &
 elif [ -x /usr/sbin/dropbear ]; then
   /usr/sbin/dropbear -R -E -F -p 22 &
 else

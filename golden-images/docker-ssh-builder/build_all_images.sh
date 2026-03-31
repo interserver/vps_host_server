@@ -279,12 +279,7 @@ RUN apt-get update && \
         dnsutils \
         net-tools \
         ca-certificates && \
-    echo 'options timeout:2 attempts:3 rotate' > /etc/resolv.conf.head && \
-    rm -f /etc/resolv.conf && \
-    touch /etc/resolv.conf && \
-    chattr -i /etc/resolv.conf 2>/dev/null || true && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
+    (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true && \
     apt-get update || (sleep 5 && apt-get update) || (sleep 10 && apt-get update)
 
 # Install OpenSSH
@@ -322,13 +317,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
 # Fix DNS and update
-RUN apt-get update && \
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         dnsutils \
         net-tools \
         ca-certificates && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
     apt-get update || (sleep 5 && apt-get update) || (sleep 10 && apt-get update)
 
 # Install OpenSSH
@@ -363,9 +357,8 @@ FROM fedora:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -401,9 +394,8 @@ FROM ${BASE_IMAGE}:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -438,9 +430,8 @@ FROM amazonlinux:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN yum -y update && \
@@ -475,9 +466,8 @@ FROM oraclelinux:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -512,9 +502,8 @@ FROM photon:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN tdnf -y update && \
@@ -549,7 +538,8 @@ FROM busybox:${VERSION}
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
 # BusyBox minimal SSH (dropbear)
-RUN apk add --no-cache dropbear
+RUN apk add --no-cache dropbear; \
+    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true
 
 # Configure dropbear
 RUN mkdir -p /etc/dropbear && \
@@ -605,9 +595,8 @@ FROM mageia:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y install openssh-server && \
@@ -641,9 +630,8 @@ FROM archlinux:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS and update
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
+# Fix DNS and update (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true && \
     pacman -Sy --noconfirm && \
     pacman -S --noconfirm openssh
 
@@ -678,9 +666,8 @@ FROM opensuse/leap:${IMAGE_TAG}
 # HADOLINT SKIP SECRETS
 ENV SSH_PASSWORD="${SSH_PASSWORD}"
 
-# Fix DNS
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Fix DNS (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN zypper -n update && \

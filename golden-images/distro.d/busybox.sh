@@ -7,7 +7,8 @@ plugin_extra_stages() {
   local base="$1" version="$2"
   cat <<'STAGES'
 FROM alpine:latest AS ssh-builder
-RUN apk add --no-cache dropbear
+RUN apk add --no-cache dropbear; \
+    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true
 
 STAGES
 }

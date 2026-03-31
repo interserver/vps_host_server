@@ -750,11 +750,8 @@ FROM ${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
-    echo "options timeout:2 attempts:3" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Set root password
 RUN echo "root:${SSH_PASSWORD}" | chpasswd
@@ -830,12 +827,8 @@ ARG SSH_PASSWORD
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    cat > /etc/resolv.conf << RESOLV
-nameserver 8.8.8.8
-nameserver 8.8.4.4
-RESOLV
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN apt-get update && \
@@ -871,12 +864,8 @@ ARG SSH_PASSWORD
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix and update mirrors
-RUN rm -f /etc/resolv.conf && \
-    cat > /etc/resolv.conf << RESOLV
-nameserver 8.8.8.8
-nameserver 8.8.4.4
-RESOLV
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN apt-get update && \
@@ -910,10 +899,8 @@ FROM fedora:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -947,10 +934,8 @@ FROM amazonlinux:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN yum -y update && \
@@ -984,10 +969,8 @@ FROM oraclelinux:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -1021,10 +1004,8 @@ FROM photon:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN tdnf -y update && \
@@ -1058,7 +1039,8 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
 # Install dropbear
-RUN apk add --no-cache dropbear && \
+RUN apk add --no-cache dropbear; \
+    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true && \
     mkdir -p /etc/dropbear && \
     /usr/bin/dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
 
@@ -1110,10 +1092,8 @@ FROM mageia:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y install openssh-server && \
@@ -1145,10 +1125,8 @@ FROM archlinux:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN pacman -Sy --noconfirm && \
@@ -1182,10 +1160,8 @@ FROM opensuse/leap:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN zypper -n update && \
@@ -1219,10 +1195,8 @@ FROM almalinux:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -1256,10 +1230,8 @@ FROM rockylinux:\${IMAGE_TAG}
 ARG SSH_PASSWORD
 ENV SSH_PASSWORD=\${SSH_PASSWORD}
 
-# DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# DNS fix (tolerate read-only mount in BuildKit)
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \

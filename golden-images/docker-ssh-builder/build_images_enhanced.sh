@@ -599,10 +599,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
-    chattr -i /etc/resolv.conf 2>/dev/null || true && \
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
+RUN chattr -i /etc/resolv.conf 2>/dev/null || true && \
     apt-get update
 
 # Install OpenSSH
@@ -639,10 +637,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
-    chattr -i /etc/resolv.conf 2>/dev/null || true && \
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
+RUN chattr -i /etc/resolv.conf 2>/dev/null || true && \
     apt-get update
 
 # Install OpenSSH
@@ -677,9 +673,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -712,9 +706,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN yum -y update && \
@@ -747,9 +739,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \
@@ -782,9 +772,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN tdnf -y update && \
@@ -816,7 +804,8 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # Install dropbear
-RUN apk add --no-cache dropbear
+RUN apk add --no-cache dropbear; \
+    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true
 
 # Configure
 RUN mkdir -p /etc/dropbear && \
@@ -869,9 +858,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y install openssh-server && \
@@ -903,9 +890,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN pacman -Sy --noconfirm && \
@@ -938,9 +923,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN zypper -n update && \
@@ -974,9 +957,7 @@ ARG SSH_PASSWORD
 ENV SSH_PASSWORD=${SSH_PASSWORD}
 
 # DNS fix
-RUN rm -f /etc/resolv.conf && \
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
-    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+RUN (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n' > /etc/resolv.conf) 2>/dev/null || true
 
 # Install OpenSSH
 RUN dnf -y update && \

@@ -55,6 +55,8 @@ write_dropbear_entrypoint() {
 #!/bin/sh
 set -eu
 
+# CirrOS may have /etc as a broken symlink
+if [ -L /etc ] && [ ! -d /etc ]; then rm -f /etc; mkdir -p /etc; fi
 mkdir -p /etc/dropbear
 
 # Generate host keys if missing
@@ -64,9 +66,10 @@ for kt in rsa ecdsa ed25519; do
   dropbearkey -t "$kt" -f "$kf" 2>/dev/null || true
 done
 
-# Start dropbear in background (-R = generate keys on demand, -B = allow blank pw)
-if command -v dropbear >/dev/null 2>&1; then
-  dropbear -R -E -F -p 22 &
+# Start dropbear in background — use absolute path
+DROPBEAR_BIN=$(command -v dropbear 2>/dev/null || true)
+if [ -x "${DROPBEAR_BIN:-}" ]; then
+  "$DROPBEAR_BIN" -R -E -F -p 22 &
 elif [ -x /usr/sbin/dropbear ]; then
   /usr/sbin/dropbear -R -E -F -p 22 &
 else
