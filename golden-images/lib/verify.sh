@@ -11,7 +11,7 @@ gb_verify_image() {
   trap _verify_cleanup RETURN
 
   # Start container
-  container_id="$(docker run -d -P "$image_tag" sleep infinity 2>&1)" || {
+  container_id="$(docker run -d -P "$image_tag" tail -f /dev/null 2>&1)" || {
     echo "ERROR: container failed to start for $image_tag" >&2
     return 2
   }

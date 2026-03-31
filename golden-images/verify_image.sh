@@ -21,7 +21,7 @@ cleanup() {
 trap cleanup EXIT
 
 # ── Start container ──────────────────────────────────────────────────
-run_output="$(docker run -d -P "$IMAGE_TAG" sleep infinity 2>&1)" || {
+run_output="$(docker run -d -P "$IMAGE_TAG" tail -f /dev/null 2>&1)" || {
   echo "ERROR: container failed to start for $IMAGE_TAG" >&2
   echo "$run_output" >&2
   exit 2
