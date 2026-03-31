@@ -104,7 +104,6 @@ generate_busybox_dockerfile() {
 FROM alpine:latest AS ssh-builder
 RUN apk add --no-cache dropbear; \
     apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true; \
-    # Auto-stage all shared library deps so COPY never misses one
     mkdir -p /deps/lib /deps/usr/lib; \
     cp /lib/ld-musl-* /deps/lib/; \
     for b in /usr/sbin/dropbear /usr/bin/dropbearkey /usr/bin/dbclient /usr/bin/scp; do \
