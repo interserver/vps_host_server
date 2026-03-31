@@ -103,19 +103,28 @@ generate_busybox_dockerfile() {
 # Multi-stage: grab dropbear + deps from Alpine, copy into busybox
 FROM alpine:latest AS ssh-builder
 RUN apk add --no-cache dropbear; \
-    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true
+    apk add --no-cache dropbear-dbclient dropbear-scp 2>/dev/null || true; \
+    # Auto-stage all shared library deps so COPY never misses one
+    mkdir -p /deps/lib /deps/usr/lib; \
+    cp /lib/ld-musl-* /deps/lib/; \
+    for b in /usr/sbin/dropbear /usr/bin/dropbearkey /usr/bin/dbclient /usr/bin/scp; do \
+      [ -f "\$b" ] || continue; \
+      ldd "\$b" 2>/dev/null | awk '/=>/{print \$3}' | sort -u | while read -r l; do \
+        [ -f "\$l" ] && cp -n "\$l" "/deps\$(dirname "\$l")/" 2>/dev/null || true; \
+      done; \
+    done
 
 FROM ${BASE_IMAGE}
 ARG ROOT_PASSWORD
 
-# Copy dropbear binaries and required shared libraries from Alpine
+# Copy dropbear binaries from Alpine
 COPY --from=ssh-builder /usr/sbin/dropbear /usr/sbin/dropbear
 COPY --from=ssh-builder /usr/bin/dropbearkey /usr/bin/dropbearkey
 COPY --from=ssh-builder /usr/bin/dbclient /usr/bin/dbclient
 COPY --from=ssh-builder /usr/bin/scp /usr/bin/scp
-# musl libc and zlib (dropbear's runtime dependencies)
-COPY --from=ssh-builder /lib/ld-musl-* /lib/
-COPY --from=ssh-builder /usr/lib/libz.so* /usr/lib/
+# All runtime shared library dependencies (auto-detected via ldd)
+COPY --from=ssh-builder /deps/lib/ /lib/
+COPY --from=ssh-builder /deps/usr/lib/ /usr/lib/
 
 SHELL ["/bin/sh", "-c"]
 
