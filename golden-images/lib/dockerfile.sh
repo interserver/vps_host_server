@@ -53,9 +53,8 @@ gb_dockerfile_generate() {
     echo ''
     echo 'RUN set -eux; \'
 
-    # DNS fix — always inject working nameservers
-    echo '  rm -f /etc/resolv.conf 2>/dev/null || true; \'
-    echo '  printf '"'"'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'"'"' > /etc/resolv.conf; \'
+    # DNS fix — inject working nameservers (tolerate read-only mount in BuildKit)
+    echo '  (rm -f /etc/resolv.conf 2>/dev/null; printf '"'"'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'"'"' > /etc/resolv.conf) 2>/dev/null || true; \'
 
     # Distro-specific: fix repos
     if type plugin_fix_repos &>/dev/null; then
