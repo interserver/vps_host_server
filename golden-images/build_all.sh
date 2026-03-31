@@ -264,11 +264,30 @@ run_worker() {
 
     # ── Push ──
     if [[ "$PUSH_IMAGES" == "1" ]]; then
-      update_status "pushing $tag"
-      if ! docker push "$tag" >> "$log_file" 2>&1; then
+      local detain_tag=""
+      if detain_tag="$(derive_detain_tag "$tag")"; then
+        update_status "tagging $tag -> $detain_tag"
+        if ! docker tag "$tag" "$detain_tag" >> "$log_file" 2>&1; then
+          elapsed=$(( $(date +%s) - t0 ))
+          log_error "[Worker $wid] Tag FAILED: $tag -> $detain_tag (${elapsed}s)"
+          printf 'TAG_FAIL\t%s\t%s\n' "$base" "$tag" > "$RESULTS_DIR/${safe_name}.fail"
+          mv "$job_file" "$QUEUE_DIR/failed/$(basename "$job_file")" 2>/dev/null || true
+          built_fail=$((built_fail + 1))
+          continue
+        fi
+        update_status "pushing $detain_tag"
+        if ! docker push "$detain_tag" >> "$log_file" 2>&1; then
+          elapsed=$(( $(date +%s) - t0 ))
+          log_error "[Worker $wid] Push FAILED: $detain_tag (${elapsed}s)"
+          printf 'PUSH_FAIL\t%s\t%s\n' "$base" "$detain_tag" > "$RESULTS_DIR/${safe_name}.fail"
+          mv "$job_file" "$QUEUE_DIR/failed/$(basename "$job_file")" 2>/dev/null || true
+          built_fail=$((built_fail + 1))
+          continue
+        fi
+      else
         elapsed=$(( $(date +%s) - t0 ))
-        log_error "[Worker $wid] Push FAILED: $tag (${elapsed}s)"
-        printf 'PUSH_FAIL\t%s\t%s\n' "$base" "$tag" > "$RESULTS_DIR/${safe_name}.fail"
+        log_error "[Worker $wid] Could not derive detain tag from: $tag (${elapsed}s)"
+        printf 'TAG_FAIL\t%s\t%s\n' "$base" "$tag" > "$RESULTS_DIR/${safe_name}.fail"
         mv "$job_file" "$QUEUE_DIR/failed/$(basename "$job_file")" 2>/dev/null || true
         built_fail=$((built_fail + 1))
         continue
@@ -313,6 +332,15 @@ detect_rate_limit_wait() {
   else
     # Default: Docker Hub anonymous rate limit resets after ~15 minutes
     echo "$RATE_LIMIT_WAIT"
+  fi
+}
+
+derive_detain_tag() {
+  local source_tag="$1"
+  if [[ "$source_tag" =~ ^[^/]+/([^-]+-[^-]+)-ssh$ ]]; then
+    printf 'detain/interserver:%s\n' "${BASH_REMATCH[1]}"
+  else
+    return 1
   fi
 }
 
@@ -889,11 +917,26 @@ else
 
     # Push
     if [[ "$PUSH_IMAGES" == "1" ]]; then
-      log_info "[$tag] Pushing..."
-      if ! docker push "$tag" >> "$log_file" 2>&1; then
+      local detain_tag=""
+      if detain_tag="$(derive_detain_tag "$tag")"; then
+        log_info "[$tag] Tagging as $detain_tag..."
+        if ! docker tag "$tag" "$detain_tag" >> "$log_file" 2>&1; then
+          elapsed=$(( $(date +%s) - t0 ))
+          log_error "[$tag] Tag failed -> $detain_tag (${elapsed}s)"
+          printf 'TAG_FAIL\t%s\t%s\n' "$base" "$tag" > "$RESULTS_DIR/${safe_name}.fail"
+          return 0
+        fi
+        log_info "[$detain_tag] Pushing..."
+        if ! docker push "$detain_tag" >> "$log_file" 2>&1; then
+          elapsed=$(( $(date +%s) - t0 ))
+          log_error "[$detain_tag] Push failed (${elapsed}s)"
+          printf 'PUSH_FAIL\t%s\t%s\n' "$base" "$detain_tag" > "$RESULTS_DIR/${safe_name}.fail"
+          return 0
+        fi
+      else
         elapsed=$(( $(date +%s) - t0 ))
-        log_error "[$tag] Push failed (${elapsed}s)"
-        printf 'PUSH_FAIL\t%s\t%s\n' "$base" "$tag" > "$RESULTS_DIR/${safe_name}.fail"
+        log_error "[$tag] Could not derive detain tag (${elapsed}s)"
+        printf 'TAG_FAIL\t%s\t%s\n' "$base" "$tag" > "$RESULTS_DIR/${safe_name}.fail"
         return 0
       fi
     fi
