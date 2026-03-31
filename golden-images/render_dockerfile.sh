@@ -195,7 +195,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/sh", "-c"]
 
 RUN set -eux; \\
-  # ── DNS fix ── ensure resolution works inside build (tolerate read-only mount in BuildKit) \\
   (rm -f /etc/resolv.conf 2>/dev/null; printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf) 2>/dev/null || true; \\
   \\
   if [ -f /etc/os-release ]; then . /etc/os-release; fi; \\
@@ -217,7 +216,6 @@ RUN set -eux; \\
   fi; \\
   case "\$distro" in \\
     ubuntu|debian) \\
-      # ── Fix EOL / archive repos for Debian ── \\
       if [ "\$distro" = "debian" ]; then \\
         ver_id="\${VERSION_ID%%.*}"; \\
         if [ "\${ver_id:-0}" -le 10 ] 2>/dev/null; then \\
@@ -226,15 +224,12 @@ RUN set -eux; \\
           fi; \\
           for f in /etc/apt/sources.list.d/*.list; do [ -f "\$f" ] && sed -i 's|deb.debian.org|archive.debian.org|g' "\$f" 2>/dev/null || true; done; \\
           echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until; \\
-          # Remove stretch-updates / buster-updates (gone from archive) \\
           sed -i '/stretch-updates/d; /buster-updates/d; /jessie-updates/d' /etc/apt/sources.list 2>/dev/null || true; \\
         fi; \\
       fi; \\
-      # ── Fix EOL repos for Ubuntu ── \\
       apt-get update 2>/dev/null \\
         || { \\
           if [ "\$distro" = "ubuntu" ]; then \\
-            # Switch to old-releases for EOL Ubuntu \\
             if [ -f /etc/apt/sources.list ]; then \\
               sed -i \\
                 -e 's|http://archive.ubuntu.com|http://old-releases.ubuntu.com|g' \\
@@ -242,14 +237,12 @@ RUN set -eux; \\
                 -e 's|http://ports.ubuntu.com|http://old-releases.ubuntu.com|g' \\
                 /etc/apt/sources.list; \\
             fi; \\
-            # Handle DEB822 format (Ubuntu >= 24.04 uses /etc/apt/sources.list.d/ubuntu.sources) \\
             for f in /etc/apt/sources.list.d/*.sources; do \\
               [ -f "\$f" ] || continue; \\
               sed -i 's|archive.ubuntu.com|old-releases.ubuntu.com|g; s|security.ubuntu.com|old-releases.ubuntu.com|g' "\$f" 2>/dev/null || true; \\
             done; \\
             apt-get update; \\
           else \\
-            # Debian: try harder with archive \\
             if [ -f /etc/apt/sources.list ]; then \\
               sed -i 's|deb.debian.org|archive.debian.org|g; s|security.debian.org|archive.debian.org|g' /etc/apt/sources.list; \\
             fi; \\
@@ -270,13 +263,11 @@ RUN set -eux; \\
       rm -rf /var/lib/apt/lists/*; \\
       ;; \\
     alpine) \\
-      # ── Fix old Alpine repos ── \\
       ver_id="\${VERSION_ID:-}"; \\
       major_minor="\${ver_id%.*}"; \\
       if [ -n "\$major_minor" ]; then \\
         case "\$major_minor" in \\
           2.*|3.[0-9]|3.1[0-1]) \\
-            # Old Alpine, repos may have moved; try both main and community \\
             printf 'https://dl-cdn.alpinelinux.org/alpine/v%s/main\nhttps://dl-cdn.alpinelinux.org/alpine/v%s/community\n' "\$major_minor" "\$major_minor" > /etc/apk/repositories 2>/dev/null || true; \\
             ;; \\
         esac; \\
@@ -285,10 +276,8 @@ RUN set -eux; \\
       apk add --no-cache openssh || apk add --no-cache --allow-untrusted openssh; \\
       ;; \\
     fedora) \\
-      # ── Fix old Fedora repos (EOL releases) ── \\
       ver_id="\${VERSION_ID:-0}"; \\
       if [ "\$ver_id" -le 39 ] 2>/dev/null; then \\
-        # Fedora archives old releases; update repo URLs \\
         sed -i \\
           -e 's|^metalink=|#metalink=|g' \\
           -e "s|^#baseurl=http://download.example/pub/fedora/linux|baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux|g" \\
@@ -300,30 +289,22 @@ RUN set -eux; \\
       ;; \\
     rocky|almalinux|centos|rhel|ol|amzn|amazon|scientific) \\
       (dnf clean all || yum clean all || true) 2>/dev/null; \\
-      # ── Fix CentOS 8 vault repos ── \\
       if [ "\$distro" = "centos" ]; then \\
         cent_ver="\${VERSION_ID%%.*}"; \\
         if [ "\${cent_ver:-0}" -eq 8 ] 2>/dev/null; then \\
           sed -i 's|^mirrorlist=|#mirrorlist=|g; s|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true; \\
         fi; \\
       fi; \\
-      # ── Fix Scientific Linux repos (mirrors are dead, use CERN archive) ── \\
       if [ "\$distro" = "scientific" ]; then \\
-        sed -i -e 's|^mirrorlist=|#mirrorlist=|g' \\
-          -e 's|ftp.scientificlinux.org/linux/scientific|linuxsoft.cern.ch/scientific|g' \\
-          -e 's|ftp1.scientificlinux.org/linux/scientific|linuxsoft.cern.ch/scientific|g' \\
-          -e 's|ftp2.scientificlinux.org/linux/scientific|linuxsoft.cern.ch/scientific|g' \\
-          /etc/yum.repos.d/sl*.repo 2>/dev/null || true; \\
-        sed -i 's|^#baseurl=|baseurl=|g' /etc/yum.repos.d/sl*.repo 2>/dev/null || true; \\
+        sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|ftp.scientificlinux.org|linuxsoft.cern.ch|g' -e 's|ftp1.scientificlinux.org|linuxsoft.cern.ch|g' -e 's|ftp2.scientificlinux.org|linuxsoft.cern.ch|g' /etc/yum.repos.d/*.repo 2>/dev/null || true; \\
+        sed -i 's|^#baseurl=|baseurl=|g' /etc/yum.repos.d/*.repo 2>/dev/null || true; \\
       fi; \\
-      # ── Fix Oracle Linux repos (ensure ol repo is enabled) ── \\
       if [ "\$distro" = "ol" ]; then \\
         ol_ver="\${VERSION_ID%%.*}"; \\
         if [ "\${ol_ver:-0}" -le 7 ] 2>/dev/null; then \\
           yum-config-manager --enable ol7_latest 2>/dev/null || true; \\
         fi; \\
       fi; \\
-      # ── Fix Amazon Linux repos ── \\
       if [ "\$distro" = "amzn" ] && [ -f /etc/yum.repos.d/amzn2-core.repo ]; then \\
         sed -i 's|^enabled=0|enabled=1|' /etc/yum.repos.d/amzn2-core.repo 2>/dev/null || true; \\
       fi; \\
@@ -331,7 +312,6 @@ RUN set -eux; \\
       (dnf clean all || yum clean all || true); \\
       ;; \\
     arch) \\
-      # ── Arch: refresh keyring + update first ── \\
       pacman-key --init 2>/dev/null || true; \\
       pacman-key --populate archlinux 2>/dev/null || true; \\
       pacman -Sy --noconfirm archlinux-keyring 2>/dev/null || true; \\
@@ -365,7 +345,6 @@ RUN set -eux; \\
   grep -q '^PasswordAuthentication ' /etc/ssh/sshd_config \\
     && sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config \\
     || echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config; \\
-  # Disable PAM on distros where it interferes with password auth in containers \\
   if grep -q '^UsePAM ' /etc/ssh/sshd_config 2>/dev/null; then \\
     sed -i 's/^UsePAM .*/UsePAM no/' /etc/ssh/sshd_config; \\
   else \\
