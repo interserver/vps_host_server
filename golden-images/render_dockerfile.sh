@@ -37,6 +37,14 @@ write_ssh_entrypoint() {
   cat > "$OUTPUT_DIR/provirted-ssh-entrypoint.sh" <<'ENTRYPOINT'
 #!/bin/sh
 
+# Override root password at runtime via env var
+if [ -n "${ROOT_PASSWORD:-}" ]; then
+  echo "root:$ROOT_PASSWORD" | chpasswd 2>/dev/null \
+    || echo "root:$ROOT_PASSWORD" | busybox chpasswd 2>/dev/null \
+    || true
+  unset ROOT_PASSWORD
+fi
+
 # Ensure privilege-separation directory exists — /run is often a tmpfs that
 # gets mounted empty on every boot, so the build-time mkdir is lost.
 mkdir -p /run/sshd /var/run/sshd 2>/dev/null || true
@@ -72,6 +80,14 @@ ENTRYPOINT
 write_dropbear_entrypoint() {
   cat > "$OUTPUT_DIR/provirted-ssh-entrypoint.sh" <<'ENTRYPOINT'
 #!/bin/sh
+
+# Override root password at runtime via env var
+if [ -n "${ROOT_PASSWORD:-}" ]; then
+  echo "root:$ROOT_PASSWORD" | chpasswd 2>/dev/null \
+    || echo "root:$ROOT_PASSWORD" | busybox chpasswd 2>/dev/null \
+    || true
+  unset ROOT_PASSWORD
+fi
 
 # Ensure /etc/dropbear exists (CirrOS may have non-standard /etc)
 rm -f /etc 2>/dev/null || true
