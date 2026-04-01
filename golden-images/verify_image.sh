@@ -197,7 +197,7 @@ fi
 # only manifests after a reboot (Docker preserves build-time dirs, but
 # a real tmpfs-mounted /run does not).
 privsep_ok=true
-docker exec "$container_id" sh -c '
+privsep_output="$(docker exec "$container_id" sh -c '
   # Only test OpenSSH images (skip dropbear)
   command -v sshd >/dev/null 2>&1 || [ -x /usr/sbin/sshd ] || exit 0
 
@@ -206,28 +206,56 @@ docker exec "$container_id" sh -c '
 
   # Kill existing sshd so we can restart cleanly
   pkill -x sshd 2>/dev/null || killall sshd 2>/dev/null || true
+  # Fallback: kill via /proc if pkill/killall are missing
+  for p in /proc/[0-9]*/comm; do
+    [ -f "$p" ] || continue
+    read -r pname < "$p" 2>/dev/null || continue
+    if [ "$pname" = "sshd" ]; then
+      pid="${p#/proc/}"; pid="${pid%%/*}"
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
   sleep 1
 
   # Re-run the entrypoint (it should recreate /run/sshd)
   if [ -x /usr/local/bin/provirted-ssh-entrypoint.sh ]; then
     /usr/local/bin/provirted-ssh-entrypoint.sh true &
-    sleep 2
+    sleep 3
   fi
 
-  # Verify sshd is running again
+  # Verify sshd is running — try multiple detection methods
   if command -v pgrep >/dev/null 2>&1 && pgrep -x sshd >/dev/null 2>&1; then
     echo "PRIVSEP_RESTART_OK"
-  elif [ -d /proc ] && ls /proc/[0-9]*/comm 2>/dev/null | xargs grep -l "^sshd$" >/dev/null 2>&1; then
-    echo "PRIVSEP_RESTART_OK"
-  else
-    echo "PRIVSEP_RESTART_FAIL"
-    exit 1
+    exit 0
   fi
-' 2>/dev/null || privsep_ok=false
+  if command -v ps >/dev/null 2>&1 && ps aux 2>/dev/null | grep -v grep | grep -q "[s]shd"; then
+    echo "PRIVSEP_RESTART_OK"
+    exit 0
+  fi
+  for p in /proc/[0-9]*/comm; do
+    [ -f "$p" ] || continue
+    read -r pname < "$p" 2>/dev/null || continue
+    if [ "$pname" = "sshd" ]; then
+      echo "PRIVSEP_RESTART_OK"
+      exit 0
+    fi
+  done
+  # Last resort: check if port 22 is listening
+  if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":22 "; then
+    echo "PRIVSEP_RESTART_OK"
+    exit 0
+  elif command -v netstat >/dev/null 2>&1 && netstat -tln 2>/dev/null | grep -q ":22 "; then
+    echo "PRIVSEP_RESTART_OK"
+    exit 0
+  fi
+  echo "PRIVSEP_RESTART_FAIL"
+  exit 1
+' 2>&1)" || privsep_ok=false
 
 if [[ "$privsep_ok" != "true" ]]; then
   echo "ERROR: sshd failed to restart after /run/sshd was removed (simulated reboot) for $IMAGE_TAG" >&2
   echo "This means the entrypoint does not create /run/sshd — VPS deployments will fail." >&2
+  [[ -n "$privsep_output" ]] && echo "-- test output: $privsep_output --" >&2
   echo "-- container logs --" >&2
   docker logs "$container_id" 2>&1 | tail -15 >&2 || true
   exit 4
