@@ -290,10 +290,7 @@ RUN set -eux; \\
     rocky|almalinux|centos|rhel|ol|amzn|amazon|scientific) \\
       (dnf clean all || yum clean all || true) 2>/dev/null; \\
       if [ "\$distro" = "centos" ]; then \\
-        cent_ver="\${VERSION_ID%%.*}"; \\
-        if [ "\${cent_ver:-0}" -eq 8 ] 2>/dev/null; then \\
-          sed -i 's|^mirrorlist=|#mirrorlist=|g; s|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true; \\
-        fi; \\
+        sed -i -e 's|^mirrorlist=|#mirrorlist=|g' -e 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' -e 's|^baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' -e 's|^baseurl=http://mirrorlist.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/*.repo 2>/dev/null || true; \\
       fi; \\
       if [ "\$distro" = "scientific" ]; then \\
         sed -i -e 's|mirrorlist=|#mirrorlist=|g' -e 's|ftp.scientificlinux.org|linuxsoft.cern.ch|g' -e 's|ftp1.scientificlinux.org|linuxsoft.cern.ch|g' -e 's|ftp2.scientificlinux.org|linuxsoft.cern.ch|g' /etc/yum.repos.d/*.repo 2>/dev/null || true; \\
