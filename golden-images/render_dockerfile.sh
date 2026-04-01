@@ -37,6 +37,10 @@ write_ssh_entrypoint() {
   cat > "$OUTPUT_DIR/provirted-ssh-entrypoint.sh" <<'ENTRYPOINT'
 #!/bin/sh
 
+# Ensure privilege-separation directory exists — /run is often a tmpfs that
+# gets mounted empty on every boot, so the build-time mkdir is lost.
+mkdir -p /run/sshd /var/run/sshd 2>/dev/null || true
+
 if command -v ssh-keygen >/dev/null 2>&1; then
   ssh-keygen -A >/dev/null 2>&1 || {
     # Fallback for old OpenSSH (CentOS 6) where -A is not supported
@@ -341,6 +345,11 @@ RUN set -eux; \\
       ;; \\
   esac; \\
   mkdir -p /var/run/sshd /run/sshd; \\
+  if [ -d /usr/lib/tmpfiles.d ] || [ -d /etc/tmpfiles.d ]; then \\
+    _td="/etc/tmpfiles.d"; \\
+    mkdir -p "\$_td"; \\
+    printf 'd /run/sshd 0755 root root -\n' > "\$_td/sshd-privsep.conf"; \\
+  fi; \\
   touch /etc/ssh/sshd_config; \\
   grep -q '^PermitRootLogin ' /etc/ssh/sshd_config \\
     && sed -i 's/^PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config \\

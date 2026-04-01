@@ -190,4 +190,47 @@ else
   esac
 fi
 
+# ── Privilege-separation restart test ────────────────────────────────
+# Simulate a real VPS boot where /run is a fresh tmpfs: wipe /run/sshd,
+# kill sshd, then re-invoke the entrypoint and verify sshd comes back.
+# This catches the "Missing privilege separation directory" error that
+# only manifests after a reboot (Docker preserves build-time dirs, but
+# a real tmpfs-mounted /run does not).
+privsep_ok=true
+docker exec "$container_id" sh -c '
+  # Only test OpenSSH images (skip dropbear)
+  command -v sshd >/dev/null 2>&1 || [ -x /usr/sbin/sshd ] || exit 0
+
+  # Wipe the privsep directory as a fresh tmpfs boot would
+  rm -rf /run/sshd /var/run/sshd 2>/dev/null || true
+
+  # Kill existing sshd so we can restart cleanly
+  pkill -x sshd 2>/dev/null || killall sshd 2>/dev/null || true
+  sleep 1
+
+  # Re-run the entrypoint (it should recreate /run/sshd)
+  if [ -x /usr/local/bin/provirted-ssh-entrypoint.sh ]; then
+    /usr/local/bin/provirted-ssh-entrypoint.sh true &
+    sleep 2
+  fi
+
+  # Verify sshd is running again
+  if command -v pgrep >/dev/null 2>&1 && pgrep -x sshd >/dev/null 2>&1; then
+    echo "PRIVSEP_RESTART_OK"
+  elif [ -d /proc ] && ls /proc/[0-9]*/comm 2>/dev/null | xargs grep -l "^sshd$" >/dev/null 2>&1; then
+    echo "PRIVSEP_RESTART_OK"
+  else
+    echo "PRIVSEP_RESTART_FAIL"
+    exit 1
+  fi
+' 2>/dev/null || privsep_ok=false
+
+if [[ "$privsep_ok" != "true" ]]; then
+  echo "ERROR: sshd failed to restart after /run/sshd was removed (simulated reboot) for $IMAGE_TAG" >&2
+  echo "This means the entrypoint does not create /run/sshd — VPS deployments will fail." >&2
+  echo "-- container logs --" >&2
+  docker logs "$container_id" 2>&1 | tail -15 >&2 || true
+  exit 4
+fi
+
 printf 'Verified image: %s\n' "$IMAGE_TAG"
