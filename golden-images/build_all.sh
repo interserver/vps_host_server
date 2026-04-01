@@ -337,7 +337,7 @@ detect_rate_limit_wait() {
 
 derive_detain_tag() {
   local source_tag="$1"
-  if [[ "$source_tag" =~ ^[^/]+/([^-]+-[^-]+)-ssh$ ]]; then
+  if [[ "$source_tag" =~ ^[^/]+/(.+)-ssh$ ]]; then
     printf 'detain/interserver:%s\n' "${BASH_REMATCH[1]}"
   else
     return 1
