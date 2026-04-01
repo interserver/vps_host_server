@@ -128,7 +128,12 @@ _dockerfile_write_ssh_entrypoint() {
   cat > "$1/provirted-ssh-entrypoint.sh" <<'ENTRY'
 #!/bin/sh
 if command -v ssh-keygen >/dev/null 2>&1; then
-  ssh-keygen -A >/dev/null 2>&1 || true
+  ssh-keygen -A >/dev/null 2>&1 || {
+    for kt in rsa dsa ecdsa ed25519; do
+      kf="/etc/ssh/ssh_host_${kt}_key"
+      [ -f "$kf" ] || ssh-keygen -t "$kt" -f "$kf" -N '' 2>/dev/null || true
+    done
+  }
 fi
 # sshd re-exec requires an absolute path; don't exit on failure so container stays up
 SSHD_BIN=$(command -v sshd 2>/dev/null || true)
