@@ -946,12 +946,12 @@ else
     touch "$RESULTS_DIR/${safe_name}.ok"
     return 0
   }
-  export -f _xargs_build_one
+  export -f _xargs_build_one derive_detain_tag
 
   build_queue="$WORK_DIR/build-queue.csv"
   awk -F',' '$1=="BUILD"{print $2","$3}' "$plan_file" > "$build_queue"
 
-  cat "$build_queue" | xargs -P "$PARALLELISM" -n 1 -I {} bash -lc '_xargs_build_one "{}"' || true
+  cat "$build_queue" | xargs -P "$PARALLELISM" -I {} bash -lc '_xargs_build_one "{}"' || true
 
   # ── Non-tmux final report ──
   log_header "Build Summary"
