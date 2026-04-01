@@ -684,7 +684,7 @@ normalize_line_to_pairs() {
   line="$(echo "$line" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ -z "$line" ]] && return 0
 
-  if [[ "$line" == *":"* && "$line" == *,* && "$line" != *,*:* ]]; then
+  if [[ "$line" == *":"* && "$line" != *,*:* ]]; then
     local family versions version base tag
     family="${line%%:*}"
     versions="${line#*:}"
