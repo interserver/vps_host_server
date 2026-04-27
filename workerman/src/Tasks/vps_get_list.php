@@ -1,7 +1,6 @@
 <?php
 return function ($stdObject, $params) {
 	$dir = dirname(dirname(dirname(__DIR__)));
-	$curl_cmd= '';
 	$servers = array();
 	$ips = array();
 	if (file_exists('/usr/bin/lxc')) {
@@ -75,19 +74,6 @@ return function ($stdObject, $params) {
 						$server['diskmax'] = $dparts[1];
 					}
 					*/
-					if (isset($server['vnc'])) {
-						$port = $server['vnc'];
-						if ($port >= 5900) {
-							// vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
-							/*
-							$cmd .= "if [ -e /usr/bin/timeout ]; then
-								timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-							else
-								./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-							fi;\n";
-							*/
-						}
-					}
 				}
 				$servers[$veid] = $server;
 			}
@@ -127,8 +113,6 @@ return function ($stdObject, $params) {
 				$ips[$ipIds[$mainIp]][] = $addonIp;
 			}
 		}
-		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
-//			$cmd .= 'while [ -e "shot_*.started" ]; do sleep 1s; done;'.PHP_EOL;
 		//echo "CMD:$cmd\n";
 		echo `$cmd`;
 	}

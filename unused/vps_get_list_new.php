@@ -12,7 +12,6 @@ function get_vps_list()
 {
 	$dir = __DIR__;
 	$url = 'https://myvps.interserver.net/vps_queue.php';
-	$curl_cmd = '';
 	$servers = array();
 	if (file_exists('/usr/bin/lxc')) {
 		$lines = explode("\n", trim(`lxc list -c ns4,volatile.eth0.hwaddr:MAC --format csv`));
@@ -66,19 +65,6 @@ function get_vps_list()
 				if (isset($xml['domain']['devices']['graphics_attr'])) {
 					$server['vnc'] = $xml['domain']['devices']['graphics_attr']['port'];
 				}
-				if ($status == 'running') {
-					if (isset($xml['domain']['devices']['graphics_attr'])) {
-						$port = (integer)$xml['domain']['devices']['graphics_attr']['port'];
-						if ($port >= 5900) {
-							// vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
-							$cmd .= "if [ -e /usr/bin/timeout ]; then
-	timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-else
-	./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-fi;\n";
-						}
-					}
-				}
 				$servers[$veid] = $server;
 			}
 		}
@@ -87,7 +73,6 @@ fi;\n";
 				$servers[$id]['cpu_usage'] = $cpu_data;
 			}
 		}
-		$curl_cmd = '$(for i in shot_*jpg; do if [ "$i" != "shot_*jpg" ]; then p=$(echo $i | cut -c5-9); gzip -9 -f $i; echo -n " -F shot$p=@${i}.gz"; fi; done;)';
 		echo `$cmd`;
 	}
 	if (file_exists('/usr/sbin/vzctl') || file_exists('/usr/bin/prlctl')) {
@@ -342,8 +327,7 @@ fi;\n";
 	);
 	$cmd = 'curl --connect-timeout 60 --max-time 600 -k -F action=server_list -F servers="'.base64_encode(gzcompress(serialize($servers), 9)).'"  '
 	. (isset($ips) ? ' -F ips="'.base64_encode(gzcompress(serialize($ips), 9)).'" ' : '')
-	. $curl_cmd.' "'.$url.'" 2>/dev/null;';
-	$cmd .= '/bin/rm -f shot_*jpg shot_*jpg.gz 2>/dev/null;';
+	. ' "'.$url.'" 2>/dev/null;';
 	echo trim(`$cmd`);
 }
 

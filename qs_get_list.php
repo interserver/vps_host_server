@@ -59,19 +59,6 @@ function get_qs_list()
 						$server['diskmax'] = $dparts[1];
 					}
 					*/
-					if (isset($server['vnc'])) {
-						$port = $server['vnc'];
-						if ($port >= 5900) {
-							// vncsnapshot Encodings: raw copyrect tight hextile zlib corre rre zrle
-							/*
-							$cmd .= "if [ -e /usr/bin/timeout ]; then
-								timeout 30s ./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-							else
-								./vncsnapshot -dieblank -compresslevel 0 -quality 70 -vncQuality 7 -jpeg -fps 5 -count 1 -quiet -encodings raw :\$(($port - 5900)) shot_{$port}.jpg >/dev/null 2>&1;
-							fi;\n";
-							*/
-						}
-					}
 				}
 				$servers[$veid] = $server;
 			}
