@@ -1,0 +1,279 @@
+#cloud-config
+# =============================================================================
+# AzuraCast — Ubuntu 26.04 cloud-init user-data
+# Stack: Docker + Docker Compose (official AzuraCast Docker install)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Web ports: 80 (HTTP), 443 (HTTPS), 8000-8999 (listener streams)
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.azuracast-bootstrap.env
+# block before launching (APP_DOMAIN, LE_EMAIL, ADMIN_PASS).
+# All passwords are randomly generated per-boot if left as CHANGE_ME defaults.
+# =============================================================================
+
+hostname: azuracast
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioners can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 G to survive build-time Docker image pulls
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — minimal host-level dependencies; Docker handles the rest
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - pwgen
+  - net-tools
+  - jq
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable variables — fill in before first boot
+  # --------------------------------------------------------------------------
+  - path: /root/.azuracast-bootstrap.env
+    permissions: '0600'
+    content: |
+      # -----------------------------------------------------------------------
+      # AzuraCast bootstrap environment — edit BEFORE launching the instance
+      # -----------------------------------------------------------------------
+
+      # Fully-qualified domain name pointing at this server's IP
+      APP_DOMAIN=azuracast.example.com
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=admin@example.com
+
+      # Set to 'true' to request a TLS certificate via Certbot/ACME
+      # Set to 'false' to skip (e.g. IP-only or behind a proxy)
+      ENABLE_TLS=true
+
+      # AzuraCast admin account credentials
+      # Leave as CHANGE_ME and a random password is generated at boot
+      ADMIN_EMAIL=admin@example.com
+      ADMIN_PASS=CHANGE_ME
+
+      # AzuraCast installation directory
+      INSTALL_DIR=/opt/azuracast
+
+      # Docker Compose version to pin (leave empty for latest stable)
+      DOCKER_COMPOSE_VERSION=
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/azuracast-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/azuracast-bootstrap.log) 2>&1
+      source /root/.azuracast-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== AzuraCast bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # Resolve passwords — generate if still CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+      fi
+
+      # -----------------------------------------------------------------------
+      # System prep
+      # -----------------------------------------------------------------------
+      export DEBIAN_FRONTEND=noninteractive
+
+      # Automatic security updates
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADES'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADES
+
+      # -----------------------------------------------------------------------
+      # Install Docker (official repo; use noble line until 26.04 published)
+      # -----------------------------------------------------------------------
+      if ! command -v docker &>/dev/null; then
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+          | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+
+        # fallback: noble repo until 26.04 published
+        DOCKER_CODENAME=noble
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu ${DOCKER_CODENAME} stable" \
+          > /etc/apt/sources.list.d/docker.list
+
+        apt-get update -qq
+        apt-get install -y docker-ce docker-ce-cli containerd.io \
+          docker-buildx-plugin docker-compose-plugin
+      fi
+
+      # Enable + start Docker daemon
+      systemctl enable --now docker
+
+      # -----------------------------------------------------------------------
+      # Verify docker compose subcommand is available
+      # -----------------------------------------------------------------------
+      docker compose version
+
+      # -----------------------------------------------------------------------
+      # Firewall — allow SSH + AzuraCast ports only
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      # AzuraCast radio listener streams (Icecast / SHOUTcast range)
+      ufw allow 8000:8999/tcp  comment 'AzuraCast streams TCP'
+      ufw allow 8000:8999/udp  comment 'AzuraCast streams UDP'
+      # SFTP-based station uploads (optional; AzuraCast default is 2022)
+      ufw allow 2022/tcp  comment 'AzuraCast SFTP'
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # fail2ban — protect SSH
+      # -----------------------------------------------------------------------
+      cat > /etc/fail2ban/jail.d/sshd.local <<'FAIL2BAN'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      FAIL2BAN
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # Create install directory and download AzuraCast Docker installer
+      # -----------------------------------------------------------------------
+      mkdir -p "${INSTALL_DIR}"
+      cd "${INSTALL_DIR}"
+
+      if [ ! -f docker.sh ]; then
+        curl -fsSL https://raw.githubusercontent.com/AzuraCast/AzuraCast/stable/docker.sh \
+          -o docker.sh
+        chmod +x docker.sh
+      fi
+
+      # -----------------------------------------------------------------------
+      # Run the official AzuraCast Docker installer (non-interactive)
+      # Passes pre-answered values via environment variables so the install
+      # script does not block waiting for user input.
+      # -----------------------------------------------------------------------
+      AZURACAST_HTTP_PORT=80 \
+      AZURACAST_HTTPS_PORT=443 \
+      AZURACAST_SFTP_PORT=2022 \
+      AZURACAST_SETUP_COMPLETE=false \
+        bash docker.sh install --no-interaction 2>&1 || true
+
+      # Give containers a moment to initialise
+      sleep 10
+
+      # -----------------------------------------------------------------------
+      # Certbot / TLS (only when ENABLE_TLS=true and domain is set)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] \
+          && [ -n "${APP_DOMAIN}" ] \
+          && [ "${APP_DOMAIN}" != "azuracast.example.com" ]; then
+
+        if ! command -v certbot &>/dev/null; then
+          apt-get install -y certbot
+        fi
+
+        # AzuraCast ships with its own nginx inside the container and handles
+        # TLS via the built-in Lets-Encrypt / ACME flow.  Trigger it via the
+        # CLI wrapper the installer provides.
+        if [ -f "${INSTALL_DIR}/docker.sh" ]; then
+          cd "${INSTALL_DIR}"
+          LETSENCRYPT_HOST="${APP_DOMAIN}" \
+          LETSENCRYPT_EMAIL="${LE_EMAIL}" \
+            bash docker.sh letsencrypt-create \
+              --domain "${APP_DOMAIN}" \
+              --email  "${LE_EMAIL}" \
+              2>&1 || echo "WARN: certbot deferred — check DNS for ${APP_DOMAIN}"
+        fi
+      else
+        echo "WARN: certbot deferred — set APP_DOMAIN and ENABLE_TLS=true to enable"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Write credentials file
+      # -----------------------------------------------------------------------
+      PROTO=http
+      [ "${ENABLE_TLS}" = "true" ] && PROTO=https
+
+      cat > /root/azuracast-credentials.txt <<CREDS
+      ================================================================
+        AzuraCast — generated credentials  ($(date -u))
+      ================================================================
+      URL           : ${PROTO}://${APP_DOMAIN}/
+      Admin e-mail  : ${ADMIN_EMAIL}
+      Admin password: ${ADMIN_PASS}
+
+      Install dir   : ${INSTALL_DIR}
+      Log           : /var/log/azuracast-bootstrap.log
+
+      AzuraCast ships a first-run setup wizard — visit the URL above
+      to complete account creation if the automated setup was skipped.
+
+      Radio streams : ${PROTO}://${APP_DOMAIN}:8000  (and up to :8999)
+      SFTP upload   : ${APP_DOMAIN}:2022
+
+      Firewall open ports: 22, 80, 443, 2022, 8000-8999
+      ================================================================
+      CREDS
+      chmod 600 /root/azuracast-credentials.txt
+
+      echo "=== AzuraCast bootstrap finished at $(date -u) ==="
+      echo "=== Credentials written to /root/azuracast-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/azuracast-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Console message shown in cloud provider dashboards after boot
+# ----------------------------------------------------------------------------
+final_message: |
+  AzuraCast cloud-init bootstrap complete.
+  Credentials and URLs: /root/azuracast-credentials.txt
+  Bootstrap log: /var/log/azuracast-bootstrap.log
+  Boot took $UPTIME seconds.

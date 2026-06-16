@@ -1,0 +1,171 @@
+#cloud-config
+# =============================================================================
+# OpenClaw — installed NATIVELY on the KVM VPS (no Docker, no nested container)
+# Runs the OpenClaw Gateway as a systemd service on port 18789 (LAN bind),
+# straight on the host. Edit /etc/openclaw/openclaw.env with your token + your
+# provider API keys, then:  systemctl restart openclaw-gateway
+# =============================================================================
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - git
+  - ca-certificates
+  - gnupg
+  - jq
+
+write_files:
+  # --- Gateway secrets + runtime env (read by the systemd service) ----------
+  - path: /etc/openclaw/openclaw.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # OpenClaw Gateway Token (Change this to a strong randomized string!)
+      OPENCLAW_GATEWAY_TOKEN=ChangeMeSuperSecretToken123!
+
+      # Network: bind to the LAN interface on the standard gateway port
+      OPENCLAW_GATEWAY_BIND=lan
+      OPENCLAW_GATEWAY_PORT=18789
+
+      # Runtime home / state (service runs directly on the host as root)
+      HOME=/root
+      OPENCLAW_HOME=/root
+      OPENCLAW_STATE_DIR=/root/.openclaw
+      OPENCLAW_CONFIG_DIR=/root/.openclaw
+      OPENCLAW_CONFIG_PATH=/root/.openclaw/openclaw.json
+      OPENCLAW_WORKSPACE_DIR=/root/.openclaw/workspace
+
+      # Model Provider API Keys
+      ANTHROPIC_API_KEY=sk-ant-your-key-here
+      OPENAI_API_KEY=sk-your-openai-key-here
+      GEMINI_API_KEY=your-gemini-key-here
+
+  # --- systemd unit: run the gateway natively on the VPS --------------------
+  - path: /etc/systemd/system/openclaw-gateway.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=OpenClaw Gateway (native, no Docker)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/openclaw/openclaw.env
+      ExecStart=/usr/local/bin/openclaw gateway --bind lan --port 18789
+      Restart=always
+      RestartSec=5
+      TimeoutStopSec=30
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- native bootstrap script ----------------------------------------------
+  - path: /root/openclaw-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # NOTE: intentionally NO `set -e` — the external installer has optional
+      # steps; we check the things that matter explicitly instead.
+      set -uo pipefail
+      exec > >(tee -a /var/log/openclaw-bootstrap.log) 2>&1
+      echo "=== OpenClaw native bootstrap started: $(date) ==="
+
+      # --- Node.js (OpenClaw needs Node >= 22.19; 24 recommended) ---
+      NODE_MAJOR="$(node -v 2>/dev/null | sed -n 's/^v\([0-9]\+\).*/\1/p')"
+      if [ -z "${NODE_MAJOR:-}" ] || [ "${NODE_MAJOR:-0}" -lt 22 ]; then
+        echo "Installing Node.js 24.x ..."
+        curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
+        bash /tmp/nodesource_setup.sh
+        rm -f /tmp/nodesource_setup.sh
+        DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+      fi
+      if ! node -v >/dev/null 2>&1; then
+        echo "ERROR: Node.js installation failed" >&2
+        exit 1
+      fi
+      echo "Node: $(node -v)"
+
+      # --- install the OpenClaw CLI natively (official installer, no Docker) ---
+      export HOME=/root
+      curl -fsSL https://openclaw.ai/install.sh -o /tmp/openclaw-install.sh || { echo "ERROR: failed to download OpenClaw installer" >&2; exit 1; }
+      if ! bash /tmp/openclaw-install.sh; then
+        echo "ERROR: OpenClaw installer failed" >&2
+        exit 1
+      fi
+      rm -f /tmp/openclaw-install.sh
+
+      # --- resolve the installed binary and expose it at a stable path ---
+      hash -r 2>/dev/null || true
+      OPENCLAW_BIN="$(command -v openclaw 2>/dev/null || true)"
+      if [ -z "$OPENCLAW_BIN" ]; then
+        for cand in /usr/local/bin/openclaw /usr/bin/openclaw /root/.local/bin/openclaw /root/.openclaw/bin/openclaw /opt/openclaw/bin/openclaw; do
+          if [ -x "$cand" ]; then OPENCLAW_BIN="$cand"; break; fi
+        done
+      fi
+      if [ -z "$OPENCLAW_BIN" ]; then
+        echo "ERROR: openclaw binary not found after install" >&2
+        exit 1
+      fi
+      echo "OpenClaw binary: $OPENCLAW_BIN"
+      if [ "$OPENCLAW_BIN" != "/usr/local/bin/openclaw" ]; then
+        ln -sf "$OPENCLAW_BIN" /usr/local/bin/openclaw
+      fi
+
+      install -d -m 0700 /root/.openclaw /root/.openclaw/workspace
+
+      # --- start the gateway as a systemd service (straight on the VPS) ---
+      systemctl daemon-reload
+      systemctl enable --now openclaw-gateway.service
+      sleep 2
+      systemctl --no-pager --full status openclaw-gateway.service || true
+
+      echo "=== OpenClaw bootstrap finished: $(date) ==="
+      echo "Gateway listening on :18789 (LAN). Edit /etc/openclaw/openclaw.env then: systemctl restart openclaw-gateway"
+
+  # --- SSH login banner prompting the operator to set secrets ----------------
+  - path: /etc/update-motd.d/99-openclaw-setup
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      echo -e "\e[1;31m"
+      echo "====================================================================="
+      echo "  ACTION REQUIRED: OPENCLAW API KEYS & SECURITY TOKEN NEEDED"
+      echo "====================================================================="
+      echo -e "\e[0m"
+      echo "OpenClaw is installed NATIVELY and runs as a systemd service"
+      echo "(openclaw-gateway) on port 18789 - no Docker involved."
+      echo ""
+      echo "It is currently using placeholders. Update your secrets:"
+      echo ""
+      echo "  1. Edit your secrets:"
+      echo "     nano /etc/openclaw/openclaw.env"
+      echo ""
+      echo "  2. Replace the placeholders with your actual values:"
+      echo "     - OPENCLAW_GATEWAY_TOKEN=ChangeMeSuperSecretToken123!"
+      echo "     - ANTHROPIC_API_KEY=sk-ant-your-key-here"
+      echo "     - OPENAI_API_KEY=sk-your-openai-key-here"
+      echo "     - GEMINI_API_KEY=your-gemini-key-here"
+      echo ""
+      echo "  3. Restart OpenClaw to apply changes:"
+      echo "     systemctl restart openclaw-gateway"
+      echo ""
+      echo "  Status / logs:"
+      echo "     systemctl status openclaw-gateway"
+      echo "     journalctl -u openclaw-gateway -f"
+      echo "====================================================================="
+
+# ----------------------------------------------------------------------------
+# Run the native bootstrap once the files above have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openclaw-bootstrap.sh" ]
+
+final_message: "OpenClaw native bootstrap done after $UPTIME s. Edit /etc/openclaw/openclaw.env then run: systemctl restart openclaw-gateway"
+
+

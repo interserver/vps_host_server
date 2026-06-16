@@ -1,0 +1,305 @@
+#cloud-config
+# =============================================================================
+# WordPress "with all the trimmings" — Ubuntu 22.04/24.04 cloud-init user-data
+# Stack: Nginx + PHP-FPM + MariaDB + WP-CLI + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades + Redis cache
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.wp-bootstrap.env block
+# (domain, email, db creds) before launching, OR pass them in via your
+# provisioner. Passwords below are random per-boot if left as the defaults.
+# =============================================================================
+
+hostname: wordpress
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — a non-root sudo user with your SSH key (replace the key!)
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - mariadb-server
+  - mariadb-client
+  - php-fpm
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-mbstring
+  - php-xml
+  - php-xmlrpc
+  - php-soap
+  - php-intl
+  - php-zip
+  - php-imagick
+  - php-bcmath
+  - php-redis
+  - redis-server
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive MySQL + PHP memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- bootstrap variables -------------------------------------------------
+  - path: /root/.wp-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE -----
+      WP_DOMAIN="example.com"          # primary domain (no scheme)
+      WP_DOMAIN_WWW="www.example.com"  # www alias (set empty to skip)
+      LE_EMAIL="admin@example.com"     # Let's Encrypt registration email
+      ENABLE_TLS="true"                # set false to skip certbot (e.g. no DNS yet)
+
+      WP_TITLE="My WordPress Site"
+      WP_ADMIN_USER="siteadmin"
+      WP_ADMIN_EMAIL="admin@example.com"
+
+      # DB names/creds. Passwords default to random if left as CHANGE_ME.
+      WP_DB_NAME="wordpress"
+      WP_DB_USER="wp_user"
+      WP_DB_PASS="CHANGE_ME"
+      WP_ADMIN_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      WP_PATH="/var/www/wordpress"
+
+  # --- Nginx vhost ---------------------------------------------------------
+  - path: /etc/nginx/sites-available/wordpress.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name SERVER_NAMES_PLACEHOLDER;
+
+          root /var/www/wordpress;
+          index index.php index.html;
+
+          # Upload size to match PHP
+          client_max_body_size 64M;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          location / {
+              try_files $uri $uri/ /index.php?$args;
+          }
+
+          location ~ \.php$ {
+              include snippets/fastcgi-php.conf;
+              fastcgi_pass unix:PHP_FPM_SOCK_PLACEHOLDER;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+          }
+
+          # WordPress hardening
+          location = /favicon.ico { log_not_found off; access_log off; }
+          location = /robots.txt  { log_not_found off; access_log off; allow all; }
+          location ~ /\.(?!well-known).* { deny all; }
+          location ~* /(?:uploads|files)/.*\.php$ { deny all; }
+          location = /xmlrpc.php { deny all; access_log off; log_not_found off; }
+          location ~* \.(?:css|js|woff2?|ttf|svg|gif|jpe?g|png|webp|ico)$ {
+              expires max;
+              log_not_found off;
+              access_log off;
+          }
+      }
+
+  # --- fail2ban jail for WordPress + sshd ----------------------------------
+  - path: /etc/fail2ban/jail.d/wordpress.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades ----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -----------------------------------------------
+  - path: /root/wp-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/wp-bootstrap.log) 2>&1
+      echo "=== WordPress bootstrap started: $(date) ==="
+
+      source /root/.wp-bootstrap.env
+
+      # --- fill in random passwords where left as CHANGE_ME ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9!@#%^*_=+' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      [ "$WP_DB_PASS"     = "CHANGE_ME" ] && WP_DB_PASS="$(rand)"
+      [ "$WP_ADMIN_PASS"  = "CHANGE_ME" ] && WP_ADMIN_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+
+      # --- detect PHP-FPM socket dynamically ---
+      PHP_FPM_SOCK="$(find /run/php -name 'php*-fpm.sock' 2>/dev/null | head -n1 || true)"
+      echo "PHP-FPM socket: $PHP_FPM_SOCK"
+
+      # --- tune PHP for WordPress ---
+      PHP_INI_DIR="$(dirname "$(php -i 2>/dev/null | awk -F'=> ' '/Loaded Configuration File/{print $2}')")"
+      FPM_INI="${PHP_INI_DIR}/php.ini"
+      if [ -f "$FPM_INI" ]; then
+        sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 64M/' "$FPM_INI"
+        sed -ri 's/^;?post_max_size.*/post_max_size = 64M/'             "$FPM_INI"
+        sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'              "$FPM_INI"
+        sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'   "$FPM_INI"
+      fi
+      systemctl restart "php*-fpm" 2>/dev/null || systemctl restart php-fpm || true
+
+      # --- secure MariaDB + create DB ---
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${WP_DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${WP_DB_NAME}\`.* TO '${WP_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --- install WP-CLI ---
+      if ! command -v wp >/dev/null 2>&1; then
+        curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
+        chmod +x /usr/local/bin/wp
+      fi
+
+      # --- download + configure WordPress ---
+      mkdir -p "$WP_PATH"
+      chown -R www-data:www-data "$WP_PATH"
+
+      wp --allow-root core download --path="$WP_PATH" --force
+      wp --allow-root config create --path="$WP_PATH" \
+          --dbname="$WP_DB_NAME" --dbuser="$WP_DB_USER" --dbpass="$WP_DB_PASS" \
+          --dbhost="localhost" --dbcharset="utf8mb4" --skip-check
+
+      # extra hardening + redis object cache constants
+      wp --allow-root config set WP_AUTO_UPDATE_CORE minor --path="$WP_PATH"
+      wp --allow-root config set DISALLOW_FILE_EDIT true --raw --path="$WP_PATH"
+      wp --allow-root config set WP_REDIS_HOST 127.0.0.1 --path="$WP_PATH"
+      wp --allow-root config set FS_METHOD direct --path="$WP_PATH"
+
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      wp --allow-root core install --path="$WP_PATH" \
+          --url="${PROTO}://${WP_DOMAIN}" \
+          --title="$WP_TITLE" \
+          --admin_user="$WP_ADMIN_USER" \
+          --admin_password="$WP_ADMIN_PASS" \
+          --admin_email="$WP_ADMIN_EMAIL" \
+          --skip-email
+
+      # pretty permalinks + sensible defaults
+      wp --allow-root rewrite structure '/%postname%/' --path="$WP_PATH"
+      wp --allow-root option update blog_public 1 --path="$WP_PATH"
+
+      # handy plugins + redis cache
+      wp --allow-root plugin install redis-cache wordfence --activate --path="$WP_PATH" || true
+      wp --allow-root redis enable --path="$WP_PATH" || true
+
+      chown -R www-data:www-data "$WP_PATH"
+      find "$WP_PATH" -type d -exec chmod 755 {} \;
+      find "$WP_PATH" -type f -exec chmod 644 {} \;
+
+      # --- Nginx vhost ---
+      SERVER_NAMES="$WP_DOMAIN"
+      [ -n "$WP_DOMAIN_WWW" ] && SERVER_NAMES="$WP_DOMAIN $WP_DOMAIN_WWW"
+      sed -i "s|SERVER_NAMES_PLACEHOLDER|${SERVER_NAMES}|" /etc/nginx/sites-available/wordpress.conf
+      sed -i "s|PHP_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|" /etc/nginx/sites-available/wordpress.conf
+      ln -sf /etc/nginx/sites-available/wordpress.conf /etc/nginx/sites-enabled/wordpress.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # --- firewall ---
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban + redis ---
+      systemctl enable --now fail2ban
+      systemctl enable --now redis-server
+
+      # --- TLS via Let's Encrypt ---
+      if [ "$ENABLE_TLS" = "true" ]; then
+        CERTBOT_DOMAINS="-d $WP_DOMAIN"
+        [ -n "$WP_DOMAIN_WWW" ] && CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $WP_DOMAIN_WWW"
+        certbot --nginx --non-interactive --agree-tos \
+            -m "$LE_EMAIL" $CERTBOT_DOMAINS --redirect || \
+            echo "WARN: certbot failed (DNS not pointed yet?). Re-run later: certbot --nginx"
+      fi
+
+      # --- write credentials summary for the operator ---
+      cat > /root/wp-credentials.txt <<EOF
+      ===== WordPress install complete: $(date) =====
+      URL:            ${PROTO}://${WP_DOMAIN}
+      WP admin user:  ${WP_ADMIN_USER}
+      WP admin pass:  ${WP_ADMIN_PASS}
+      WP admin email: ${WP_ADMIN_EMAIL}
+
+      DB name:        ${WP_DB_NAME}
+      DB user:        ${WP_DB_USER}
+      DB pass:        ${WP_DB_PASS}
+      MySQL root:     ${MYSQL_ROOT_PASS}
+      WP path:        ${WP_PATH}
+      EOF
+      chmod 600 /root/wp-credentials.txt
+      echo "=== Bootstrap finished. Credentials in /root/wp-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/wp-bootstrap.sh" ]
+
+final_message: "WordPress bootstrap done after $UPTIME s. See /root/wp-credentials.txt and /var/log/wp-bootstrap.log"
+
+

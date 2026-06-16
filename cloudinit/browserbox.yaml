@@ -1,0 +1,294 @@
+#cloud-config
+# =============================================================================
+# BrowserBox — InterServer KVM VPS one-click app cloud-init user-data
+# Stack: BrowserBox binary (bbx CLI) + Certbot TLS + UFW + fail2ban
+#        + unattended-upgrades + swap
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.browserbox-bootstrap.env
+# block before launching your VPS (domain, email, product key, port).
+# Passwords/tokens default to random per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: browserbox
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — let the provisioner inject the customer SSH key via 'default'
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: bbxuser
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages — baseline deps; BrowserBox installer handles its own heavy deps
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - jq
+  - xxd
+  - vim-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - certbot
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - sudo
+  - cron
+  - logrotate
+  - htop
+  - procps
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB to survive build-time memory spikes during bbx install
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files + bootstrap script written to disk before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable variables ------------------------------------------
+  - path: /root/.browserbox-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ======================================================
+      # BrowserBox Bootstrap — edit these before first boot
+      # ======================================================
+
+      # Domain or public IP for this VPS (no scheme). BrowserBox will use this
+      # as the hostname for TLS and login-link generation.
+      APP_DOMAIN="your-domain.example.com"
+
+      # Email address for Let's Encrypt registration AND BrowserBox terms.
+      LE_EMAIL="admin@example.com"
+
+      # Set false to skip certbot (e.g. DNS not yet pointed; run certbot later).
+      ENABLE_TLS="true"
+
+      # BrowserBox product key — purchase at https://browserbox.io
+      # bbx certify is run automatically during bootstrap.
+      BBX_PRODUCT_KEY="CHANGE_ME"
+
+      # Non-root Linux user that will own the BrowserBox process.
+      BBX_USER="bbxuser"
+
+      # Main BrowserBox service port. Default 8080 for HTTP; use 443 for HTTPS.
+      BBX_PORT="8080"
+
+  # --- fail2ban jail — protect SSH + application ---------------------------
+  - path: /etc/fail2ban/jail.d/browserbox.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime  = 1h
+
+      [http-get-dos]
+      enabled  = false
+
+  # --- unattended security upgrades ----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -----------------------------------------------
+  - path: /root/browserbox-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/browserbox-bootstrap.log) 2>&1
+      source /root/.browserbox-bootstrap.env
+
+      echo "=== BrowserBox bootstrap started: $(date) ==="
+
+      # ---------------------------------------------------------------
+      # Random-secret helper — SIGPIPE-safe under set -e + pipefail
+      # ---------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Fill in CHANGE_ME values
+      [ "$BBX_PRODUCT_KEY" = "CHANGE_ME" ] && BBX_PRODUCT_KEY=""  # key is required; leave blank if not provided
+
+      # ---------------------------------------------------------------
+      # Ensure bbxuser exists and has sudo
+      # ---------------------------------------------------------------
+      if ! id "$BBX_USER" >/dev/null 2>&1; then
+        useradd -m -s /bin/bash -G sudo "$BBX_USER"
+        echo "$BBX_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$BBX_USER"
+        chmod 440 "/etc/sudoers.d/$BBX_USER"
+      fi
+
+      # ---------------------------------------------------------------
+      # Install BrowserBox binary non-interactively as the target user
+      # ---------------------------------------------------------------
+      echo "--- Installing BrowserBox binary ---"
+      export BBX_INSTALL_HOSTNAME="${APP_DOMAIN}"
+      export BBX_INSTALL_EMAIL="${LE_EMAIL}"
+      export BBX_HOSTNAME="${APP_DOMAIN}"
+      export EMAIL="${LE_EMAIL}"
+      export BBX_INSTALL_USER="${BBX_USER}"
+      export BBX_TEST_AGREEMENT="true"
+      export BBX_FULL_INSTALL="true"
+
+      # Run the official installer as root; it handles user-handoff internally
+      curl -fsSL https://browserbox.io/install.sh | bash
+
+      # Verify bbx is on PATH
+      if ! command -v bbx >/dev/null 2>&1; then
+        # Installer may place binary under BBX_USER's home or /usr/local/bin
+        BBX_BIN="$(find /home/"$BBX_USER" /usr/local/bin /root -maxdepth 4 -name 'bbx' -type f 2>/dev/null | head -n1 || true)"
+        if [ -n "$BBX_BIN" ]; then
+          ln -sf "$BBX_BIN" /usr/local/bin/bbx
+        else
+          echo "WARN: bbx binary not found in expected locations after install"
+        fi
+      fi
+
+      BBX_CMD="bbx"
+      command -v bbx >/dev/null 2>&1 || BBX_CMD="$(find /home/"$BBX_USER" /usr/local/bin -maxdepth 5 -name 'bbx' 2>/dev/null | head -n1 || true)"
+
+      # ---------------------------------------------------------------
+      # Apply product key if provided
+      # ---------------------------------------------------------------
+      if [ -n "$BBX_PRODUCT_KEY" ]; then
+        echo "--- Certifying BrowserBox product key ---"
+        # Run certify as the install user
+        if command -v bbx >/dev/null 2>&1; then
+          sudo -u "$BBX_USER" -i bash -c "bbx certify '$BBX_PRODUCT_KEY'" || \
+            echo "WARN: bbx certify failed — ensure your product key is valid"
+        else
+          sudo -u "$BBX_USER" -i bash -c "$BBX_CMD certify '$BBX_PRODUCT_KEY'" || \
+            echo "WARN: bbx certify failed — ensure your product key is valid"
+        fi
+      else
+        echo "WARN: No BBX_PRODUCT_KEY set. BrowserBox requires a valid product key."
+        echo "      Purchase at https://browserbox.io then run: sudo -u $BBX_USER bbx certify YOUR_KEY"
+      fi
+
+      # ---------------------------------------------------------------
+      # TLS via Let's Encrypt (optional; skip if DNS not pointed yet)
+      # ---------------------------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ] && [ "$APP_DOMAIN" != "your-domain.example.com" ]; then
+        echo "--- Requesting Let's Encrypt certificate for ${APP_DOMAIN} ---"
+        certbot certonly --standalone --non-interactive --agree-tos \
+            -m "$LE_EMAIL" -d "$APP_DOMAIN" \
+            --pre-hook "ufw allow 80/tcp || true" \
+            --post-hook "ufw delete allow 80/tcp 2>/dev/null || true" \
+            || echo "WARN: certbot failed — DNS not pointed yet? Re-run: certbot certonly --standalone -d $APP_DOMAIN"
+      fi
+
+      # ---------------------------------------------------------------
+      # BrowserBox setup: configure port and hostname
+      # ---------------------------------------------------------------
+      echo "--- Running bbx setup ---"
+      sudo -u "$BBX_USER" -i bash -c "bbx setup --port '${BBX_PORT}' --hostname '${APP_DOMAIN}'" || \
+        echo "WARN: bbx setup returned non-zero — check /var/log/browserbox-bootstrap.log"
+
+      # ---------------------------------------------------------------
+      # Firewall — allow only SSH + BrowserBox ports
+      # ---------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP (certbot + redirect)'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow "${BBX_PORT}/tcp" comment 'BrowserBox main'
+      # BrowserBox internal service ports (used when running in full mode)
+      ufw allow 8081/tcp  comment 'BrowserBox devtools'
+      ufw allow 8082/tcp  comment 'BrowserBox audio'
+      ufw --force enable
+
+      # ---------------------------------------------------------------
+      # Start BrowserBox as a background service under BBX_USER
+      # ---------------------------------------------------------------
+      echo "--- Starting BrowserBox ---"
+      sudo -u "$BBX_USER" -i bash -c "bbx start" || \
+        echo "WARN: bbx start returned non-zero — product key may still be needed"
+
+      # ---------------------------------------------------------------
+      # Enable fail2ban + unattended-upgrades
+      # ---------------------------------------------------------------
+      systemctl enable --now fail2ban
+      systemctl enable unattended-upgrades
+
+      # ---------------------------------------------------------------
+      # Derive login URL — bbx writes the login link to ~/.config/dosaygo/bbpro/login.link
+      # ---------------------------------------------------------------
+      LOGIN_LINK_FILE="/home/${BBX_USER}/.config/dosaygo/bbpro/login.link"
+      LOGIN_LINK=""
+      for _i in $(seq 1 30); do
+        if [ -s "$LOGIN_LINK_FILE" ]; then
+          LOGIN_LINK="$(tr -d '\r\n' < "$LOGIN_LINK_FILE" | head -c 512 || true)"
+          [ -n "$LOGIN_LINK" ] && break
+        fi
+        sleep 2
+      done
+      [ -z "$LOGIN_LINK" ] && LOGIN_LINK="https://${APP_DOMAIN}:${BBX_PORT}/  (link not yet available; check login.link after start)"
+
+      # ---------------------------------------------------------------
+      # Write credentials file (chmod 600)
+      # ---------------------------------------------------------------
+      cat > /root/browserbox-credentials.txt <<CREDS
+      ===== BrowserBox install complete: $(date) =====
+
+      Login URL:       ${LOGIN_LINK}
+      App domain:      ${APP_DOMAIN}
+      BrowserBox port: ${BBX_PORT}
+      BBX_USER:        ${BBX_USER}
+
+      Product key:     ${BBX_PRODUCT_KEY:-NOT SET — purchase at https://browserbox.io}
+      LE email:        ${LE_EMAIL}
+
+      Log file:        /var/log/browserbox-bootstrap.log
+      Login link file: ${LOGIN_LINK_FILE}
+
+      Next steps if product key not yet set:
+        sudo -u ${BBX_USER} bbx certify YOUR_KEY
+
+      To restart BrowserBox:
+        sudo -u ${BBX_USER} bbx stop
+        sudo -u ${BBX_USER} bbx start
+
+      To view logs:
+        journalctl -u browserbox --no-pager -n 50
+        cat /var/log/browserbox-bootstrap.log
+      CREDS
+      chmod 600 /root/browserbox-credentials.txt
+
+      echo "=== BrowserBox bootstrap finished: $(date) ==="
+      echo "=== Login URL: ${LOGIN_LINK} ==="
+      echo "=== Credentials saved to /root/browserbox-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once after all write_files are in place
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/browserbox-bootstrap.sh" ]
+
+final_message: "BrowserBox bootstrap completed after $UPTIME s. Login URL and credentials are in /root/browserbox-credentials.txt — run 'cat /root/browserbox-credentials.txt' to view."

@@ -1,0 +1,316 @@
+#cloud-config
+# =============================================================================
+# Keitaro Tracker "one-click app" — AlmaLinux 9 cloud-init user-data
+# Stack: Keitaro (official kctl installer) on ports 80/443
+#        nginx reverse-proxy + Certbot TLS (optional, deferred if DNS not ready)
+#        firewalld + fail2ban + dnf-automatic (security updates)
+# -----------------------------------------------------------------------------
+# LICENSING: Keitaro is a commercial product — BYOL.
+#   After boot, open http://<SERVER-IP>/ and enter your license key to activate.
+#   Your license can be purchased at: https://keitaro.io/
+# -----------------------------------------------------------------------------
+# EDIT the operator vars in write_files -> /root/.keitaro-bootstrap.env
+# before launching, OR supply them via your provisioner.
+# APP_DOMAIN and LE_EMAIL are the only two you should need to change.
+# =============================================================================
+
+hostname: keitaro
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — minimal prereqs for AlmaLinux 9; Keitaro's kctl installer
+# pulls the rest (Podman, MariaDB, ClickHouse, Redis, nginx, PHP) itself.
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - unzip
+  - tar
+  - rsync
+  - jq
+  - openssl
+  - ca-certificates
+  - gnupg2
+  - sudo
+  - fail2ban
+  - dnf-automatic
+  - firewalld
+  - python3
+  - certbot
+  - python3-certbot-nginx
+  - lsb-release
+  - cronie
+  - policycoreutils-python-utils
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB to survive ClickHouse + MariaDB memory spikes during bootstrap
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd executes
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment vars -----------------------------------
+  - path: /root/.keitaro-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # =============================================================
+      # Keitaro bootstrap environment — edit before first boot
+      # =============================================================
+
+      # Your server's public domain name (used for the nginx vhost + TLS).
+      # Leave empty to access Keitaro directly on port 80 (IP-only mode).
+      APP_DOMAIN=
+
+      # Email address for Let's Encrypt certificate registration.
+      # Only used when APP_DOMAIN is set and ENABLE_TLS=true.
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to request a Let's Encrypt certificate.
+      # Safe to leave true — certbot will be deferred if DNS is not ready.
+      ENABLE_TLS=true
+
+      # Keitaro admin password.
+      # Set on first login via the web UI; CHANGE_ME triggers a random one
+      # that is printed to /root/keitaro-credentials.txt for reference.
+      ADMIN_PASS=CHANGE_ME
+
+  # --- fail2ban SSH jail config ---------------------------------------------
+  - path: /etc/fail2ban/jail.d/keitaro.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 3600
+
+      [nginx-http-auth]
+      enabled  = true
+      maxretry = 5
+
+  # --- dnf-automatic — security updates config (overridden in bootstrap too)
+  - path: /etc/dnf/automatic.conf.d/keitaro-security.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # Applied via sed in bootstrap; this file is a record only.
+      # upgrade_type = security
+      # apply_updates = yes
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/keitaro-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/keitaro-bootstrap.log) 2>&1
+      source /root/.keitaro-bootstrap.env
+
+      echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] === Keitaro bootstrap start ==="
+
+      # ----------------------------------------------------------------
+      # SIGPIPE-safe random password generator (safe under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Generate a password reference if left as CHANGE_ME
+      [ "${ADMIN_PASS}" = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # ----------------------------------------------------------------
+      # Resolve public IP (for credentials file and IP-only access URL)
+      # ----------------------------------------------------------------
+      SERVER_IP=$(curl -4 -s --max-time 10 https://ifconfig.me 2>/dev/null || \
+                  curl -4 -s --max-time 10 https://api.ipify.org 2>/dev/null || \
+                  hostname -I | awk '{print $1}')
+
+      # ----------------------------------------------------------------
+      # SELinux — Keitaro's kctl installer requires it permissive/disabled
+      # ----------------------------------------------------------------
+      setenforce 0 2>/dev/null || true
+      sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+
+      # ----------------------------------------------------------------
+      # firewalld — start early so kctl can query/modify it
+      # ----------------------------------------------------------------
+      systemctl enable --now firewalld
+
+      firewall-cmd --permanent --add-service=ssh
+      firewall-cmd --permanent --add-service=http
+      firewall-cmd --permanent --add-service=https
+      # kctl health-check and inter-container communication
+      firewall-cmd --permanent --add-port=8080/tcp
+      firewall-cmd --reload
+
+      # ----------------------------------------------------------------
+      # fail2ban
+      # ----------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # dnf-automatic — security-only updates, auto-applied
+      # ----------------------------------------------------------------
+      sed -i 's/^upgrade_type\s*=.*/upgrade_type = security/'    /etc/dnf/automatic.conf
+      sed -i 's/^apply_updates\s*=.*/apply_updates = yes/'       /etc/dnf/automatic.conf
+      sed -i 's/^download_updates\s*=.*/download_updates = yes/' /etc/dnf/automatic.conf
+      systemctl enable --now dnf-automatic.timer
+
+      # ----------------------------------------------------------------
+      # crond (required by Keitaro for scheduled tasks)
+      # ----------------------------------------------------------------
+      systemctl enable --now crond
+
+      # ----------------------------------------------------------------
+      # Run the official Keitaro kctl non-interactive installer
+      # The installer detects AlmaLinux 9 natively (RHEL family el9).
+      # -I  = install mode (non-interactive)
+      # -s  = skip CentOS release check (not needed on AlmaLinux)
+      # KEITARO_SKIP_SWAP_SETUP=1 because we already created swap above.
+      # LOG_PATH writes installer output alongside our bootstrap log.
+      # ----------------------------------------------------------------
+      echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Downloading Keitaro kctl installer..."
+
+      for attempt in 1 2 3; do
+        if curl -fsSL https://keitaro.io/install.sh -o /tmp/keitaro-install.sh; then
+          break
+        fi
+        echo "Download attempt ${attempt} failed; retrying in 20s..."
+        sleep 20
+      done
+
+      chmod +x /tmp/keitaro-install.sh
+
+      echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Running Keitaro installer (this takes 10-20 minutes)..."
+      ANSIBLE_IGNORE_TAGS=tune-swap \
+      LOG_PATH=/var/log/keitaro-installer.log \
+        bash /tmp/keitaro-install.sh -I -s
+
+      echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Keitaro installer finished."
+
+      # ----------------------------------------------------------------
+      # Optional: nginx vhost + Certbot TLS when APP_DOMAIN is provided.
+      # Keitaro's kctl sets up its own nginx; we configure the vhost here
+      # only if a domain was specified.
+      # ----------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Configuring nginx vhost for ${APP_DOMAIN}..."
+
+        # kctl writes its own nginx config; set the server_name in Keitaro
+        command -v kctl >/dev/null 2>&1 && \
+          kctl set domain "${APP_DOMAIN}" 2>/dev/null || \
+          echo "WARN: kctl set domain skipped — may need manual configuration"
+
+        if [ "${ENABLE_TLS}" = "true" ]; then
+          echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Requesting Let's Encrypt certificate..."
+          certbot --nginx \
+            --non-interactive \
+            --agree-tos \
+            --email "${LE_EMAIL}" \
+            --redirect \
+            -d "${APP_DOMAIN}" \
+            || echo "WARN: certbot deferred — DNS not yet pointed to this server; re-run after DNS propagates"
+        fi
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (chmod 600)
+      # NOTE: Keitaro requires a license key entered at first login.
+      #       Purchase at: https://keitaro.io/
+      # ----------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        PROTO="http"
+        [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+        ACCESS_URL="${PROTO}://${APP_DOMAIN}/"
+      else
+        ACCESS_URL="http://${SERVER_IP}/"
+      fi
+
+      cat > /root/keitaro-credentials.txt <<CREDS
+      ============================================================
+       Keitaro Tracker — First-Boot Credentials
+       Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      ============================================================
+
+       LICENSING (BYOL — Bring Your Own License)
+       -----------------------------------------
+       Keitaro is a commercial product. After first boot, open the
+       URL below and enter your license key to activate the tracker.
+       Purchase / manage your license at: https://keitaro.io/
+
+       Access URL  : ${ACCESS_URL}
+       Direct IP   : http://${SERVER_IP}/ (always available)
+
+       Admin Setup
+       -----------
+       Complete setup at the URL above. On first visit you will be
+       prompted to:
+         1. Enter your Keitaro license key
+         2. Set the admin username and password
+         3. Configure your tracking domain
+
+       Password hint (for your records after setup):
+         ADMIN_PASS  : ${ADMIN_PASS}
+         (This value is NOT automatically applied — set it yourself
+          during the initial web setup wizard.)
+
+       Keitaro Paths
+       -------------
+       Config dir    : /etc/keitaro/
+       App home      : /home/keitaro/
+       Installer log : /var/log/keitaro-installer.log
+       Bootstrap log : /var/log/keitaro-bootstrap.log
+
+       Service Management
+       ------------------
+       kctl status
+       kctl restart
+       systemctl status firewalld
+       systemctl status fail2ban
+
+       Firewall — open ports: SSH (22), HTTP (80), HTTPS (443)
+
+      ============================================================
+      CREDS
+      chmod 600 /root/keitaro-credentials.txt
+
+      echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] === Keitaro bootstrap complete ==="
+      echo ""
+      echo "============================================================"
+      echo " Keitaro Tracker URL : ${ACCESS_URL}"
+      echo " License required    : https://keitaro.io/"
+      echo " Credentials file    : /root/keitaro-credentials.txt"
+      echo " Bootstrap log       : /var/log/keitaro-bootstrap.log"
+      echo "============================================================"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script once on first boot (after write_files)
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/keitaro-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output / console log
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   Keitaro bootstrap finished in $UPTIME seconds.
+   Open http://<SERVER-IP>/ to activate your license and complete setup.
+   Full credentials: /root/keitaro-credentials.txt
+   Bootstrap log   : /var/log/keitaro-bootstrap.log
+  ============================================================

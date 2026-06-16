@@ -1,0 +1,651 @@
+#cloud-config
+# =============================================================================
+# HEAVY.AI Immerse — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NVIDIA driver + CUDA toolkit + HEAVY.AI (HeavyDB + Immerse)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# REQUIRES:
+#   - A KVM VPS plan with a dedicated NVIDIA GPU (Pascal / Volta / Turing /
+#     Ampere or newer, Kepler no longer supported as of HEAVY.AI 6.x)
+#   - Minimum 16 GB VRAM recommended (32 GB+ for large datasets)
+#   - Minimum 100 GB disk (HeavyDB data + CUDA libraries + Immerse assets)
+#   - Minimum 32 GB RAM (64 GB recommended for production workloads)
+#
+# EDIT the variables in write_files -> /root/.heavyai-bootstrap.env before
+# launching, or supply them via your provisioner.
+#
+# IMPORTANT: Do NOT depend on Vultr metadata, APIs, or object storage.
+#            This is an in-house InterServer one-click app image.
+# =============================================================================
+
+hostname: heavyai-immerse
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GB to survive build-time memory spikes (CUDA + package installs)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Base packages — NVIDIA driver and CUDA installed in bootstrap via keyring
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+
+packages:
+  # Core utilities
+  - curl
+  - wget
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  # Security
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  # Build / runtime helpers
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - libffi-dev
+  - libnuma1
+  - libnuma-dev
+  - libgomp1
+  # Python (used for health-check scripts and optional pyomniscidb client)
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  # GPU / CUDA detection helpers
+  - pciutils
+  - nvtop
+  - htop
+  - tmux
+  # Nginx reverse proxy + Certbot TLS
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  # Misc
+  - jq
+  - rsync
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd executes
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # (a) Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.heavyai-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # HEAVY.AI Immerse bootstrap configuration — edit before first boot
+      # -----------------------------------------------------------------------
+
+      # Domain name pointing to this server (used for Certbot TLS + nginx vhost).
+      # Leave as CHANGE_ME to skip TLS and access via plain IP.
+      APP_DOMAIN=CHANGE_ME
+
+      # Email address for Let's Encrypt certificate notifications.
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to request a TLS cert via Certbot.
+      # Requires APP_DOMAIN to resolve to this server before the script runs.
+      ENABLE_TLS=false
+
+      # HEAVY.AI version to install (see https://releases.heavy.ai/ for tags).
+      # Format: <major>.<minor>.<patch>  e.g. 7.3.0
+      HEAVYAI_VERSION=7.3.0
+
+      # Edition: "free" (HeavyDB + Immerse, up to 1 GPU, no cost) or
+      #          "enterprise" (requires a purchased license key).
+      HEAVYAI_EDITION=free
+
+      # Installation directory for HEAVY.AI runtime.
+      HEAVYAI_DIR=/opt/heavyai
+
+      # Data directory (database files, logs, exports).
+      # Point to a large attached volume if available.
+      HEAVYAI_STORAGE=/var/lib/heavyai/storage
+
+      # HeavyDB backend listen port (internal — Immerse proxies to this).
+      HEAVYDB_PORT=6274
+
+      # HeavyDB HTTP port (internal, used by Immerse).
+      HEAVYDB_HTTP_PORT=6278
+
+      # Immerse web interface listen port (nginx proxies to this).
+      IMMERSE_PORT=6273
+
+      # Linux user that runs HeavyDB and Immerse (created if absent).
+      HEAVYAI_USER=heavyai
+
+      # Admin username for the Immerse / HeavyDB account.
+      HEAVYAI_ADMIN_USER=admin
+
+      # Admin password — auto-generated on first boot if left as CHANGE_ME.
+      HEAVYAI_ADMIN_PASS=CHANGE_ME
+
+      # CUDA version hint for toolkit package selection.
+      # "12-8" selects cuda-toolkit-12-8. Adjust if your GPU driver requires
+      # a different CUDA runtime (driver 570+ supports CUDA 12.8).
+      CUDA_VERSION=12-8
+
+      # Number of GPUs to expose to HeavyDB (default 1).
+      NUM_GPUS=1
+
+  # --------------------------------------------------------------------------
+  # (b) Bootstrap shell script
+  # --------------------------------------------------------------------------
+  - path: /root/heavyai-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/heavyai-bootstrap.log) 2>&1
+      source /root/.heavyai-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator (|| true required under pipefail)
+      # ------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      log() { echo "[heavyai-bootstrap] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      log "=== HEAVY.AI Immerse bootstrap started ==="
+
+      # ------------------------------------------------------------------
+      # Auto-generate secrets when still set to CHANGE_ME
+      # ------------------------------------------------------------------
+      if [ "${HEAVYAI_ADMIN_PASS}" = "CHANGE_ME" ]; then
+        HEAVYAI_ADMIN_PASS="$(rand)"
+        sed -i "s/^HEAVYAI_ADMIN_PASS=CHANGE_ME/HEAVYAI_ADMIN_PASS=${HEAVYAI_ADMIN_PASS}/" \
+          /root/.heavyai-bootstrap.env
+        log "Auto-generated HEAVYAI_ADMIN_PASS"
+      fi
+
+      # ------------------------------------------------------------------
+      # System user for HEAVY.AI services
+      # ------------------------------------------------------------------
+      id "${HEAVYAI_USER}" &>/dev/null || \
+        useradd --system --shell /bin/bash \
+          --create-home --home-dir "${HEAVYAI_DIR}" "${HEAVYAI_USER}"
+
+      # ------------------------------------------------------------------
+      # NVIDIA driver + CUDA toolkit via official CUDA keyring
+      # Uses ubuntu2404 (noble) repo — fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      log "Installing NVIDIA driver and CUDA toolkit..."
+
+      CUDA_KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
+      CUDA_KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/${CUDA_KEYRING_DEB}"
+
+      if ! dpkg -l cuda-keyring &>/dev/null; then
+        wget -q -O "/tmp/${CUDA_KEYRING_DEB}" "${CUDA_KEYRING_URL}"
+        dpkg -i "/tmp/${CUDA_KEYRING_DEB}"
+        rm -f "/tmp/${CUDA_KEYRING_DEB}"
+        apt-get update -qq
+      fi
+
+      # nvidia-open: preferred open-kernel-module driver for Ampere+ GPUs
+      command -v nvidia-smi &>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          nvidia-open \
+          "cuda-toolkit-${CUDA_VERSION}"
+
+      # Persist CUDA paths for all future logins
+      if [ ! -f /etc/profile.d/cuda.sh ]; then
+        cat > /etc/profile.d/cuda.sh <<'CUDAENV'
+      export PATH="/usr/local/cuda/bin:${PATH}"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+      CUDAENV
+        chmod 644 /etc/profile.d/cuda.sh
+      fi
+      export PATH="/usr/local/cuda/bin:${PATH}"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+
+      # ------------------------------------------------------------------
+      # HEAVY.AI apt repository
+      # HEAVY.AI publishes a signed apt repo for LTS Ubuntu releases.
+      # fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      log "Adding HEAVY.AI apt repository..."
+
+      HEAVYAI_KEYRING="/usr/share/keyrings/heavyai-keyring.gpg"
+      if [ ! -f "${HEAVYAI_KEYRING}" ]; then
+        curl -fsSL "https://releases.heavy.ai/GPG-KEY-heavyai" \
+          | gpg --dearmor -o "${HEAVYAI_KEYRING}"
+      fi
+
+      if [ ! -f /etc/apt/sources.list.d/heavyai.list ]; then
+        # fallback: noble repo until 26.04 published
+        cat > /etc/apt/sources.list.d/heavyai.list <<'HEAVYREPO'
+      deb [arch=amd64 signed-by=/usr/share/keyrings/heavyai-keyring.gpg] https://releases.heavy.ai/ee/apt/ubuntu noble main
+      HEAVYREPO
+        apt-get update -qq
+      fi
+
+      # ------------------------------------------------------------------
+      # Install HEAVY.AI (HeavyDB + Immerse)
+      # ------------------------------------------------------------------
+      log "Installing HEAVY.AI Immerse ${HEAVYAI_VERSION} (${HEAVYAI_EDITION} edition)..."
+
+      if [ "${HEAVYAI_EDITION}" = "enterprise" ]; then
+        HEAVYAI_PKG="heavyai-ee-cuda"
+      else
+        HEAVYAI_PKG="heavyai-cuda"
+      fi
+
+      # Pin the requested version; fall back to latest if the pinned version
+      # is not available in the configured repo.
+      HEAVYAI_PKG_VERSIONED="${HEAVYAI_PKG}=${HEAVYAI_VERSION}"
+
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        "${HEAVYAI_PKG_VERSIONED}" 2>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          "${HEAVYAI_PKG}"
+
+      # ------------------------------------------------------------------
+      # Storage directory
+      # ------------------------------------------------------------------
+      log "Initialising HEAVY.AI storage at ${HEAVYAI_STORAGE}..."
+      mkdir -p "${HEAVYAI_STORAGE}"/{data,logs,exports,import}
+      chown -R "${HEAVYAI_USER}:${HEAVYAI_USER}" "${HEAVYAI_STORAGE}"
+      chmod -R 750 "${HEAVYAI_STORAGE}"
+
+      # ------------------------------------------------------------------
+      # heavyai.conf — main configuration
+      # ------------------------------------------------------------------
+      HEAVYAI_CONF="/etc/heavyai/heavyai.conf"
+      mkdir -p "$(dirname "${HEAVYAI_CONF}")"
+
+      cat > "${HEAVYAI_CONF}" <<HEAVYCONF
+      [db]
+      data = ${HEAVYAI_STORAGE}/data
+      port = ${HEAVYDB_PORT}
+      http-port = ${HEAVYDB_HTTP_PORT}
+      num-gpus = ${NUM_GPUS}
+      start-gpu = 0
+
+      [web]
+      port = ${IMMERSE_PORT}
+      servers-json = ${HEAVYAI_DIR}/servers.json
+      data = ${HEAVYAI_STORAGE}
+      enable-logs = true
+      log-dir = ${HEAVYAI_STORAGE}/logs
+      HEAVYCONF
+
+      chmod 640 "${HEAVYAI_CONF}"
+      chown root:"${HEAVYAI_USER}" "${HEAVYAI_CONF}"
+
+      # servers.json: tells Immerse how to reach HeavyDB
+      cat > "${HEAVYAI_DIR}/servers.json" <<SERVERS
+      [
+        {
+          "username": "${HEAVYAI_ADMIN_USER}",
+          "password": "${HEAVYAI_ADMIN_PASS}",
+          "database": "heavyai",
+          "master": true,
+          "host": "localhost",
+          "port": ${HEAVYDB_HTTP_PORT},
+          "https": false
+        }
+      ]
+      SERVERS
+      chmod 640 "${HEAVYAI_DIR}/servers.json"
+      chown root:"${HEAVYAI_USER}" "${HEAVYAI_DIR}/servers.json"
+
+      # ------------------------------------------------------------------
+      # Initialise the database (heavydb --initdb) — idempotent
+      # ------------------------------------------------------------------
+      if [ ! -f "${HEAVYAI_STORAGE}/data/catalogs/system_catalog" ] && \
+         [ ! -d "${HEAVYAI_STORAGE}/data/catalogs" ]; then
+        log "Initialising HeavyDB catalog..."
+        sudo -u "${HEAVYAI_USER}" "${HEAVYAI_DIR}/bin/heavydb" \
+          --data "${HEAVYAI_STORAGE}/data" \
+          --initdb || true
+      fi
+
+      # ------------------------------------------------------------------
+      # systemd service: heavydb (backend database + GPU engine)
+      # ------------------------------------------------------------------
+      log "Creating systemd services..."
+
+      cat > /etc/systemd/system/heavydb.service <<HEAVYDB_SVC
+      [Unit]
+      Description=HEAVY.AI HeavyDB GPU Database Engine
+      Documentation=https://docs.heavy.ai
+      After=network.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=${HEAVYAI_USER}
+      Group=${HEAVYAI_USER}
+      WorkingDirectory=${HEAVYAI_DIR}
+      ExecStart=${HEAVYAI_DIR}/bin/heavydb \
+        --config ${HEAVYAI_CONF}
+      Restart=on-failure
+      RestartSec=10
+      TimeoutStartSec=300
+      StandardOutput=journal
+      StandardError=journal
+      Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64:${HEAVYAI_DIR}/lib"
+
+      [Install]
+      WantedBy=multi-user.target
+      HEAVYDB_SVC
+
+      # ------------------------------------------------------------------
+      # systemd service: immerse (web visualisation front-end)
+      # ------------------------------------------------------------------
+      cat > /etc/systemd/system/heavyai-immerse.service <<IMMERSE_SVC
+      [Unit]
+      Description=HEAVY.AI Immerse Web Interface
+      Documentation=https://docs.heavy.ai
+      After=network.target heavydb.service
+      Requires=heavydb.service
+
+      [Service]
+      Type=simple
+      User=${HEAVYAI_USER}
+      Group=${HEAVYAI_USER}
+      WorkingDirectory=${HEAVYAI_DIR}
+      ExecStart=${HEAVYAI_DIR}/bin/immerse \
+        --port ${IMMERSE_PORT} \
+        --servers-json ${HEAVYAI_DIR}/servers.json \
+        --data ${HEAVYAI_STORAGE} \
+        --log-dir ${HEAVYAI_STORAGE}/logs
+      Restart=on-failure
+      RestartSec=10
+      TimeoutStartSec=120
+      StandardOutput=journal
+      StandardError=journal
+      Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64:${HEAVYAI_DIR}/lib"
+
+      [Install]
+      WantedBy=multi-user.target
+      IMMERSE_SVC
+
+      systemctl daemon-reload
+      systemctl enable heavydb heavyai-immerse
+      systemctl start heavydb || log "WARNING: heavydb failed to start — GPU driver reboot may be required"
+      systemctl start heavyai-immerse || log "WARNING: immerse failed to start — check heavydb is running first"
+
+      # ------------------------------------------------------------------
+      # Set admin password via HeavyDB binary client (heavysql)
+      # Wait up to 30 s for HeavyDB to accept connections
+      # ------------------------------------------------------------------
+      log "Waiting for HeavyDB to accept connections..."
+      HEAVYSQL="${HEAVYAI_DIR}/bin/heavysql"
+      for i in $(seq 1 30); do
+        if "${HEAVYSQL}" -p HyperInteractive \
+            --host localhost --port "${HEAVYDB_PORT}" \
+            --db heavyai -q "\\q" &>/dev/null 2>&1; then
+          break
+        fi
+        sleep 2
+      done
+
+      "${HEAVYSQL}" -p HyperInteractive \
+        --host localhost --port "${HEAVYDB_PORT}" \
+        --db heavyai \
+        -q "ALTER USER ${HEAVYAI_ADMIN_USER} (password='${HEAVYAI_ADMIN_PASS}');" 2>/dev/null \
+        || log "WARN: Could not set admin password via heavysql — may need manual password change after reboot"
+
+      # ------------------------------------------------------------------
+      # Nginx reverse proxy
+      # ------------------------------------------------------------------
+      log "Configuring nginx reverse proxy..."
+
+      cat > /etc/nginx/sites-available/heavyai <<NGXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN:-_};
+
+          client_max_body_size 256M;
+
+          # Immerse web UI
+          location / {
+              proxy_pass         http://127.0.0.1:${IMMERSE_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 600s;
+              proxy_send_timeout 600s;
+          }
+
+          # HeavyDB HTTP Thrift endpoint (used by Immerse internally)
+          location /heavydb/ {
+              proxy_pass         http://127.0.0.1:${HEAVYDB_HTTP_PORT}/;
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_read_timeout 600s;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/heavyai /etc/nginx/sites-enabled/heavyai
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # ------------------------------------------------------------------
+      # TLS via Certbot — deferred gracefully if DNS not yet pointed
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ -n "${APP_DOMAIN:-}" ] && \
+         [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot --nginx --non-interactive --agree-tos \
+          --email "${LE_EMAIL}" \
+          --domains "${APP_DOMAIN}" \
+          --redirect \
+          || echo "WARN: certbot deferred — ensure DNS points to this server, then run certbot manually"
+      else
+        log "Skipping Certbot (ENABLE_TLS=${ENABLE_TLS:-false} or APP_DOMAIN not set)"
+      fi
+
+      # ------------------------------------------------------------------
+      # Firewall (UFW) — SSH + HTTP + HTTPS only; DB ports stay local
+      # ------------------------------------------------------------------
+      log "Configuring UFW firewall..."
+
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      # HeavyDB Thrift and HTTP ports are internal; restrict to loopback
+      ufw allow from 127.0.0.1 to any port "${HEAVYDB_PORT}" proto tcp \
+        comment 'HeavyDB Thrift (local only)'
+      ufw allow from 127.0.0.1 to any port "${HEAVYDB_HTTP_PORT}" proto tcp \
+        comment 'HeavyDB HTTP (local only)'
+      ufw allow from 127.0.0.1 to any port "${IMMERSE_PORT}" proto tcp \
+        comment 'Immerse (local only — nginx proxies)'
+      ufw --force enable
+
+      # ------------------------------------------------------------------
+      # fail2ban
+      # ------------------------------------------------------------------
+      log "Configuring fail2ban..."
+
+      cat > /etc/fail2ban/jail.d/heavyai.conf <<'F2BJAIL'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      F2BJAIL
+
+      systemctl enable --now fail2ban
+
+      # ------------------------------------------------------------------
+      # Automatic security updates (unattended-upgrades)
+      # ------------------------------------------------------------------
+      log "Enabling unattended-upgrades..."
+
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      systemctl enable --now unattended-upgrades
+
+      # ------------------------------------------------------------------
+      # Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      log "Writing credentials file..."
+
+      PUBLIC_IP="$(curl -sf https://ipv4.icanhazip.com 2>/dev/null || \
+                   curl -sf https://api.ipify.org 2>/dev/null || \
+                   hostname -I | awk '{print $1}')"
+
+      PROTO="http"
+      BASE_HOST="${APP_DOMAIN:-${PUBLIC_IP}}"
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ -n "${APP_DOMAIN:-}" ] && \
+         [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        PROTO="https"
+      fi
+
+      cat > /root/heavyai-credentials.txt <<CREDS
+      ============================================================
+      HEAVY.AI Immerse — Access Credentials
+      Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      ============================================================
+
+      !! GPU REQUIREMENT !!
+      This app REQUIRES a KVM VPS with a dedicated NVIDIA GPU.
+      Minimum: Pascal architecture or newer (GTX 1080 / P100+)
+      Recommended: 16 GB VRAM, 32 GB RAM, 100 GB disk.
+      Without a GPU, HeavyDB will NOT start.
+      After first boot a REBOOT may be required to load the
+      NVIDIA kernel module. Verify with: nvidia-smi
+
+      -----------------------------------------------------------
+      Public IP    : ${PUBLIC_IP}
+      App domain   : ${APP_DOMAIN:-Not configured}
+
+      Immerse UI   : ${PROTO}://${BASE_HOST}/
+      (direct)     : http://${PUBLIC_IP}:${IMMERSE_PORT}/
+      HTTPS        : https://${APP_DOMAIN:-<set APP_DOMAIN and enable TLS>}/
+
+      HeavyDB host : localhost:${HEAVYDB_PORT}   (Thrift/binary)
+      HeavyDB HTTP : localhost:${HEAVYDB_HTTP_PORT}  (HTTP/Thrift)
+
+      -----------------------------------------------------------
+      Admin username : ${HEAVYAI_ADMIN_USER}
+      Admin password : ${HEAVYAI_ADMIN_PASS}
+      Default DB     : heavyai
+
+      Edition        : ${HEAVYAI_EDITION}
+      Version        : ${HEAVYAI_VERSION}
+      GPUs           : ${NUM_GPUS}
+
+      -----------------------------------------------------------
+      Service management:
+        systemctl status heavydb
+        systemctl status heavyai-immerse
+        systemctl restart heavydb
+        systemctl restart heavyai-immerse
+
+      Logs:
+        /var/log/heavyai-bootstrap.log
+        journalctl -u heavydb -f
+        journalctl -u heavyai-immerse -f
+        ${HEAVYAI_STORAGE}/logs/
+
+      Data directory : ${HEAVYAI_STORAGE}/data/
+      Import staging : ${HEAVYAI_STORAGE}/import/
+      Exports        : ${HEAVYAI_STORAGE}/exports/
+
+      -----------------------------------------------------------
+      Next steps:
+        1. If services did not start, reboot to activate the GPU driver:
+             reboot
+           Then verify:  nvidia-smi
+        2. Point ${APP_DOMAIN:-<your-domain>} DNS A-record to ${PUBLIC_IP}
+        3. Enable TLS: set ENABLE_TLS=true and APP_DOMAIN in
+             /root/.heavyai-bootstrap.env
+           then run:    certbot --nginx -d <your-domain>
+        4. Open the Immerse UI and log in with the admin credentials above.
+        5. Enterprise licences: place your key at
+             ${HEAVYAI_DIR}/heavyai.license
+           and restart heavydb.
+      ============================================================
+      CREDS
+
+      chmod 600 /root/heavyai-credentials.txt
+
+      log "=== HEAVY.AI Immerse bootstrap complete ==="
+      log "Credentials written to /root/heavyai-credentials.txt"
+      log "NOTE: A reboot is recommended to activate the NVIDIA kernel module."
+      log "      After reboot verify: nvidia-smi"
+      log "      Then start services: systemctl start heavydb heavyai-immerse"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/heavyai-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  HEAVY.AI Immerse bootstrap has completed.
+  Elapsed time: $UPTIME seconds since boot.
+
+  !! GPU REQUIREMENT !!
+  This app requires a dedicated NVIDIA GPU (Pascal+).
+  A reboot is strongly recommended to activate the NVIDIA
+  kernel module after the driver install.
+
+  After reboot:
+    nvidia-smi                                  # confirm GPU detected
+    systemctl start heavydb heavyai-immerse     # start services if not running
+
+  Access credentials and URLs:
+    cat /root/heavyai-credentials.txt
+
+  Bootstrap log:
+    /var/log/heavyai-bootstrap.log
+  ============================================================

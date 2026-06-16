@@ -1,0 +1,328 @@
+#cloud-config
+# =============================================================================
+# Ubuntu Desktop (GNOME) — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: ubuntu-desktop (GNOME) + xrdp + TigerVNC + fail2ban + swap
+#        UFW firewall (SSH + RDP 3389 + VNC 5901) + unattended-upgrades
+# -----------------------------------------------------------------------------
+# Requires a plan with at least 2 GB RAM.
+# EDIT the variables in /root/.ubuntu-desktop-gnome-bootstrap.env before or
+# after first boot — particularly DESKTOP_USER and DESKTOP_PASS.
+# Connect via RDP to port 3389, or VNC to port 5901.
+# =============================================================================
+
+hostname: ubuntu-desktop
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioning can inject customer SSH key + hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: desktopuser
+    groups: [sudo, audio, video, plugdev]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - ubuntu-desktop-minimal
+  - gnome-session
+  - gdm3
+  - xrdp
+  - tigervnc-standalone-server
+  - tigervnc-common
+  - dbus-x11
+  - xorgxrdp
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - curl
+  - wget
+  - git
+  - htop
+  - vim
+  - net-tools
+  - gnupg
+  - ca-certificates
+  - pwgen
+
+# ----------------------------------------------------------------------------
+# Swap (required: desktop + compositor can spike past 1 GB on a 2 GB plan)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files dropped to disk before the bootstrap runs
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable variables -------------------------------------------
+  - path: /root/.ubuntu-desktop-gnome-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ---- EDIT THESE before first login ----
+      # Non-root desktop user created during bootstrap
+      DESKTOP_USER="desktopuser"
+      # Password for the desktop user (RDP + VNC + console).
+      # Set to CHANGE_ME to generate a random one at boot.
+      DESKTOP_PASS="CHANGE_ME"
+
+      # VNC display number and geometry
+      VNC_DISPLAY="1"
+      VNC_GEOMETRY="1920x1080"
+      VNC_DEPTH="24"
+
+      # RDP port (default 3389)
+      RDP_PORT="3389"
+
+      # Whether to enable the GDM login screen on the VM console
+      ENABLE_GDM="true"
+
+  # --- fail2ban jail (SSH + RDP brute-force) ----------------------------------
+  - path: /etc/fail2ban/jail.d/desktop.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime  = 1h
+
+      [rdp]
+      enabled  = true
+      port     = 3389
+      filter   = rdp
+      logpath  = /var/log/auth.log
+      maxretry = 5
+      bantime  = 1h
+
+  # --- fail2ban RDP filter ----------------------------------------------------
+  - path: /etc/fail2ban/filter.d/rdp.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Definition]
+      failregex = pam_unix\(xrdp-sesman:auth\): authentication failure.*rhost=<HOST>
+                  pam_unix\(sshd:auth\): authentication failure.*rhost=<HOST>
+      ignoreregex =
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- xrdp policy: use our dedicated Xvnc session instead of the default ----
+  - path: /etc/xrdp/xrdp.ini.d/20-gnome.ini
+    permissions: '0644'
+    owner: root:root
+    content: |
+      ; Force Xvnc backend so GNOME renders through TigerVNC
+      [Globals]
+      max_bpp=32
+      xserverbpp=24
+      bitmap_cache=yes
+      bitmap_compression=yes
+      bulk_compression=yes
+
+  # --- per-user VNC startup: launch a GNOME session --------------------------
+  - path: /etc/xrdp/startwm.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/sh
+      # xrdp session launcher — start a GNOME session
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      export GNOME_SHELL_SESSION_MODE=ubuntu
+      exec /usr/bin/gnome-session
+
+  # --- VNC password + startup for the desktop user ---------------------------
+  - path: /root/setup-vnc.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # Called from the main bootstrap with $DESKTOP_USER and $DESKTOP_PASS set
+      set -euo pipefail
+      USER_HOME="/home/${DESKTOP_USER}"
+      VNC_DIR="${USER_HOME}/.vnc"
+      mkdir -p "${VNC_DIR}"
+      # Set VNC password (uses the same pass as the desktop user for simplicity)
+      printf '%s\n%s\n\n' "${DESKTOP_PASS}" "${DESKTOP_PASS}" | \
+        su -s /bin/bash -c "vncpasswd" "${DESKTOP_USER}" 2>/dev/null || true
+      # xstartup for TigerVNC standalone server
+      cat > "${VNC_DIR}/xstartup" <<'XEOF'
+      #!/bin/sh
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      export GNOME_SHELL_SESSION_MODE=ubuntu
+      exec /usr/bin/gnome-session
+      XEOF
+      chmod 0755 "${VNC_DIR}/xstartup"
+      chown -R "${DESKTOP_USER}:${DESKTOP_USER}" "${VNC_DIR}"
+
+  # --- systemd unit for TigerVNC standalone (user's VNC server) --------------
+  - path: /etc/systemd/system/vncserver@.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=TigerVNC server for display :%i
+      After=syslog.target network.target
+
+      [Service]
+      Type=forking
+      User=%i
+      # %i = username; VNC display is :1 (port 5901)
+      ExecStartPre=/bin/sh -c 'vncserver -kill :1 >/dev/null 2>&1 || true'
+      ExecStart=/usr/bin/vncserver :1 -geometry 1920x1080 -depth 24 \
+                  -localhost no -SecurityTypes VncAuth
+      ExecStop=/usr/bin/vncserver -kill :1
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- MOTD for first login ---------------------------------------------------
+  - path: /etc/update-motd.d/99-desktop-setup
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      if [ -f /root/ubuntu-desktop-gnome-credentials.txt ]; then
+        echo ""
+        echo "====================================================================="
+        echo "  Ubuntu Desktop (GNOME) — InterServer VPS"
+        echo "====================================================================="
+        grep -v "^====" /root/ubuntu-desktop-gnome-credentials.txt || true
+        echo "====================================================================="
+        echo ""
+      fi
+
+  # --- main bootstrap script --------------------------------------------------
+  - path: /root/ubuntu-desktop-gnome-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/ubuntu-desktop-gnome-bootstrap.log) 2>&1
+      source /root/.ubuntu-desktop-gnome-bootstrap.env
+
+      echo "=== Ubuntu Desktop (GNOME) bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random secret generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- generate random desktop password if left as default ----------------
+      if [ "${DESKTOP_PASS}" = "CHANGE_ME" ]; then
+        DESKTOP_PASS="$(rand)"
+        echo "Generated desktop user password."
+      fi
+
+      # --- ensure the desktop user exists with the right groups ---------------
+      if ! id "${DESKTOP_USER}" &>/dev/null; then
+        useradd -m -s /bin/bash -G sudo,audio,video,plugdev "${DESKTOP_USER}"
+        echo "Created user: ${DESKTOP_USER}"
+      fi
+      echo "${DESKTOP_USER}:${DESKTOP_PASS}" | chpasswd
+      echo "Password set for ${DESKTOP_USER}."
+
+      # --- enable GNOME display manager ---------------------------------------
+      if [ "${ENABLE_GDM}" = "true" ]; then
+        systemctl enable gdm3 || systemctl enable gdm || true
+        echo "GDM enabled."
+      fi
+
+      # --- configure xrdp -----------------------------------------------------
+      # Ensure xrdp uses the system ssl cert for RDP
+      adduser xrdp ssl-cert 2>/dev/null || true
+
+      # Replace startwm.sh so RDP sessions launch GNOME
+      # (already written by write_files, just ensure it is in place)
+      [ -f /etc/xrdp/startwm.sh ] || cp /etc/xrdp/startwm.sh.bak /etc/xrdp/startwm.sh
+
+      # Set port in xrdp.ini if non-default
+      if [ "${RDP_PORT}" != "3389" ]; then
+        sed -i "s/^port=.*/port=${RDP_PORT}/" /etc/xrdp/xrdp.ini
+      fi
+
+      systemctl enable --now xrdp
+      echo "xrdp enabled on port ${RDP_PORT}."
+
+      # --- configure TigerVNC for the desktop user ----------------------------
+      /root/setup-vnc.sh
+      # Enable per-display service (display :1 → username maps to desktopuser)
+      # The unit uses the username as the instance; symlink to a predictable name
+      systemctl enable "vncserver@${DESKTOP_USER}" || true
+      systemctl start  "vncserver@${DESKTOP_USER}" || true
+      echo "VNC server started on display :${VNC_DISPLAY} (port 590${VNC_DISPLAY})."
+
+      # --- firewall (ufw) -----------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw allow "${RDP_PORT}/tcp"          # RDP
+      ufw allow "590${VNC_DISPLAY}/tcp"    # VNC display :1
+      ufw --force enable
+      echo "UFW enabled: SSH + RDP(${RDP_PORT}) + VNC(590${VNC_DISPLAY}) open."
+
+      # --- fail2ban -----------------------------------------------------------
+      systemctl enable --now fail2ban
+      echo "fail2ban enabled."
+
+      # --- unattended security upgrades ---------------------------------------
+      systemctl enable --now unattended-upgrades || true
+      echo "Unattended upgrades enabled."
+
+      # --- write credentials file (root-only) ---------------------------------
+      PUBLIC_IP="$(curl -sf --max-time 5 https://api4.my-ip.io/ip || \
+                   curl -sf --max-time 5 https://ifconfig.me || \
+                   hostname -I | awk '{print $1}')"
+      cat > /root/ubuntu-desktop-gnome-credentials.txt <<CREDS
+      ===== Ubuntu Desktop (GNOME) provisioned: $(date) =====
+      Desktop user:   ${DESKTOP_USER}
+      Desktop pass:   ${DESKTOP_PASS}
+
+      RDP (port ${RDP_PORT}):
+        Host:         ${PUBLIC_IP}:${RDP_PORT}
+        User:         ${DESKTOP_USER}
+        Pass:         ${DESKTOP_PASS}
+        Client:       Windows: mstsc.exe / Linux: remmina / macOS: Microsoft Remote Desktop
+
+      VNC (port 590${VNC_DISPLAY}):
+        Host:         ${PUBLIC_IP}:590${VNC_DISPLAY}
+        Pass:         ${DESKTOP_PASS}
+        Client:       TigerVNC viewer, RealVNC, Remmina
+
+      Logs:   /var/log/ubuntu-desktop-gnome-bootstrap.log
+      =======================================================
+      CREDS
+      chmod 600 /root/ubuntu-desktop-gnome-credentials.txt
+
+      echo "=== Bootstrap complete: $(date) ==="
+      echo "Credentials saved to /root/ubuntu-desktop-gnome-credentials.txt"
+      cat /root/ubuntu-desktop-gnome-credentials.txt
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/ubuntu-desktop-gnome-bootstrap.sh" ]
+
+final_message: "Ubuntu Desktop (GNOME) bootstrap done after $UPTIME s. RDP port 3389, VNC port 5901. See /root/ubuntu-desktop-gnome-credentials.txt"

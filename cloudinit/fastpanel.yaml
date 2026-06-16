@@ -1,0 +1,280 @@
+#cloud-config
+# =============================================================================
+# FASTPANEL — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: FASTPANEL (official installer) + Apache/Nginx + PHP-FPM + MySQL/MariaDB
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.fastpanel-bootstrap.env before
+# launching (or inject via provisioner). Passwords are random per-boot when
+# left as CHANGE_ME.
+# -----------------------------------------------------------------------------
+# NOTE: FASTPANEL officially supports Ubuntu 20.04 / 22.04 / 24.04 + Debian.
+# fallback: ubuntu24.qcow2 — FASTPANEL installer not yet 26.04-certified
+# If the installer rejects Ubuntu 26.04, switch the base image to ubuntu24.qcow2.
+# =============================================================================
+
+hostname: fastpanel
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default (cloud-init injects customer SSH key here)
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — minimal set; FASTPANEL installer pulls its own deps
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - jq
+  - net-tools
+  - dnsutils
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.fastpanel-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # FASTPANEL bootstrap environment
+      # Edit these before first boot, or inject via provisioner.
+
+      # Fully-qualified domain name (used in credentials output and optional TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email used for Let's Encrypt registration / FASTPANEL admin account
+      ADMIN_EMAIL=CHANGE_ME
+
+      # FASTPANEL admin username (leave as 'admin' or customise)
+      ADMIN_USER=admin
+
+      # Admin password — leave as CHANGE_ME to auto-generate a random value at runtime
+      ADMIN_PASS=CHANGE_ME
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/fastpanel-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/fastpanel-bootstrap.log) 2>&1
+      source /root/.fastpanel-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== FASTPANEL bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${ADMIN_PASS}"  == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+      [[ "${ADMIN_EMAIL}" == "CHANGE_ME" ]] && ADMIN_EMAIL="admin@${APP_DOMAIN:-localhost}"
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — basic SSH protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # FASTPANEL ports:
+      #   8888  — panel HTTP/HTTPS (FASTPANEL web UI)
+      #   80    — HTTP (hosted sites + ACME challenge)
+      #   443   — HTTPS (hosted sites)
+      #   22    — SSH
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 8888/tcp  comment 'FASTPANEL UI'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # FASTPANEL official installer
+      # Ref: https://fastpanel.direct/documentation/
+      # Installer: https://repo.fastpanel.direct/install/fastpanel.sh
+      # Supports: Ubuntu 20.04 / 22.04 / 24.04, Debian 10/11/12
+      # NOTE: If running Ubuntu 26.04 and the installer rejects the OS,
+      #       rebuild with the ubuntu24.qcow2 base image instead.
+      # ----------------------------------------------------------------
+      echo "=== Downloading FASTPANEL installer ==="
+      export DEBIAN_FRONTEND=noninteractive
+
+      wget -q https://repo.fastpanel.direct/install/fastpanel.sh -O /tmp/fastpanel-install.sh
+      chmod +x /tmp/fastpanel-install.sh
+
+      echo "=== Running FASTPANEL installer ==="
+      # Capture installer output to extract the one-time admin URL/password
+      bash /tmp/fastpanel-install.sh 2>&1 | tee /var/log/fastpanel-installer-raw.log || {
+          echo "WARN: FASTPANEL installer exited non-zero — check /var/log/fastpanel-installer-raw.log"
+      }
+
+      # ----------------------------------------------------------------
+      # Wait for FASTPANEL service to be reachable (max 180 s)
+      # ----------------------------------------------------------------
+      echo "=== Waiting for FASTPANEL to be ready ==="
+      TIMEOUT=180
+      ELAPSED=0
+      until curl -fsSk "https://127.0.0.1:8888/" >/dev/null 2>&1 || [ "$ELAPSED" -ge "$TIMEOUT" ]; do
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+      done
+
+      # ----------------------------------------------------------------
+      # Extract / set admin credentials via the mogwai CLI
+      # (mogwai is FASTPANEL's management CLI, installed by the installer)
+      # ----------------------------------------------------------------
+      PANEL_ADMIN_URL=""
+      PANEL_ADMIN_PASS=""
+
+      if command -v mogwai >/dev/null 2>&1; then
+          echo "=== Querying FASTPANEL admin credentials via mogwai ==="
+          # List existing users; first entry is typically the admin
+          MOGWAI_OUT="$(mogwai users list 2>/dev/null || true)"
+          echo "${MOGWAI_OUT}"
+
+          # Attempt to set/reset admin password programmatically
+          PANEL_ADMIN_PASS_SET="$(mogwai users reset-password \
+              --username "${ADMIN_USER}" \
+              --password "${ADMIN_PASS}" 2>/dev/null || true)"
+
+          if [[ -n "${PANEL_ADMIN_PASS_SET}" ]]; then
+              PANEL_ADMIN_PASS="${ADMIN_PASS}"
+          else
+              # Fall back: parse the one-time password from installer log
+              PANEL_ADMIN_PASS="$(grep -Eo 'password[: ]+[A-Za-z0-9!@#$%^&*_+=?-]{8,}' \
+                  /var/log/fastpanel-installer-raw.log 2>/dev/null | head -1 | awk '{print $NF}' || true)"
+              [[ -z "${PANEL_ADMIN_PASS}" ]] && PANEL_ADMIN_PASS="${ADMIN_PASS}"
+          fi
+
+          # Extract panel URL from installer output if printed
+          PANEL_ADMIN_URL="$(grep -Eo 'https?://[^ ]+:8888[^ ]*' \
+              /var/log/fastpanel-installer-raw.log 2>/dev/null | head -1 || true)"
+      else
+          echo "WARN: mogwai CLI not found — parsing credentials from installer log"
+          # Parse one-time password printed by installer
+          PANEL_ADMIN_PASS="$(grep -Eo 'password[: ]+[A-Za-z0-9!@#$%^&*_+=?-]{8,}' \
+              /var/log/fastpanel-installer-raw.log 2>/dev/null | head -1 | awk '{print $NF}' || true)"
+          PANEL_ADMIN_URL="$(grep -Eo 'https?://[^ ]+:8888[^ ]*' \
+              /var/log/fastpanel-installer-raw.log 2>/dev/null | head -1 || true)"
+          [[ -z "${PANEL_ADMIN_PASS}" ]] && PANEL_ADMIN_PASS="${ADMIN_PASS}"
+      fi
+
+      # ----------------------------------------------------------------
+      # Determine server IP for panel URL fallback
+      # ----------------------------------------------------------------
+      SERVER_IP="$(curl -fsSL https://api4.my-ip.io/ip 2>/dev/null \
+          || curl -fsSL https://api.ipify.org 2>/dev/null \
+          || hostname -I | awk '{print $1}')"
+
+      PANEL_HOST="${APP_DOMAIN:-${SERVER_IP}}"
+      [[ -z "${PANEL_ADMIN_URL}" ]] && PANEL_ADMIN_URL="https://${PANEL_HOST}:8888"
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      cat > /root/fastpanel-credentials.txt <<CREDS
+      ============================================================
+       FASTPANEL — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       Panel URL      : ${PANEL_ADMIN_URL}
+       Admin username : ${ADMIN_USER}
+       Admin email    : ${ADMIN_EMAIL}
+       Admin password : ${PANEL_ADMIN_PASS}
+
+       Firewall open ports : 22 (SSH) | 80 (HTTP) | 443 (HTTPS) | 8888 (panel)
+       Install log    : /var/log/fastpanel-installer-raw.log
+       Bootstrap log  : /var/log/fastpanel-bootstrap.log
+
+       IMPORTANT: Change the admin password after first login.
+      ============================================================
+      CREDS
+      chmod 600 /root/fastpanel-credentials.txt
+
+      echo ""
+      echo "=== FASTPANEL bootstrap complete $(date -u) ==="
+      echo "=== Panel URL      : ${PANEL_ADMIN_URL}"
+      echo "=== Admin username : ${ADMIN_USER}"
+      echo "=== Admin password : ${PANEL_ADMIN_PASS}"
+      echo "=== Full creds     : /root/fastpanel-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/fastpanel-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   FASTPANEL bootstrap complete.
+   Panel URL   : https://YOUR_SERVER_IP:8888
+   Credentials : /root/fastpanel-credentials.txt
+   Log         : /var/log/fastpanel-bootstrap.log
+  ============================================================

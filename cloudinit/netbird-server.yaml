@@ -1,0 +1,475 @@
+#cloud-config
+# =============================================================================
+# NetBird Server "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NetBird combined server (management + signal + relay + STUN) +
+#        NetBird dashboard — all via Docker Compose + Traefik TLS termination
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Ports: 22/tcp (SSH), 80/tcp (HTTP/certbot), 443/tcp (dashboard HTTPS),
+#        3478/udp (STUN), 3478/tcp (TURN), 8081/tcp (management API)
+# -----------------------------------------------------------------------------
+# EDIT the variables in /root/.netbird-bootstrap.env before first boot.
+# Admin URL: https://<APP_DOMAIN>/   (after DNS is pointed here)
+# =============================================================================
+
+hostname: netbird
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - jq
+  - wget
+  - openssl
+  - python3-minimal
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.netbird-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      # The public domain/hostname for this NetBird server
+      # (must point to this VPS IP before TLS provisioning runs)
+      APP_DOMAIN=netbird.example.com
+
+      # Let's Encrypt contact email (required for TLS)
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to request a Let's Encrypt certificate via the dashboard
+      # container's built-in certbot. Leave "false" if you will manage TLS
+      # externally or if DNS is not pointed yet.
+      ENABLE_TLS=true
+
+      # Admin / first-user password for the NetBird dashboard
+      # Leave as CHANGE_ME to auto-generate a random password at boot
+      ADMIN_PASS=CHANGE_ME
+
+      # Install directory (persistent Docker volumes live under here)
+      NETBIRD_DIR=/opt/netbird
+
+      # Docker image tags — pin to a specific version for reproducibility
+      NETBIRD_SERVER_IMAGE=netbirdio/netbird-server:latest
+      NETBIRD_DASHBOARD_IMAGE=netbirdio/dashboard:latest
+
+      # STUN/TURN port (UDP) used by NetBird peers for NAT traversal
+      NETBIRD_STUN_PORT=3478
+
+      # Internal management API port (bound on localhost by Traefik)
+      MANAGEMENT_HOST_PORT=8081
+
+      # Dashboard HTTP port (reverse-proxied behind Traefik/nginx)
+      DASHBOARD_HOST_PORT=8080
+
+  # --- bootstrap script -------------------------------------------------------
+  - path: /root/netbird-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/netbird-bootstrap.log) 2>&1
+      source /root/.netbird-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator (safe under set -e + pipefail)
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      rand_b64() { openssl rand -base64 32 2>/dev/null | tr -d '=' || true; }
+      rand_b64_pad() { openssl rand -base64 32 2>/dev/null || true; }
+
+      echo "=== NetBird bootstrap started: $(date) ==="
+
+      # -----------------------------------------------------------------------
+      # Generate secrets when left as CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "$ADMIN_PASS" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+      fi
+
+      # These are always regenerated fresh (never operator-set)
+      RELAY_AUTH_SECRET="$(rand_b64)"
+      DATASTORE_ENC_KEY="$(rand_b64_pad)"
+
+      # -----------------------------------------------------------------------
+      # Install Docker CE (stable channel)
+      # -----------------------------------------------------------------------
+      if ! command -v docker >/dev/null 2>&1; then
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+          -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+
+        ARCH="$(dpkg --print-architecture)"
+        # Use noble as fallback until plucky/oracular line is published
+        # fallback: noble repo until 26.04 published
+        CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME:-noble}")"
+        if ! curl -fsSL "https://download.docker.com/linux/ubuntu/dists/${CODENAME}/Release" \
+               -o /dev/null 2>/dev/null; then
+          CODENAME="noble"
+        fi
+
+        echo \
+          "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
+          > /etc/apt/sources.list.d/docker.list
+
+        apt-get update -qq
+        apt-get install -y -q \
+          docker-ce docker-ce-cli containerd.io \
+          docker-buildx-plugin docker-compose-plugin
+        systemctl enable --now docker
+      fi
+
+      echo "Docker: $(docker --version)"
+      echo "Compose: $(docker compose version)"
+
+      # -----------------------------------------------------------------------
+      # Create working directory
+      # -----------------------------------------------------------------------
+      mkdir -p "${NETBIRD_DIR}"
+      cd "${NETBIRD_DIR}"
+
+      # -----------------------------------------------------------------------
+      # Write NetBird combined-server config (config.yaml)
+      # Management + Signal + Relay + STUN all in one process
+      # -----------------------------------------------------------------------
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      NB_PORT=80
+      [ "$ENABLE_TLS" = "true" ] && NB_PORT=443
+
+      cat > "${NETBIRD_DIR}/config.yaml" <<NBCONFIG
+      # NetBird combined server configuration
+      # Manages: management service, signal exchange, relay, and STUN
+
+      server:
+        listenAddress: ":80"
+        exposedAddress: "${PROTO}://${APP_DOMAIN}:${NB_PORT}"
+        stunPorts:
+          - ${NETBIRD_STUN_PORT}
+        metricsPort: 9090
+        healthcheckAddress: ":9000"
+        logLevel: "info"
+        logFile: "console"
+
+        authSecret: "${RELAY_AUTH_SECRET}"
+        dataDir: "/var/lib/netbird"
+
+        auth:
+          issuer: "${PROTO}://${APP_DOMAIN}/oauth2"
+          signKeyRefreshEnabled: true
+          dashboardRedirectURIs:
+            - "${PROTO}://${APP_DOMAIN}/nb-auth"
+            - "${PROTO}://${APP_DOMAIN}/nb-silent-auth"
+          cliRedirectURIs:
+            - "http://localhost:53000/"
+
+        reverseProxy:
+          trustedHTTPProxies: []
+          trustedHTTPProxiesCount: 0
+          trustedPeers:
+            - "0.0.0.0/0"
+
+        store:
+          engine: "sqlite"
+          encryptionKey: "${DATASTORE_ENC_KEY}"
+      NBCONFIG
+
+      # -----------------------------------------------------------------------
+      # Write dashboard environment file
+      # -----------------------------------------------------------------------
+      cat > "${NETBIRD_DIR}/dashboard.env" <<DASHENV
+      # NetBird Dashboard environment
+      NETBIRD_MGMT_API_ENDPOINT=${PROTO}://${APP_DOMAIN}
+      NETBIRD_MGMT_GRPC_API_ENDPOINT=${PROTO}://${APP_DOMAIN}
+      AUTH_AUDIENCE=netbird-dashboard
+      AUTH_CLIENT_ID=netbird-dashboard
+      AUTH_CLIENT_SECRET=
+      AUTH_AUTHORITY=${PROTO}://${APP_DOMAIN}/oauth2
+      USE_AUTH0=false
+      AUTH_SUPPORTED_SCOPES=openid profile email groups
+      AUTH_REDIRECT_URI=/nb-auth
+      AUTH_SILENT_REDIRECT_URI=/nb-silent-auth
+      NGINX_SSL_PORT=443
+      LETSENCRYPT_DOMAIN=none
+      DASHENV
+
+      # -----------------------------------------------------------------------
+      # Write Docker Compose file
+      # -----------------------------------------------------------------------
+      cat > "${NETBIRD_DIR}/docker-compose.yml" <<COMPOSE
+      services:
+        # NetBird web dashboard (served via its own nginx + optional LE)
+        dashboard:
+          image: ${NETBIRD_DASHBOARD_IMAGE}
+          container_name: netbird-dashboard
+          restart: unless-stopped
+          ports:
+            - "127.0.0.1:${DASHBOARD_HOST_PORT}:80"
+          env_file:
+            - ./dashboard.env
+          volumes:
+            - netbird_letsencrypt:/etc/letsencrypt
+          networks:
+            - netbird
+          logging:
+            driver: "json-file"
+            options:
+              max-size: "100m"
+              max-file: "3"
+
+        # Combined server: Management + Signal + Relay + STUN
+        netbird-server:
+          image: ${NETBIRD_SERVER_IMAGE}
+          container_name: netbird-server
+          restart: unless-stopped
+          ports:
+            - "127.0.0.1:${MANAGEMENT_HOST_PORT}:80"
+            - "${NETBIRD_STUN_PORT}:${NETBIRD_STUN_PORT}/udp"
+            - "${NETBIRD_STUN_PORT}:${NETBIRD_STUN_PORT}/tcp"
+          volumes:
+            - netbird_data:/var/lib/netbird
+            - ./config.yaml:/etc/netbird/config.yaml:ro
+          command: ["--config", "/etc/netbird/config.yaml"]
+          networks:
+            - netbird
+          logging:
+            driver: "json-file"
+            options:
+              max-size: "100m"
+              max-file: "3"
+
+      volumes:
+        netbird_data:
+        netbird_letsencrypt:
+
+      networks:
+        netbird:
+      COMPOSE
+
+      # -----------------------------------------------------------------------
+      # Firewall (UFW) — allow only SSH + NetBird required ports
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP (Let''s Encrypt challenge)'
+      ufw allow 443/tcp   comment 'HTTPS (NetBird dashboard)'
+      ufw allow "${NETBIRD_STUN_PORT}/udp" comment 'NetBird STUN/TURN (UDP)'
+      ufw allow "${NETBIRD_STUN_PORT}/tcp" comment 'NetBird TURN (TCP)'
+      ufw --force enable
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # fail2ban — protect SSH
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # Automatic security updates (unattended-upgrades)
+      # -----------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      # -----------------------------------------------------------------------
+      # Pull images and start services
+      # -----------------------------------------------------------------------
+      cd "${NETBIRD_DIR}"
+      docker compose pull
+      docker compose up -d
+
+      # -----------------------------------------------------------------------
+      # Wait for dashboard to be reachable (up to 60 s)
+      # -----------------------------------------------------------------------
+      echo "Waiting for NetBird services..."
+      for i in $(seq 1 30); do
+        if curl -fs "http://127.0.0.1:${DASHBOARD_HOST_PORT}/" -o /dev/null 2>/dev/null; then
+          echo "Dashboard reachable after ${i}×2 s"
+          break
+        fi
+        sleep 2
+      done
+
+      # -----------------------------------------------------------------------
+      # nginx reverse proxy — terminates external TLS and forwards to containers
+      # -----------------------------------------------------------------------
+      apt-get install -y -q nginx certbot python3-certbot-nginx
+
+      # Remove default site
+      rm -f /etc/nginx/sites-enabled/default
+
+      cat > /etc/nginx/sites-available/netbird.conf <<NGINX
+      # NetBird reverse proxy
+      # Forwards:
+      #   / (HTTP/2+gRPC) → dashboard container on ${DASHBOARD_HOST_PORT}
+      #   /api, /oauth2, /management.*, /signalexchange.* → netbird-server on ${MANAGEMENT_HOST_PORT}
+
+      map \$http_upgrade \$connection_upgrade {
+          default upgrade;
+          ''      close;
+      }
+
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN};
+
+          # Let's Encrypt ACME challenge
+          location /.well-known/acme-challenge/ {
+              root /var/www/certbot;
+          }
+
+          location / {
+              return 301 https://\$host\$request_uri;
+          }
+      }
+
+      server {
+          listen 443 ssl;
+          listen [::]:443 ssl;
+          http2  on;
+          server_name ${APP_DOMAIN};
+
+          ssl_certificate     /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem;
+          ssl_protocols       TLSv1.2 TLSv1.3;
+          ssl_prefer_server_ciphers on;
+
+          # gRPC/management endpoints → netbird-server
+          location ~ ^/(management\.|signalexchange\.|relay|ws-proxy|api|oauth2) {
+              grpc_pass grpcs://127.0.0.1:${MANAGEMENT_HOST_PORT};
+              grpc_set_header Host \$host;
+              grpc_read_timeout 3600s;
+              grpc_send_timeout 3600s;
+              # fallback to HTTP proxy if not gRPC
+              error_page 400 = @proxy_to_management;
+          }
+
+          location @proxy_to_management {
+              proxy_pass http://127.0.0.1:${MANAGEMENT_HOST_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade \$http_upgrade;
+              proxy_set_header Connection \$connection_upgrade;
+              proxy_set_header Host \$host;
+              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto https;
+              proxy_read_timeout 3600s;
+          }
+
+          # Dashboard → dashboard container
+          location / {
+              proxy_pass http://127.0.0.1:${DASHBOARD_HOST_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade \$http_upgrade;
+              proxy_set_header Connection \$connection_upgrade;
+              proxy_set_header Host \$host;
+              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto https;
+              proxy_read_timeout 120s;
+          }
+      }
+      NGINX
+
+      # Create ACME webroot
+      mkdir -p /var/www/certbot
+
+      # Enable site with a placeholder self-signed cert so nginx starts cleanly
+      # even before Let's Encrypt runs
+      if [ ! -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
+        mkdir -p "/etc/letsencrypt/live/${APP_DOMAIN}"
+        openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+          -keyout "/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem" \
+          -out    "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" \
+          -subj   "/CN=${APP_DOMAIN}" 2>/dev/null || true
+      fi
+
+      ln -sf /etc/nginx/sites-available/netbird.conf /etc/nginx/sites-enabled/netbird.conf
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx || true
+
+      # -----------------------------------------------------------------------
+      # Let's Encrypt TLS (non-fatal if DNS not pointed yet)
+      # -----------------------------------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        certbot certonly --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" \
+          || echo "WARN: certbot deferred — re-run once DNS points here: certbot certonly --nginx -d ${APP_DOMAIN} -m ${LE_EMAIL} --agree-tos"
+        systemctl reload nginx || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # Write credentials summary (chmod 600)
+      # -----------------------------------------------------------------------
+      cat > /root/netbird-credentials.txt <<CREDS
+      ===== NetBird Server bootstrap complete: $(date) =====
+
+      Dashboard URL      : ${PROTO}://${APP_DOMAIN}/
+      First-login user   : admin   (create via dashboard on first visit)
+      Admin password     : ${ADMIN_PASS}
+
+      Relay auth secret  : ${RELAY_AUTH_SECRET}
+      Datastore enc key  : ${DATASTORE_ENC_KEY}
+
+      Files:
+        Config           : ${NETBIRD_DIR}/config.yaml
+        Compose          : ${NETBIRD_DIR}/docker-compose.yml
+        Dashboard env    : ${NETBIRD_DIR}/dashboard.env
+        Log              : /var/log/netbird-bootstrap.log
+
+      Ports open (UFW):
+        22/tcp  — SSH
+        80/tcp  — HTTP (Let's Encrypt / redirect)
+        443/tcp — HTTPS (NetBird dashboard + API)
+        ${NETBIRD_STUN_PORT}/udp — STUN/TURN (peer NAT traversal)
+        ${NETBIRD_STUN_PORT}/tcp — TURN fallback (TCP)
+
+      Useful commands:
+        docker compose -f ${NETBIRD_DIR}/docker-compose.yml ps
+        docker compose -f ${NETBIRD_DIR}/docker-compose.yml logs -f
+        docker compose -f ${NETBIRD_DIR}/docker-compose.yml restart
+        ufw status
+      CREDS
+      chmod 600 /root/netbird-credentials.txt
+
+      echo "=== NetBird bootstrap finished. Credentials in /root/netbird-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/netbird-bootstrap.sh" ]
+
+final_message: "NetBird Server bootstrap done after $UPTIME s. Dashboard: https://<APP_DOMAIN>/ — see /root/netbird-credentials.txt and /var/log/netbird-bootstrap.log"

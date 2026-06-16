@@ -1,0 +1,372 @@
+#cloud-config
+# =============================================================================
+# WireGuard "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: WireGuard VPN + UFW firewall + fail2ban + unattended-upgrades
+#        IP forwarding + NAT masquerade for VPN clients
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.wireguard-bootstrap.env
+# block before launching. Secrets below are generated randomly on first boot
+# if left as CHANGE_ME.
+# =============================================================================
+
+hostname: wireguard
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - wireguard
+  - wireguard-tools
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - curl
+  - wget
+  - gnupg
+  - ca-certificates
+  - lsb-release
+  - qrencode
+  - iptables
+  - iptables-persistent
+  - net-tools
+  - jq
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.wireguard-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # WireGuard Bootstrap — operator-editable variables
+      # Edit BEFORE first boot (or re-run /root/wireguard-bootstrap.sh
+      # after editing).
+      # ============================================================
+
+      # WireGuard listen port (UDP)
+      WG_PORT=51820
+
+      # VPN tunnel network (server is .1, clients start at .2)
+      WG_NETWORK=10.8.0.0/24
+      WG_SERVER_IP=10.8.0.1
+
+      # Number of peer configs to pre-generate on first boot
+      WG_PEER_COUNT=5
+
+      # WireGuard interface name
+      WG_INTERFACE=wg0
+
+      # DNS served to VPN clients (Cloudflare + Google)
+      WG_DNS=1.1.1.1,8.8.8.8
+
+      # Server public hostname/IP used in client config Endpoint lines.
+      # Leave as CHANGE_ME to auto-detect from ipify on first boot.
+      SERVER_HOST=CHANGE_ME
+
+      # Set to 'true' to enable IP forwarding persistently (required for NAT)
+      ENABLE_FORWARDING=true
+
+  # --- bootstrap script -------------------------------------------------------
+  - path: /root/wireguard-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/wireguard-bootstrap.log) 2>&1
+      source /root/.wireguard-bootstrap.env
+
+      echo "======================================================"
+      echo " WireGuard Bootstrap -- $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      echo "======================================================"
+
+      # ------------------------------------------------------------------
+      # Helpers
+      # ------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # ------------------------------------------------------------------
+      # Detect public IP if SERVER_HOST not set
+      # ------------------------------------------------------------------
+      if [ -z "${SERVER_HOST:-}" ] || [ "${SERVER_HOST}" = "CHANGE_ME" ]; then
+        SERVER_HOST="$(curl -sf --max-time 10 https://api.ipify.org 2>/dev/null \
+          || curl -sf --max-time 10 http://checkip.amazonaws.com 2>/dev/null \
+          || true)"
+        SERVER_HOST="${SERVER_HOST:-127.0.0.1}"
+        echo "Auto-detected SERVER_HOST=${SERVER_HOST}"
+        sed -i "s|^SERVER_HOST=.*|SERVER_HOST=${SERVER_HOST}|" /root/.wireguard-bootstrap.env
+      fi
+
+      # ------------------------------------------------------------------
+      # IP forwarding
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_FORWARDING}" = "true" ]; then
+        echo "Enabling IP forwarding..."
+        sysctl -w net.ipv4.ip_forward=1
+        sysctl -w net.ipv6.conf.all.forwarding=1
+        sed -i 's|^#\?net\.ipv4\.ip_forward\s*=.*|net.ipv4.ip_forward=1|' /etc/sysctl.conf
+        grep -q '^net\.ipv6\.conf\.all\.forwarding' /etc/sysctl.conf \
+          || echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.conf
+        sysctl -p
+      fi
+
+      # ------------------------------------------------------------------
+      # Determine outbound network interface for NAT masquerade
+      # ------------------------------------------------------------------
+      PUB_IFACE="$(ip route show default | awk '/default/ {print $5; exit}')"
+      echo "Public interface for NAT: ${PUB_IFACE}"
+
+      # ------------------------------------------------------------------
+      # WireGuard key material
+      # ------------------------------------------------------------------
+      WG_DIR=/etc/wireguard
+      mkdir -p "${WG_DIR}"
+      chmod 700 "${WG_DIR}"
+
+      SERVER_PRIVKEY_FILE="${WG_DIR}/server_private.key"
+      SERVER_PUBKEY_FILE="${WG_DIR}/server_public.key"
+
+      if [ ! -f "${SERVER_PRIVKEY_FILE}" ]; then
+        echo "Generating server WireGuard keys..."
+        wg genkey | tee "${SERVER_PRIVKEY_FILE}" | wg pubkey > "${SERVER_PUBKEY_FILE}"
+        chmod 600 "${SERVER_PRIVKEY_FILE}"
+      fi
+
+      SERVER_PRIVKEY="$(cat "${SERVER_PRIVKEY_FILE}")"
+      SERVER_PUBKEY="$(cat "${SERVER_PUBKEY_FILE}")"
+
+      # ------------------------------------------------------------------
+      # Network helpers
+      # ------------------------------------------------------------------
+      # Extract the first three octets from WG_NETWORK for per-peer IPs
+      NET_BASE="$(echo "${WG_NETWORK}" | cut -d'/' -f1 | sed 's/\.[0-9]*$//')"
+
+      # ------------------------------------------------------------------
+      # Server wg0.conf
+      # Uses printf to avoid bare heredocs at column-0 (YAML-safe)
+      # ------------------------------------------------------------------
+      SERVER_CONF="${WG_DIR}/${WG_INTERFACE}.conf"
+
+      if [ ! -f "${SERVER_CONF}" ]; then
+        echo "Writing server config ${SERVER_CONF}..."
+        printf '%s\n' \
+          "[Interface]" \
+          "Address = ${WG_SERVER_IP}/24" \
+          "ListenPort = ${WG_PORT}" \
+          "PrivateKey = ${SERVER_PRIVKEY}" \
+          "" \
+          "# NAT masquerade -- route VPN clients through the server public IP" \
+          "PostUp   = iptables -t nat -A POSTROUTING -s ${WG_NETWORK} -o ${PUB_IFACE} -j MASQUERADE; iptables -A FORWARD -i ${WG_INTERFACE} -j ACCEPT; iptables -A FORWARD -o ${WG_INTERFACE} -j ACCEPT" \
+          "PostDown = iptables -t nat -D POSTROUTING -s ${WG_NETWORK} -o ${PUB_IFACE} -j MASQUERADE; iptables -D FORWARD -i ${WG_INTERFACE} -j ACCEPT; iptables -D FORWARD -o ${WG_INTERFACE} -j ACCEPT" \
+          "" \
+          > "${SERVER_CONF}"
+        chmod 600 "${SERVER_CONF}"
+      fi
+
+      # ------------------------------------------------------------------
+      # Generate peer configs
+      # ------------------------------------------------------------------
+      PEERS_DIR="${WG_DIR}/peers"
+      mkdir -p "${PEERS_DIR}"
+      chmod 700 "${PEERS_DIR}"
+
+      CRED_LINES=""
+
+      for i in $(seq 1 "${WG_PEER_COUNT}"); do
+        PEER_NAME="peer${i}"
+        PEER_DIR="${PEERS_DIR}/${PEER_NAME}"
+        mkdir -p "${PEER_DIR}"
+
+        PEER_PRIVKEY_FILE="${PEER_DIR}/private.key"
+        PEER_PUBKEY_FILE="${PEER_DIR}/public.key"
+        PEER_PSK_FILE="${PEER_DIR}/preshared.key"
+        PEER_CONF_FILE="${PEER_DIR}/${PEER_NAME}.conf"
+
+        if [ ! -f "${PEER_PRIVKEY_FILE}" ]; then
+          echo "  Generating keys for ${PEER_NAME}..."
+          wg genkey | tee "${PEER_PRIVKEY_FILE}" | wg pubkey > "${PEER_PUBKEY_FILE}"
+          wg genpsk > "${PEER_PSK_FILE}"
+          chmod 600 "${PEER_PRIVKEY_FILE}" "${PEER_PSK_FILE}"
+        fi
+
+        PEER_PRIVKEY="$(cat "${PEER_PRIVKEY_FILE}")"
+        PEER_PUBKEY="$(cat "${PEER_PUBKEY_FILE}")"
+        PEER_PSK="$(cat "${PEER_PSK_FILE}")"
+        PEER_IP="${NET_BASE}.$((i + 1))"
+
+        if [ ! -f "${PEER_CONF_FILE}" ]; then
+          printf '%s\n' \
+            "[Interface]" \
+            "PrivateKey = ${PEER_PRIVKEY}" \
+            "Address = ${PEER_IP}/24" \
+            "DNS = ${WG_DNS}" \
+            "" \
+            "[Peer]" \
+            "PublicKey = ${SERVER_PUBKEY}" \
+            "PresharedKey = ${PEER_PSK}" \
+            "Endpoint = ${SERVER_HOST}:${WG_PORT}" \
+            "AllowedIPs = 0.0.0.0/0, ::/0" \
+            "PersistentKeepalive = 25" \
+            > "${PEER_CONF_FILE}"
+          chmod 600 "${PEER_CONF_FILE}"
+        fi
+
+        # Append this peer to the server config if not already present
+        if ! grep -qF "${PEER_PUBKEY}" "${SERVER_CONF}"; then
+          printf '\n%s\n%s\n%s\n%s\n' \
+            "[Peer]" \
+            "# ${PEER_NAME} -- ${PEER_IP}" \
+            "PublicKey = ${PEER_PUBKEY}" \
+            "PresharedKey = ${PEER_PSK}" \
+            "AllowedIPs = ${PEER_IP}/32" \
+            >> "${SERVER_CONF}"
+        fi
+
+        # Generate QR code for mobile import
+        QR_FILE="${PEER_DIR}/${PEER_NAME}.png"
+        if command -v qrencode >/dev/null 2>&1; then
+          qrencode -t PNG -o "${QR_FILE}" < "${PEER_CONF_FILE}" 2>/dev/null || true
+        fi
+
+        CRED_LINES="${CRED_LINES}
+        ${PEER_NAME}: IP=${PEER_IP}  config=${PEER_CONF_FILE}  qr=${QR_FILE}"
+      done
+
+      # ------------------------------------------------------------------
+      # Enable and start WireGuard
+      # ------------------------------------------------------------------
+      echo "Enabling and starting WireGuard interface ${WG_INTERFACE}..."
+      systemctl enable "wg-quick@${WG_INTERFACE}"
+      systemctl restart "wg-quick@${WG_INTERFACE}" || systemctl start "wg-quick@${WG_INTERFACE}"
+
+      # ------------------------------------------------------------------
+      # Firewall (UFW)
+      # ------------------------------------------------------------------
+      echo "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow "${WG_PORT}/udp" comment 'WireGuard VPN'
+      ufw --force enable
+      echo "UFW status:"
+      ufw status verbose
+
+      # ------------------------------------------------------------------
+      # fail2ban
+      # ------------------------------------------------------------------
+      echo "Configuring fail2ban..."
+      printf '%s\n' \
+        "[sshd]" \
+        "enabled  = true" \
+        "port     = ssh" \
+        "maxretry = 5" \
+        "findtime = 600" \
+        "bantime  = 3600" \
+        > /etc/fail2ban/jail.d/sshd-local.conf
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # ------------------------------------------------------------------
+      # Unattended security upgrades
+      # ------------------------------------------------------------------
+      echo "Configuring unattended-upgrades..."
+      printf '%s\n' \
+        'APT::Periodic::Update-Package-Lists "1";' \
+        'APT::Periodic::Unattended-Upgrade "1";' \
+        'APT::Periodic::AutocleanInterval "7";' \
+        > /etc/apt/apt.conf.d/20auto-upgrades
+      systemctl enable unattended-upgrades
+      systemctl restart unattended-upgrades
+
+      # ------------------------------------------------------------------
+      # Write credentials summary
+      # ------------------------------------------------------------------
+      echo "Writing credentials file..."
+      {
+        printf '%s\n' "========================================================"
+        printf '%s\n' "WireGuard VPN -- Credentials and Connection Info"
+        printf '%s\n' "Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '%s\n' "========================================================"
+        printf '\n'
+        printf '%s\n' "Server Public IP   : ${SERVER_HOST}"
+        printf '%s\n' "WireGuard Port     : ${WG_PORT}/UDP"
+        printf '%s\n' "VPN Network        : ${WG_NETWORK}"
+        printf '%s\n' "Server VPN IP      : ${WG_SERVER_IP}"
+        printf '%s\n' "WireGuard Interface: ${WG_INTERFACE}"
+        printf '\n'
+        printf '%s\n' "Server Public Key  : ${SERVER_PUBKEY}"
+        printf '\n'
+        printf '%s\n' "---- Peer Configs -------------------------------------------"
+        printf '%s\n' "${CRED_LINES}"
+        printf '\n'
+        printf '%s\n' "Each .conf file is a valid WireGuard client config."
+        printf '%s\n' "QR code .png files can be scanned with the WireGuard mobile app."
+        printf '\n'
+        printf '%s\n' "---- Files --------------------------------------------------"
+        printf '%s\n' "Server config : /etc/wireguard/${WG_INTERFACE}.conf"
+        printf '%s\n' "Peer configs  : /etc/wireguard/peers/"
+        printf '%s\n' "Bootstrap log : /var/log/wireguard-bootstrap.log"
+        printf '\n'
+        printf '%s\n' "---- Usage --------------------------------------------------"
+        printf '%s\n' "Show active tunnel : wg show"
+        printf '%s\n' "Restart tunnel     : systemctl restart wg-quick@${WG_INTERFACE}"
+        printf '%s\n' "Add extra peers    : wg genkey | tee priv.key | wg pubkey > pub.key"
+        printf '%s\n' "                     then add [Peer] block and reload with:"
+        printf '%s\n' "                     wg addconf ${WG_INTERFACE} <fragment.conf>"
+        printf '\n'
+        printf '%s\n' "========================================================"
+      } > /root/wireguard-credentials.txt
+      chmod 600 /root/wireguard-credentials.txt
+
+      echo "======================================================"
+      echo " WireGuard Bootstrap COMPLETE -- $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      echo " Credentials: /root/wireguard-credentials.txt"
+      echo " Active peers: ${WG_PEER_COUNT}"
+      echo "======================================================"
+
+# ----------------------------------------------------------------------------
+# runcmd — execute bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/wireguard-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  WireGuard VPN is configured and running.
+  SSH to this server, then:
+    cat /root/wireguard-credentials.txt
+  for the server public key, peer IPs, and config file paths.
+  Peer .conf files live in /etc/wireguard/peers/ and can be
+  imported into any WireGuard client (desktop or mobile).
+  QR codes (.png) sit next to each peer .conf for mobile import.
+  WireGuard UDP port 51820 is open through UFW.
+  ============================================================
+  Boot completed in $UPTIME seconds.

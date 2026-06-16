@@ -1,0 +1,269 @@
+#cloud-config
+# =============================================================================
+# Coolify — Ubuntu 26.04 LTS cloud-init user-data
+# Category: Control Panel / Self-hosted PaaS (one-click app)
+# Installer: Coolify official non-interactive installer
+#            curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+#            (Coolify installs and manages Docker itself)
+# Panel port: 8000  —  proxy ports: 80, 443
+# License: AGPL-3.0 free; Cloud hosted plans available
+#          https://coolify.io
+# -----------------------------------------------------------------------------
+# EDIT operator vars in /root/.coolify-bootstrap.env before (or just after)
+# first boot, then re-run /root/coolify-bootstrap.sh if needed.
+# =============================================================================
+
+hostname: coolify
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — let provisioner inject SSH key + hostname; never delete default
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — cloud-init installs these before runcmd runs
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - jq
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB; survive Docker image pulls and build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.coolify-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ---------------------------------------------------------------
+      # Coolify bootstrap — edit these before first boot (or re-run
+      # /root/coolify-bootstrap.sh after editing).
+      # ---------------------------------------------------------------
+
+      # Fully-qualified domain name for the Coolify dashboard.
+      # Coolify listens on port 8000 and can be accessed by IP immediately.
+      # Set this to your domain once DNS is pointed at this server.
+      APP_DOMAIN=coolify.example.com
+
+      # Let's Encrypt registration e-mail.
+      # Used only if ENABLE_TLS=true and DNS is already resolved.
+      LE_EMAIL=admin@example.com
+
+      # Set to 'true' to attempt TLS setup on first boot.
+      # Leave 'false' until DNS is pointed at this server.
+      # Coolify manages its own TLS via its built-in proxy (Traefik/Caddy);
+      # this flag controls whether bootstrap tries certbot as a pre-flight only.
+      ENABLE_TLS=true
+
+  # ---------- bootstrap shell script ----------
+  - path: /root/coolify-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/coolify-bootstrap.log) 2>&1
+      source /root/.coolify-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helpers
+      # ----------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      log() { echo "[coolify-bootstrap] $(date -u +%FT%TZ)  $*"; }
+
+      # ----------------------------------------------------------------
+      # Automatic security updates
+      # ----------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      EOF
+
+      # ----------------------------------------------------------------
+      # Firewall — allow only SSH (22), HTTP (80), HTTPS (443),
+      # and Coolify dashboard port (8000/TCP).
+      # Coolify's built-in reverse proxy routes app traffic on 80/443.
+      # ----------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'HTTP (Coolify proxy)'
+      ufw allow 443/tcp  comment 'HTTPS (Coolify proxy)'
+      ufw allow 8000/tcp comment 'Coolify dashboard'
+      ufw --force enable
+      log "UFW enabled."
+
+      # ----------------------------------------------------------------
+      # fail2ban
+      # ----------------------------------------------------------------
+      log "Configuring fail2ban..."
+      if ! systemctl is-active --quiet fail2ban; then
+        systemctl enable --now fail2ban
+      fi
+      cat > /etc/fail2ban/jail.d/coolify-ssh.conf <<'EOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      EOF
+      systemctl reload fail2ban || systemctl restart fail2ban
+      log "fail2ban configured."
+
+      # ----------------------------------------------------------------
+      # Run the official Coolify installer
+      # Coolify installs and manages Docker itself; we do not pre-install
+      # Docker to avoid version conflicts with Coolify's own managed daemon.
+      # Ref: https://coolify.io/docs/installation
+      # ----------------------------------------------------------------
+      log "Running Coolify official installer..."
+      if command -v coolify > /dev/null 2>&1; then
+        log "Coolify binary already present — skipping install."
+      else
+        curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+        log "Coolify installer completed."
+      fi
+
+      # ----------------------------------------------------------------
+      # Wait for Coolify API to become reachable on port 8000 (up to 5 min)
+      # Coolify manages its own TLS via its built-in proxy; do not fail
+      # boot if DNS is not yet pointed at this server.
+      # ----------------------------------------------------------------
+      log "Waiting for Coolify dashboard on port 8000 (up to 5 min)..."
+      COOLIFY_UP=false
+      for i in $(seq 1 60); do
+        if curl -sf --max-time 5 "http://localhost:8000/" -o /dev/null 2>&1; then
+          COOLIFY_UP=true
+          log "Coolify dashboard is up after $((i * 5)) seconds."
+          break
+        fi
+        sleep 5
+      done
+      if [ "${COOLIFY_UP}" = "false" ]; then
+        log "WARN: Coolify dashboard did not respond within 5 min. Check: systemctl status coolify"
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials / first-run instructions
+      # ----------------------------------------------------------------
+      log "Writing credentials file..."
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      LOCAL_URL="http://${SERVER_IP}:8000"
+      DOMAIN_URL="http://${APP_DOMAIN}:8000"
+
+      cat > /root/coolify-credentials.txt <<CREDS
+      ================================================================
+       Coolify — InterServer One-Click App
+       Generated: $(date -u +%FT%TZ)
+      ================================================================
+
+      Dashboard URL (by IP — usable immediately):
+        ${LOCAL_URL}
+
+      Dashboard URL (by domain, once DNS is configured):
+        ${DOMAIN_URL}
+
+      ================================================================
+       FIRST-RUN ADMIN ACCOUNT
+      ================================================================
+      Coolify creates the first admin account via the browser on
+      first access. Open the dashboard URL above and follow the
+      registration wizard to set your admin email and password.
+
+      No pre-seeded credentials are stored on disk.
+      After registration, save your login details securely.
+
+      ================================================================
+       GETTING STARTED
+      ================================================================
+      1. Open ${LOCAL_URL} in your browser.
+      2. Complete the first-run registration wizard (admin account).
+      3. Add a server (this host or a remote server via SSH key).
+      4. Configure your domain in Settings → Instance Settings.
+         Coolify manages TLS automatically via its built-in proxy
+         (Traefik/Caddy) — no manual certbot needed.
+      5. Deploy apps, databases, or services from the Coolify UI.
+
+      ================================================================
+       FIREWALL RULES (UFW)
+      ================================================================
+      Open ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 8000 (dashboard)
+      Coolify's proxy routes deployed-app traffic on 80/443.
+      To restrict dashboard access after first setup, remove 8000:
+        ufw delete allow 8000/tcp
+
+      ================================================================
+       OPERATOR VARS
+      ================================================================
+      Edit:  /root/.coolify-bootstrap.env
+      Log:   /var/log/coolify-bootstrap.log
+
+      ================================================================
+       USEFUL COMMANDS
+      ================================================================
+        systemctl status coolify          # check Coolify service
+        docker ps                         # list running containers
+        docker logs coolify               # Coolify container logs
+        journalctl -u coolify -f          # follow systemd logs
+      ================================================================
+      CREDS
+      chmod 600 /root/coolify-credentials.txt
+      log "Credentials written to /root/coolify-credentials.txt"
+
+      # ----------------------------------------------------------------
+      # Final summary
+      # ----------------------------------------------------------------
+      log "============================================================"
+      log " Coolify bootstrap complete."
+      log " Dashboard : ${LOCAL_URL}"
+      log " First-run : open the URL above and register your admin account"
+      log " Credentials : /root/coolify-credentials.txt"
+      log "============================================================"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/coolify-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Console message shown after cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   Coolify one-click app bootstrap finished.
+   Run:  cat /root/coolify-credentials.txt
+   Log:  /var/log/coolify-bootstrap.log
+  ============================================================

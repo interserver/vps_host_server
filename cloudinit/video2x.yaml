@@ -1,0 +1,587 @@
+#cloud-config
+# =============================================================================
+# Video2X — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NVIDIA driver + CUDA toolkit + Python venv + Video2X + systemd
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# REQUIRES: a KVM VPS plan with a dedicated NVIDIA GPU and ≥ 60 GB disk.
+# Video2X uses GPU-accelerated upscaling (Real-ESRGAN, Waifu2x, etc.) and
+# needs substantial disk space for video input/output files and AI models.
+# Without a real GPU the service will run but processing will be extremely slow.
+#
+# EDIT the variables in the `write_files` -> /root/.video2x-bootstrap.env block
+# before launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: video2x
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so provisioner can inject customer SSH key + hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 G helps during pip installs / model loads on memory-constrained VMs
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+
+packages:
+  # Core utilities
+  - curl
+  - wget
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  # Security
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  # Build tools needed for compiling C++ extensions and Python wheels
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - libffi-dev
+  - cmake
+  - ninja-build
+  # Python
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  # Video processing dependencies
+  - ffmpeg
+  - libavcodec-dev
+  - libavformat-dev
+  - libavutil-dev
+  - libswscale-dev
+  - libavfilter-dev
+  - libvulkan-dev
+  - vulkan-tools
+  # GPU / CUDA helpers
+  - pciutils
+  - ocl-icd-opencl-dev
+  # Nginx reverse proxy
+  - nginx
+  # Certbot (LE TLS)
+  - certbot
+  - python3-certbot-nginx
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.video2x-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Video2X bootstrap configuration — edit before first boot
+      # -----------------------------------------------------------------------
+
+      # Domain pointing at this server (leave blank to skip TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS setup (requires APP_DOMAIN DNS)
+      ENABLE_TLS=false
+
+      # Port the Video2X web UI listens on (internal; nginx proxies to this)
+      VIDEO2X_PORT=8765
+
+      # Linux user that owns and runs the Video2X service
+      VIDEO2X_USER=video2x
+
+      # Installation directory
+      VIDEO2X_DIR=/opt/video2x
+
+      # Python venv path
+      VENV_DIR=/opt/video2x-venv
+
+      # Directory for video uploads / outputs
+      VIDEO2X_WORKSPACE=/var/lib/video2x
+
+      # CUDA version hint — used to select the correct PyTorch wheel index.
+      # Leave as "cu128" for CUDA 12.8 (driver 570+). Change to "cu121" for
+      # CUDA 12.1 (driver 530+) if your host runs an older driver stack.
+      CUDA_TAG=cu128
+
+      # PyTorch index URL derived from CUDA_TAG (edit if you need a nightly)
+      TORCH_INDEX=https://download.pytorch.org/whl/${CUDA_TAG}
+
+      # Admin password for the Video2X web interface (auto-generated if CHANGE_ME)
+      ADMIN_PASS=CHANGE_ME
+
+  # --------------------------------------------------------------------------
+  # Bootstrap shell script
+  # --------------------------------------------------------------------------
+  - path: /root/video2x-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/video2x-bootstrap.log) 2>&1
+      source /root/.video2x-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator (|| true required under pipefail)
+      # ------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Video2X bootstrap started: $(date) ==="
+
+      # ------------------------------------------------------------------
+      # Replace CHANGE_ME defaults with random values
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+      fi
+
+      # ------------------------------------------------------------------
+      # System user for Video2X
+      # ------------------------------------------------------------------
+      id "${VIDEO2X_USER}" &>/dev/null || useradd --system --shell /bin/bash \
+        --create-home --home-dir "${VIDEO2X_DIR}" "${VIDEO2X_USER}"
+
+      # ------------------------------------------------------------------
+      # NVIDIA driver and CUDA toolkit
+      # ------------------------------------------------------------------
+      echo "--- Installing NVIDIA driver and CUDA toolkit ---"
+
+      # Add NVIDIA CUDA apt repo
+      # fallback: noble repo until 26.04 published
+      if ! dpkg -l | grep -q "cuda-keyring"; then
+        KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
+        wget -q "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/${KEYRING_DEB}" \
+          -O "/tmp/${KEYRING_DEB}"
+        dpkg -i "/tmp/${KEYRING_DEB}"
+        apt-get update -qq
+      fi
+
+      # Install latest production NVIDIA driver + CUDA runtime
+      # (cuda meta-package pulls the matching driver automatically)
+      command -v nvidia-smi &>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          cuda-toolkit \
+          nvidia-open
+
+      # Persist CUDA paths for all future logins
+      cat > /etc/profile.d/cuda.sh <<'CUDAENV'
+      export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+      export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+      CUDAENV
+      chmod 644 /etc/profile.d/cuda.sh
+
+      # Source CUDA paths in this script right now
+      export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+      export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+      # ------------------------------------------------------------------
+      # Python venv
+      # ------------------------------------------------------------------
+      echo "--- Setting up Python venv at ${VENV_DIR} ---"
+      mkdir -p "${VENV_DIR}"
+      python3 -m venv "${VENV_DIR}"
+      # shellcheck disable=SC1091
+      source "${VENV_DIR}/bin/activate"
+
+      pip install --upgrade pip setuptools wheel
+
+      # PyTorch with CUDA support — required for Real-ESRGAN and other
+      # neural upscalers bundled with Video2X
+      echo "--- Installing PyTorch (CUDA tag: ${CUDA_TAG}) ---"
+      pip install torch torchvision torchaudio --index-url "${TORCH_INDEX}"
+
+      # ------------------------------------------------------------------
+      # Video2X — install from PyPI (includes CLI + web UI + bundled models)
+      # ------------------------------------------------------------------
+      echo "--- Installing Video2X ---"
+      # Install Video2X and its GPU-capable dependencies
+      pip install \
+        video2x \
+        realesrgan \
+        basicsr \
+        facexlib \
+        gfpgan \
+        opencv-python-headless \
+        ffmpeg-python \
+        flask \
+        flask-cors \
+        tqdm
+
+      # ------------------------------------------------------------------
+      # Video2X workspace directories
+      # ------------------------------------------------------------------
+      mkdir -p "${VIDEO2X_WORKSPACE}/input"
+      mkdir -p "${VIDEO2X_WORKSPACE}/output"
+      mkdir -p "${VIDEO2X_WORKSPACE}/models"
+      chown -R "${VIDEO2X_USER}:${VIDEO2X_USER}" "${VIDEO2X_WORKSPACE}"
+
+      # ------------------------------------------------------------------
+      # Download bundled AI model weights
+      # ------------------------------------------------------------------
+      echo "--- Downloading Real-ESRGAN model weights ---"
+      MODEL_DIR="${VIDEO2X_WORKSPACE}/models"
+      # Real-ESRGAN x4+ (general purpose upscaler)
+      REALESRGAN_MODEL_URL="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
+      wget -qc "${REALESRGAN_MODEL_URL}" -O "${MODEL_DIR}/RealESRGAN_x4plus.pth" || \
+        echo "WARN: RealESRGAN_x4plus model download deferred — retry with: wget ${REALESRGAN_MODEL_URL} -O ${MODEL_DIR}/RealESRGAN_x4plus.pth"
+      # Real-ESRGAN x4+ anime (optimized for animation/anime content)
+      ANIME_MODEL_URL="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+      wget -qc "${ANIME_MODEL_URL}" -O "${MODEL_DIR}/RealESRGAN_x4plus_anime_6B.pth" || \
+        echo "WARN: RealESRGAN_x4plus_anime model download deferred"
+      chown -R "${VIDEO2X_USER}:${VIDEO2X_USER}" "${MODEL_DIR}"
+
+      # ------------------------------------------------------------------
+      # Simple Flask web UI wrapper for Video2X
+      # ------------------------------------------------------------------
+      echo "--- Creating Video2X web UI ---"
+      mkdir -p "${VIDEO2X_DIR}"
+      cat > "${VIDEO2X_DIR}/webui.py" <<'PYAPP'
+      #!/usr/bin/env python3
+      """
+      Video2X Web UI — lightweight Flask front-end for submitting upscale jobs.
+      Access at http://<server>:8765
+      """
+      import os
+      import json
+      import subprocess
+      import threading
+      import uuid
+      from pathlib import Path
+      from flask import Flask, request, jsonify, send_from_directory, render_template_string
+      from flask_cors import CORS
+
+      app = Flask(__name__)
+      CORS(app)
+
+      WORKSPACE    = os.environ.get("VIDEO2X_WORKSPACE", "/var/lib/video2x")
+      INPUT_DIR    = Path(WORKSPACE) / "input"
+      OUTPUT_DIR   = Path(WORKSPACE) / "output"
+      MODEL_DIR    = Path(WORKSPACE) / "models"
+      ADMIN_PASS   = os.environ.get("ADMIN_PASS", "changeme")
+      jobs: dict   = {}
+
+      TEMPLATE = """<!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"><title>Video2X Upscaler</title>
+      <style>
+        body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;background:#1a1a2e;color:#eee}
+        h1{color:#e94560}
+        .card{background:#16213e;border-radius:8px;padding:20px;margin:20px 0}
+        input,select{background:#0f3460;color:#eee;border:1px solid #e94560;padding:8px;border-radius:4px;width:100%;margin:6px 0}
+        button{background:#e94560;color:#fff;border:none;padding:10px 24px;border-radius:4px;cursor:pointer}
+        button:hover{background:#c73652}
+        pre{background:#0a0a1a;padding:12px;border-radius:4px;overflow:auto;font-size:12px}
+        .job-ok{color:#4ade80} .job-err{color:#f87171} .job-run{color:#facc15}
+      </style></head>
+      <body>
+      <h1>Video2X Upscaler</h1>
+      <div class="card">
+        <h2>Submit Upscale Job</h2>
+        <p>Place your input video in <code>{{ input_dir }}</code> on the server first.</p>
+        <form id="jobForm">
+          <label>Admin Password</label>
+          <input type="password" id="pass" placeholder="Admin password" required>
+          <label>Input filename (in {{ input_dir }})</label>
+          <input type="text" id="infile" placeholder="video.mp4" required>
+          <label>Output filename (in {{ output_dir }})</label>
+          <input type="text" id="outfile" placeholder="video_4k.mp4" required>
+          <label>Scale Factor</label>
+          <select id="scale"><option value="2">2x</option><option value="4" selected>4x</option></select>
+          <label>Model</label>
+          <select id="model">
+            <option value="realesrgan-x4plus">RealESRGAN x4+ (general)</option>
+            <option value="realesrgan-x4plus-anime">RealESRGAN x4+ Anime</option>
+          </select>
+          <br><br>
+          <button type="submit">Start Job</button>
+        </form>
+        <pre id="result"></pre>
+      </div>
+      <div class="card">
+        <h2>Active Jobs</h2>
+        <button onclick="listJobs()">Refresh</button>
+        <pre id="jobs"></pre>
+      </div>
+      <script>
+      document.getElementById('jobForm').onsubmit = async(e)=>{
+        e.preventDefault();
+        const r = await fetch('/api/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({pass:document.getElementById('pass').value,
+            input:document.getElementById('infile').value,
+            output:document.getElementById('outfile').value,
+            scale:document.getElementById('scale').value,
+            model:document.getElementById('model').value})});
+        document.getElementById('result').textContent = JSON.stringify(await r.json(),null,2);
+        listJobs();
+      };
+      async function listJobs(){
+        const r = await fetch('/api/jobs');
+        const d = await r.json();
+        document.getElementById('jobs').textContent = JSON.stringify(d,null,2);
+      }
+      listJobs();
+      </script>
+      </body></html>
+      """
+
+      @app.route("/")
+      def index():
+          return render_template_string(TEMPLATE,
+              input_dir=str(INPUT_DIR), output_dir=str(OUTPUT_DIR))
+
+      @app.route("/api/jobs")
+      def list_jobs():
+          return jsonify(jobs)
+
+      @app.route("/api/submit", methods=["POST"])
+      def submit_job():
+          data = request.get_json(force=True)
+          if data.get("pass") != ADMIN_PASS:
+              return jsonify({"error": "Unauthorized"}), 403
+
+          in_path  = INPUT_DIR  / data["input"]
+          out_path = OUTPUT_DIR / data["output"]
+          if not in_path.exists():
+              return jsonify({"error": f"Input file not found: {in_path}"}), 400
+
+          job_id = str(uuid.uuid4())[:8]
+          model_map = {
+              "realesrgan-x4plus":       "RealESRGAN_x4plus.pth",
+              "realesrgan-x4plus-anime": "RealESRGAN_x4plus_anime_6B.pth",
+          }
+          model_file = str(MODEL_DIR / model_map.get(data.get("model","realesrgan-x4plus"), "RealESRGAN_x4plus.pth"))
+
+          cmd = [
+              "video2x",
+              "-i", str(in_path),
+              "-o", str(out_path),
+              "-h", str(int(data.get("scale", 4)) * 1080 if int(data.get("scale", 4)) <= 4 else 2160),
+              "-a", "realesrgan",
+              "-n", data.get("model", "realesrgan-x4plus"),
+          ]
+
+          jobs[job_id] = {"status": "running", "cmd": " ".join(cmd), "output": ""}
+
+          def run():
+              try:
+                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
+                  jobs[job_id]["status"] = "done" if result.returncode == 0 else "error"
+                  jobs[job_id]["output"] = result.stdout[-2000:] + result.stderr[-2000:]
+              except Exception as exc:
+                  jobs[job_id]["status"] = "error"
+                  jobs[job_id]["output"] = str(exc)
+
+          threading.Thread(target=run, daemon=True).start()
+          return jsonify({"job_id": job_id, "message": "Job submitted"})
+
+      @app.route("/output/<path:filename>")
+      def download_output(filename):
+          return send_from_directory(str(OUTPUT_DIR), filename, as_attachment=True)
+
+      if __name__ == "__main__":
+          port = int(os.environ.get("VIDEO2X_PORT", 8765))
+          app.run(host="127.0.0.1", port=port, threaded=True)
+      PYAPP
+
+      chown -R "${VIDEO2X_USER}:${VIDEO2X_USER}" "${VIDEO2X_DIR}"
+      deactivate
+
+      # ------------------------------------------------------------------
+      # systemd service
+      # ------------------------------------------------------------------
+      echo "--- Installing systemd service ---"
+      cat > /etc/systemd/system/video2x.service <<SYSD
+      [Unit]
+      Description=Video2X GPU Video Upscaler Web UI
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=${VIDEO2X_USER}
+      Group=${VIDEO2X_USER}
+      WorkingDirectory=${VIDEO2X_DIR}
+      EnvironmentFile=/root/.video2x-bootstrap.env
+      Environment="VIDEO2X_WORKSPACE=${VIDEO2X_WORKSPACE}"
+      Environment="ADMIN_PASS=${ADMIN_PASS}"
+      Environment="VIDEO2X_PORT=${VIDEO2X_PORT}"
+      Environment="PATH=/usr/local/cuda/bin:${VENV_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64"
+      ExecStart=${VENV_DIR}/bin/python ${VIDEO2X_DIR}/webui.py
+      Restart=on-failure
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      systemctl daemon-reload
+      systemctl enable video2x
+      systemctl start video2x
+
+      # ------------------------------------------------------------------
+      # Nginx reverse proxy
+      # ------------------------------------------------------------------
+      echo "--- Configuring Nginx ---"
+      cat > /etc/nginx/sites-available/video2x <<NGXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN:-_};
+
+          client_max_body_size 10G;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${VIDEO2X_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 7200s;
+              proxy_send_timeout 7200s;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/video2x /etc/nginx/sites-enabled/video2x
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # ------------------------------------------------------------------
+      # TLS (optional — only when ENABLE_TLS=true and APP_DOMAIN is set)
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        echo "--- Requesting Let's Encrypt certificate for ${APP_DOMAIN} ---"
+        certbot --nginx --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" || echo "WARN: certbot deferred — DNS not yet pointing here"
+      fi
+
+      # ------------------------------------------------------------------
+      # Firewall (ufw)
+      # ------------------------------------------------------------------
+      echo "--- Configuring UFW ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw --force enable
+
+      # ------------------------------------------------------------------
+      # fail2ban
+      # ------------------------------------------------------------------
+      echo "--- Enabling fail2ban ---"
+      systemctl enable --now fail2ban
+
+      # ------------------------------------------------------------------
+      # Automatic security updates
+      # ------------------------------------------------------------------
+      echo "--- Enabling unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+      systemctl enable --now unattended-upgrades
+
+      # ------------------------------------------------------------------
+      # Write credentials file
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf https://ipv4.icanhazip.com || curl -sf https://api.ipify.org || echo 'unknown')"
+
+      cat > /root/video2x-credentials.txt <<CREDS
+      ============================================================
+      Video2X — Access Credentials
+      Generated: $(date)
+      ============================================================
+
+      NOTE: A GPU VPS plan is REQUIRED for hardware-accelerated video upscaling.
+            Minimum recommended: 1x NVIDIA GPU (8 GB VRAM), 60 GB disk, 16 GB RAM.
+            4K output from HD source can produce very large temporary files.
+
+      Public IP  : ${PUBLIC_IP}
+      App domain : ${APP_DOMAIN:-Not configured}
+
+      Web UI (nginx)  : http://${APP_DOMAIN:-${PUBLIC_IP}}
+      Web UI (TLS)    : https://${APP_DOMAIN:-<set APP_DOMAIN and enable TLS>}
+
+      Admin password  : ${ADMIN_PASS}
+
+      Install dir     : ${VIDEO2X_DIR}
+      Python venv     : ${VENV_DIR}
+      Workspace       : ${VIDEO2X_WORKSPACE}
+        Input videos  :   ${VIDEO2X_WORKSPACE}/input/
+        Output videos :   ${VIDEO2X_WORKSPACE}/output/
+        AI models     :   ${VIDEO2X_WORKSPACE}/models/
+      CUDA tag        : ${CUDA_TAG}
+      Log file        : /var/log/video2x-bootstrap.log
+      Service         : systemctl status video2x
+
+      CLI usage (as root or ${VIDEO2X_USER}):
+        source ${VENV_DIR}/bin/activate
+        video2x -i /path/to/input.mp4 -o /path/to/output.mp4 -h 2160 -a realesrgan
+
+      Next steps:
+        1. Upload input video files to ${VIDEO2X_WORKSPACE}/input/
+        2. Open the Web UI and submit an upscale job
+        3. Download output from ${VIDEO2X_WORKSPACE}/output/
+        4. Point ${APP_DOMAIN} DNS A-record to ${PUBLIC_IP}
+        5. Set ENABLE_TLS=true in /root/.video2x-bootstrap.env and re-run
+           certbot manually or run: certbot --nginx -d ${APP_DOMAIN}
+
+      Bundled AI models:
+        - RealESRGAN_x4plus.pth        (general purpose — photos, videos)
+        - RealESRGAN_x4plus_anime_6B.pth (anime / animated content)
+      ============================================================
+      CREDS
+      chmod 600 /root/video2x-credentials.txt
+
+      echo "=== Video2X bootstrap complete: $(date) ==="
+      echo "=== Credentials: /root/video2x-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/video2x-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  Video2X one-click app is installed and running.
+  SSH in as root and read /root/video2x-credentials.txt for
+  access details, generated password, and next steps.
+
+  IMPORTANT: This app REQUIRES an NVIDIA GPU with ≥ 8 GB VRAM.
+  Without one, upscaling will fall back to CPU (extremely slow).
+  Minimum disk recommendation: 60 GB (large video files + models).
+  ============================================================

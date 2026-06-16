@@ -1,0 +1,304 @@
+#cloud-config
+# =============================================================================
+# Elasticsearch "one-click app" — Ubuntu 26.04 cloud-init user-data
+# Stack: Elasticsearch 8.x (official Elastic apt repo) bound to localhost
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.elasticsearch-bootstrap.env
+# block before launching, OR pass them in via your provisioner.
+# The ELASTIC_PASS is generated randomly per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: elasticsearch
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (base tooling; Elasticsearch itself is added via vendor repo below)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - gnupg
+  - ca-certificates
+  - curl
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - htop
+  - jq
+
+# ----------------------------------------------------------------------------
+# Swap (helps single-node JVM survive memory pressure during indexing)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files and bootstrap script dropped to disk
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable env block -----------------------------------------
+  - path: /root/.elasticsearch-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT (or leave passwords as CHANGE_ME for random) -----
+
+      # Elasticsearch built-in superuser password (elastic user)
+      ELASTIC_PASS="CHANGE_ME"
+
+      # Optional: heap size in MB (leave empty to use Elasticsearch auto-sizing; 50% of RAM)
+      # ES_HEAP_MB=""
+
+      # Cluster / node naming
+      ES_CLUSTER_NAME="my-cluster"
+      ES_NODE_NAME="node-1"
+
+      # Network — only change if you know what you are doing
+      ES_HTTP_HOST="127.0.0.1"
+      ES_HTTP_PORT="9200"
+      ES_TRANSPORT_PORT="9300"
+
+  # --- fail2ban — protect SSH -----------------------------------------------
+  - path: /etc/fail2ban/jail.d/elasticsearch.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+  # --- unattended-upgrades (security patches only) --------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- sysctl / ulimit tuning for Elasticsearch -----------------------------
+  - path: /etc/sysctl.d/99-elasticsearch.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # Elasticsearch requires vm.max_map_count >= 262144
+      vm.max_map_count=262144
+      # Reduce swappiness so JVM heap is rarely paged out
+      vm.swappiness=1
+
+  - path: /etc/security/limits.d/99-elasticsearch.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # Elasticsearch needs many open files and memory-map regions
+      elasticsearch soft nofile 65536
+      elasticsearch hard nofile 65536
+      elasticsearch soft nproc  4096
+      elasticsearch hard nproc  4096
+      elasticsearch soft memlock unlimited
+      elasticsearch hard memlock unlimited
+
+  # --- systemd override: raise file/process limits for elasticsearch.service -
+  - path: /etc/systemd/system/elasticsearch.service.d/override.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Service]
+      LimitNOFILE=65536
+      LimitNPROC=4096
+      LimitMEMLOCK=infinity
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/elasticsearch-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/elasticsearch-bootstrap.log) 2>&1
+      source /root/.elasticsearch-bootstrap.env
+
+      echo "=== Elasticsearch bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random password generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Generate password if left as CHANGE_ME
+      [ "${ELASTIC_PASS}" = "CHANGE_ME" ] && ELASTIC_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. Add the official Elastic apt repository
+      # -----------------------------------------------------------------------
+      # fallback: noble repo until 26.04 published
+      ELASTIC_APT_CODENAME="stable"
+      if ! apt-key list 2>/dev/null | grep -q "Elasticsearch" ; then
+        curl -fsSL https://artifacts.elastic.co/GPG-KEY-elasticsearch \
+          | gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+      fi
+      echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt ${ELASTIC_APT_CODENAME} main" \
+        > /etc/apt/sources.list.d/elastic-8.x.list
+      apt-get update -qq
+
+      # -----------------------------------------------------------------------
+      # 2. Install Elasticsearch (non-interactive — skip initial-setup prompt)
+      # -----------------------------------------------------------------------
+      DEBIAN_FRONTEND=noninteractive apt-get install -y elasticsearch
+
+      # -----------------------------------------------------------------------
+      # 3. Apply sysctl and limits
+      # -----------------------------------------------------------------------
+      sysctl --system -q
+      systemctl daemon-reload
+
+      # -----------------------------------------------------------------------
+      # 4. Configure Elasticsearch
+      # -----------------------------------------------------------------------
+      ES_YML="/etc/elasticsearch/elasticsearch.yml"
+
+      # Cluster and node identity
+      sed -i "s|^#*cluster\.name:.*|cluster.name: ${ES_CLUSTER_NAME}|"   "${ES_YML}"
+      sed -i "s|^#*node\.name:.*|node.name: ${ES_NODE_NAME}|"             "${ES_YML}"
+
+      # Bind to localhost only (security-by-default: no external exposure)
+      sed -i "s|^#*network\.host:.*|network.host: ${ES_HTTP_HOST}|"       "${ES_YML}"
+      sed -i "s|^#*http\.port:.*|http.port: ${ES_HTTP_PORT}|"             "${ES_YML}"
+
+      # Single-node discovery (avoids "waiting for master" timeout on 1-node)
+      grep -q '^discovery.type' "${ES_YML}" \
+        || echo "discovery.type: single-node" >> "${ES_YML}"
+
+      # Disable X-Pack security prompts (security is still ON — just no interactive wizard)
+      grep -q '^xpack.security.enabled' "${ES_YML}" \
+        || echo "xpack.security.enabled: true" >> "${ES_YML}"
+
+      # -----------------------------------------------------------------------
+      # 5. Optional heap sizing (skip auto-sizing if ES_HEAP_MB is set)
+      # -----------------------------------------------------------------------
+      JVM_OPTIONS_D="/etc/elasticsearch/jvm.options.d"
+      mkdir -p "${JVM_OPTIONS_D}"
+      if [ -n "${ES_HEAP_MB:-}" ] && [ "${ES_HEAP_MB:-}" != "" ]; then
+        cat > "${JVM_OPTIONS_D}/heap.options" <<HEAPOPTS
+      -Xms${ES_HEAP_MB}m
+      -Xmx${ES_HEAP_MB}m
+      HEAPOPTS
+      fi
+
+      # -----------------------------------------------------------------------
+      # 6. Enable and start Elasticsearch
+      # -----------------------------------------------------------------------
+      systemctl enable elasticsearch
+      systemctl start  elasticsearch
+
+      # Wait up to 90 seconds for Elasticsearch to become healthy
+      echo "Waiting for Elasticsearch to start..."
+      ES_READY=0
+      for i in $(seq 1 18); do
+        if curl -s --max-time 5 \
+               "http://${ES_HTTP_HOST}:${ES_HTTP_PORT}" \
+               >/dev/null 2>&1 ; then
+          ES_READY=1
+          break
+        fi
+        echo "  attempt ${i}/18 …"
+        sleep 5
+      done
+
+      if [ "${ES_READY}" -eq 0 ]; then
+        echo "WARN: Elasticsearch not responding after 90s — check journalctl -u elasticsearch"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. Set the built-in 'elastic' superuser password
+      #    (ES 8 ships with security enabled; reset via elasticsearch-reset-password
+      #     but we need to set our chosen password, so use the API after startup)
+      # -----------------------------------------------------------------------
+      if [ "${ES_READY}" -eq 1 ]; then
+        # Grab the auto-generated password from the first-boot output and
+        # immediately reset it to our chosen secret via the _security API.
+        # First-boot auto-password ends up in the install log:
+        ES_AUTOPASS="$(grep -oP '(?<=The generated password for the elastic built-in superuser is : ).*' \
+                         /var/log/elasticsearch/elasticsearch.log 2>/dev/null | tail -1 || true)"
+
+        if [ -n "${ES_AUTOPASS}" ]; then
+          curl -s -X POST \
+            "http://${ES_HTTP_HOST}:${ES_HTTP_PORT}/_security/user/elastic/_password" \
+            -u "elastic:${ES_AUTOPASS}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"password\":\"${ELASTIC_PASS}\"}" \
+          && echo "elastic password updated" \
+          || echo "WARN: Could not update elastic password via API — check log"
+        else
+          # ES 8.x may use the reset-password binary for first boot
+          echo "${ELASTIC_PASS}" | /usr/share/elasticsearch/bin/elasticsearch-reset-password \
+            -u elastic -i --batch 2>/dev/null \
+            || /usr/share/elasticsearch/bin/elasticsearch-reset-password \
+                 -u elastic --batch 2>/dev/null \
+            || echo "WARN: Password reset not available yet; see /etc/elasticsearch/certs/"
+        fi
+      fi
+
+      # -----------------------------------------------------------------------
+      # 8. Firewall — SSH only (Elasticsearch bound to 127.0.0.1; not exposed)
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 9. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 10. Write credentials file
+      # -----------------------------------------------------------------------
+      cat > /root/elasticsearch-credentials.txt <<CREDS
+      ===== Elasticsearch bootstrap complete: $(date) =====
+
+      Endpoint  : http://${ES_HTTP_HOST}:${ES_HTTP_PORT}
+      (bound to localhost — use SSH tunnel or configure network.host to expose)
+
+      Built-in superuser
+        Username : elastic
+        Password : ${ELASTIC_PASS}
+
+      Cluster   : ${ES_CLUSTER_NAME}
+      Node      : ${ES_NODE_NAME}
+
+      Quick health check (run on the server):
+        curl -u elastic:'${ELASTIC_PASS}' http://127.0.0.1:9200/_cluster/health?pretty
+
+      SSH tunnel from your workstation:
+        ssh -L 9200:127.0.0.1:9200 root@<SERVER_IP>
+        then open  http://localhost:9200  in your browser
+
+      Logs      : /var/log/elasticsearch/
+      Config    : /etc/elasticsearch/elasticsearch.yml
+      Bootstrap : /var/log/elasticsearch-bootstrap.log
+      CREDS
+      chmod 600 /root/elasticsearch-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials in /root/elasticsearch-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/elasticsearch-bootstrap.sh" ]
+
+final_message: "Elasticsearch bootstrap done after $UPTIME s. See /root/elasticsearch-credentials.txt and /var/log/elasticsearch-bootstrap.log"

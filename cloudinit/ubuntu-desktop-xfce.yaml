@@ -1,0 +1,322 @@
+#cloud-config
+# =============================================================================
+# Ubuntu Desktop (XFCE) "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: XFCE4 desktop + xrdp (RDP/3389) + TigerVNC (VNC/5901)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# NOTE: Requires a 2 GB+ plan for comfortable desktop operation.
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.ubuntu-desktop-xfce-bootstrap.env
+# block before launching. Passwords below are random per-boot if left as defaults.
+# =============================================================================
+
+hostname: ubuntu-desktop-xfce
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — all available via Ubuntu apt (26.04 LTS / noble)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - xfce4
+  - xfce4-goodies
+  - xrdp
+  - tigervnc-standalone-server
+  - tigervnc-common
+  - dbus-x11
+  - xfonts-base
+  - xfonts-75dpi
+  - x11-xserver-utils
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - htop
+  - net-tools
+  - sudo
+  - pwgen
+  - openssl
+  - bash-completion
+  - nano
+  - vim-tiny
+  - whois
+
+# ----------------------------------------------------------------------------
+# Swap (helps 2 GB instances survive desktop startup memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.ubuntu-desktop-xfce-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      DESKTOP_USER="xfceuser"             # non-root sudo user for desktop sessions
+      DESKTOP_PASS="CHANGE_ME"            # password for the desktop user (random if CHANGE_ME)
+      VNC_PASS="CHANGE_ME"               # TigerVNC password (8 chars max; random if CHANGE_ME)
+      VNC_DISPLAY=":1"                    # VNC display (port = 5900 + display number = 5901)
+      VNC_GEOMETRY="1280x800"             # initial VNC framebuffer size
+      ENABLE_RDP="true"                   # enable xrdp on port 3389
+      ENABLE_VNC="true"                   # enable TigerVNC on port 5901
+
+  # --- fail2ban jail config ---------------------------------------------------
+  - path: /etc/fail2ban/jail.d/desktop-app.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [xrdp-sesman]
+      enabled  = true
+      filter   = xrdp-sesman
+      logpath  = /var/log/xrdp-sesman.log
+      maxretry = 4
+      bantime  = 1h
+      findtime = 600
+
+  # --- fail2ban filter for xrdp auth failures ---------------------------------
+  - path: /etc/fail2ban/filter.d/xrdp-sesman.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Definition]
+      failregex = ^\[\w+\]\[\w+\] login failed for user .+ from <HOST>
+      ignoreregex =
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- xrdp polkit rule (allow colour management without password prompt) -----
+  - path: /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Allow Colord all Users]
+      Identity=unix-user:*
+      Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
+      ResultAny=no
+      ResultInactive=no
+      ResultActive=yes
+
+  # --- main bootstrap script --------------------------------------------------
+  - path: /root/ubuntu-desktop-xfce-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/ubuntu-desktop-xfce-bootstrap.log) 2>&1
+      source /root/.ubuntu-desktop-xfce-bootstrap.env
+
+      echo "=== Ubuntu Desktop (XFCE) bootstrap started: $(date) ==="
+
+      # --- random secret helper (SIGPIPE-safe under set -e + pipefail) --------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      rand8() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 8 || true; }
+
+      [ "$DESKTOP_PASS" = "CHANGE_ME" ] && DESKTOP_PASS="$(rand)"
+      [ "$VNC_PASS"     = "CHANGE_ME" ] && VNC_PASS="$(rand8)"
+
+      # TigerVNC password must be 6–8 chars; clamp if needed
+      VNC_PASS="${VNC_PASS:0:8}"
+
+      # --- create non-root sudo desktop user -----------------------------------
+      if ! id "$DESKTOP_USER" >/dev/null 2>&1; then
+        useradd -m -s /bin/bash -G sudo "$DESKTOP_USER"
+      fi
+      echo "${DESKTOP_USER}:${DESKTOP_PASS}" | chpasswd
+      # ensure sudo group membership
+      usermod -aG sudo "$DESKTOP_USER"
+
+      # --- configure XFCE4 as the desktop session for xrdp --------------------
+      # startwm.sh is sourced by xrdp; point it to XFCE
+      cat > /etc/xrdp/startwm.sh <<'STARTWM'
+      #!/bin/sh
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      exec /usr/bin/startxfce4
+      STARTWM
+      chmod 755 /etc/xrdp/startwm.sh
+
+      # per-user .xsession (fallback for VNC and some xrdp codecs)
+      USER_HOME="/home/${DESKTOP_USER}"
+      echo "startxfce4" > "${USER_HOME}/.xsession"
+      chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.xsession"
+      chmod 755 "${USER_HOME}/.xsession"
+
+      # --- configure xrdp ------------------------------------------------------
+      if [ "$ENABLE_RDP" = "true" ]; then
+        # ensure xrdp ssl cert exists
+        if [ ! -f /etc/xrdp/cert.pem ]; then
+          openssl req -x509 -newkey rsa:2048 -keyout /etc/xrdp/key.pem \
+            -out /etc/xrdp/cert.pem -days 3650 -nodes \
+            -subj "/CN=$(hostname)" 2>/dev/null
+          chmod 640 /etc/xrdp/key.pem /etc/xrdp/cert.pem
+          chown root:xrdp /etc/xrdp/key.pem /etc/xrdp/cert.pem 2>/dev/null || true
+        fi
+        systemctl enable xrdp
+        systemctl restart xrdp
+        echo "xrdp enabled on port 3389"
+      else
+        systemctl disable xrdp 2>/dev/null || true
+        echo "xrdp disabled by config"
+      fi
+
+      # --- configure TigerVNC as a systemd service -----------------------------
+      if [ "$ENABLE_VNC" = "true" ]; then
+        # write the VNC password for DESKTOP_USER
+        mkdir -p "${USER_HOME}/.vnc"
+        chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.vnc"
+
+        # vncpasswd expects input on stdin; tigervnc accepts -f for file creation
+        printf '%s\n%s\n' "$VNC_PASS" "$VNC_PASS" | \
+          su -s /bin/bash "${DESKTOP_USER}" -c "vncpasswd ${USER_HOME}/.vnc/passwd" 2>/dev/null || \
+          su -s /bin/bash "${DESKTOP_USER}" -c "echo '${VNC_PASS}' | vncpasswd -f > ${USER_HOME}/.vnc/passwd"
+        chmod 600 "${USER_HOME}/.vnc/passwd"
+        chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.vnc/passwd"
+
+        # xstartup for VNC
+        cat > "${USER_HOME}/.vnc/xstartup" <<'XSTARTUP'
+      #!/bin/sh
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      exec /usr/bin/startxfce4
+      XSTARTUP
+        chmod 755 "${USER_HOME}/.vnc/xstartup"
+        chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.vnc/xstartup"
+
+        # systemd unit for VNC server
+        DISPLAY_NUM="${VNC_DISPLAY#:}"
+        VNC_PORT="$((5900 + DISPLAY_NUM))"
+        cat > /etc/systemd/system/vncserver@.service <<VNCSVC
+      [Unit]
+      Description=TigerVNC server for %i
+      After=syslog.target network.target
+
+      [Service]
+      Type=forking
+      User=${DESKTOP_USER}
+      Group=${DESKTOP_USER}
+      WorkingDirectory=${USER_HOME}
+      PIDFile=${USER_HOME}/.vnc/%H${VNC_DISPLAY}.pid
+      ExecStartPre=-/usr/bin/vncserver -kill ${VNC_DISPLAY} 2>/dev/null
+      ExecStart=/usr/bin/vncserver ${VNC_DISPLAY} -geometry ${VNC_GEOMETRY} -depth 24 -localhost no
+      ExecStop=/usr/bin/vncserver -kill ${VNC_DISPLAY}
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+      VNCSVC
+
+        systemctl daemon-reload
+        systemctl enable "vncserver@${DISPLAY_NUM}.service"
+        systemctl restart "vncserver@${DISPLAY_NUM}.service" || true
+        echo "TigerVNC enabled on port ${VNC_PORT}"
+      else
+        echo "VNC disabled by config"
+        VNC_PORT="(disabled)"
+      fi
+
+      # --- firewall: allow only SSH + RDP + VNC --------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+
+      if [ "$ENABLE_RDP" = "true" ]; then
+        ufw allow 3389/tcp comment 'xrdp RDP'
+      fi
+      if [ "$ENABLE_VNC" = "true" ]; then
+        DISPLAY_NUM="${VNC_DISPLAY#:}"
+        VNC_PORT_UFW="$((5900 + DISPLAY_NUM))"
+        ufw allow "${VNC_PORT_UFW}/tcp" comment 'TigerVNC'
+      fi
+
+      ufw --force enable
+      echo "UFW firewall configured"
+
+      # --- fail2ban ------------------------------------------------------------
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+      echo "fail2ban enabled"
+
+      # --- write credentials summary -------------------------------------------
+      DISPLAY_NUM="${VNC_DISPLAY#:}"
+      VNC_PORT_FINAL="$((5900 + DISPLAY_NUM))"
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+
+      cat > /root/ubuntu-desktop-xfce-credentials.txt <<CREDS
+      ===== Ubuntu Desktop (XFCE) bootstrap complete: $(date) =====
+
+      Server IP      : ${SERVER_IP}
+
+      === Desktop User ===
+      Username       : ${DESKTOP_USER}
+      Password       : ${DESKTOP_PASS}
+
+      === RDP (Remote Desktop Protocol) ===
+      Host           : ${SERVER_IP}:3389
+      Client         : Windows Remote Desktop, Remmina, Microsoft Remote Desktop (macOS/iOS)
+      Username       : ${DESKTOP_USER}
+      Password       : ${DESKTOP_PASS}
+      RDP enabled    : ${ENABLE_RDP}
+
+      === VNC ===
+      Host           : ${SERVER_IP}:${VNC_PORT_FINAL}
+      Client         : TigerVNC Viewer, RealVNC Viewer, Remmina
+      VNC Password   : ${VNC_PASS}
+      VNC enabled    : ${ENABLE_VNC}
+
+      === SSH ===
+      ssh ${DESKTOP_USER}@${SERVER_IP}
+
+      === Logs ===
+      Bootstrap log  : /var/log/ubuntu-desktop-xfce-bootstrap.log
+      xrdp log       : /var/log/xrdp.log
+      xrdp-sesman    : /var/log/xrdp-sesman.log
+
+      === Useful Commands ===
+      systemctl status xrdp
+      systemctl status vncserver@1.service
+      journalctl -u xrdp -f
+      CREDS
+      chmod 600 /root/ubuntu-desktop-xfce-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials in /root/ubuntu-desktop-xfce-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/ubuntu-desktop-xfce-bootstrap.sh" ]
+
+final_message: "Ubuntu Desktop (XFCE) bootstrap done after $UPTIME s. See /root/ubuntu-desktop-xfce-credentials.txt and /var/log/ubuntu-desktop-xfce-bootstrap.log"

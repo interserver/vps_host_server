@@ -1,0 +1,407 @@
+#cloud-config
+# =============================================================================
+# Steam Dedicated Server (SteamCMD) — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: SteamCMD + configurable Steam dedicated server app
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Default game : Team Fortress 2 Dedicated Server (App ID 232250)
+#   Game ports : 27015/udp (game) + 27015/tcp (RCON) + 27005/udp (client)
+#                26900/udp (Steam heartbeat) + 27020/udp (SourceTV, optional)
+# Change STEAM_APP_ID + ports to run any anonymous-login Steam DS.
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.steam-bootstrap.env
+# before launching, or supply them via your provisioner.
+# =============================================================================
+
+hostname: steam
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject SSH key + hostname later
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd runs)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - net-tools
+  - htop
+  - git
+  - unzip
+  - tar
+  - jq
+  - lib32gcc-s1
+  - lib32stdc++6
+  - libc6-i386
+  - screen
+  - openssl
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables — fill in before first boot
+  # --------------------------------------------------------------------------
+  - path: /root/.steam-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Steam Dedicated Server bootstrap environment — edit BEFORE launching
+      # -----------------------------------------------------------------------
+
+      # Steam App ID for the dedicated server binary (anonymous login).
+      # Common free DS app IDs:
+      #   232250 = Team Fortress 2 DS  (default)
+      #   232330 = Counter-Strike: Source DS
+      #   740     = Counter-Strike: GO DS
+      #   294420  = 7 Days to Die DS
+      # See: https://developer.valvesoftware.com/wiki/Dedicated_Servers_List
+      STEAM_APP_ID="232250"
+
+      # Human-readable label used for the systemd unit, install path, etc.
+      # Keep it short, no spaces (e.g. tf2, csgo, css, 7dtd).
+      GAME_LABEL="tf2"
+
+      # Server name shown in the server browser
+      SERVER_NAME="InterServer TF2 Server"
+
+      # Server description / message-of-the-day
+      SERVER_DESC="Powered by InterServer"
+
+      # RCON password (set to CHANGE_ME to auto-generate)
+      RCON_PASS="CHANGE_ME"
+
+      # Optional server password — leave empty for public server
+      SERVER_PASS=""
+
+      # Maximum concurrent players
+      MAX_PLAYERS="24"
+
+      # Map to load on start (TF2 example: cp_dustbowl, ctf_2fort, pl_badwater)
+      START_MAP="ctf_2fort"
+
+      # Source engine game port (UDP+TCP) — clients connect here
+      GAME_PORT="27015"
+
+      # Steam query / Heartbeat port (UDP)
+      QUERY_PORT="26900"
+
+      # SourceTV relay port (UDP); set ENABLE_SOURCETV=false to skip
+      SOURCETV_PORT="27020"
+      ENABLE_SOURCETV="true"
+
+      # Server install directory (game files land here)
+      GAME_DIR="/opt/steam/servers/${GAME_LABEL}"
+
+      # SteamCMD install directory
+      STEAMCMD_DIR="/opt/steamcmd"
+
+      # OS user that runs the game server process
+      STEAM_USER="steam"
+
+      # Extra +cvars passed verbatim to srcds_run / the server binary
+      # Example: EXTRA_ARGS="+sv_pure 1 +sv_lan 0"
+      EXTRA_ARGS="+sv_pure 1 +sv_lan 0"
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/steam-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/steam-bootstrap.log) 2>&1
+      source /root/.steam-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Steam DS bootstrap started at $(date -u) ==="
+      echo "    App ID   : ${STEAM_APP_ID}"
+      echo "    Label    : ${GAME_LABEL}"
+      echo "    Game dir : ${GAME_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 1. Auto-generate secrets when left at CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${RCON_PASS}" = "CHANGE_ME" ]; then
+        RCON_PASS="$(rand)"
+        echo "Generated RCON_PASS"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. Automatic security updates
+      # -----------------------------------------------------------------------
+      echo "--- Configuring unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'APTEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      APTEOF
+      systemctl enable --now unattended-upgrades || true
+
+      # -----------------------------------------------------------------------
+      # 3. Create the steam system user
+      # -----------------------------------------------------------------------
+      echo "--- Creating '${STEAM_USER}' system user ---"
+      id -u "${STEAM_USER}" &>/dev/null || \
+        useradd --system --shell /bin/bash \
+                --home-dir "/home/${STEAM_USER}" \
+                --create-home "${STEAM_USER}"
+
+      mkdir -p "${GAME_DIR}" "${STEAMCMD_DIR}"
+      chown "${STEAM_USER}:${STEAM_USER}" "${GAME_DIR}" "${STEAMCMD_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 4. Enable i386 architecture (required by SteamCMD)
+      # -----------------------------------------------------------------------
+      echo "--- Enabling i386 architecture ---"
+      dpkg --add-architecture i386
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        lib32gcc-s1 lib32stdc++6 libc6-i386 || true
+
+      # -----------------------------------------------------------------------
+      # 5. Install SteamCMD
+      # -----------------------------------------------------------------------
+      echo "--- Installing SteamCMD ---"
+      if [ ! -f "${STEAMCMD_DIR}/steamcmd.sh" ]; then
+        STEAMCMD_TGZ="/tmp/steamcmd_linux.tar.gz"
+        curl -fsSL -o "${STEAMCMD_TGZ}" \
+          "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+        tar -xzf "${STEAMCMD_TGZ}" -C "${STEAMCMD_DIR}"
+        rm -f "${STEAMCMD_TGZ}"
+        chown -R "${STEAM_USER}:${STEAM_USER}" "${STEAMCMD_DIR}"
+      else
+        echo "SteamCMD already present — skipping download."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 6. Install / update dedicated server via SteamCMD
+      #    Anonymous login is valid for all free-to-play DS binaries.
+      # -----------------------------------------------------------------------
+      echo "--- Installing/updating App ${STEAM_APP_ID} via SteamCMD ---"
+      sudo -u "${STEAM_USER}" "${STEAMCMD_DIR}/steamcmd.sh" \
+        +login anonymous \
+        +force_install_dir "${GAME_DIR}" \
+        +app_update "${STEAM_APP_ID}" validate \
+        +quit
+
+      # -----------------------------------------------------------------------
+      # 7. Write a Source engine server.cfg (works for TF2/CS:S/CS:GO etc.)
+      #    Skipped silently if the cfg directory does not exist (non-Source DS).
+      # -----------------------------------------------------------------------
+      echo "--- Writing server.cfg (Source engine) ---"
+      # TF2 and most Source games put cfg under <gamedir>/<moddir>/cfg/.
+      # We try the two most common paths; unknown DS layouts are unaffected.
+      for CFG_DIR in \
+          "${GAME_DIR}/tf/cfg" \
+          "${GAME_DIR}/cstrike/cfg" \
+          "${GAME_DIR}/csgo/cfg" \
+          "${GAME_DIR}/game/cfg"; do
+        if [ -d "$(dirname "${CFG_DIR}")" ]; then
+          mkdir -p "${CFG_DIR}"
+          cat > "${CFG_DIR}/server.cfg" <<SRCCFG
+      hostname "${SERVER_NAME}"
+      sv_password "${SERVER_PASS}"
+      rcon_password "${RCON_PASS}"
+      sv_maxplayers ${MAX_PLAYERS}
+      sv_region 255
+      sv_lan 0
+      sv_pure 1
+      motd "${SERVER_DESC}"
+      SRCCFG
+          chown -R "${STEAM_USER}:${STEAM_USER}" "${CFG_DIR}"
+          echo "  Wrote ${CFG_DIR}/server.cfg"
+          break
+        fi
+      done || true
+
+      # -----------------------------------------------------------------------
+      # 8. Systemd service
+      # -----------------------------------------------------------------------
+      echo "--- Creating systemd service: ${GAME_LABEL} ---"
+
+      # Determine the server executable — try common Source engine wrappers first.
+      if [ -f "${GAME_DIR}/srcds_run" ]; then
+        SERVER_BIN="${GAME_DIR}/srcds_run"
+        START_ARGS="-game ${GAME_LABEL} -ip 0.0.0.0 -port ${GAME_PORT} \
+      +sv_maxplayers ${MAX_PLAYERS} +map ${START_MAP} \
+      +rcon_password ${RCON_PASS} ${EXTRA_ARGS}"
+        if [ "${ENABLE_SOURCETV}" = "true" ]; then
+          START_ARGS="${START_ARGS} +tv_enable 1 +tv_port ${SOURCETV_PORT}"
+        fi
+      elif [ -f "${GAME_DIR}/server.sh" ]; then
+        SERVER_BIN="${GAME_DIR}/server.sh"
+        START_ARGS=""
+      else
+        # Generic fallback — operators should override in .env / unit drop-in
+        SERVER_BIN="${GAME_DIR}/$(ls "${GAME_DIR}" | grep -E '\.(sh|run)$' | head -1 || echo start.sh)"
+        START_ARGS=""
+      fi
+
+      cat > "/etc/systemd/system/${GAME_LABEL}.service" <<SVCEOF
+      [Unit]
+      Description=Steam Dedicated Server (${GAME_LABEL} / App ${STEAM_APP_ID})
+      After=network.target network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=${STEAM_USER}
+      Group=${STEAM_USER}
+      WorkingDirectory=${GAME_DIR}
+      ExecStart=${SERVER_BIN} ${START_ARGS}
+      ExecStop=/bin/kill -SIGINT \$MAINPID
+      Restart=on-failure
+      RestartSec=15
+      StandardOutput=journal
+      StandardError=journal
+      LimitNOFILE=100000
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCEOF
+
+      # -----------------------------------------------------------------------
+      # 9. Firewall — SSH + game ports only
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp                        comment 'SSH'
+      ufw allow "${GAME_PORT}/tcp"            comment 'Steam DS RCON/TCP'
+      ufw allow "${GAME_PORT}/udp"            comment 'Steam DS game/UDP'
+      ufw allow "${QUERY_PORT}/udp"           comment 'Steam query/heartbeat'
+      if [ "${ENABLE_SOURCETV}" = "true" ]; then
+        ufw allow "${SOURCETV_PORT}/udp"      comment 'SourceTV relay'
+      fi
+      ufw --force enable
+      echo "UFW status:"
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 10. Fail2ban — SSH brute-force protection
+      # -----------------------------------------------------------------------
+      echo "--- Configuring fail2ban ---"
+      cat > /etc/fail2ban/jail.d/steam-defaults.conf <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable --now fail2ban || true
+
+      # -----------------------------------------------------------------------
+      # 11. Enable and start the game server service
+      # -----------------------------------------------------------------------
+      echo "--- Enabling and starting ${GAME_LABEL} service ---"
+      systemctl daemon-reload
+      systemctl enable "${GAME_LABEL}.service"
+      systemctl start "${GAME_LABEL}.service" || true
+
+      # -----------------------------------------------------------------------
+      # 12. Write credentials / connection info
+      # -----------------------------------------------------------------------
+      echo "--- Writing credentials file ---"
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      cat > /root/steam-credentials.txt <<CREDS
+      ======================================================
+        Steam Dedicated Server — Connection Info
+      ======================================================
+      App ID         : ${STEAM_APP_ID}
+      Game Label     : ${GAME_LABEL}
+      Host / IP      : ${SERVER_IP}
+      Game Port (UDP): ${GAME_PORT}
+      Game Port (TCP): ${GAME_PORT}  (RCON)
+      Query Port(UDP): ${QUERY_PORT}
+      SourceTV  (UDP): ${SOURCETV_PORT}  (if enabled)
+      Server Name    : ${SERVER_NAME}
+      RCON Password  : ${RCON_PASS}
+      Server Password: ${SERVER_PASS:-<none — public server>}
+      Max Players    : ${MAX_PLAYERS}
+      Start Map      : ${START_MAP}
+
+      HOW TO CONNECT (TF2 / Source engine):
+        In-game console:  connect ${SERVER_IP}:${GAME_PORT}
+        Or browse:        steam://connect/${SERVER_IP}:${GAME_PORT}
+
+      RCON MANAGEMENT:
+        rcon_address ${SERVER_IP}:${GAME_PORT}
+        rcon_password ${RCON_PASS}
+
+      OPERATOR NOTES:
+        - Server installed in  : ${GAME_DIR}
+        - SteamCMD directory   : ${STEAMCMD_DIR}
+        - Run as user          : ${STEAM_USER}
+        - server.cfg           : ${GAME_DIR}/tf/cfg/server.cfg  (TF2 default path)
+        - Update server        : sudo -u ${STEAM_USER} ${STEAMCMD_DIR}/steamcmd.sh +login anonymous +app_update ${STEAM_APP_ID} validate +quit
+        - Change game          : Edit /root/.steam-bootstrap.env and re-run /root/steam-bootstrap.sh
+
+      SERVICE MANAGEMENT:
+        systemctl status  ${GAME_LABEL}
+        systemctl restart ${GAME_LABEL}
+        journalctl -u ${GAME_LABEL} -f
+
+      Bootstrap log : /var/log/steam-bootstrap.log
+      ======================================================
+      CREDS
+      chmod 600 /root/steam-credentials.txt
+
+      echo "=== Steam DS bootstrap complete at $(date -u) ==="
+      echo "=== Server reachable at ${SERVER_IP}:${GAME_PORT} ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/steam-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in the console log when cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ==========================================================
+  Steam Dedicated Server (SteamCMD) is ready!
+  - Default game : Team Fortress 2 (App 232250 / label: tf2)
+  - Game port    : 27015/udp+tcp
+  - Query port   : 26900/udp
+  - SourceTV     : 27020/udp (if enabled)
+  - Service      : systemctl status tf2
+  - Credentials  : cat /root/steam-credentials.txt
+  - Bootstrap log: /var/log/steam-bootstrap.log
+  - Change game  : Edit /root/.steam-bootstrap.env + rerun script
+  ==========================================================

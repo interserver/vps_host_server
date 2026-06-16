@@ -1,0 +1,327 @@
+#cloud-config
+# =============================================================================
+# ServerWand — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Apache 2 · MariaDB · PHP-FPM · Postfix · VSFTPD
+#        ServerWand SaaS control panel (manage.serverwand.com)
+#        UFW firewall · fail2ban · swap · unattended-upgrades
+# -----------------------------------------------------------------------------
+# ServerWand is a cloud-based (SaaS) control panel.  It connects to this
+# server over SSH and installs / manages software remotely from
+# manage.serverwand.com.  There is NO locally-hosted admin port; the panel
+# URL printed at the end is https://manage.serverwand.com.
+#
+# OPERATOR VARS in /root/.serverwand-bootstrap.env:
+#   SW_API_KEY   — ServerWand API key from manage.serverwand.com (required for
+#                  automated registration).  Leave blank to connect manually.
+#   SW_SERVER_NAME — Friendly label shown in the ServerWand dashboard.
+#   APP_DOMAIN   — Public FQDN for this server (used in credential output).
+#   ROOT_PASS    — Current root password (sent to ServerWand API at register
+#                  time so it can inject its SSH key).  Clear after first boot.
+# =============================================================================
+
+hostname: serverwand
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default so provisioner can inject customer SSH key
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — minimal set; ServerWand remote installer pulls its own deps
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - certbot
+  - jq
+  - net-tools
+  - openssh-server
+  - python3-minimal
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.serverwand-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ServerWand bootstrap environment
+      # Edit these before first boot, or inject via your provisioner.
+
+      # Your ServerWand API key (from manage.serverwand.com → Account → API).
+      # Required for automated server registration.
+      # Leave blank to connect manually via the web UI.
+      SW_API_KEY=CHANGE_ME
+
+      # Friendly label shown in the ServerWand dashboard
+      SW_SERVER_NAME=my-server
+
+      # SSH port this server listens on (default: 22)
+      SW_SSH_PORT=22
+
+      # Fully-qualified domain name for this server (used in output only)
+      APP_DOMAIN=CHANGE_ME
+
+      # Root password for the initial ServerWand SSH key injection.
+      # ServerWand uses this once to add its deploy key, then connects via key.
+      # Clear this file or rotate the root password after first registration.
+      ROOT_PASS=CHANGE_ME
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/serverwand-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/serverwand-bootstrap.log) 2>&1
+      source /root/.serverwand-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== ServerWand bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Detect public IP
+      # ----------------------------------------------------------------
+      PUBLIC_IP="$(curl -fsSL --max-time 10 https://api4.my-ip.io/ip 2>/dev/null \
+                   || curl -fsSL --max-time 10 https://checkip.amazonaws.com 2>/dev/null \
+                   || hostname -I | awk '{print $1}')"
+      echo "Public IP: ${PUBLIC_IP}"
+
+      DISPLAY_HOST="${APP_DOMAIN:-${PUBLIC_IP}}"
+
+      # ----------------------------------------------------------------
+      # Unattended security updates
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — SSH brute-force protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # Open ports required for ServerWand and the LAMP stack it manages:
+      #   22    — SSH (also used by ServerWand's remote management)
+      #   21    — FTP (VSFTPD, managed by ServerWand)
+      #   80    — HTTP (Apache + ACME challenge)
+      #   443   — HTTPS (Apache TLS sites)
+      #   25    — SMTP outbound (Postfix)
+      #
+      # ServerWand management IPs (must reach this server via SSH):
+      #   213.219.36.149  — ServerWand main connection
+      #   50.116.56.24    — ServerWand SSH terminal (ssh.shiftedit.net)
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+
+      ufw allow 22/tcp    comment 'SSH + ServerWand management'
+      ufw allow 21/tcp    comment 'FTP (VSFTPD managed by ServerWand)'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 25/tcp    comment 'SMTP outbound (Postfix)'
+
+      # Allow ServerWand management IPs explicitly (belt-and-suspenders)
+      ufw allow from 213.219.36.149 to any port 22 comment 'ServerWand main'
+      ufw allow from 50.116.56.24   to any port 22 comment 'ServerWand SSH terminal'
+
+      ufw --force enable
+      echo "UFW enabled."
+
+      # ----------------------------------------------------------------
+      # OpenSSH — ensure PasswordAuthentication is on temporarily so
+      # ServerWand can inject its SSH key on first connection.
+      # After ServerWand deploys its key, you may disable password auth.
+      # ----------------------------------------------------------------
+      sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+      systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+
+      # ----------------------------------------------------------------
+      # Register this server with ServerWand via the API (if key provided)
+      # Ref: https://serverwand.com/developers/servers
+      #      POST /api/servers/create  → GET /api/servers/$id/install
+      # ----------------------------------------------------------------
+      SERVER_ID=""
+      if [[ "${SW_API_KEY}" != "CHANGE_ME" && -n "${SW_API_KEY}" ]]; then
+          echo "=== Registering server with ServerWand API ==="
+
+          # Resolve ROOT_PASS — generate random if placeholder
+          [[ "${ROOT_PASS}" == "CHANGE_ME" ]] && ROOT_PASS="$(rand)"
+
+          RESPONSE="$(curl -fsSL \
+              -X POST \
+              -H "Authorization: Bearer ${SW_API_KEY}" \
+              -H "Content-Type: application/x-www-form-urlencoded" \
+              --data-urlencode "provider=custom" \
+              --data-urlencode "dns=custom" \
+              --data-urlencode "name=${SW_SERVER_NAME}" \
+              --data-urlencode "host=${PUBLIC_IP}" \
+              --data-urlencode "user=root" \
+              --data-urlencode "pass=${ROOT_PASS}" \
+              --data-urlencode "port=${SW_SSH_PORT}" \
+              https://serverwand.com/api/servers/create 2>/dev/null || echo '{}')"
+
+          echo "Create response: ${RESPONSE}"
+          SERVER_ID="$(echo "${RESPONSE}" | python3 -c \
+              "import sys,json; d=json.load(sys.stdin); print(d.get('items',[{}])[0].get('id',''))" \
+              2>/dev/null || true)"
+
+          if [[ -n "${SERVER_ID}" ]]; then
+              echo "Server created with ID: ${SERVER_ID}"
+              echo "=== Triggering ServerWand remote installation ==="
+              # The install call connects back via SSH and installs the full stack
+              INSTALL_RESPONSE="$(curl -fsSL \
+                  -H "Authorization: Bearer ${SW_API_KEY}" \
+                  "https://serverwand.com/api/servers/${SERVER_ID}/install" \
+                  2>/dev/null || echo '{}')"
+              echo "Install response: ${INSTALL_RESPONSE}"
+              echo "ServerWand is now installing the software stack remotely."
+              echo "Monitor progress at: https://manage.serverwand.com"
+          else
+              echo "WARN: Could not extract server ID from API response."
+              echo "      Register manually at: https://manage.serverwand.com"
+          fi
+      else
+          echo "=== SW_API_KEY not set — manual registration required ==="
+          echo "    1. Go to https://manage.serverwand.com"
+          echo "    2. Click Create → Server → Custom / Other provider"
+          echo "    3. Enter host=${PUBLIC_IP}, user=root, pass=<root-password>, port=22"
+          echo "    4. ServerWand will install the software stack remotely."
+      fi
+
+      # ----------------------------------------------------------------
+      # Optional Certbot TLS for APP_DOMAIN
+      # Non-fatal: skipped when DNS is not yet pointing here.
+      # ----------------------------------------------------------------
+      if [[ "${APP_DOMAIN}" != "CHANGE_ME" && -n "${APP_DOMAIN}" ]]; then
+          LE_EMAIL="${LE_EMAIL:-admin@${APP_DOMAIN}}"
+          echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+          certbot certonly --standalone \
+              --non-interactive \
+              --agree-tos \
+              --email "${LE_EMAIL}" \
+              -d "${APP_DOMAIN}" \
+              || echo "WARN: certbot deferred — DNS may not point here yet"
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (root-only)
+      # ----------------------------------------------------------------
+      cat > /root/serverwand-credentials.txt <<CREDS
+      ============================================================
+       ServerWand — Server Credentials
+       Generated  : $(date -u)
+      ============================================================
+
+       ServerWand Panel URL : https://manage.serverwand.com
+       Server IP            : ${PUBLIC_IP}
+       Server Name (label)  : ${SW_SERVER_NAME}
+       ServerWand Server ID : ${SERVER_ID:-"(register manually)"}
+
+       Firewall open ports  : 22 (SSH) | 21 (FTP) | 80 (HTTP) | 443 (HTTPS) | 25 (SMTP)
+       ServerWand mgmt IPs  : 213.219.36.149 | 50.116.56.24 (must reach port 22)
+
+       Software installed by ServerWand (once connected):
+         Apache HTTP Server · MariaDB · PHP-FPM · Postfix
+         Certbot · VSFTPD · Fail2ban
+
+       Log file             : /var/log/serverwand-bootstrap.log
+
+       IMPORTANT:
+         - After ServerWand deploys its SSH key, you may disable
+           PasswordAuthentication in /etc/ssh/sshd_config.
+         - Clear /root/.serverwand-bootstrap.env (ROOT_PASS).
+         - Manage sites, databases, SSL, and backups at
+           https://manage.serverwand.com
+      ============================================================
+      CREDS
+      chmod 600 /root/serverwand-credentials.txt
+
+      echo ""
+      echo "=== ServerWand bootstrap complete $(date -u) ==="
+      echo "=== Panel URL  : https://manage.serverwand.com"
+      echo "=== Server IP  : ${PUBLIC_IP}"
+      if [[ -n "${SERVER_ID}" ]]; then
+          echo "=== Server ID  : ${SERVER_ID}"
+          echo "=== Install is running remotely — check manage.serverwand.com"
+      else
+          echo "=== ACTION REQUIRED: register server at https://manage.serverwand.com"
+      fi
+      echo "=== Credentials: /root/serverwand-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/serverwand-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   ServerWand bootstrap complete.
+   Panel URL   : https://manage.serverwand.com
+   Credentials : /root/serverwand-credentials.txt
+   Log         : /var/log/serverwand-bootstrap.log
+
+   If SW_API_KEY was not set, register this server manually:
+     1. Log in to https://manage.serverwand.com
+     2. Create Server → Custom → provide IP + root credentials
+     3. ServerWand will install Apache, MariaDB, PHP, Postfix, etc.
+  ============================================================

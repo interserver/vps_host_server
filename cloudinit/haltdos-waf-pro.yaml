@@ -1,0 +1,354 @@
+#cloud-config
+# =============================================================================
+# Haltdos WAF Pro — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Haltdos WAF Pro (BYOL) + UFW firewall + fail2ban + swap
+#        + unattended-upgrades
+# Haltdos WAF Pro is a commercial Web Application Firewall and API security
+# platform. A valid Haltdos license is REQUIRED — obtain one at
+# https://www.haltdos.com before activating.
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.haltdos-waf-pro-bootstrap.env
+# before launching. The admin console is at https://<SERVER_IP>:9000 once
+# the bootstrap completes.
+# =============================================================================
+
+hostname: haltdos-waf
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - openjdk-21-jre-headless
+  - net-tools
+  - htop
+  - lsof
+  - unzip
+  - jq
+
+# ----------------------------------------------------------------------------
+# Swap (guards against OOM during Haltdos startup on small instances)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + scripts dropped to disk before bootstrap runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.haltdos-waf-pro-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # EDIT THESE BEFORE FIRST BOOT (or before re-running the script)
+      # ============================================================
+
+      # Public FQDN or IP of this server (used in credentials file and
+      # optional reverse-proxy vhost). Leave as IP to skip DNS-based TLS.
+      APP_DOMAIN="CHANGE_ME"          # e.g. waf.example.com or 203.0.113.10
+
+      # Let's Encrypt email for TLS certificate renewal notices.
+      # Only used if ENABLE_TLS=true AND APP_DOMAIN is a real FQDN.
+      LE_EMAIL="admin@example.com"
+
+      # Set to true to attempt Certbot TLS for the management console.
+      # Requires APP_DOMAIN DNS to resolve here BEFORE first boot.
+      # Non-fatal — boot continues even if Certbot fails.
+      ENABLE_TLS="false"
+
+      # -------- Haltdos WAF Pro settings --------------------------------
+      # Haltdos management console listens on this TCP port (default 9000).
+      HALTDOS_MGMT_PORT="9000"
+
+      # HTTP / HTTPS ports that Haltdos WAF will proxy / protect.
+      HALTDOS_HTTP_PORT="80"
+      HALTDOS_HTTPS_PORT="443"
+
+      # Admin password for the Haltdos web console.
+      # Leave CHANGE_ME to auto-generate a random 24-char password at boot.
+      HALTDOS_ADMIN_PASS="CHANGE_ME"
+
+      # Haltdos installation directory.
+      HALTDOS_HOME="/opt/haltdos"
+
+      # Haltdos WAF Pro installer download URL.
+      # Replace with the URL provided by Haltdos support / customer portal.
+      # Example (not guaranteed current):
+      #   https://packages.haltdos.com/waf-pro/latest/haltdos-waf-pro-linux-x64.tar.gz
+      HALTDOS_INSTALLER_URL="CHANGE_ME"
+
+      # -------- BYOL / License activation -----------------------------------
+      # After the server boots, log in to https://<APP_DOMAIN>:<HALTDOS_MGMT_PORT>
+      # and enter your Haltdos license key in Settings → License.
+      # Do NOT embed the license key here — Haltdos activates online.
+      HALTDOS_LICENSE_KEY="ENTER_YOUR_LICENSE_KEY_HERE"
+
+  # --- fail2ban jails for SSH + Haltdos -----------------------------------
+  - path: /etc/fail2ban/jail.d/haltdos.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+      findtime = 600
+
+      [haltdos-mgmt]
+      enabled  = true
+      port     = 9000
+      filter   = haltdos-mgmt
+      logpath  = /opt/haltdos/logs/access.log
+      maxretry = 5
+      bantime  = 1h
+
+  # --- fail2ban filter for Haltdos management console --------------------
+  - path: /etc/fail2ban/filter.d/haltdos-mgmt.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Definition]
+      # Match failed login attempts in Haltdos access log.
+      # Adjust failregex to match your Haltdos log format if it differs.
+      failregex = ^<HOST> .* "(POST|GET) /api/v1/login .* 40[13]
+      ignoreregex =
+
+  # --- unattended security upgrades ----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- systemd unit for Haltdos WAF Pro ------------------------------------
+  - path: /etc/systemd/system/haltdos-waf.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Haltdos WAF Pro
+      Documentation=https://docs.haltdos.com
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=forking
+      User=haltdos
+      Group=haltdos
+      WorkingDirectory=/opt/haltdos
+      EnvironmentFile=/opt/haltdos/conf/haltdos.env
+      ExecStart=/opt/haltdos/bin/haltdos start
+      ExecStop=/opt/haltdos/bin/haltdos stop
+      ExecReload=/opt/haltdos/bin/haltdos reload
+      Restart=on-failure
+      RestartSec=15
+      LimitNOFILE=65536
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=haltdos-waf
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- main bootstrap script -----------------------------------------------
+  - path: /root/haltdos-waf-pro-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/haltdos-waf-pro-bootstrap.log) 2>&1
+      source /root/.haltdos-waf-pro-bootstrap.env
+
+      echo "=== Haltdos WAF Pro bootstrap started: $(date) ==="
+
+      # ---- random secret generator (SIGPIPE-safe under set -e + pipefail) ----
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$HALTDOS_ADMIN_PASS" = "CHANGE_ME" ] && HALTDOS_ADMIN_PASS="$(rand)"
+
+      # ---- system hardening: kernel network tuning ----------------------------
+      cat >> /etc/sysctl.d/99-haltdos.conf <<'SYSCTL'
+      net.core.somaxconn            = 65535
+      net.ipv4.tcp_max_syn_backlog  = 65535
+      net.ipv4.ip_local_port_range  = 1024 65535
+      net.ipv4.tcp_tw_reuse         = 1
+      net.ipv4.tcp_fin_timeout      = 30
+      net.core.netdev_max_backlog   = 65535
+      fs.file-max                   = 2097152
+      SYSCTL
+      sysctl -p /etc/sysctl.d/99-haltdos.conf || true
+
+      # ---- create system user for Haltdos ------------------------------------
+      if ! id haltdos &>/dev/null; then
+        useradd --system --shell /usr/sbin/nologin \
+          --home-dir "${HALTDOS_HOME}" --create-home haltdos
+      fi
+
+      mkdir -p "${HALTDOS_HOME}"/{bin,conf,logs,data,tmp}
+      chown -R haltdos:haltdos "${HALTDOS_HOME}"
+
+      # ---- download and install Haltdos WAF Pro ------------------------------
+      if [ "${HALTDOS_INSTALLER_URL}" = "CHANGE_ME" ]; then
+        echo "WARN: HALTDOS_INSTALLER_URL not set in .haltdos-waf-pro-bootstrap.env"
+        echo "WARN: Skipping automated install. Download the Haltdos WAF Pro"
+        echo "WARN: installer from https://www.haltdos.com/downloads and place"
+        echo "WARN: it at ${HALTDOS_HOME}/installer.tar.gz, then re-run:"
+        echo "WARN:   tar -xzf ${HALTDOS_HOME}/installer.tar.gz -C ${HALTDOS_HOME}"
+        echo "WARN:   chown -R haltdos:haltdos ${HALTDOS_HOME}"
+        echo "WARN:   ${HALTDOS_HOME}/bin/haltdos install"
+        HALTDOS_INSTALLED=false
+      else
+        INSTALLER_ARCHIVE="${HALTDOS_HOME}/installer.tar.gz"
+        echo "--- Downloading Haltdos WAF Pro installer ---"
+        wget --quiet --show-progress -O "${INSTALLER_ARCHIVE}" "${HALTDOS_INSTALLER_URL}"
+
+        echo "--- Extracting installer ---"
+        tar -xzf "${INSTALLER_ARCHIVE}" -C "${HALTDOS_HOME}" --strip-components=1
+        rm -f "${INSTALLER_ARCHIVE}"
+
+        chown -R haltdos:haltdos "${HALTDOS_HOME}"
+        chmod +x "${HALTDOS_HOME}"/bin/* 2>/dev/null || true
+
+        # Run the Haltdos install routine if present
+        if [ -x "${HALTDOS_HOME}/bin/haltdos" ]; then
+          sudo -u haltdos "${HALTDOS_HOME}/bin/haltdos" install \
+            --port "${HALTDOS_MGMT_PORT}" \
+            --http-port "${HALTDOS_HTTP_PORT}" \
+            --https-port "${HALTDOS_HTTPS_PORT}" \
+            --admin-pass "${HALTDOS_ADMIN_PASS}" \
+            2>&1 || true
+        elif [ -f "${HALTDOS_HOME}/install.sh" ]; then
+          bash "${HALTDOS_HOME}/install.sh" \
+            --port "${HALTDOS_MGMT_PORT}" \
+            --admin-pass "${HALTDOS_ADMIN_PASS}" \
+            2>&1 || true
+        else
+          echo "WARN: No known installer entry-point found in ${HALTDOS_HOME}."
+          echo "WARN: Consult https://docs.haltdos.com for manual install steps."
+        fi
+        HALTDOS_INSTALLED=true
+      fi
+
+      # ---- write Haltdos runtime environment file ----------------------------
+      mkdir -p "${HALTDOS_HOME}/conf"
+      cat > "${HALTDOS_HOME}/conf/haltdos.env" <<HENV
+      HALTDOS_HOME=${HALTDOS_HOME}
+      HALTDOS_MGMT_PORT=${HALTDOS_MGMT_PORT}
+      HALTDOS_HTTP_PORT=${HALTDOS_HTTP_PORT}
+      HALTDOS_HTTPS_PORT=${HALTDOS_HTTPS_PORT}
+      JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+      HENV
+      chmod 640 "${HALTDOS_HOME}/conf/haltdos.env"
+      chown haltdos:haltdos "${HALTDOS_HOME}/conf/haltdos.env"
+
+      # ---- enable + start Haltdos service (only if installer ran) -----------
+      systemctl daemon-reload
+      if [ "${HALTDOS_INSTALLED:-false}" = "true" ] && \
+         [ -x "${HALTDOS_HOME}/bin/haltdos" ]; then
+        systemctl enable haltdos-waf
+        systemctl start  haltdos-waf || \
+          echo "WARN: haltdos-waf service did not start — check /var/log/haltdos-waf-pro-bootstrap.log"
+      else
+        systemctl enable haltdos-waf || true
+        echo "WARN: Haltdos service not started — installer was deferred."
+      fi
+
+      # ---- firewall (UFW) ----------------------------------------------------
+      ufw default deny incoming
+      ufw default allow outgoing
+      # SSH
+      ufw allow 22/tcp comment 'SSH'
+      # Haltdos WAF management console
+      ufw allow "${HALTDOS_MGMT_PORT}/tcp" comment 'Haltdos mgmt console'
+      # WAF proxy ports (HTTP + HTTPS traffic forwarded to protected backends)
+      ufw allow "${HALTDOS_HTTP_PORT}/tcp"  comment 'WAF HTTP proxy'
+      ufw allow "${HALTDOS_HTTPS_PORT}/tcp" comment 'WAF HTTPS proxy'
+      ufw --force enable
+
+      # ---- fail2ban -----------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # ---- optional Certbot TLS for the management console -------------------
+      # Note: Certbot targets port 80; Haltdos mgmt is on ${HALTDOS_MGMT_PORT}.
+      # TLS for the management console is typically handled internally by Haltdos.
+      # The block below is provided for custom reverse-proxy setups only.
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "CHANGE_ME" ] && \
+         ! echo "${APP_DOMAIN}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        command -v certbot &>/dev/null || apt-get install -y -q certbot
+        certbot certonly --standalone --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" \
+          --pre-hook  "ufw allow 80/tcp" \
+          --post-hook "ufw delete allow 80/tcp || true" || \
+          echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot certonly --standalone -d ${APP_DOMAIN}"
+      fi
+
+      # ---- write credentials summary -----------------------------------------
+      cat > /root/haltdos-waf-pro-credentials.txt <<CREDS
+      ===== Haltdos WAF Pro — bootstrap complete: $(date) =====
+
+      Management Console URL:   https://${APP_DOMAIN}:${HALTDOS_MGMT_PORT}
+      (Use the server IP if APP_DOMAIN was not set)
+      Admin username:           admin
+      Admin password:           ${HALTDOS_ADMIN_PASS}
+
+      HTTP proxy port:          ${HALTDOS_HTTP_PORT}/tcp
+      HTTPS proxy port:         ${HALTDOS_HTTPS_PORT}/tcp
+      Management port:          ${HALTDOS_MGMT_PORT}/tcp
+
+      BYOL Licensing:
+        Log in to the management console and navigate to:
+          Settings → License → Activate
+        Enter your Haltdos WAF Pro license key to activate.
+        License key placeholder in env: ${HALTDOS_LICENSE_KEY}
+        Obtain/renew licenses at: https://www.haltdos.com
+
+      Installer URL used:       ${HALTDOS_INSTALLER_URL}
+      Install directory:        ${HALTDOS_HOME}
+
+      Service management:
+        systemctl status  haltdos-waf
+        systemctl restart haltdos-waf
+        journalctl -u haltdos-waf -f
+
+      Bootstrap log:            /var/log/haltdos-waf-pro-bootstrap.log
+      Haltdos docs:             https://docs.haltdos.com
+      CREDS
+      chmod 600 /root/haltdos-waf-pro-credentials.txt
+
+      echo "=== Haltdos WAF Pro bootstrap finished: $(date) ==="
+      echo "=== Credentials saved to /root/haltdos-waf-pro-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once all write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/haltdos-waf-pro-bootstrap.sh" ]
+
+final_message: "Haltdos WAF Pro bootstrap done after $UPTIME s. Admin console: https://<SERVER_IP>:9000 — See /root/haltdos-waf-pro-credentials.txt and /var/log/haltdos-waf-pro-bootstrap.log"

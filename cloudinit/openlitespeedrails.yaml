@@ -1,0 +1,623 @@
+#cloud-config
+# =============================================================================
+# OpenLiteSpeed Rails "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: OpenLiteSpeed + Ruby (rbenv) + Rails + PostgreSQL + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.openlitespeedrails-bootstrap.env
+# before launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: openlitespeedrails
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages (base tools; OpenLiteSpeed + Ruby are installed by bootstrap script
+# because the Ubuntu 26.04 packages may lag or require vendor repos)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - gnupg
+  - lsb-release
+  - ca-certificates
+  - apt-transport-https
+  - build-essential
+  - libssl-dev
+  - libreadline-dev
+  - zlib1g-dev
+  - libpq-dev
+  - libsqlite3-dev
+  - libxml2-dev
+  - libxslt1-dev
+  - libyaml-dev
+  - libffi-dev
+  - libgdbm-dev
+  - libncurses5-dev
+  - libbz2-dev
+  - postgresql
+  - postgresql-contrib
+  - certbot
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - htop
+  - nodejs
+  - npm
+
+# ----------------------------------------------------------------------------
+# Swap  (2 GiB — survives gem install / asset precompile spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # -- operator-editable environment variables --------------------------------
+  - path: /root/.openlitespeedrails-bootstrap.env
+    permissions: '0600'
+    content: |
+      # -----------------------------------------------------------------------
+      # OpenLiteSpeed Rails bootstrap — operator-editable variables
+      # Change these BEFORE first boot, or update and re-run the bootstrap.
+      # -----------------------------------------------------------------------
+      APP_DOMAIN=example.com
+      LE_EMAIL=admin@example.com
+      ENABLE_TLS=true
+
+      # Rails application name (used for directory and DB names)
+      APP_NAME=myapp
+
+      # Directory where the Rails app lives
+      APP_DIR=/var/www/myapp
+
+      # Ruby version to install via rbenv
+      RUBY_VERSION=3.3.4
+
+      # Rails version to install
+      RAILS_VERSION=7.2.2
+
+      # PostgreSQL database credentials
+      DB_NAME=myapp_production
+      DB_USER=myapp
+      DB_PASS=CHANGE_ME
+
+      # OpenLiteSpeed admin panel credentials
+      OLS_ADMIN_USER=admin
+      OLS_ADMIN_PASS=CHANGE_ME
+
+      # Rails secret key base — set to CHANGE_ME to auto-generate
+      SECRET_KEY_BASE=CHANGE_ME
+
+      # OpenLiteSpeed HTTP/HTTPS ports
+      OLS_HTTP_PORT=80
+      OLS_HTTPS_PORT=443
+      # OLS admin panel port (do NOT expose publicly)
+      OLS_ADMIN_PORT=7080
+
+      # Rails environment
+      RAILS_ENV=production
+
+  # -- bootstrap script -------------------------------------------------------
+  - path: /root/openlitespeedrails-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openlitespeedrails-bootstrap.log) 2>&1
+      source /root/.openlitespeedrails-bootstrap.env
+
+      echo "=== OpenLiteSpeed Rails bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # 0. Random-secret helper — SIGPIPE-safe under set -e + pipefail
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      if [ "${DB_PASS}" = "CHANGE_ME" ]; then
+        DB_PASS="$(rand)"
+        sed -i "s|^DB_PASS=.*|DB_PASS=${DB_PASS}|" /root/.openlitespeedrails-bootstrap.env
+      fi
+
+      if [ "${OLS_ADMIN_PASS}" = "CHANGE_ME" ]; then
+        OLS_ADMIN_PASS="$(rand)"
+        sed -i "s|^OLS_ADMIN_PASS=.*|OLS_ADMIN_PASS=${OLS_ADMIN_PASS}|" /root/.openlitespeedrails-bootstrap.env
+      fi
+
+      if [ "${SECRET_KEY_BASE}" = "CHANGE_ME" ]; then
+        SECRET_KEY_BASE="$(rand)$(rand)$(rand)"
+        sed -i "s|^SECRET_KEY_BASE=.*|SECRET_KEY_BASE=${SECRET_KEY_BASE}|" /root/.openlitespeedrails-bootstrap.env
+      fi
+
+      # -----------------------------------------------------------------------
+      # 1. OpenLiteSpeed — install via official repo
+      #    Ubuntu 26.04 ('plucky') may not have a published OLS repo yet;
+      #    fall back to noble (24.04) which is compatible.
+      # -----------------------------------------------------------------------
+      UBUNTU_CODENAME="$(lsb_release -cs)"
+
+      if ! command -v lsws &>/dev/null && [ ! -f /usr/local/lsws/bin/lswsctrl ]; then
+        # Add OpenLiteSpeed GPG key and repository
+        wget -q -O /tmp/ols.key https://repo.litespeed.sh
+        if bash /tmp/ols.key 2>/dev/null; then
+          echo "OLS repo script applied for ${UBUNTU_CODENAME}"
+        else
+          # fallback: noble repo until 26.04 published
+          echo "WARN: OLS repo script failed for ${UBUNTU_CODENAME}, applying noble fallback"
+          curl -fsSL https://repo.litespeed.sh | DISTRO_CODENAME=noble bash || true
+        fi
+        apt-get update -qq
+        apt-get install -y openlitespeed || true
+      fi
+
+      # Verify OLS installed
+      if [ ! -f /usr/local/lsws/bin/lswsctrl ]; then
+        echo "WARN: OpenLiteSpeed binary not found via repo, trying direct deb install"
+        OLS_VER="1.8.3"
+        wget -q -O /tmp/ols.deb \
+          "https://github.com/litespeedtech/openlitespeed/releases/download/v${OLS_VER}/openlitespeed-${OLS_VER}-amd64-linux.deb" || true
+        dpkg -i /tmp/ols.deb 2>/dev/null || apt-get install -f -y
+        rm -f /tmp/ols.deb
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. Install lsphp (LSAPI PHP for OLS) — used for admin panel
+      # -----------------------------------------------------------------------
+      if ! command -v /usr/local/lsws/lsphp83/bin/php &>/dev/null; then
+        apt-get install -y lsphp83 lsphp83-common lsphp83-mysql lsphp83-opcache 2>/dev/null || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 3. Ruby via rbenv (system-wide in /usr/local/rbenv)
+      # -----------------------------------------------------------------------
+      export RBENV_ROOT=/usr/local/rbenv
+      export PATH="${RBENV_ROOT}/bin:${RBENV_ROOT}/shims:${PATH}"
+
+      if [ ! -d "${RBENV_ROOT}" ]; then
+        git clone --depth=1 https://github.com/rbenv/rbenv.git "${RBENV_ROOT}"
+        git clone --depth=1 https://github.com/rbenv/ruby-build.git \
+          "${RBENV_ROOT}/plugins/ruby-build"
+      fi
+
+      # Make rbenv available system-wide
+      if [ ! -f /etc/profile.d/rbenv.sh ]; then
+        cat > /etc/profile.d/rbenv.sh <<'RBENVSH'
+      export RBENV_ROOT=/usr/local/rbenv
+      export PATH="${RBENV_ROOT}/bin:${RBENV_ROOT}/shims:${PATH}"
+      eval "$(rbenv init - bash)"
+      RBENVSH
+      fi
+      eval "$(rbenv init - bash)" 2>/dev/null || true
+
+      if ! rbenv versions --bare 2>/dev/null | grep -qx "${RUBY_VERSION}"; then
+        echo "Installing Ruby ${RUBY_VERSION} via rbenv (this may take 5-10 min)..."
+        MAKE_OPTS="-j$(nproc)" rbenv install "${RUBY_VERSION}"
+      fi
+      rbenv global "${RUBY_VERSION}"
+      rbenv rehash
+
+      # -----------------------------------------------------------------------
+      # 4. Install Bundler + Rails
+      # -----------------------------------------------------------------------
+      gem install bundler --no-document 2>/dev/null || true
+      gem install rails -v "${RAILS_VERSION}" --no-document 2>/dev/null || true
+      rbenv rehash
+
+      # -----------------------------------------------------------------------
+      # 5. PostgreSQL — create DB user and database
+      # -----------------------------------------------------------------------
+      systemctl enable postgresql
+      systemctl start postgresql
+
+      # Create DB role if it doesn't exist
+      su -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\" | grep -q 1 || \
+        psql -c \"CREATE ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASS}';\"" postgres
+
+      # Create database if it doesn't exist
+      su -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'\" | grep -q 1 || \
+        psql -c \"CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};\"" postgres
+
+      # -----------------------------------------------------------------------
+      # 6. Create sample Rails application
+      # -----------------------------------------------------------------------
+      mkdir -p "$(dirname "${APP_DIR}")"
+
+      if [ ! -f "${APP_DIR}/Gemfile" ]; then
+        echo "Creating sample Rails app at ${APP_DIR}..."
+        rails new "${APP_DIR}" \
+          --database=postgresql \
+          --skip-test \
+          --skip-bundle \
+          --skip-action-mailer \
+          --skip-action-cable \
+          --skip-asset-pipeline \
+          --skip-javascript \
+          2>&1 || true
+
+        # Write database.yml
+        cat > "${APP_DIR}/config/database.yml" <<DBYML
+      default: &default
+        adapter: postgresql
+        encoding: unicode
+        pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+        username: ${DB_USER}
+        password: ${DB_PASS}
+        host: 127.0.0.1
+
+      production:
+        <<: *default
+        database: ${DB_NAME}
+      DBYML
+
+        # Write a simple welcome controller
+        mkdir -p "${APP_DIR}/app/controllers"
+        cat > "${APP_DIR}/app/controllers/welcome_controller.rb" <<'RUBYCTRL'
+      class WelcomeController < ApplicationController
+        def index
+          render html: <<~HTML.html_safe
+            <!DOCTYPE html>
+            <html lang="en">
+            <head><meta charset="utf-8"><title>Rails on InterServer</title>
+            <style>body{font-family:sans-serif;text-align:center;padding:4rem;
+            background:#1a1a2e;color:#e0e0e0}h1{color:#cc0000}
+            code{background:#333;padding:.2em .4em;border-radius:3px}
+            a{color:#cc0000}</style></head>
+            <body>
+            <h1>Rails is running on OpenLiteSpeed!</h1>
+            <p>Your InterServer VPS is ready.</p>
+            <p>Deploy your application to <code>/var/www/myapp</code>.</p>
+            <p><a href="https://rubyonrails.org/docs">Rails Documentation</a></p>
+            </body></html>
+          HTML
+        end
+      end
+      RUBYCTRL
+
+        # Set root route
+        cat > "${APP_DIR}/config/routes.rb" <<'ROUTES'
+      Rails.application.routes.draw do
+        root "welcome#index"
+      end
+      ROUTES
+
+        # Append production secrets to credentials or use env var approach
+        chown -R www-data:www-data "${APP_DIR}"
+
+        # Bundle install
+        cd "${APP_DIR}"
+        sudo -u www-data RBENV_ROOT=/usr/local/rbenv \
+          PATH="/usr/local/rbenv/bin:/usr/local/rbenv/shims:${PATH}" \
+          HOME=/var/www \
+          bundle install --without development test 2>&1 || \
+          bundle install 2>&1 || true
+
+        # Create and migrate DB
+        sudo -u www-data RBENV_ROOT=/usr/local/rbenv \
+          PATH="/usr/local/rbenv/bin:/usr/local/rbenv/shims:${PATH}" \
+          HOME=/var/www \
+          RAILS_ENV="${RAILS_ENV}" \
+          SECRET_KEY_BASE="${SECRET_KEY_BASE}" \
+          bundle exec rails db:create db:migrate 2>&1 || true
+
+        chown -R www-data:www-data "${APP_DIR}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. Systemd service — Puma (Rack server for Rails, served via OLS proxy)
+      # -----------------------------------------------------------------------
+      PUMA_SOCKET="/run/puma/${APP_NAME}.sock"
+      mkdir -p /run/puma
+      chown www-data:www-data /run/puma
+
+      if [ ! -f /etc/systemd/system/puma-rails.service ]; then
+        cat > /etc/systemd/system/puma-rails.service <<PUMAUNIT
+      [Unit]
+      Description=Puma HTTP Server (Rails)
+      After=network.target postgresql.service
+
+      [Service]
+      Type=simple
+      User=www-data
+      Group=www-data
+      WorkingDirectory=${APP_DIR}
+      Environment=RAILS_ENV=${RAILS_ENV}
+      Environment=SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      Environment=RBENV_ROOT=/usr/local/rbenv
+      Environment=PATH=/usr/local/rbenv/bin:/usr/local/rbenv/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      Environment=HOME=/var/www
+      ExecStart=/usr/local/rbenv/shims/bundle exec puma -C config/puma.rb
+      RuntimeDirectory=puma
+      RuntimeDirectoryMode=0755
+      Restart=always
+      RestartSec=10
+      SyslogIdentifier=puma-rails
+
+      [Install]
+      WantedBy=multi-user.target
+      PUMAUNIT
+
+        # Write Puma config
+        cat > "${APP_DIR}/config/puma.rb" <<PUMACONF
+      workers ENV.fetch("WEB_CONCURRENCY") { 2 }
+      threads_count = ENV.fetch("RAILS_MAX_THREADS") { 5 }
+      threads threads_count, threads_count
+
+      preload_app!
+
+      bind "unix://${PUMA_SOCKET}"
+      pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
+
+      plugin :tmp_restart
+
+      on_worker_boot do
+        ActiveRecord::Base.establish_connection if defined?(ActiveRecord)
+      end
+      PUMACONF
+
+        mkdir -p "${APP_DIR}/tmp/pids"
+        chown -R www-data:www-data "${APP_DIR}"
+      fi
+
+      systemctl daemon-reload
+      systemctl enable puma-rails
+      systemctl restart puma-rails || true
+
+      # -----------------------------------------------------------------------
+      # 8. OpenLiteSpeed configuration
+      # -----------------------------------------------------------------------
+      OLS_CONF_DIR="/usr/local/lsws/conf"
+      OLS_VHOST_DIR="${OLS_CONF_DIR}/vhosts/${APP_NAME}"
+      mkdir -p "${OLS_VHOST_DIR}/conf"
+      mkdir -p /usr/local/lsws/logs
+      mkdir -p /usr/local/lsws/${APP_NAME}/logs
+
+      # Set OLS admin password
+      if [ -f /usr/local/lsws/admin/misc/admpass.sh ]; then
+        /usr/local/lsws/admin/misc/admpass.sh "${OLS_ADMIN_USER}" "${OLS_ADMIN_PASS}" 2>/dev/null || true
+      fi
+
+      # Virtual host config — proxy to Puma socket
+      cat > "${OLS_VHOST_DIR}/conf/vhconf.conf" <<OLSVHOST
+      docRoot                   ${APP_DIR}/public
+      enableGzip                1
+
+      errorlog ${APP_DIR}/log/ols-error.log {
+        useServer               1
+      }
+
+      accesslog ${APP_DIR}/log/ols-access.log {
+        useServer               0
+        rollingSize             10M
+      }
+
+      rewrite  {
+        enable                  1
+        autoLoadHtaccess        1
+        rules                   <<<END_RULES
+      RewriteCond %{DOCUMENT_ROOT}/%{REQUEST_FILENAME} !-f
+      RewriteRule ^/(.*)$ unix://${PUMA_SOCKET}|fcgi://localhost/ [P,L,QSA]
+      END_RULES
+      }
+
+      context / {
+        location              ${APP_DIR}/public
+        allowBrowse           1
+      }
+      OLSVHOST
+
+      # Main OLS httpd config
+      cat > "${OLS_CONF_DIR}/httpd_config.conf" <<OLSMAIN
+      serverName                InterServer Rails VPS
+      user                      www-data
+      group                     www-data
+      priority                  0
+      inMemBufSize              60M
+      swappingDir               /tmp/lshttpd/swap
+      autoFix503                1
+      gracefulRestartTimeout    300
+      mime                      conf/mime.properties
+      showVersionNumber         0
+
+      errorlog logs/error.log {
+        useServer               1
+        logLevel                WARN
+        rollingSize             10M
+      }
+
+      accesslog logs/access.log {
+        useServer               0
+        rollingSize             10M
+      }
+
+      indexFiles                index.html, index.php
+
+      expires {
+        enableExpires           1
+      }
+
+      tuning {
+        maxConnections          10000
+        maxSSLConnections       10000
+        connTimeout             300
+        maxKeepAliveReq         10000
+        keepAliveTimeout        5
+        sndBufSize              0
+        rcvBufSize              0
+        maxReqURLLen            32768
+        maxReqHeaderSize        65536
+        maxReqBodySize          2047M
+        maxDynRespHeaderSize    32768
+        maxDynRespSize          2047M
+        maxCachedFileSize       4096
+        totalInMemCacheSize     20M
+        maxMMapFileSize         256K
+        totalMMapCacheSize      40M
+        useSendfile             1
+        fileETag                28
+        enableSendfileChkSz     1
+        SSLCryptoDevice         null
+      }
+
+      listener Default {
+        address                 *:${OLS_HTTP_PORT}
+        secure                  0
+        map                     ${APP_NAME} *
+      }
+
+      virtualhost ${APP_NAME} {
+        vhRoot                  /usr/local/lsws/${APP_NAME}
+        configFile              ${OLS_VHOST_DIR}/conf/vhconf.conf
+        allowSymbolLink         1
+        enableScript            1
+        restrained              0
+      }
+
+      listener Admin {
+        address                 127.0.0.1:${OLS_ADMIN_PORT}
+        secure                  1
+        map                     _AdminVHost /
+      }
+      OLSMAIN
+
+      mkdir -p /usr/local/lsws/${APP_NAME}/logs
+      chown -R www-data:www-data /usr/local/lsws/${APP_NAME}
+      mkdir -p "${APP_DIR}/log"
+      chown -R www-data:www-data "${APP_DIR}/log"
+
+      # Start / restart OLS
+      if [ -f /usr/local/lsws/bin/lswsctrl ]; then
+        /usr/local/lsws/bin/lswsctrl restart 2>/dev/null || \
+          /usr/local/lsws/bin/lswsctrl start 2>/dev/null || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 9. UFW firewall — allow ONLY SSH + HTTP + HTTPS (OLS admin stays 127.0.0.1)
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 10. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # -----------------------------------------------------------------------
+      # 11. Unattended security upgrades
+      # -----------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'APT'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT
+
+      # -----------------------------------------------------------------------
+      # 12. TLS via Certbot (deferred gracefully if DNS not yet pointed)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "example.com" ] && \
+         [ "${LE_EMAIL}" != "admin@example.com" ]; then
+        certbot certonly --webroot \
+          -w "${APP_DIR}/public" \
+          --non-interactive \
+          --agree-tos \
+          -m "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" || echo "WARN: certbot deferred — point DNS to this IP then re-run certbot"
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f /usr/local/lsws/bin/lswsctrl ]; then
+          # Add HTTPS listener to OLS config
+          cat >> "${OLS_CONF_DIR}/httpd_config.conf" <<TLSLISTENER
+
+      listener HTTPS {
+        address                 *:${OLS_HTTPS_PORT}
+        secure                  1
+        keyFile                 ${CERT_DIR}/privkey.pem
+        certFile                ${CERT_DIR}/fullchain.pem
+        map                     ${APP_NAME} *
+      }
+      TLSLISTENER
+          /usr/local/lsws/bin/lswsctrl restart 2>/dev/null || true
+        fi
+      else
+        echo "WARN: certbot deferred — set APP_DOMAIN and LE_EMAIL in /root/.openlitespeedrails-bootstrap.env then re-run certbot"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 13. Write credentials file
+      # -----------------------------------------------------------------------
+      cat > /root/openlitespeedrails-credentials.txt <<CREDS
+      ===== OpenLiteSpeed Rails VPS Credentials =====
+      Generated   : $(date -u)
+      -----------------------------------------------
+      URL (HTTP)  : http://${APP_DOMAIN}
+      URL (HTTPS) : https://${APP_DOMAIN}
+      App Dir     : ${APP_DIR}
+      Rails Env   : ${RAILS_ENV}
+      -----------------------------------------------
+      PostgreSQL DB   : ${DB_NAME}
+      PostgreSQL User : ${DB_USER}
+      PostgreSQL Pass : ${DB_PASS}
+      -----------------------------------------------
+      OLS Admin Panel : https://127.0.0.1:${OLS_ADMIN_PORT}
+      OLS Admin User  : ${OLS_ADMIN_USER}
+      OLS Admin Pass  : ${OLS_ADMIN_PASS}
+      -----------------------------------------------
+      Rails SECRET_KEY_BASE : ${SECRET_KEY_BASE}
+      -----------------------------------------------
+      TLS             : ${ENABLE_TLS}
+      LE Email        : ${LE_EMAIL}
+      -----------------------------------------------
+      Service (Puma)  : systemctl status puma-rails
+      Rails Logs      : journalctl -u puma-rails -f
+      OLS Logs        : /usr/local/lsws/logs/error.log
+      Bootstrap Log   : /var/log/openlitespeedrails-bootstrap.log
+      CREDS
+      chmod 600 /root/openlitespeedrails-credentials.txt
+
+      echo "=== OpenLiteSpeed Rails bootstrap finished at $(date -u) ==="
+      echo "=== Credentials written to /root/openlitespeedrails-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# runcmd — run the bootstrap once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openlitespeedrails-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  OpenLiteSpeed Rails VPS is ready!
+  - Credentials   : /root/openlitespeedrails-credentials.txt
+  - Bootstrap log : /var/log/openlitespeedrails-bootstrap.log
+  - Puma service  : systemctl status puma-rails
+  - OLS restart   : /usr/local/lsws/bin/lswsctrl restart
+  - Edit /root/.openlitespeedrails-bootstrap.env and re-run
+    /root/openlitespeedrails-bootstrap.sh to change domain / enable TLS.
+  ============================================================

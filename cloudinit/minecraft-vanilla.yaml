@@ -1,0 +1,412 @@
+#cloud-config
+# =============================================================================
+# Minecraft Vanilla — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: OpenJDK 21 JRE + Minecraft Server (latest vanilla jar via Mojang API)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Game port : 25565/tcp+udp  (Java Edition)
+# RCON port : 25575/tcp      (optional remote console, localhost only by default)
+# =============================================================================
+# EDIT the variables in write_files -> /root/.minecraft-bootstrap.env
+# before launching, or supply them via your provisioner.
+# =============================================================================
+
+hostname: minecraft
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject SSH key + hostname later
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd runs)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - net-tools
+  - htop
+  - git
+  - jq
+  - screen
+  - openjdk-21-jre-headless
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables — fill in before first boot
+  # --------------------------------------------------------------------------
+  - path: /root/.minecraft-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Minecraft Vanilla bootstrap environment — edit BEFORE launching instance
+      # -----------------------------------------------------------------------
+
+      # Server name shown in the in-game server list (MOTD)
+      SERVER_MOTD="An InterServer Minecraft Server"
+
+      # Maximum number of player slots (default 20)
+      MAX_PLAYERS=20
+
+      # Difficulty: peaceful, easy, normal, hard
+      DIFFICULTY=normal
+
+      # Game mode for new players: survival, creative, adventure, spectator
+      DEFAULT_GAMEMODE=survival
+
+      # Allow players to fly (operators can still fly regardless)
+      ALLOW_FLIGHT=false
+
+      # Enable PvP (player vs player combat)
+      ENABLE_PVP=true
+
+      # Spawn protection radius (0 = disabled)
+      SPAWN_PROTECTION=16
+
+      # View distance in chunks (2-32, default 10)
+      VIEW_DISTANCE=10
+
+      # Simulation distance in chunks (2-32, default 10)
+      SIMULATION_DISTANCE=10
+
+      # World seed (leave empty for random seed)
+      LEVEL_SEED=""
+
+      # World name / directory name
+      LEVEL_NAME=world
+
+      # RCON password — change this before launching!
+      # Set to empty string to disable RCON entirely.
+      RCON_PASSWORD=CHANGE_ME
+
+      # JVM heap size (minimum and maximum)
+      JVM_XMS=1G
+      JVM_XMX=3G
+
+      # Minecraft server version to install
+      # 'latest' downloads the most recent stable release via the Mojang version manifest.
+      # You may also pin to a specific version, e.g. '1.21.4'
+      MC_VERSION=latest
+
+      # Install directory
+      MC_DIR=/opt/minecraft
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/minecraft-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/minecraft-bootstrap.log) 2>&1
+      source /root/.minecraft-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Minecraft Vanilla bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # 1. Unattended-upgrades (automatic security updates)
+      # -----------------------------------------------------------------------
+      echo "--- Configuring unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      EOF
+      systemctl enable --now unattended-upgrades || true
+
+      # -----------------------------------------------------------------------
+      # 2. Create minecraft system user and directories
+      # -----------------------------------------------------------------------
+      echo "--- Creating minecraft system user ---"
+      id -u minecraft &>/dev/null || \
+        useradd --system --shell /usr/sbin/nologin \
+                --home "${MC_DIR}" --create-home minecraft
+
+      mkdir -p "${MC_DIR}"
+      chown -R minecraft:minecraft "${MC_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 3. Generate RCON password if placeholder is still set
+      # -----------------------------------------------------------------------
+      if [ "${RCON_PASSWORD}" = "CHANGE_ME" ] || [ -z "${RCON_PASSWORD}" ]; then
+        RCON_PASSWORD="$(rand)"
+        echo "INFO: Generated random RCON password."
+      fi
+      RCON_ENABLED=true
+      if [ -z "${RCON_PASSWORD}" ]; then
+        RCON_ENABLED=false
+      fi
+
+      # -----------------------------------------------------------------------
+      # 4. Resolve Minecraft server JAR URL via Mojang's version manifest
+      # -----------------------------------------------------------------------
+      echo "--- Resolving Minecraft server download URL ---"
+      MANIFEST_URL="https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
+      MANIFEST="$(curl -fsSL "${MANIFEST_URL}")"
+
+      if [ "${MC_VERSION}" = "latest" ]; then
+        MC_VERSION="$(echo "${MANIFEST}" | jq -r '.latest.release')"
+        echo "INFO: Resolved latest release to ${MC_VERSION}"
+      fi
+
+      VERSION_URL="$(echo "${MANIFEST}" | jq -r --arg v "${MC_VERSION}" \
+        '.versions[] | select(.id == $v) | .url')"
+
+      if [ -z "${VERSION_URL}" ]; then
+        echo "ERROR: Could not find Minecraft version '${MC_VERSION}' in manifest." >&2
+        exit 1
+      fi
+
+      SERVER_JAR_URL="$(curl -fsSL "${VERSION_URL}" | jq -r '.downloads.server.url')"
+      SERVER_JAR_SHA1="$(curl -fsSL "${VERSION_URL}" | jq -r '.downloads.server.sha1')"
+
+      echo "INFO: Downloading ${MC_VERSION} server JAR..."
+      curl -fsSL -o "${MC_DIR}/server.jar" "${SERVER_JAR_URL}"
+
+      # Verify checksum
+      ACTUAL_SHA1="$(sha1sum "${MC_DIR}/server.jar" | awk '{print $1}')"
+      if [ "${ACTUAL_SHA1}" != "${SERVER_JAR_SHA1}" ]; then
+        echo "ERROR: SHA1 mismatch for server.jar (expected ${SERVER_JAR_SHA1}, got ${ACTUAL_SHA1})" >&2
+        exit 1
+      fi
+      echo "INFO: SHA1 verified OK (${ACTUAL_SHA1})"
+
+      # -----------------------------------------------------------------------
+      # 5. Accept the Minecraft EULA
+      # -----------------------------------------------------------------------
+      echo "--- Accepting Minecraft EULA ---"
+      cat > "${MC_DIR}/eula.txt" <<'EULAEOF'
+      # By setting eula=true you are indicating your agreement to the Minecraft
+      # End User License Agreement (https://aka.ms/MinecraftEULA).
+      eula=true
+      EULAEOF
+
+      # -----------------------------------------------------------------------
+      # 6. Write server.properties
+      # -----------------------------------------------------------------------
+      echo "--- Writing server.properties ---"
+
+      # Build seed line (empty value = random seed)
+      SEED_LINE="level-seed=${LEVEL_SEED:-}"
+
+      cat > "${MC_DIR}/server.properties" <<EOF
+      #Minecraft server properties — managed by minecraft-bootstrap.sh
+      motd=${SERVER_MOTD}
+      max-players=${MAX_PLAYERS}
+      difficulty=${DIFFICULTY}
+      gamemode=${DEFAULT_GAMEMODE}
+      allow-flight=${ALLOW_FLIGHT}
+      pvp=${ENABLE_PVP}
+      spawn-protection=${SPAWN_PROTECTION}
+      view-distance=${VIEW_DISTANCE}
+      simulation-distance=${SIMULATION_DISTANCE}
+      ${SEED_LINE}
+      level-name=${LEVEL_NAME}
+      online-mode=true
+      white-list=false
+      enforce-whitelist=false
+      enable-rcon=${RCON_ENABLED}
+      rcon.port=25575
+      rcon.password=${RCON_PASSWORD}
+      server-port=25565
+      server-ip=
+      enable-query=false
+      query.port=25565
+      enable-jmx-monitoring=false
+      sync-chunk-writes=true
+      prevent-proxy-connections=false
+      hide-online-players=false
+      log-ips=true
+      EOF
+
+      # -----------------------------------------------------------------------
+      # 7. Write JVM flags file (tuned for server workloads)
+      # -----------------------------------------------------------------------
+      echo "--- Writing JVM flags ---"
+      cat > "${MC_DIR}/jvm-flags.conf" <<'EOF'
+      -XX:+UseG1GC
+      -XX:+ParallelRefProcEnabled
+      -XX:MaxGCPauseMillis=200
+      -XX:+UnlockExperimentalVMOptions
+      -XX:+DisableExplicitGC
+      -XX:+AlwaysPreTouch
+      -XX:G1HeapWastePercent=5
+      -XX:G1MixedGCCountTarget=4
+      -XX:InitiatingHeapOccupancyPercent=15
+      -XX:G1MixedGCLiveThresholdPercent=90
+      -XX:G1RSetUpdatingPauseTimePercent=5
+      -XX:SurvivorRatio=32
+      -XX:+PerfDisableSharedMem
+      -XX:MaxTenuringThreshold=1
+      -Dusing.aikars.flags=https://mcflags.emc.gs
+      -Daikars.new.flags=true
+      EOF
+
+      chown -R minecraft:minecraft "${MC_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 8. Systemd service for Minecraft server
+      # -----------------------------------------------------------------------
+      echo "--- Creating minecraft-server systemd service ---"
+
+      # Read JVM flags into a single-line string for ExecStart
+      JVM_FLAGS="$(tr '\n' ' ' < "${MC_DIR}/jvm-flags.conf")"
+
+      cat > /etc/systemd/system/minecraft-server.service <<EOF
+      [Unit]
+      Description=Minecraft Vanilla Server (${MC_VERSION})
+      After=network.target
+      Documentation=https://minecraft.net
+
+      [Service]
+      Type=simple
+      User=minecraft
+      Group=minecraft
+      WorkingDirectory=${MC_DIR}
+      Environment=HOME=${MC_DIR}
+      ExecStart=/usr/bin/java ${JVM_FLAGS} -Xms${JVM_XMS} -Xmx${JVM_XMX} -jar server.jar nogui
+      Restart=on-failure
+      RestartSec=10
+      SuccessExitStatus=0 1
+      StandardOutput=journal
+      StandardError=journal
+
+      # Security hardening
+      NoNewPrivileges=true
+      PrivateTmp=true
+      ProtectHome=read-only
+      ReadWritePaths=${MC_DIR}
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      # -----------------------------------------------------------------------
+      # 9. Firewall — allow SSH + Minecraft ports only
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 25565/tcp comment 'Minecraft Java Edition TCP'
+      ufw allow 25565/udp comment 'Minecraft Java Edition UDP'
+      # RCON only on loopback (management via local tools); do NOT expose to internet
+      # ufw allow 25575/tcp  # uncomment only if external RCON is needed
+      ufw --force enable
+      echo "UFW status:"
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 10. Fail2ban (SSH brute-force protection)
+      # -----------------------------------------------------------------------
+      echo "--- Configuring fail2ban ---"
+      cat > /etc/fail2ban/jail.d/minecraft-defaults.conf <<'EOF'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      EOF
+      systemctl enable --now fail2ban || true
+
+      # -----------------------------------------------------------------------
+      # 11. Enable and start Minecraft server
+      # -----------------------------------------------------------------------
+      echo "--- Enabling and starting minecraft-server ---"
+      systemctl daemon-reload
+      systemctl enable minecraft-server.service
+      systemctl start minecraft-server.service || true
+
+      # -----------------------------------------------------------------------
+      # 12. Write credentials / connection info
+      # -----------------------------------------------------------------------
+      echo "--- Writing credentials file ---"
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      cat > /root/minecraft-credentials.txt <<CREDS
+      ======================================================
+        Minecraft Vanilla Server — Connection Information
+      ======================================================
+      Server Version : ${MC_VERSION}
+      Host / IP      : ${SERVER_IP}
+      Game Port      : 25565 (TCP + UDP)
+      RCON Port      : 25575 (TCP, localhost only)
+      RCON Password  : ${RCON_PASSWORD}
+      RCON Enabled   : ${RCON_ENABLED}
+
+      HOW TO CONNECT:
+        1. Launch Minecraft Java Edition
+        2. Multiplayer -> Add Server -> ${SERVER_IP}:25565
+
+      RCON (remote console):
+        mcrcon -H 127.0.0.1 -P 25575 -p '${RCON_PASSWORD}'
+        (install: apt install mcrcon  OR  pip install mcrcon)
+
+      SERVICE MANAGEMENT:
+        systemctl status  minecraft-server
+        systemctl restart minecraft-server
+        journalctl -u     minecraft-server -f
+
+      SERVER FILES      : ${MC_DIR}/
+      World data        : ${MC_DIR}/${LEVEL_NAME}/
+      server.properties : ${MC_DIR}/server.properties
+
+      Bootstrap log     : /var/log/minecraft-bootstrap.log
+      ======================================================
+      CREDS
+      chmod 600 /root/minecraft-credentials.txt
+
+      echo "=== Minecraft Vanilla bootstrap complete at $(date -u) ==="
+      echo "=== Players connect to ${SERVER_IP}:25565 ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/minecraft-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in the console log when cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ==========================================================
+  Minecraft Vanilla server is ready!
+  - Players connect via Minecraft Java Edition to port 25565
+  - Service status  : systemctl status minecraft-server
+  - Credentials     : cat /root/minecraft-credentials.txt
+  - Bootstrap log   : /var/log/minecraft-bootstrap.log
+  ==========================================================

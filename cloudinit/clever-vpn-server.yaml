@@ -1,0 +1,424 @@
+#cloud-config
+# =============================================================================
+# Clever VPN Clustered Server — "one-click app" — Ubuntu 26.04 LTS cloud-init
+# =============================================================================
+# This is an InterServer in-house equivalent of the "Clever VPN Clustered
+# Server" marketplace app.
+#
+# Clever VPN is a third-party commercial product with no public self-hosted
+# installer.  This image therefore builds a FUNCTIONALLY EQUIVALENT stack:
+#
+#   • kernel WireGuard (wireguard + wireguard-tools) via native Ubuntu packages
+#   • wg-quick for interface management (wg-quick@wg0.service)
+#   • IP forwarding + iptables NAT MASQUERADE for full-tunnel client routing
+#   • UFW firewall (allow SSH + WireGuard UDP 51820 only)
+#   • fail2ban SSH brute-force protection
+#   • unattended-upgrades for automatic security patches
+#   • Generated server keypair + 5 ready-to-use peer configs on first boot
+#   • QR code per peer (scannable with the WireGuard mobile app)
+#   • Credentials summary at /root/clever-vpn-credentials.txt (chmod 600)
+#
+# ── CLEVER VPN HOOK ──────────────────────────────────────────────────────────
+# If you have a real Clever VPN installer package or install URL, replace the
+# marked block inside /root/clever-vpn-bootstrap.sh labelled:
+#   ## CLEVER_VPN_INSTALL_HOOK_BEGIN / ## CLEVER_VPN_INSTALL_HOOK_END
+# with the vendor-supplied installation steps, then comment out the WireGuard
+# fallback immediately below those markers.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# BASE IMAGE: ubuntu26.qcow2 (Ubuntu 26.04 LTS)
+# =============================================================================
+
+hostname: clever-vpn-server
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - wireguard
+  - wireguard-tools
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - curl
+  - wget
+  - gnupg
+  - ca-certificates
+  - lsb-release
+  - qrencode
+  - iptables
+  - iptables-persistent
+  - net-tools
+  - jq
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive first-boot package churn)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files written to disk before runcmd fires
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.clever-vpn-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # Clever VPN Bootstrap — operator-editable variables
+      # Edit BEFORE first boot, or re-run /root/clever-vpn-bootstrap.sh
+      # after editing (idempotent).
+      # ============================================================
+
+      # WireGuard UDP listen port
+      WG_PORT=51820
+
+      # VPN tunnel network (server takes .1, clients start at .2)
+      WG_NET=10.8.0.0/24
+      WG_SERVER_IP=10.8.0.1
+
+      # WireGuard interface name
+      WG_IFACE=wg0
+
+      # DNS pushed to VPN clients
+      WG_DNS=1.1.1.1,8.8.8.8
+
+      # Number of peer/client configs to pre-generate on first boot
+      WG_PEER_COUNT=5
+
+      # Server public hostname or IP used in client Endpoint lines.
+      # Leave as CHANGE_ME to auto-detect via ipify on first boot.
+      SERVER_HOST=CHANGE_ME
+
+      # Keep IP forwarding enabled for NAT (required — do not change)
+      ENABLE_FORWARDING=true
+
+  # --- bootstrap script -------------------------------------------------------
+  - path: /root/clever-vpn-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/clever-vpn-bootstrap.log) 2>&1
+      source /root/.clever-vpn-bootstrap.env
+
+      echo "============================================================"
+      echo " Clever VPN Bootstrap -- $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      echo " Stack: WireGuard equivalent of Clever VPN Clustered Server"
+      echo "============================================================"
+
+      # ------------------------------------------------------------------
+      # SIGPIPE-safe random-string helper
+      # ------------------------------------------------------------------
+      rand24() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # ------------------------------------------------------------------
+      # Detect public IP when SERVER_HOST is unset or placeholder
+      # ------------------------------------------------------------------
+      if [ -z "${SERVER_HOST:-}" ] || [ "${SERVER_HOST}" = "CHANGE_ME" ]; then
+        SERVER_HOST="$(curl -sf --max-time 10 https://api.ipify.org 2>/dev/null \
+          || curl -sf --max-time 10 http://checkip.amazonaws.com 2>/dev/null \
+          || true)"
+        SERVER_HOST="${SERVER_HOST:-127.0.0.1}"
+        echo "Auto-detected SERVER_HOST=${SERVER_HOST}"
+        sed -i "s|^SERVER_HOST=.*|SERVER_HOST=${SERVER_HOST}|" /root/.clever-vpn-bootstrap.env
+      fi
+
+      # ------------------------------------------------------------------
+      ## CLEVER_VPN_INSTALL_HOOK_BEGIN
+      # ── If you have the real Clever VPN installer, add it here. ──────
+      # Example (replace URL/package with real values):
+      #
+      #   curl -fsSL https://repo.clever-vpn.example.com/install.sh \
+      #       | bash -s -- --port "${WG_PORT}" --network "${WG_NET}"
+      #   systemctl enable clever-vpn-cluster
+      #   systemctl start  clever-vpn-cluster
+      #   # Then skip or remove the WireGuard fallback below.
+      #
+      ## CLEVER_VPN_INSTALL_HOOK_END
+      # ── No real installer found — using WireGuard fallback. ──────────
+      # ------------------------------------------------------------------
+
+      # ------------------------------------------------------------------
+      # IP forwarding (required for client routing / NAT)
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_FORWARDING}" = "true" ]; then
+        echo "Enabling IP forwarding..."
+        sysctl -w net.ipv4.ip_forward=1
+        sysctl -w net.ipv6.conf.all.forwarding=1
+        sed -i 's|^#\?net\.ipv4\.ip_forward\s*=.*|net.ipv4.ip_forward=1|' /etc/sysctl.conf
+        grep -q '^net\.ipv6\.conf\.all\.forwarding' /etc/sysctl.conf \
+          || echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.conf
+        sysctl -p
+      fi
+
+      # ------------------------------------------------------------------
+      # Determine outbound (public) network interface for NAT MASQUERADE
+      # ------------------------------------------------------------------
+      PUB_IFACE="$(ip route show default | awk '/default/ {print $5; exit}')"
+      echo "Primary interface for NAT: ${PUB_IFACE}"
+
+      # ------------------------------------------------------------------
+      # WireGuard server key material
+      # ------------------------------------------------------------------
+      WG_DIR=/etc/wireguard
+      mkdir -p "${WG_DIR}"
+      chmod 700 "${WG_DIR}"
+
+      SRV_PRIV="${WG_DIR}/server_private.key"
+      SRV_PUB="${WG_DIR}/server_public.key"
+
+      if [ ! -f "${SRV_PRIV}" ]; then
+        echo "Generating server WireGuard keypair..."
+        wg genkey | tee "${SRV_PRIV}" | wg pubkey > "${SRV_PUB}"
+        chmod 600 "${SRV_PRIV}"
+      fi
+
+      SERVER_PRIVKEY="$(cat "${SRV_PRIV}")"
+      SERVER_PUBKEY="$(cat "${SRV_PUB}")"
+      echo "Server public key: ${SERVER_PUBKEY}"
+
+      # ------------------------------------------------------------------
+      # Write /etc/wireguard/wg0.conf (idempotent)
+      # ------------------------------------------------------------------
+      SERVER_CONF="${WG_DIR}/${WG_IFACE}.conf"
+
+      if [ ! -f "${SERVER_CONF}" ]; then
+        echo "Writing server config ${SERVER_CONF}..."
+        printf '%s\n' \
+          "[Interface]" \
+          "Address    = ${WG_SERVER_IP}/24" \
+          "ListenPort = ${WG_PORT}" \
+          "PrivateKey = ${SERVER_PRIVKEY}" \
+          "" \
+          "# NAT masquerade — route VPN clients through the server public IP" \
+          "PostUp   = iptables -t nat -A POSTROUTING -s ${WG_NET} -o ${PUB_IFACE} -j MASQUERADE; iptables -A FORWARD -i ${WG_IFACE} -j ACCEPT; iptables -A FORWARD -o ${WG_IFACE} -j ACCEPT" \
+          "PostDown = iptables -t nat -D POSTROUTING -s ${WG_NET} -o ${PUB_IFACE} -j MASQUERADE; iptables -D FORWARD -i ${WG_IFACE} -j ACCEPT; iptables -D FORWARD -o ${WG_IFACE} -j ACCEPT" \
+          "" \
+          > "${SERVER_CONF}"
+        chmod 600 "${SERVER_CONF}"
+      fi
+
+      # ------------------------------------------------------------------
+      # Generate peer configs
+      # ------------------------------------------------------------------
+      PEERS_DIR="${WG_DIR}/peers"
+      mkdir -p "${PEERS_DIR}"
+      chmod 700 "${PEERS_DIR}"
+
+      # Base octets of tunnel network (e.g. "10.8.0" from "10.8.0.0/24")
+      NET_BASE="$(echo "${WG_NET}" | cut -d'/' -f1 | sed 's/\.[0-9]*$//')"
+
+      CRED_PEERS=""
+
+      for i in $(seq 1 "${WG_PEER_COUNT}"); do
+        PEER_NAME="peer${i}"
+        PEER_DIR="${PEERS_DIR}/${PEER_NAME}"
+        mkdir -p "${PEER_DIR}"
+
+        P_PRIV="${PEER_DIR}/private.key"
+        P_PUB="${PEER_DIR}/public.key"
+        P_PSK="${PEER_DIR}/preshared.key"
+        P_CONF="${PEER_DIR}/${PEER_NAME}.conf"
+
+        if [ ! -f "${P_PRIV}" ]; then
+          echo "  Generating keys for ${PEER_NAME}..."
+          wg genkey | tee "${P_PRIV}" | wg pubkey > "${P_PUB}"
+          wg genpsk > "${P_PSK}"
+          chmod 600 "${P_PRIV}" "${P_PSK}"
+        fi
+
+        PEER_PRIVKEY="$(cat "${P_PRIV}")"
+        PEER_PUBKEY="$(cat "${P_PUB}")"
+        PEER_PSK="$(cat "${P_PSK}")"
+        PEER_IP="${NET_BASE}.$((i + 1))"
+
+        if [ ! -f "${P_CONF}" ]; then
+          printf '%s\n' \
+            "[Interface]" \
+            "PrivateKey = ${PEER_PRIVKEY}" \
+            "Address    = ${PEER_IP}/24" \
+            "DNS        = ${WG_DNS}" \
+            "" \
+            "[Peer]" \
+            "PublicKey       = ${SERVER_PUBKEY}" \
+            "PresharedKey    = ${PEER_PSK}" \
+            "Endpoint        = ${SERVER_HOST}:${WG_PORT}" \
+            "AllowedIPs      = 0.0.0.0/0, ::/0" \
+            "PersistentKeepalive = 25" \
+            > "${P_CONF}"
+          chmod 600 "${P_CONF}"
+        fi
+
+        # Append peer block to server config if not already present
+        if ! grep -qF "${PEER_PUBKEY}" "${SERVER_CONF}"; then
+          printf '\n%s\n%s\n%s\n%s\n%s\n' \
+            "[Peer]" \
+            "# ${PEER_NAME} — tunnel IP ${PEER_IP}" \
+            "PublicKey    = ${PEER_PUBKEY}" \
+            "PresharedKey = ${PEER_PSK}" \
+            "AllowedIPs   = ${PEER_IP}/32" \
+            >> "${SERVER_CONF}"
+        fi
+
+        # Generate QR code for mobile app import
+        QR="${PEER_DIR}/${PEER_NAME}.png"
+        if command -v qrencode >/dev/null 2>&1; then
+          qrencode -t PNG -o "${QR}" < "${P_CONF}" 2>/dev/null || true
+        fi
+
+        CRED_PEERS="${CRED_PEERS}
+        ${PEER_NAME}: IP=${PEER_IP}  conf=${P_CONF}  qr=${QR}"
+      done
+
+      # ------------------------------------------------------------------
+      # Enable and start WireGuard
+      # ------------------------------------------------------------------
+      echo "Enabling wg-quick@${WG_IFACE}..."
+      systemctl enable "wg-quick@${WG_IFACE}"
+      systemctl restart "wg-quick@${WG_IFACE}" || systemctl start "wg-quick@${WG_IFACE}"
+
+      # ------------------------------------------------------------------
+      # Firewall (UFW) — SSH + WireGuard UDP only
+      # ------------------------------------------------------------------
+      echo "Configuring UFW..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow "${WG_PORT}/udp" comment 'Clever VPN / WireGuard'
+      ufw --force enable
+      ufw status verbose
+
+      # ------------------------------------------------------------------
+      # fail2ban — protect SSH
+      # ------------------------------------------------------------------
+      echo "Configuring fail2ban..."
+      printf '%s\n' \
+        "[sshd]" \
+        "enabled  = true" \
+        "port     = ssh" \
+        "maxretry = 5" \
+        "findtime = 600" \
+        "bantime  = 3600" \
+        > /etc/fail2ban/jail.d/sshd-local.conf
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # ------------------------------------------------------------------
+      # Unattended-upgrades — automatic security patches
+      # ------------------------------------------------------------------
+      echo "Configuring unattended-upgrades..."
+      printf '%s\n' \
+        'APT::Periodic::Update-Package-Lists "1";' \
+        'APT::Periodic::Unattended-Upgrade "1";' \
+        'APT::Periodic::AutocleanInterval "7";' \
+        > /etc/apt/apt.conf.d/20auto-upgrades
+      systemctl enable unattended-upgrades
+      systemctl restart unattended-upgrades
+
+      # ------------------------------------------------------------------
+      # Write credentials summary (chmod 600 — root-readable only)
+      # ------------------------------------------------------------------
+      echo "Writing /root/clever-vpn-credentials.txt..."
+      {
+        printf '%s\n' "================================================================"
+        printf '%s\n' " Clever VPN Clustered Server — Credentials & Connection Info"
+        printf '%s\n' " Generated : $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '%s\n' "================================================================"
+        printf '\n'
+        printf '%s\n' "NOTE: Clever VPN is a commercial product with no public"
+        printf '%s\n' "self-hosted installer. This server runs a WireGuard-based"
+        printf '%s\n' "equivalent that provides identical VPN functionality."
+        printf '%s\n' "To use the real Clever VPN package, see the install hook in:"
+        printf '%s\n' "  /root/clever-vpn-bootstrap.sh  (CLEVER_VPN_INSTALL_HOOK_BEGIN)"
+        printf '\n'
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' " Server"
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' "Public IP / Endpoint : ${SERVER_HOST}"
+        printf '%s\n' "WireGuard port       : ${WG_PORT}/UDP"
+        printf '%s\n' "VPN network          : ${WG_NET}"
+        printf '%s\n' "Server VPN IP        : ${WG_SERVER_IP}"
+        printf '%s\n' "Interface            : ${WG_IFACE}"
+        printf '%s\n' "Server Public Key    : ${SERVER_PUBKEY}"
+        printf '\n'
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' " Sample client config (peer1) — import into any WireGuard app"
+        printf '%s\n' "----------------------------------------------------------------"
+        if [ -f "${PEERS_DIR}/peer1/peer1.conf" ]; then
+          cat "${PEERS_DIR}/peer1/peer1.conf"
+        fi
+        printf '\n'
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' " All peer configs"
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' "${CRED_PEERS}"
+        printf '\n'
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' " Files"
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' "Server config  : /etc/wireguard/${WG_IFACE}.conf"
+        printf '%s\n' "Peer configs   : /etc/wireguard/peers/"
+        printf '%s\n' "Bootstrap log  : /var/log/clever-vpn-bootstrap.log"
+        printf '%s\n' "Credentials    : /root/clever-vpn-credentials.txt"
+        printf '\n'
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' " Quick commands"
+        printf '%s\n' "----------------------------------------------------------------"
+        printf '%s\n' "Show tunnel status : wg show"
+        printf '%s\n' "Restart tunnel     : systemctl restart wg-quick@${WG_IFACE}"
+        printf '%s\n' "Add a new peer     : wg genkey | tee priv.key | wg pubkey > pub.key"
+        printf '%s\n' "                     then append a [Peer] block to ${WG_DIR}/${WG_IFACE}.conf"
+        printf '%s\n' "                     and reload: wg addconf ${WG_IFACE} <fragment.conf>"
+        printf '\n'
+        printf '%s\n' "================================================================"
+      } > /root/clever-vpn-credentials.txt
+      chmod 600 /root/clever-vpn-credentials.txt
+
+      echo "============================================================"
+      echo " Clever VPN Bootstrap COMPLETE -- $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      echo " Credentials : /root/clever-vpn-credentials.txt"
+      echo " Peers ready : ${WG_PEER_COUNT}"
+      echo "============================================================"
+
+# ----------------------------------------------------------------------------
+# runcmd — execute bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/clever-vpn-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output log
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  Clever VPN Clustered Server (WireGuard equivalent) is ready.
+  SSH to this server, then run:
+    cat /root/clever-vpn-credentials.txt
+  for the server public key, endpoint, and all peer configs.
+  Peer .conf files are in /etc/wireguard/peers/ — importable
+  into any WireGuard client (desktop or mobile).
+  QR code .png files sit next to each peer conf for mobile use.
+  WireGuard UDP port 51820 is open through UFW.
+  Bootstrap log: /var/log/clever-vpn-bootstrap.log
+  ============================================================
+  Boot completed in $UPTIME seconds.

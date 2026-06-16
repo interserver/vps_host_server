@@ -1,0 +1,304 @@
+#cloud-config
+# =============================================================================
+# NodeJS "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Node.js LTS (via NodeSource) + Nginx reverse proxy
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.nodejs-bootstrap.env block
+# (domain, email, TLS) before launching, OR leave the defaults and the
+# bootstrap will generate random secrets where needed.
+# =============================================================================
+
+hostname: nodejs
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep provisioner-injected SSH key + hostname working
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages — Node.js LTS itself is added via NodeSource repo in the script
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - git
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable variables ------------------------------------------
+  - path: /root/.nodejs-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE before first boot -----
+      APP_DOMAIN="example.com"         # primary domain served by Nginx (no scheme)
+      LE_EMAIL="admin@example.com"     # Let's Encrypt registration email
+      ENABLE_TLS="true"                # set false to skip certbot (e.g. no DNS yet)
+
+      # Application settings
+      APP_PORT="3000"                  # internal port Node.js listens on
+      APP_DIR="/var/www/nodejs-app"    # where the Node.js application lives
+      NODE_MAJOR="22"                  # LTS major version (NodeSource: 22 = LTS as of 2025)
+
+      # Secret — left as CHANGE_ME means a random value is generated at boot
+      APP_SECRET="CHANGE_ME"
+
+  # --- Nginx reverse-proxy vhost --------------------------------------------
+  - path: /etc/nginx/sites-available/nodejs.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name APP_DOMAIN_PLACEHOLDER;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          # Pass all requests to Node.js
+          location / {
+              proxy_pass         http://127.0.0.1:APP_PORT_PLACEHOLDER;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade $http_upgrade;
+              proxy_set_header   Connection 'upgrade';
+              proxy_set_header   Host $host;
+              proxy_set_header   X-Real-IP $remote_addr;
+              proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              proxy_cache_bypass $http_upgrade;
+          }
+
+          location = /favicon.ico { log_not_found off; access_log off; }
+          location = /robots.txt  { log_not_found off; access_log off; allow all; }
+          location ~ /\.(?!well-known).* { deny all; }
+      }
+
+  # --- systemd unit for the Node.js app -------------------------------------
+  - path: /etc/systemd/system/nodejs-app.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Node.js application server
+      After=network.target
+      Wants=network.target
+
+      [Service]
+      Type=simple
+      User=www-data
+      Group=www-data
+      WorkingDirectory=/var/www/nodejs-app
+      Environment="HOME=/var/www/nodejs-app"
+      EnvironmentFile=/etc/nodejs-app.env
+      ExecStart=/usr/bin/node /var/www/nodejs-app/index.js
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=nodejs-app
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- fail2ban jails -------------------------------------------------------
+  - path: /etc/fail2ban/jail.d/nodejs.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades ----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/nodejs-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/nodejs-bootstrap.log) 2>&1
+      source /root/.nodejs-bootstrap.env
+
+      echo "=== Node.js bootstrap started: $(date) ==="
+
+      # --- random secret generator (SIGPIPE-safe under set -e + pipefail) ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$APP_SECRET" = "CHANGE_ME" ] && APP_SECRET="$(rand)"
+
+      # --- install Node.js LTS via NodeSource --------------------------------
+      # fallback: noble repo until 26.04 published
+      if ! command -v node >/dev/null 2>&1; then
+        curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+        apt-get install -y nodejs
+      else
+        echo "node already installed: $(node --version)"
+      fi
+
+      echo "Node.js version: $(node --version)"
+      echo "npm version:     $(npm --version)"
+
+      # --- install npm globally available tools (idempotent) -----------------
+      npm install -g pm2 2>/dev/null || true
+
+      # --- create app directory -----------------------------------------------
+      mkdir -p "${APP_DIR}"
+      chown www-data:www-data "${APP_DIR}"
+
+      # --- write the 'it works' Node.js app ------------------------------------
+      cat > "${APP_DIR}/index.js" <<'NODEAPP'
+      'use strict';
+      const http = require('http');
+      const os   = require('os');
+
+      const PORT   = parseInt(process.env.APP_PORT  || '3000', 10);
+      const SECRET = process.env.APP_SECRET || 'not-set';
+
+      const server = http.createServer((req, res) => {
+        if (req.url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', runtime: 'nodejs', version: process.version }));
+          return;
+        }
+        const html = `<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Node.js is running</title>
+        <style>
+          body { font-family: system-ui, sans-serif; display: flex; align-items: center;
+                 justify-content: center; min-height: 100vh; margin: 0; background: #0f0f0f; color: #fff; }
+          .card { text-align: center; padding: 2rem 3rem; border: 1px solid #333; border-radius: 12px; }
+          h1 { font-size: 2.5rem; margin: 0 0 .5rem; }
+          p  { color: #aaa; margin: .25rem 0; }
+          .badge { display: inline-block; background: #5fa04e; color: #fff;
+                   border-radius: 6px; padding: .2rem .7rem; font-size: .85rem; margin-top: 1rem; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>It works!</h1>
+          <p>Node.js ${process.version} is running on InterServer.</p>
+          <p>Edit <code>/var/www/nodejs-app/index.js</code> to get started.</p>
+          <span class="badge">Node.js ${process.version}</span>
+        </div>
+      </body>
+      </html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      });
+
+      server.listen(PORT, '127.0.0.1', () => {
+        console.log(`Node.js server listening on http://127.0.0.1:${PORT}`);
+      });
+      NODEAPP
+
+      chown www-data:www-data "${APP_DIR}/index.js"
+
+      # --- write runtime env for systemd -------------------------------------
+      cat > /etc/nodejs-app.env <<ENVFILE
+      APP_PORT=${APP_PORT}
+      APP_SECRET=${APP_SECRET}
+      NODE_ENV=production
+      ENVFILE
+      chmod 600 /etc/nodejs-app.env
+
+      # --- configure Nginx ---------------------------------------------------
+      sed -i "s|APP_DOMAIN_PLACEHOLDER|${APP_DOMAIN}|" /etc/nginx/sites-available/nodejs.conf
+      sed -i "s|APP_PORT_PLACEHOLDER|${APP_PORT}|"     /etc/nginx/sites-available/nodejs.conf
+      ln -sf /etc/nginx/sites-available/nodejs.conf /etc/nginx/sites-enabled/nodejs.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # --- enable + start the Node.js systemd service ------------------------
+      systemctl daemon-reload
+      systemctl enable --now nodejs-app
+
+      # --- firewall ----------------------------------------------------------
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban ----------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt ---------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" --redirect || \
+          echo "WARN: certbot deferred (DNS not pointed yet?). Re-run: certbot --nginx -d ${APP_DOMAIN}"
+      fi
+
+      # --- write credentials summary -----------------------------------------
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      cat > /root/nodejs-credentials.txt <<EOF
+      ===== Node.js install complete: $(date) =====
+      URL:          ${PROTO}://${APP_DOMAIN}
+      Health check: ${PROTO}://${APP_DOMAIN}/health
+      App secret:   ${APP_SECRET}
+      App dir:      ${APP_DIR}
+      Log:          journalctl -u nodejs-app -f
+      Bootstrap:    /var/log/nodejs-bootstrap.log
+      EOF
+      chmod 600 /root/nodejs-credentials.txt
+
+      echo "=== Node.js bootstrap finished. Credentials in /root/nodejs-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/nodejs-bootstrap.sh" ]
+
+final_message: "Node.js bootstrap done after $UPTIME s. See /root/nodejs-credentials.txt and /var/log/nodejs-bootstrap.log"

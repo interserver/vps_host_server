@@ -1,0 +1,287 @@
+#cloud-config
+# =============================================================================
+# Cloudron — Ubuntu 26.04 LTS cloud-init user-data
+# Category: Control Panel (one-click app)
+# Installer: Cloudron official non-interactive installer
+# License: BYOL (Bring Your Own License) — commercial product
+#          Activate at https://<your-domain> after boot.
+# -----------------------------------------------------------------------------
+# EDIT operator vars in /root/.cloudron-bootstrap.env before (or just after)
+# first boot, then re-run /root/cloudron-bootstrap.sh if needed.
+# =============================================================================
+
+hostname: cloudron
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — let provisioner inject SSH key + hostname; never delete default
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — cloud-init installs these before runcmd runs
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - python3-certbot
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB; survive build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.cloudron-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ---------------------------------------------------------------
+      # Cloudron bootstrap — edit these before first boot (or re-run
+      # /root/cloudron-bootstrap.sh after editing).
+      # ---------------------------------------------------------------
+
+      # Fully-qualified domain name for the Cloudron panel.
+      # Cloudron installs itself at the root of this domain.
+      APP_DOMAIN=cloudron.example.com
+
+      # Let's Encrypt registration e-mail (used if ENABLE_TLS=true).
+      LE_EMAIL=admin@example.com
+
+      # Set to 'true' to attempt Certbot TLS on first boot.
+      # Leave 'false' until DNS is pointed at this server.
+      ENABLE_TLS=false
+
+      # Initial Cloudron administrator credentials.
+      # Leave ADMIN_PASS as CHANGE_ME and the script will generate a
+      # random password; change ADMIN_USER if desired.
+      ADMIN_USER=admin
+      ADMIN_PASS=CHANGE_ME
+
+  # ---------- bootstrap shell script ----------
+  - path: /root/cloudron-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/cloudron-bootstrap.log) 2>&1
+      source /root/.cloudron-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helpers
+      # ----------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      log() { echo "[cloudron-bootstrap] $(date -u +%FT%TZ)  $*"; }
+
+      # ----------------------------------------------------------------
+      # Resolve admin password
+      # ----------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        log "Generated random ADMIN_PASS."
+      fi
+
+      # ----------------------------------------------------------------
+      # Automatic security updates
+      # ----------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      EOF
+
+      # ----------------------------------------------------------------
+      # Firewall — allow only SSH (22), HTTP (80), HTTPS (443),
+      # and Cloudron admin port (4443 / TCP).
+      # Cloudron also uses 25, 587, 993, 4190 for mail — open if needed.
+      # ----------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 4443/tcp  comment 'Cloudron admin panel'
+      # Mail ports — uncomment if this Cloudron will handle e-mail:
+      # ufw allow 25/tcp   comment 'SMTP'
+      # ufw allow 587/tcp  comment 'Submission'
+      # ufw allow 993/tcp  comment 'IMAPS'
+      # ufw allow 4190/tcp comment 'ManageSieve'
+      ufw --force enable
+      log "UFW enabled."
+
+      # ----------------------------------------------------------------
+      # fail2ban
+      # ----------------------------------------------------------------
+      log "Configuring fail2ban..."
+      if ! systemctl is-active --quiet fail2ban; then
+        systemctl enable --now fail2ban
+      fi
+      cat > /etc/fail2ban/jail.d/cloudron-ssh.conf <<'EOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      EOF
+      systemctl reload fail2ban || systemctl restart fail2ban
+
+      # ----------------------------------------------------------------
+      # Detect Ubuntu codename (26.04 may report 'oracular+' or similar)
+      # ----------------------------------------------------------------
+      CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-noble}}")"
+      log "Detected Ubuntu codename: ${CODENAME}"
+
+      # ----------------------------------------------------------------
+      # Install Cloudron via official installer
+      # Cloudron ships its own installer script that sets up Docker,
+      # the Cloudron platform packages, and systemd services.
+      # Ref: https://cloudron.io/documentation/installation/
+      # ----------------------------------------------------------------
+      log "Downloading Cloudron installer..."
+      INSTALLER_URL="https://cloudron.io/cloudron-setup"
+      INSTALLER_SCRIPT="/tmp/cloudron-setup.sh"
+
+      curl -fsSL "${INSTALLER_URL}" -o "${INSTALLER_SCRIPT}"
+      chmod +x "${INSTALLER_SCRIPT}"
+
+      log "Running Cloudron installer (non-interactive)..."
+      # The official installer accepts --help to list flags; use --yes
+      # to suppress interactive prompts.  Cloudron requires root.
+      bash "${INSTALLER_SCRIPT}" --yes || {
+        log "ERROR: Cloudron installer exited non-zero. Check /var/log/cloudron-setup.log"
+        exit 1
+      }
+
+      log "Cloudron platform installed."
+
+      # ----------------------------------------------------------------
+      # Wait for Cloudron web UI to become reachable (up to 3 min)
+      # ----------------------------------------------------------------
+      log "Waiting for Cloudron admin UI on port 4443..."
+      for i in $(seq 1 36); do
+        if curl -sk --max-time 5 "https://localhost:4443/" -o /dev/null 2>&1; then
+          log "Cloudron UI is up."
+          break
+        fi
+        sleep 5
+      done
+
+      # ----------------------------------------------------------------
+      # Certbot TLS (optional — only if DNS already resolves)
+      # ----------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        # Cloudron manages its own TLS via its built-in ACME client.
+        # Certbot here is only for non-Cloudron-managed vhosts.
+        # Cloudron's own cert renewal is automatic after domain setup.
+        certbot certonly --standalone --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS may not be pointed yet."
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file
+      # ----------------------------------------------------------------
+      log "Writing credentials file..."
+      PANEL_URL="https://${APP_DOMAIN}:4443"
+      LOCAL_URL="https://$(hostname -I | awk '{print $1}'):4443"
+
+      cat > /root/cloudron-credentials.txt <<CREDS
+      ================================================================
+       Cloudron — InterServer One-Click App
+       Generated: $(date -u +%FT%TZ)
+      ================================================================
+
+      Panel URL (by domain, once DNS is configured):
+        ${PANEL_URL}
+
+      Panel URL (by IP, usable immediately):
+        ${LOCAL_URL}
+
+      Cloudron Admin User: ${ADMIN_USER}
+      Cloudron Admin Pass: ${ADMIN_PASS}
+
+      ================================================================
+       ACTIVATION NOTES (BYOL)
+      ================================================================
+      Cloudron is a commercial product. The free tier supports up to
+      2 apps. For more apps, purchase a subscription at:
+        https://cloudron.io/pricing.html
+
+      After opening the panel URL in your browser:
+        1. Complete the Cloudron first-run setup wizard.
+        2. Set your domain name (APP_DOMAIN = ${APP_DOMAIN}).
+        3. Cloudron will obtain its own TLS certificate automatically
+           once DNS is pointed at this server.
+        4. Log in with the credentials above.
+
+      ================================================================
+       FIREWALL RULES (UFW)
+      ================================================================
+      Open ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 4443 (admin)
+      Mail ports (25, 587, 993, 4190) are commented out in bootstrap.
+      Edit /root/cloudron-bootstrap.sh to enable them if needed.
+
+      ================================================================
+       OPERATOR VARS
+      ================================================================
+      Edit:  /root/.cloudron-bootstrap.env
+      Log:   /var/log/cloudron-bootstrap.log
+      Installer log: /var/log/cloudron-setup.log (if it exists)
+      ================================================================
+      CREDS
+      chmod 600 /root/cloudron-credentials.txt
+      log "Credentials written to /root/cloudron-credentials.txt"
+
+      # ----------------------------------------------------------------
+      # Final summary
+      # ----------------------------------------------------------------
+      log "============================================================"
+      log " Cloudron bootstrap complete."
+      log " Admin panel : ${LOCAL_URL}"
+      log " Credentials : /root/cloudron-credentials.txt"
+      log "============================================================"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/cloudron-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Console message shown after cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   Cloudron one-click app bootstrap finished.
+   Run:  cat /root/cloudron-credentials.txt
+   Log:  /var/log/cloudron-bootstrap.log
+  ============================================================

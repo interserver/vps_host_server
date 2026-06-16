@@ -1,0 +1,402 @@
+#cloud-config
+# =============================================================================
+# Octelium "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: k3s (lightweight Kubernetes) + Helm + PostgreSQL + Redis + Octelium
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Octelium: open-source zero trust secure access platform (ZTNA/VPN/API GW)
+# Ports: 22 (SSH), 443/TCP (HTTPS/ingress), 53820/UDP (WireGuard VPN)
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.octelium-bootstrap.env
+# block before launching. Secrets are generated randomly on first boot if left
+# as CHANGE_ME.
+# Admin auth token is written to /root/octelium-credentials.txt after boot.
+# =============================================================================
+
+hostname: octelium
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — base tooling only; k3s/Helm/Octelium installed by bootstrap
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - certbot
+  - git
+  - htop
+  - jq
+  - wget
+  - openssl
+  - wireguard-tools
+  - net-tools
+
+# ----------------------------------------------------------------------------
+# Swap (prevents OOM during k3s + Helm + Postgres startup on 2 GB nodes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before bootstrap runs
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.octelium-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      APP_DOMAIN="example.com"          # FQDN for the Octelium cluster (no scheme)
+                                        # DNS must have:
+                                        #   A     <APP_DOMAIN>    -> <this server IP>
+                                        #   CNAME *.<APP_DOMAIN> -> <APP_DOMAIN>
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (DNS not yet set)
+      ADMIN_PASS="CHANGE_ME"            # not used by Octelium directly; kept for
+                                        # future admin tooling / SSH guard
+
+  # --- fail2ban jail config ---------------------------------------------------
+  - path: /etc/fail2ban/jail.d/octelium-app.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/octelium-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/octelium-bootstrap.log) 2>&1
+      source /root/.octelium-bootstrap.env
+
+      echo "=== Octelium bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret helper (required under set -e + pipefail) ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$ADMIN_PASS" = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # Generate internal DB credentials (idempotent: reuse if already set)
+      PG_PASS="${PG_PASS:-$(rand)}"
+      REDIS_PASS="${REDIS_PASS:-$(rand)}"
+
+      # Detect public IP (AWS IMDSv2 → ipify → ifconfig.me)
+      PUBLIC_IP=""
+      PUBLIC_IP="$(curl -sf --max-time 3 \
+        -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' \
+        'http://169.254.169.254/latest/api/token' 2>/dev/null \
+        | xargs -I{} curl -sf --max-time 3 \
+          -H 'X-aws-ec2-metadata-token: {}' \
+          'http://169.254.169.254/latest/meta-data/public-ipv4' \
+        2>/dev/null || true)"
+      if [ -z "$PUBLIC_IP" ]; then
+        PUBLIC_IP="$(curl -sf --max-time 5 'https://api.ipify.org' 2>/dev/null || true)"
+      fi
+      if [ -z "$PUBLIC_IP" ]; then
+        PUBLIC_IP="$(curl -sf --max-time 5 'https://ifconfig.me' 2>/dev/null || true)"
+      fi
+      echo "Detected public IP: ${PUBLIC_IP:-<unknown>}"
+
+      # -----------------------------------------------------------------------
+      # 1. KERNEL — ensure WireGuard module is available
+      # -----------------------------------------------------------------------
+      modprobe wireguard 2>/dev/null || echo "INFO: wireguard kernel module not available; k3s will use wireguard-go userspace"
+
+      # -----------------------------------------------------------------------
+      # 2. FIREWALL (UFW) — allow only SSH + HTTPS + WireGuard before k3s starts
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 443/tcp  comment 'Octelium HTTPS ingress'
+      ufw allow 53820/udp comment 'Octelium WireGuard gateway'
+      # k3s requires flannel/CNI pods to talk between nodes (single-node: loopback is fine)
+      ufw allow in on lo
+      ufw --force enable
+      echo "UFW firewall configured."
+
+      # -----------------------------------------------------------------------
+      # 3. FAIL2BAN
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 4. INSTALL k3s (lightweight Kubernetes) — Traefik disabled
+      # -----------------------------------------------------------------------
+      if ! command -v k3s >/dev/null 2>&1; then
+        echo "Installing k3s..."
+        curl -fsSL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+      fi
+      systemctl enable --now k3s
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      # Wait for k3s API to be ready (up to 120 s)
+      echo "Waiting for k3s API server..."
+      for i in $(seq 1 24); do
+        kubectl get nodes >/dev/null 2>&1 && break || true
+        sleep 5
+      done
+      kubectl get nodes
+
+      # -----------------------------------------------------------------------
+      # 5. INSTALL kubectl (use the one bundled with k3s via symlink)
+      # -----------------------------------------------------------------------
+      if ! command -v kubectl >/dev/null 2>&1; then
+        ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 6. INSTALL Helm
+      # -----------------------------------------------------------------------
+      if ! command -v helm >/dev/null 2>&1; then
+        echo "Installing Helm..."
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      fi
+      echo "Helm version: $(helm version --short)"
+
+      # -----------------------------------------------------------------------
+      # 7. INSTALL Octelium CLI tools (octelium, octeliumctl, octops)
+      # -----------------------------------------------------------------------
+      if ! command -v octops >/dev/null 2>&1; then
+        echo "Installing Octelium CLI tools..."
+        curl -fsSL https://octelium.com/install.sh | bash
+        # Ensure PATH includes common install locations
+        export PATH="/usr/local/bin:/root/.local/bin:${PATH}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 8. LABEL k3s single-node as both control-plane and data-plane
+      # -----------------------------------------------------------------------
+      NODE_NAME="$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+      kubectl label node "$NODE_NAME" octelium.com/node-mode-dataplane=  --overwrite
+      kubectl label node "$NODE_NAME" octelium.com/node-mode-controlplane= --overwrite
+      # Remove default control-plane taint so workloads can schedule
+      kubectl taint node "$NODE_NAME" node-role.kubernetes.io/control-plane:NoSchedule- 2>/dev/null || true
+      kubectl taint node "$NODE_NAME" node-role.kubernetes.io/master:NoSchedule- 2>/dev/null || true
+      echo "Node labelled: $NODE_NAME"
+
+      # -----------------------------------------------------------------------
+      # 9. INSTALL Multus CNI (required by Octelium for WireGuard multi-homing)
+      # -----------------------------------------------------------------------
+      if ! kubectl get daemonset -n kube-system kube-multus-ds >/dev/null 2>&1; then
+        echo "Installing Multus CNI..."
+        kubectl apply -f \
+          https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset.yml
+      fi
+
+      # Ensure standard CNI bridge + host-local plugins are present
+      mkdir -p /opt/cni/bin
+      if [ ! -f /opt/cni/bin/bridge ]; then
+        CNI_VER="v1.4.1"
+        CNI_URL="https://github.com/containernetworking/plugins/releases/download/${CNI_VER}/cni-plugins-linux-amd64-${CNI_VER}.tgz"
+        curl -fsSL "$CNI_URL" | tar -xz -C /opt/cni/bin
+      fi
+
+      # -----------------------------------------------------------------------
+      # 10. PROVISION persistent storage directory for PostgreSQL
+      # -----------------------------------------------------------------------
+      mkdir -p /mnt/octelium/db
+      chmod 777 /mnt/octelium/db
+
+      # -----------------------------------------------------------------------
+      # 11. INSTALL PostgreSQL 16 via Helm (CloudNativePG or Bitnami)
+      # -----------------------------------------------------------------------
+      helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+      helm repo update
+
+      kubectl create namespace octelium-dbs --dry-run=client -o yaml | kubectl apply -f -
+
+      if ! helm status octelium-postgres -n octelium-dbs >/dev/null 2>&1; then
+        echo "Installing PostgreSQL..."
+        helm install octelium-postgres bitnami/postgresql \
+          --namespace octelium-dbs \
+          --set auth.username=octelium \
+          --set auth.password="${PG_PASS}" \
+          --set auth.database=octelium \
+          --set primary.persistence.enabled=true \
+          --set primary.persistence.size=5Gi \
+          --set primary.persistence.storageClass=local-path \
+          --wait --timeout=300s
+      fi
+      PG_HOST="octelium-postgres-postgresql.octelium-dbs.svc.cluster.local"
+
+      # -----------------------------------------------------------------------
+      # 12. INSTALL Redis (Valkey-compatible) via Helm
+      # -----------------------------------------------------------------------
+      if ! helm status octelium-redis -n octelium-dbs >/dev/null 2>&1; then
+        echo "Installing Redis..."
+        helm install octelium-redis bitnami/redis \
+          --namespace octelium-dbs \
+          --set architecture=standalone \
+          --set auth.enabled=true \
+          --set auth.password="${REDIS_PASS}" \
+          --set master.persistence.enabled=false \
+          --wait --timeout=300s
+      fi
+      REDIS_HOST="octelium-redis-master.octelium-dbs.svc.cluster.local"
+
+      # -----------------------------------------------------------------------
+      # 13. WRITE Octelium bootstrap config
+      # -----------------------------------------------------------------------
+      mkdir -p /root/octelium-config
+      cat > /root/octelium-config/bootstrap.yaml <<BOOTCFG
+      spec:
+        primaryStorage:
+          postgresql:
+            username: octelium
+            password: "${PG_PASS}"
+            host: "${PG_HOST}"
+            port: 5432
+            database: octelium
+            isTLS: false
+        secondaryStorage:
+          redis:
+            username: default
+            password: "${REDIS_PASS}"
+            host: "${REDIS_HOST}"
+            port: 6379
+            database: 0
+            isTLS: false
+        network:
+          mode: V4_ONLY
+          v4:
+            clusterNetwork: 100.64.0.0/10
+          wireguard:
+            gatewayPort: 53820
+            mtu: 1280
+      BOOTCFG
+      chmod 600 /root/octelium-config/bootstrap.yaml
+
+      # -----------------------------------------------------------------------
+      # 14. INITIALISE the Octelium cluster
+      # -----------------------------------------------------------------------
+      echo "Initialising Octelium cluster for domain: ${APP_DOMAIN}"
+      INIT_OUTPUT=""
+      INIT_OUTPUT="$(OCTELIUM_REGION_EXTERNAL_IP="${PUBLIC_IP}" \
+        octops init "${APP_DOMAIN}" \
+          --bootstrap /root/octelium-config/bootstrap.yaml \
+          --kubeconfig "${KUBECONFIG}" \
+        2>&1)" || true
+      echo "$INIT_OUTPUT"
+
+      # Extract the auth token from init output (printed as: --auth-token <TOKEN>)
+      AUTH_TOKEN="$(echo "$INIT_OUTPUT" \
+        | grep -oP '(?<=--auth-token )[A-Za-z0-9._-]+' \
+        2>/dev/null || true)"
+      if [ -z "$AUTH_TOKEN" ]; then
+        AUTH_TOKEN="<see /var/log/octelium-bootstrap.log for token>"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 15. TLS via Let's Encrypt (non-fatal if DNS not pointed yet)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        echo "Requesting TLS certificate for ${APP_DOMAIN} and *.${APP_DOMAIN} ..."
+        # DNS challenge required for wildcard — operator must add TXT record manually
+        certbot certonly \
+          --manual \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          --preferred-challenges dns \
+          -d "${APP_DOMAIN}" \
+          -d "*.${APP_DOMAIN}" \
+          -d "*.local.${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS challenge requires manual TXT record. Re-run once DNS is set:
+        certbot certonly --manual --preferred-challenges dns \\
+          --email ${LE_EMAIL} --agree-tos \\
+          -d ${APP_DOMAIN} -d *.${APP_DOMAIN} -d *.local.${APP_DOMAIN}"
+
+        # Apply cert to Octelium cluster if certificate exists
+        if [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
+          octops cert "${APP_DOMAIN}" \
+            --key  "/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem" \
+            --cert "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" \
+            --kubeconfig "${KUBECONFIG}" \
+            || echo "WARN: octops cert upload deferred"
+        fi
+      fi
+
+      # -----------------------------------------------------------------------
+      # 16. WRITE credentials summary
+      # -----------------------------------------------------------------------
+      cat > /root/octelium-credentials.txt <<CREDS
+      ===== Octelium bootstrap complete: $(date) =====
+
+      Cluster domain : ${APP_DOMAIN}
+      Public IP      : ${PUBLIC_IP:-<detect manually>}
+      Auth token     : ${AUTH_TOKEN}
+
+      ---- Required DNS records (create BEFORE connecting clients) ----
+        A     ${APP_DOMAIN}   -> ${PUBLIC_IP:-<this server IP>}
+        CNAME *.${APP_DOMAIN} -> ${APP_DOMAIN}
+
+      ---- Connect from local machine ----
+        curl -fsSL https://octelium.com/install.sh | bash
+        octelium login --domain ${APP_DOMAIN} --auth-token ${AUTH_TOKEN}
+
+      ---- WireGuard port ----
+        UDP 53820  (clients connect via: octelium connect -d)
+
+      ---- TLS certificate ----
+        ENABLE_TLS was: ${ENABLE_TLS}
+        Cert path: /etc/letsencrypt/live/${APP_DOMAIN}/  (if certbot succeeded)
+        Re-run certbot manually if DNS was not set at boot time.
+
+      ---- Internal credentials (keep secret) ----
+        PostgreSQL password : ${PG_PASS}
+        Redis password      : ${REDIS_PASS}
+
+      ---- Useful commands ----
+        kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml get pods -A
+        octeliumctl get service
+        octeliumctl get user
+        octeliumctl get session
+        journalctl -u k3s -f
+
+      Log: /var/log/octelium-bootstrap.log
+      CREDS
+      chmod 600 /root/octelium-credentials.txt
+
+      echo "=== Bootstrap finished. See /root/octelium-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/octelium-bootstrap.sh" ]
+
+final_message: "Octelium bootstrap done after $UPTIME s. Auth token and cluster URL are in /root/octelium-credentials.txt — log at /var/log/octelium-bootstrap.log"

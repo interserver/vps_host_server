@@ -1,0 +1,421 @@
+#cloud-config
+# =============================================================================
+# VDev — Ubuntu 26.04 LTS cloud-init user-data
+# Category: Control Panel / Cloud IDE (one-click app)
+# Stack:    code-server (VS Code in the browser) + Nginx reverse proxy
+#           + Certbot TLS + UFW + fail2ban + unattended-upgrades
+# Ports:    8080 (code-server direct), 80 (HTTP/Nginx), 443 (HTTPS/Nginx)
+# Installer: official code-server install.sh (https://code-server.dev/install.sh)
+# -----------------------------------------------------------------------------
+# EDIT operator vars in /root/.vdev-bootstrap.env before (or just after)
+# first boot, then re-run /root/vdev-bootstrap.sh if needed.
+# =============================================================================
+
+hostname: vdev
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — let provisioner inject SSH key + hostname; never delete default
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — cloud-init installs these before runcmd runs
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - unzip
+  - zip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  - build-essential
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  - nodejs
+  - npm
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - htop
+  - tmux
+  - jq
+  - rsync
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB; survive build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- (a) operator-editable environment variables ----------
+  - path: /root/.vdev-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ---------------------------------------------------------------
+      # VDev bootstrap — edit these before first boot (or re-run
+      # /root/vdev-bootstrap.sh after editing).
+      # ---------------------------------------------------------------
+
+      # Fully-qualified domain name for the VDev (code-server) panel.
+      # Leave as-is and access by IP on port 8080 until DNS is pointed.
+      APP_DOMAIN=vdev.example.com
+
+      # Let's Encrypt registration e-mail (used if ENABLE_TLS=true).
+      LE_EMAIL=admin@example.com
+
+      # Set to 'true' to attempt Certbot TLS on first boot.
+      # Leave 'false' until DNS A/AAAA record points at this server.
+      ENABLE_TLS=false
+
+      # code-server password — auto-generated at boot if left as CHANGE_ME.
+      ADMIN_PASS=CHANGE_ME
+
+      # Linux user that runs code-server (created if it doesn't exist).
+      # Uses 'coder' to avoid namespace collision with 'www-data'.
+      CODER_USER=coder
+
+      # Workspace directory exposed inside code-server.
+      WORKSPACE_DIR=/home/coder/workspace
+
+  # ---------- (b) bootstrap shell script ----------
+  - path: /root/vdev-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/vdev-bootstrap.log) 2>&1
+      source /root/.vdev-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # SIGPIPE-safe random secret generator
+      # The '|| true' is REQUIRED under set -e + pipefail because
+      # head -c closes the pipe before tr finishes, raising SIGPIPE.
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      log() { echo "[vdev-bootstrap] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      log "=== VDev bootstrap started ==="
+
+      # ----------------------------------------------------------------
+      # Auto-generate admin password if still CHANGE_ME
+      # ----------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        sed -i "s/^ADMIN_PASS=CHANGE_ME/ADMIN_PASS=${ADMIN_PASS}/" /root/.vdev-bootstrap.env
+        log "Auto-generated ADMIN_PASS"
+      fi
+
+      # ----------------------------------------------------------------
+      # Automatic security updates
+      # ----------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # Dedicated system user for code-server
+      # ----------------------------------------------------------------
+      log "Ensuring user '${CODER_USER}' exists..."
+      if ! id "${CODER_USER}" &>/dev/null; then
+        useradd --shell /bin/bash \
+                --create-home \
+                --home-dir "/home/${CODER_USER}" \
+                "${CODER_USER}"
+        log "Created user '${CODER_USER}'."
+      fi
+
+      # ----------------------------------------------------------------
+      # Workspace directory
+      # ----------------------------------------------------------------
+      mkdir -p "${WORKSPACE_DIR}"
+      chown -R "${CODER_USER}:${CODER_USER}" "/home/${CODER_USER}"
+
+      # ----------------------------------------------------------------
+      # Install code-server via official non-interactive installer
+      # Ref: https://coder.com/docs/code-server/install
+      # The script detects Debian/Ubuntu and installs the latest .deb
+      # package from GitHub — codename-agnostic.
+      # ----------------------------------------------------------------
+      log "Installing code-server..."
+      if command -v code-server > /dev/null 2>&1; then
+        log "code-server already installed: $(code-server --version | head -1)"
+      else
+        curl -fsSL https://code-server.dev/install.sh -o /tmp/cs-install.sh
+        sh /tmp/cs-install.sh
+        rm -f /tmp/cs-install.sh
+        log "code-server installed: $(code-server --version | head -1)"
+      fi
+
+      # ----------------------------------------------------------------
+      # Configure code-server
+      # Config lives at /home/${CODER_USER}/.config/code-server/config.yaml
+      # Bind to localhost only; Nginx proxies external traffic.
+      # ----------------------------------------------------------------
+      log "Writing code-server config..."
+      CS_CONFIG_DIR="/home/${CODER_USER}/.config/code-server"
+      mkdir -p "${CS_CONFIG_DIR}"
+
+      cat > "${CS_CONFIG_DIR}/config.yaml" <<CSCFG
+      bind-addr: 127.0.0.1:8080
+      auth: password
+      password: ${ADMIN_PASS}
+      cert: false
+      user-data-dir: /home/${CODER_USER}/.local/share/code-server
+      CSCFG
+
+      chown -R "${CODER_USER}:${CODER_USER}" "${CS_CONFIG_DIR}"
+
+      # ----------------------------------------------------------------
+      # systemd service for code-server
+      # Run as ${CODER_USER} — not root, not www-data.
+      # ----------------------------------------------------------------
+      log "Installing code-server systemd service..."
+
+      cat > /etc/systemd/system/vdev-code-server.service <<SYSD
+      [Unit]
+      Description=VDev code-server (VS Code in the browser)
+      Documentation=https://coder.com/docs/code-server
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=${CODER_USER}
+      Group=${CODER_USER}
+      WorkingDirectory=${WORKSPACE_DIR}
+      Environment="HOME=/home/${CODER_USER}"
+      ExecStart=/usr/bin/code-server --config /home/${CODER_USER}/.config/code-server/config.yaml ${WORKSPACE_DIR}
+      Restart=on-failure
+      RestartSec=10
+      TimeoutStartSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      systemctl daemon-reload
+      systemctl enable vdev-code-server
+      systemctl start vdev-code-server
+      log "code-server service started."
+
+      # ----------------------------------------------------------------
+      # Nginx reverse proxy
+      # Proxies HTTP/HTTPS -> localhost:8080, with WebSocket support
+      # (required for code-server's terminal and live editing).
+      # ----------------------------------------------------------------
+      log "Configuring Nginx reverse proxy..."
+
+      cat > /etc/nginx/sites-available/vdev <<'NGXCONF'
+      # VDev (code-server) — managed by vdev-bootstrap
+      map $http_upgrade $connection_upgrade {
+          default upgrade;
+          ''      close;
+      }
+
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name _;
+
+          # Allow larger file uploads (project files, assets)
+          client_max_body_size 512M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:8080;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade $http_upgrade;
+              proxy_set_header   Connection $connection_upgrade;
+              proxy_set_header   Host $host;
+              proxy_set_header   X-Real-IP $remote_addr;
+              proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              # code-server needs long-lived connections for the editor websocket
+              proxy_read_timeout 86400s;
+              proxy_send_timeout 86400s;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/vdev /etc/nginx/sites-enabled/vdev
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx
+      log "Nginx configured and started."
+
+      # ----------------------------------------------------------------
+      # UFW firewall — allow SSH + HTTP + HTTPS + code-server direct
+      # code-server's direct port (8080) is intentionally exposed so
+      # users can reach it by IP immediately, before DNS/TLS are set up.
+      # ----------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'HTTP (Nginx proxy)'
+      ufw allow 443/tcp  comment 'HTTPS (Nginx proxy)'
+      ufw allow 8080/tcp comment 'code-server direct access'
+      ufw --force enable
+      log "UFW enabled."
+
+      # ----------------------------------------------------------------
+      # fail2ban
+      # ----------------------------------------------------------------
+      log "Configuring fail2ban..."
+
+      cat > /etc/fail2ban/jail.d/vdev.conf <<'F2BJAIL'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      F2BJAIL
+
+      systemctl enable --now fail2ban
+      log "fail2ban configured."
+
+      # ----------------------------------------------------------------
+      # Certbot TLS (optional — only if DNS already points here)
+      # Never fails the boot if DNS is not yet pointed.
+      # ----------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ -n "${APP_DOMAIN:-}" ] && \
+         [ "${APP_DOMAIN}" != "vdev.example.com" ]; then
+        log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot --nginx --non-interactive --agree-tos \
+          --email "${LE_EMAIL}" \
+          --domains "${APP_DOMAIN}" \
+          --redirect \
+          || echo "WARN: certbot deferred — DNS may not be pointed here yet"
+      else
+        log "Skipping Certbot (ENABLE_TLS=${ENABLE_TLS} or APP_DOMAIN is placeholder)."
+      fi
+
+      # ----------------------------------------------------------------
+      # Resolve public IP for credentials file
+      # ----------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf --max-time 5 https://ipv4.icanhazip.com \
+                   || curl -sf --max-time 5 https://api.ipify.org \
+                   || hostname -I | awk '{print $1}')"
+
+      PROTO="http"
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ -n "${APP_DOMAIN:-}" ] && \
+         [ "${APP_DOMAIN}" != "vdev.example.com" ]; then
+        PROTO="https"
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (chmod 600)
+      # ----------------------------------------------------------------
+      log "Writing credentials file..."
+
+      cat > /root/vdev-credentials.txt <<CREDS
+      ================================================================
+       VDev (code-server) — InterServer One-Click App
+       Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      ================================================================
+
+       Public IP         : ${PUBLIC_IP}
+       App domain        : ${APP_DOMAIN}
+
+       Panel URL (domain): ${PROTO}://${APP_DOMAIN}
+       Panel URL (IP)    : http://${PUBLIC_IP}:8080   ← usable immediately
+
+       Admin password    : ${ADMIN_PASS}
+
+      ================================================================
+       GETTING STARTED
+      ================================================================
+       1. Open http://${PUBLIC_IP}:8080 in your browser.
+       2. Enter the password above when prompted.
+       3. Your workspace is pre-mounted at: ${WORKSPACE_DIR}
+       4. Point ${APP_DOMAIN} to this server's IP (${PUBLIC_IP}).
+       5. To enable HTTPS once DNS resolves:
+            Edit  /root/.vdev-bootstrap.env  → set ENABLE_TLS=true
+            Then: certbot --nginx -d ${APP_DOMAIN} --email ${LE_EMAIL}
+
+      ================================================================
+       SERVICES
+      ================================================================
+       systemctl status vdev-code-server    # code-server IDE
+       systemctl status nginx               # reverse proxy
+       systemctl status fail2ban            # intrusion prevention
+
+      ================================================================
+       FILES
+      ================================================================
+       Config    : /home/${CODER_USER}/.config/code-server/config.yaml
+       Workspace : ${WORKSPACE_DIR}
+       Env vars  : /root/.vdev-bootstrap.env
+       Log       : /var/log/vdev-bootstrap.log
+      ================================================================
+      CREDS
+      chmod 600 /root/vdev-credentials.txt
+      log "Credentials written to /root/vdev-credentials.txt"
+
+      # ----------------------------------------------------------------
+      # Final summary
+      # ----------------------------------------------------------------
+      log "============================================================"
+      log " VDev bootstrap complete."
+      log " Panel URL : http://${PUBLIC_IP}:8080"
+      log " Credentials: /root/vdev-credentials.txt"
+      log "============================================================"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/vdev-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Console message shown after cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   VDev one-click app bootstrap finished.
+   Elapsed: $UPTIME seconds since boot.
+
+   Open your browser:
+     http://<server-ip>:8080
+   Password is in: /root/vdev-credentials.txt
+
+   Log: /var/log/vdev-bootstrap.log
+  ============================================================

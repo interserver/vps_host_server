@@ -1,0 +1,356 @@
+#cloud-config
+# =============================================================================
+# Owncast — Ubuntu 26.04 cloud-init user-data
+# Stack: Docker + docker compose (official Owncast Docker image)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Web ports : 80 (HTTP), 443 (HTTPS)
+# RTMP ingest: 1935 (OBS / streaming software pushes here)
+# Owncast UI : 8080 (proxied through nginx on 80/443)
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.owncast-bootstrap.env
+# before launching (APP_DOMAIN, LE_EMAIL, ADMIN_PASS).
+# All passwords are randomly generated per-boot if left as CHANGE_ME defaults.
+# =============================================================================
+
+hostname: owncast
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioners can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 G to survive build-time Docker image pulls
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — host-level deps; Docker handles the rest
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - net-tools
+  - jq
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable variables — fill in BEFORE launching the instance
+  # --------------------------------------------------------------------------
+  - path: /root/.owncast-bootstrap.env
+    permissions: '0600'
+    content: |
+      # -----------------------------------------------------------------------
+      # Owncast bootstrap environment — edit BEFORE launching the instance
+      # -----------------------------------------------------------------------
+
+      # Fully-qualified domain name pointing at this server's IP
+      APP_DOMAIN=owncast.example.com
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=admin@example.com
+
+      # Set to 'true' to request a TLS certificate via Certbot
+      # Set to 'false' to skip (e.g. IP-only or behind a reverse proxy)
+      ENABLE_TLS=true
+
+      # Owncast admin password (used at /admin)
+      # Leave as CHANGE_ME and a random password is generated at boot
+      ADMIN_PASS=CHANGE_ME
+
+      # Owncast stream key (used by OBS / broadcasting software)
+      # Leave as CHANGE_ME and a random key is generated at boot
+      STREAM_KEY=CHANGE_ME
+
+      # Owncast Docker image tag — use 'latest' or pin e.g. '0.2.2'
+      OWNCAST_VERSION=latest
+
+      # Data directory on the host (persisted across container restarts)
+      OWNCAST_DATA=/opt/owncast/data
+
+      # Port Owncast listens on inside the host network (proxied via nginx)
+      OWNCAST_PORT=8080
+
+      # RTMP ingest port (OBS streams to rtmp://<server>:1935/live)
+      RTMP_PORT=1935
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/owncast-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/owncast-bootstrap.log) 2>&1
+      source /root/.owncast-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Owncast bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # Resolve secrets — generate if still CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+      fi
+      if [ "${STREAM_KEY}" = "CHANGE_ME" ]; then
+        STREAM_KEY="$(rand)"
+      fi
+
+      # -----------------------------------------------------------------------
+      # System prep
+      # -----------------------------------------------------------------------
+      export DEBIAN_FRONTEND=noninteractive
+
+      # Automatic security updates
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADES'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADES
+
+      # -----------------------------------------------------------------------
+      # Install Docker (official repo)
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if ! command -v docker &>/dev/null; then
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+          | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+
+        # fallback: noble repo until 26.04 published
+        DOCKER_CODENAME=noble
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu ${DOCKER_CODENAME} stable" \
+          > /etc/apt/sources.list.d/docker.list
+
+        apt-get update -qq
+        apt-get install -y docker-ce docker-ce-cli containerd.io \
+          docker-buildx-plugin docker-compose-plugin
+      fi
+
+      systemctl enable --now docker
+
+      # Verify docker compose subcommand is available
+      docker compose version
+
+      # -----------------------------------------------------------------------
+      # Firewall — allow SSH + Owncast ports only
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow "${RTMP_PORT}"/tcp  comment 'Owncast RTMP ingest'
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # fail2ban — protect SSH
+      # -----------------------------------------------------------------------
+      cat > /etc/fail2ban/jail.d/sshd.local <<'FAIL2BAN'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      FAIL2BAN
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # Create data directory and set permissions
+      # -----------------------------------------------------------------------
+      mkdir -p "${OWNCAST_DATA}"
+      # Owncast container runs as UID 1000 by default
+      chown -R 1000:1000 "${OWNCAST_DATA}"
+
+      # -----------------------------------------------------------------------
+      # Docker Compose file for Owncast
+      # -----------------------------------------------------------------------
+      mkdir -p /opt/owncast
+      cat > /opt/owncast/docker-compose.yml <<COMPOSE
+      version: "3.9"
+      services:
+        owncast:
+          image: ghcr.io/owncast/owncast:${OWNCAST_VERSION}
+          container_name: owncast
+          restart: unless-stopped
+          user: "1000:1000"
+          ports:
+            - "127.0.0.1:${OWNCAST_PORT}:8080"
+            - "${RTMP_PORT}:1935"
+          volumes:
+            - "${OWNCAST_DATA}:/app/data"
+          environment:
+            - TZ=UTC
+      COMPOSE
+
+      # -----------------------------------------------------------------------
+      # Pull images and start Owncast
+      # -----------------------------------------------------------------------
+      cd /opt/owncast
+      docker compose pull
+      docker compose up -d
+
+      # Wait for Owncast to be ready
+      echo "Waiting for Owncast to start..."
+      for i in $(seq 1 30); do
+        if curl -sf "http://127.0.0.1:${OWNCAST_PORT}/api/status" >/dev/null 2>&1; then
+          echo "Owncast is up."
+          break
+        fi
+        sleep 3
+      done
+
+      # -----------------------------------------------------------------------
+      # Configure Owncast admin password and stream key via its REST API
+      # -----------------------------------------------------------------------
+      # Set admin password
+      curl -sf -X POST "http://127.0.0.1:${OWNCAST_PORT}/api/admin/changepassword" \
+        -H "Content-Type: application/json" \
+        -u "admin:abc123" \
+        -d "{\"password\": \"${ADMIN_PASS}\"}" \
+        || echo "WARN: could not set admin password via API — use default 'abc123' and change manually"
+
+      # Set stream key
+      curl -sf -X POST "http://127.0.0.1:${OWNCAST_PORT}/api/admin/config/server" \
+        -H "Content-Type: application/json" \
+        -u "admin:${ADMIN_PASS}" \
+        -d "{\"streamKey\": \"${STREAM_KEY}\"}" \
+        || echo "WARN: could not set stream key via API — set it manually in the admin panel"
+
+      # -----------------------------------------------------------------------
+      # nginx reverse proxy
+      # -----------------------------------------------------------------------
+      # Remove default site
+      rm -f /etc/nginx/sites-enabled/default
+
+      cat > /etc/nginx/sites-available/owncast <<NGINXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN} _;
+
+          # Real-IP from CloudFlare / load-balancer headers
+          real_ip_header X-Forwarded-For;
+          set_real_ip_from 0.0.0.0/0;
+
+          client_max_body_size 100M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${OWNCAST_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+          }
+      }
+      NGINXCONF
+
+      ln -sf /etc/nginx/sites-available/owncast /etc/nginx/sites-enabled/owncast
+      nginx -t && systemctl reload nginx
+
+      # -----------------------------------------------------------------------
+      # Certbot / TLS
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] \
+          && [ -n "${APP_DOMAIN}" ] \
+          && [ "${APP_DOMAIN}" != "owncast.example.com" ]; then
+
+        certbot --nginx \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          --redirect \
+          -d "${APP_DOMAIN}" \
+          2>&1 || echo "WARN: certbot deferred — check DNS for ${APP_DOMAIN}"
+      else
+        echo "WARN: certbot deferred — set APP_DOMAIN and ENABLE_TLS=true to enable TLS"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Write credentials file
+      # -----------------------------------------------------------------------
+      PROTO=http
+      [ "${ENABLE_TLS}" = "true" ] && PROTO=https
+
+      cat > /root/owncast-credentials.txt <<CREDS
+      ================================================================
+        Owncast — generated credentials  ($(date -u))
+      ================================================================
+      URL              : ${PROTO}://${APP_DOMAIN}/
+      Admin panel      : ${PROTO}://${APP_DOMAIN}/admin
+      Admin username   : admin
+      Admin password   : ${ADMIN_PASS}
+
+      Stream key       : ${STREAM_KEY}
+      RTMP ingest URL  : rtmp://${APP_DOMAIN}:${RTMP_PORT}/live
+
+      OBS Settings (Stream):
+        Service        : Custom
+        Server         : rtmp://${APP_DOMAIN}:${RTMP_PORT}/live
+        Stream Key     : ${STREAM_KEY}
+
+      Data directory   : ${OWNCAST_DATA}
+      Compose file     : /opt/owncast/docker-compose.yml
+      Log              : /var/log/owncast-bootstrap.log
+
+      Firewall open ports: 22, 80, 443, ${RTMP_PORT}
+      ================================================================
+      CREDS
+      chmod 600 /root/owncast-credentials.txt
+
+      echo "=== Owncast bootstrap finished at $(date -u) ==="
+      echo "=== Credentials written to /root/owncast-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/owncast-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Console message shown in cloud provider dashboards after boot
+# ----------------------------------------------------------------------------
+final_message: |
+  Owncast cloud-init bootstrap complete.
+  Credentials and stream key: /root/owncast-credentials.txt
+  Bootstrap log: /var/log/owncast-bootstrap.log
+  Boot took $UPTIME seconds.

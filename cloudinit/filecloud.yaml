@@ -1,0 +1,424 @@
+#cloud-config
+# =============================================================================
+# FileCloud — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: FileCloud Community / Enterprise (Docker Compose) + Nginx reverse proxy
+#        UFW firewall + fail2ban + swap + unattended-upgrades + Certbot TLS
+# -----------------------------------------------------------------------------
+# FileCloud is a commercial BYOL product. This image installs FileCloud
+# UNCONFIGURED. After boot:
+#   1. Browse to http://<SERVER_IP>/ (or https://<DOMAIN>/ if TLS enabled)
+#   2. Complete the FileCloud setup wizard
+#   3. Enter your license key when prompted (visit https://www.filecloud.com
+#      to obtain a trial or purchased license)
+# See /root/filecloud-credentials.txt for generated passwords and URLs.
+# =============================================================================
+
+hostname: filecloud
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default so provisioner can inject customer SSH key
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — base tooling; Docker and FileCloud pulled in bootstrap
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - certbot
+  - python3-certbot-nginx
+  - nginx
+  - openssl
+  - jq
+  - net-tools
+  - htop
+  - git
+  - unzip
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes (FileCloud + MongoDB + Redis)
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.filecloud-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # FileCloud bootstrap environment — edit before first boot
+      # or inject via your provisioner.
+
+      # Fully-qualified domain name for the FileCloud web interface
+      # (used for Nginx server_name and optional TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email for Let's Encrypt registration (only used when ENABLE_TLS=true)
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to request a Certbot certificate after install
+      # Requires APP_DOMAIN's DNS A/AAAA record pointing here first.
+      ENABLE_TLS=true
+
+      # FileCloud MongoDB root credentials
+      # Leave as CHANGE_ME to auto-generate random values at boot
+      MONGO_ROOT_PASS=CHANGE_ME
+      MONGO_FC_PASS=CHANGE_ME
+
+      # FileCloud admin portal password (set after wizard, stored here for reference)
+      ADMIN_PASS=CHANGE_ME
+
+      # Data directory on host — persisted across container restarts
+      FC_DATA_DIR=/opt/filecloud
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/filecloud-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/filecloud-bootstrap.log) 2>&1
+      source /root/.filecloud-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== FileCloud bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${MONGO_ROOT_PASS}" == "CHANGE_ME" ]] && MONGO_ROOT_PASS="$(rand)"
+      [[ "${MONGO_FC_PASS}"   == "CHANGE_ME" ]] && MONGO_FC_PASS="$(rand)"
+      [[ "${ADMIN_PASS}"      == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — basic SSH + Nginx protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+
+      [nginx-http-auth]
+      enabled = true
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # FileCloud ports:
+      #   22   — SSH
+      #   80   — HTTP (Nginx / ACME challenge)
+      #   443  — HTTPS (Nginx TLS termination)
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'HTTP'
+      ufw allow 443/tcp  comment 'HTTPS'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # Install Docker Engine (official repo)
+      # fallback: noble repo until 26.04 published
+      # ----------------------------------------------------------------
+      echo "=== Installing Docker Engine ==="
+      if ! command -v docker >/dev/null 2>&1; then
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+              -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+
+          # Use noble (24.04) repo line — no 26.04 Docker release yet
+          # fallback: noble repo until 26.04 published
+          DPKG_ARCH="$(dpkg --print-architecture)"
+          echo "deb [arch=${DPKG_ARCH} signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/ubuntu noble stable" \
+              > /etc/apt/sources.list.d/docker.list
+
+          apt-get update -qq
+          apt-get install -y docker-ce docker-ce-cli containerd.io \
+              docker-buildx-plugin docker-compose-plugin
+      fi
+
+      systemctl enable --now docker
+      echo "=== Docker version: $(docker --version) ==="
+
+      # ----------------------------------------------------------------
+      # Create FileCloud data directory structure
+      # ----------------------------------------------------------------
+      echo "=== Creating FileCloud directory structure ==="
+      mkdir -p "${FC_DATA_DIR}"/{data,mongodb,logs,nginx-conf}
+
+      # Set permissions so www-data inside containers can write
+      chown -R 33:33 "${FC_DATA_DIR}/data" 2>/dev/null || true
+      chmod -R 775 "${FC_DATA_DIR}"
+
+      # ----------------------------------------------------------------
+      # Write docker-compose.yml for FileCloud
+      # FileCloud official Docker image: ghcr.io/filecloud/filecloud
+      # Ref: https://www.filecloud.com/supportdocs/fcdoc/latest/server/filecloud-docker/
+      # ----------------------------------------------------------------
+      echo "=== Writing FileCloud docker-compose.yml ==="
+      cat > "${FC_DATA_DIR}/docker-compose.yml" <<DCEOF
+      version: "3.9"
+
+      services:
+        mongodb:
+          image: mongo:6
+          container_name: filecloud-mongodb
+          restart: unless-stopped
+          environment:
+            MONGO_INITDB_ROOT_USERNAME: root
+            MONGO_INITDB_ROOT_PASSWORD: "${MONGO_ROOT_PASS}"
+            MONGO_INITDB_DATABASE: filecloud
+          volumes:
+            - ${FC_DATA_DIR}/mongodb:/data/db
+          networks:
+            - filecloud-net
+          healthcheck:
+            test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+        filecloud:
+          image: ghcr.io/filecloud/filecloud:latest
+          container_name: filecloud-app
+          restart: unless-stopped
+          depends_on:
+            mongodb:
+              condition: service_healthy
+          environment:
+            FC_MONGODB_HOST: mongodb
+            FC_MONGODB_PORT: "27017"
+            FC_MONGODB_ROOT_USER: root
+            FC_MONGODB_ROOT_PASSWORD: "${MONGO_ROOT_PASS}"
+            FC_MONGODB_USER: fcuser
+            FC_MONGODB_PASSWORD: "${MONGO_FC_PASS}"
+            FC_MONGODB_DB: filecloud
+            FC_URL: "http://localhost"
+            FC_ADMIN_PASSWORD: "${ADMIN_PASS}"
+          volumes:
+            - ${FC_DATA_DIR}/data:/var/www/html/files
+            - ${FC_DATA_DIR}/logs:/var/log/apache2
+          ports:
+            - "127.0.0.1:8080:80"
+          networks:
+            - filecloud-net
+
+      networks:
+        filecloud-net:
+          driver: bridge
+      DCEOF
+
+      # Fix indentation artifacts from heredoc inside script
+      sed -i 's/^      //' "${FC_DATA_DIR}/docker-compose.yml"
+
+      # ----------------------------------------------------------------
+      # Pull images and start FileCloud stack
+      # ----------------------------------------------------------------
+      echo "=== Pulling FileCloud Docker images (may take a few minutes) ==="
+      cd "${FC_DATA_DIR}"
+      docker compose pull || echo "WARN: docker compose pull had warnings — continuing"
+      docker compose up -d
+
+      # ----------------------------------------------------------------
+      # Nginx reverse proxy configuration
+      # ----------------------------------------------------------------
+      echo "=== Configuring Nginx reverse proxy ==="
+
+      NGINX_SERVER_NAME="${APP_DOMAIN:-_}"
+
+      cat > /etc/nginx/sites-available/filecloud <<NGINXEOF
+      upstream filecloud_backend {
+          server 127.0.0.1:8080;
+          keepalive 32;
+      }
+
+      server {
+          listen 80;
+          server_name ${NGINX_SERVER_NAME};
+
+          client_max_body_size 10G;
+          client_body_timeout  300s;
+          proxy_read_timeout   300s;
+          proxy_send_timeout   300s;
+
+          # ACME challenge passthrough (used by certbot --webroot)
+          location /.well-known/acme-challenge/ {
+              root /var/www/html;
+              try_files \$uri =404;
+          }
+
+          location / {
+              proxy_pass http://filecloud_backend;
+              proxy_set_header Host              \$host;
+              proxy_set_header X-Real-IP         \$remote_addr;
+              proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$scheme;
+              proxy_http_version 1.1;
+              proxy_set_header Connection "";
+          }
+      }
+      NGINXEOF
+
+      ln -sf /etc/nginx/sites-available/filecloud /etc/nginx/sites-enabled/filecloud
+      rm -f /etc/nginx/sites-enabled/default
+
+      # Ensure webroot dir exists for ACME challenge
+      mkdir -p /var/www/html
+
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # ----------------------------------------------------------------
+      # Optional: Certbot TLS
+      # Non-fatal — DNS may not point here yet
+      # ----------------------------------------------------------------
+      if [[ "${ENABLE_TLS}" == "true" && "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+          certbot --nginx \
+              --non-interactive \
+              --agree-tos \
+              --email "${LE_EMAIL}" \
+              -d "${APP_DOMAIN}" \
+              --redirect \
+              || echo "WARN: certbot deferred — DNS may not point here yet"
+          systemctl reload nginx || true
+      fi
+
+      # ----------------------------------------------------------------
+      # Wait for FileCloud to be healthy (max 120s)
+      # ----------------------------------------------------------------
+      echo "=== Waiting for FileCloud container to become healthy ==="
+      TIMEOUT=120
+      ELAPSED=0
+      until curl -fsSL http://127.0.0.1:8080/ >/dev/null 2>&1 || [ $ELAPSED -ge $TIMEOUT ]; do
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+      done
+      if ! curl -fsSL http://127.0.0.1:8080/ >/dev/null 2>&1; then
+          echo "WARN: FileCloud not responding on port 8080 after ${TIMEOUT}s — check docker logs"
+          docker compose -f "${FC_DATA_DIR}/docker-compose.yml" logs --tail=50 || true
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      SERVER_IP="$(curl -fsSL https://api4.my-ip.io/ip 2>/dev/null || hostname -I | awk '{print $1}')"
+      if [[ "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          FC_URL="https://${APP_DOMAIN}"
+      else
+          FC_URL="http://${SERVER_IP}"
+      fi
+
+      cat > /root/filecloud-credentials.txt <<CREDS
+      ============================================================
+       FileCloud — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       FileCloud URL     : ${FC_URL}
+       Admin username    : admin
+       Admin password    : ${ADMIN_PASS}
+
+       MongoDB root user : root
+       MongoDB root pass : ${MONGO_ROOT_PASS}
+       MongoDB FC pass   : ${MONGO_FC_PASS}
+
+       Data directory    : ${FC_DATA_DIR}
+       Compose file      : ${FC_DATA_DIR}/docker-compose.yml
+       Log file          : /var/log/filecloud-bootstrap.log
+       Container logs    : docker compose -f ${FC_DATA_DIR}/docker-compose.yml logs
+
+       LICENSING — BYOL:
+         FileCloud requires a valid license key.
+         Visit https://www.filecloud.com to obtain a trial or purchased license.
+         Enter the license key in the FileCloud admin portal after setup.
+
+       IMPORTANT: Change the admin password after first login.
+                  Secure /root/filecloud-credentials.txt and then delete it.
+
+       Firewall open ports: 22 (SSH) | 80 (HTTP) | 443 (HTTPS)
+      ============================================================
+      CREDS
+      chmod 600 /root/filecloud-credentials.txt
+
+      echo ""
+      echo "=== FileCloud bootstrap complete $(date -u) ==="
+      echo "=== FileCloud URL  : ${FC_URL}"
+      echo "=== Admin user     : admin"
+      echo "=== Admin pass     : ${ADMIN_PASS}"
+      echo "=== Full creds     : /root/filecloud-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/filecloud-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   FileCloud bootstrap complete.
+   URL         : http://YOUR_IP_OR_DOMAIN/ (or https:// if TLS enabled)
+   Admin user  : admin
+   Credentials : /root/filecloud-credentials.txt
+   Log         : /var/log/filecloud-bootstrap.log
+
+   LICENSING: FileCloud requires a valid license key (BYOL).
+   Visit https://www.filecloud.com to obtain or activate your license.
+  ============================================================

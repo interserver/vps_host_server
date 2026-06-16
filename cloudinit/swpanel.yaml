@@ -1,0 +1,309 @@
+#cloud-config
+# =============================================================================
+# SWPanel — Debian 12 'bookworm' cloud-init user-data
+# Stack: SWPanel Self-Hosted (official installer) + UFW firewall + fail2ban
+#        + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# Edit the operator-editable vars in /root/.swpanel-bootstrap.env before
+# (or just after) first boot. The panel admin port is 3203.
+# After boot, visit https://go.swpanel.com/activate/ to register the generated
+# Token ID and activate your SWPanel Self-Hosted licence.
+# =============================================================================
+
+hostname: swpanel
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep [default] so the provisioner can inject the customer SSH key.
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — minimal bootstrap set; SWPanel installer pulls its own deps.
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - apt-transport-https
+  - lsb-release
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - sudo
+  - net-tools
+  - ftp
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB to survive installer memory spikes.
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write operator env + bootstrap script.
+# ----------------------------------------------------------------------------
+write_files:
+  # Operator-editable variables
+  - path: /root/.swpanel-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # SWPanel bootstrap configuration
+      # Edit these before first boot or re-run /root/swpanel-bootstrap.sh
+
+      # Domain / hostname that SWPanel will serve (used for Certbot).
+      APP_DOMAIN=CHANGE_ME
+
+      # Let's Encrypt contact e-mail (required for Certbot).
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS issuance on first boot.
+      # Safe to leave "true" — boot will not fail if DNS is not ready.
+      ENABLE_TLS=true
+
+      # SWPanel admin credentials (printed in /root/swpanel-credentials.txt
+      # after install). Leave as CHANGE_ME to auto-generate a random password.
+      ADMIN_PASS=CHANGE_ME
+
+  # Bootstrap script
+  - path: /root/swpanel-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/swpanel-bootstrap.log) 2>&1
+      source /root/.swpanel-bootstrap.env
+
+      # -----------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*"; }
+
+      log "=== SWPanel bootstrap starting ==="
+
+      # -----------------------------------------------------------------
+      # Resolve auto-generated secrets
+      # -----------------------------------------------------------------
+      if [ "${ADMIN_PASS:-CHANGE_ME}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        log "Generated ADMIN_PASS"
+      fi
+
+      # -----------------------------------------------------------------
+      # System hardening: fail2ban + unattended-upgrades
+      # -----------------------------------------------------------------
+      log "Configuring fail2ban..."
+      command -v fail2ban-server >/dev/null 2>&1 || apt-get install -y fail2ban
+
+      mkdir -p /etc/fail2ban/jail.d
+      cat > /etc/fail2ban/jail.d/swpanel.conf << 'JAILEOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      JAILEOF
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades << 'AUTOUPEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPEOF
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'UUEOF'
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}";
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUEOF
+
+      # -----------------------------------------------------------------
+      # UFW firewall — allow SSH + SWPanel port BEFORE install
+      # SWPanel admin panel runs on port 3203 (HTTPS).
+      # Ports 80/443 are used for hosted sites after panel setup.
+      # -----------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 3203/tcp comment 'SWPanel admin panel'
+      ufw allow 80/tcp   comment 'HTTP (hosted sites)'
+      ufw allow 443/tcp  comment 'HTTPS (hosted sites)'
+      ufw --force enable
+      log "UFW configured."
+
+      # -----------------------------------------------------------------
+      # SWPanel official installer (non-interactive)
+      # Ref: https://deployment.swpanel.com/install.sh
+      # The env var REMOTE_DISCLAIMER_ACCEPTED=1 bypasses the interactive
+      # "yes/no" prompt so the installer runs unattended.
+      # -----------------------------------------------------------------
+      log "Downloading SWPanel installer..."
+      command -v curl >/dev/null 2>&1 || apt-get install -y curl
+      command -v wget >/dev/null 2>&1 || apt-get install -y wget
+
+      wget -qO /tmp/swpanel-install.sh https://deployment.swpanel.com/install.sh
+      chmod +x /tmp/swpanel-install.sh
+
+      log "Running SWPanel installer (non-interactive)..."
+      # REMOTE_DISCLAIMER_ACCEPTED=1 skips the interactive prompt.
+      # The installer launches a systemd first-boot service and returns;
+      # actual panel setup continues in the background.
+      REMOTE_DISCLAIMER_ACCEPTED=1 bash /tmp/swpanel-install.sh
+      rm -f /tmp/swpanel-install.sh
+
+      log "SWPanel installer launched — background service is running."
+
+      # -----------------------------------------------------------------
+      # Wait for the SWPanel first-boot service to complete.
+      # The service runs swpanel.sh which takes several minutes.
+      # We poll the token file that swpanel.sh creates on completion.
+      # -----------------------------------------------------------------
+      log "Waiting for SWPanel first-boot to complete (up to 20 min)..."
+      TRIES=0
+      MAX_TRIES=240   # 240 x 5s = 20 minutes
+      TOKEN_FILE="/var/swinstaller/token"
+      ALT_TOKEN_FILE="/root/nohup.out"
+
+      until [ "$TRIES" -ge "$MAX_TRIES" ]; do
+        # Check if the first-boot service finished
+        if systemctl is-active --quiet first-boot.service 2>/dev/null; then
+          sleep 5
+          TRIES=$((TRIES + 1))
+          continue
+        fi
+        # Service stopped — check if SWPanel is listening on 3203
+        if ss -tlnp 2>/dev/null | grep -q ':3203'; then
+          log "SWPanel is listening on port 3203."
+          break
+        fi
+        sleep 5
+        TRIES=$((TRIES + 1))
+      done
+
+      if [ "$TRIES" -ge "$MAX_TRIES" ]; then
+        log "WARN: Timed out waiting for SWPanel — it may still be initialising. Check /root/nohup.out"
+      fi
+
+      # -----------------------------------------------------------------
+      # Extract installation Token ID from the installer log
+      # -----------------------------------------------------------------
+      SWPANEL_TOKEN=""
+      if [ -f /root/nohup.out ]; then
+        SWPANEL_TOKEN=$(grep -oP 'TOKEN[:\s=]+\K[A-Za-z0-9_\-]{8,}' /root/nohup.out 2>/dev/null | tail -1 || true)
+      fi
+      if [ -z "$SWPANEL_TOKEN" ] && [ -f "$TOKEN_FILE" ]; then
+        SWPANEL_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null | tr -d '[:space:]' || true)
+      fi
+      if [ -z "$SWPANEL_TOKEN" ]; then
+        SWPANEL_TOKEN="(see /root/nohup.out once install finishes)"
+      fi
+
+      # -----------------------------------------------------------------
+      # Certbot TLS (deferred gracefully if DNS not ready)
+      # SWPanel manages its own HTTPS on port 3203; certbot here is for
+      # any additional vhost or reverse-proxy on 80/443.
+      # -----------------------------------------------------------------
+      if [ "${ENABLE_TLS:-true}" = "true" ] && \
+         [ "${APP_DOMAIN:-CHANGE_ME}" != "CHANGE_ME" ] && \
+         [ "${LE_EMAIL:-CHANGE_ME}" != "CHANGE_ME" ]; then
+        log "Attempting Certbot TLS for ${APP_DOMAIN}..."
+        command -v certbot >/dev/null 2>&1 || apt-get install -y python3-certbot
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --http-01-port 80 \
+          || echo "WARN: certbot deferred — DNS not yet pointed or port 80 unavailable."
+      else
+        log "ENABLE_TLS is false or APP_DOMAIN/LE_EMAIL not set — skipping Certbot."
+      fi
+
+      # -----------------------------------------------------------------
+      # Write credentials file
+      # -----------------------------------------------------------------
+      log "Writing credentials file..."
+      SERVER_IP="$(curl -sSf --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null \
+                   || hostname -I | awk '{print $1}')"
+      PANEL_HOST="${APP_DOMAIN:-${SERVER_IP}}"
+
+      cat > /root/swpanel-credentials.txt << CREDS
+      =====================================================
+       SWPanel Self-Hosted — Credentials  ($(date -u '+%Y-%m-%d %H:%M UTC'))
+      =====================================================
+      Panel admin port : 3203 (HTTPS)
+      Panel URL        : https://${PANEL_HOST}:3203
+      Admin pass       : ${ADMIN_PASS}
+
+      Installation Token ID : ${SWPANEL_TOKEN}
+
+      NEXT STEP — Activate your licence:
+        1. Go to https://go.swpanel.com/activate/
+        2. Choose "Manual installation" / "Ya tengo mi Token ID"
+        3. Enter the Token ID above and click "Verificar Token ID"
+        4. Select your licence and click "Activar SWPanel ahora"
+
+      Log file : /var/log/swpanel-bootstrap.log
+      Installer log : /root/nohup.out
+      =====================================================
+      CREDS
+
+      chmod 600 /root/swpanel-credentials.txt
+
+      # -----------------------------------------------------------------
+      # Persist generated secrets back to the env file so re-runs are
+      # idempotent (do not generate new creds on subsequent invocations).
+      # -----------------------------------------------------------------
+      sed -i "s|^ADMIN_PASS=.*|ADMIN_PASS=${ADMIN_PASS}|" /root/.swpanel-bootstrap.env
+
+      log "Credentials written to /root/swpanel-credentials.txt"
+      log "=== SWPanel bootstrap complete ==="
+      log "Panel : https://${PANEL_HOST}:3203"
+      log "Token : ${SWPANEL_TOKEN}"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script once at first boot.
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/swpanel-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output.
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  SWPanel Self-Hosted bootstrap complete after $UPTIME seconds.
+  Admin panel : https://YOUR_IP_OR_DOMAIN:3203
+  Credentials : /root/swpanel-credentials.txt  (chmod 600)
+  Log         : /var/log/swpanel-bootstrap.log
+  Installer   : /root/nohup.out
+
+  IMPORTANT: Visit https://go.swpanel.com/activate/ and enter
+  the Token ID from /root/swpanel-credentials.txt to activate
+  your SWPanel Self-Hosted licence.
+  ============================================================

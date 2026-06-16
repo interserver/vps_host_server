@@ -1,0 +1,514 @@
+#cloud-config
+# =============================================================================
+# OpenLiteSpeed + Drupal "one-click app" — Ubuntu 26.04 LTS cloud-init
+# Stack: OpenLiteSpeed + LSPHP + MariaDB + Composer + Drush + Certbot
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.openlitespeed-drupal-bootstrap.env
+# before launching, OR inject them via your provisioner.
+# Passwords are randomised per-boot when left as CHANGE_ME.
+# =============================================================================
+
+hostname: openlitespeed-drupal
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve default (provisioner injects customer SSH key + hostname)
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages — base tooling only; OLS + LSPHP come from their own apt repo
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - mariadb-server
+  - mariadb-client
+  - certbot
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+  - wget
+  - gnupg2
+  - lsb-release
+  - ca-certificates
+  - apt-transport-https
+  - software-properties-common
+  - composer
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive OLS + MariaDB memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable bootstrap variables ---------------------------------
+  - path: /root/.openlitespeed-drupal-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE -----
+      APP_DOMAIN="example.com"          # primary domain (no scheme)
+      APP_DOMAIN_WWW="www.example.com"  # www alias (set empty to skip)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot when DNS is not pointed yet
+
+      DRUPAL_SITE_NAME="My Drupal Site"
+      DRUPAL_ACCOUNT_NAME="siteadmin"
+      DRUPAL_ACCOUNT_EMAIL="admin@example.com"
+
+      # DB creds — randomised on first boot if left as CHANGE_ME
+      DRUPAL_DB_NAME="drupal"
+      DRUPAL_DB_USER="drupal_user"
+      DRUPAL_DB_PASS="CHANGE_ME"
+      DRUPAL_ACCOUNT_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      DRUPAL_PATH="/var/www/drupal"
+      DRUPAL_VERSION="^10"
+
+      # OLS admin panel — randomised if left as CHANGE_ME
+      OLS_ADMIN_USER="admin"
+      OLS_ADMIN_PASS="CHANGE_ME"
+      OLS_ADMIN_PORT="7080"
+
+      # PHP version served by LSPHP (match the lsphp package installed below)
+      LSPHP_VER="83"
+
+  # --- fail2ban configuration ------------------------------------------------
+  - path: /etc/fail2ban/jail.d/openlitespeed-drupal.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime  = 1h
+
+      [apache-auth]
+      enabled = false
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/openlitespeed-drupal-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openlitespeed-drupal-bootstrap.log) 2>&1
+      source /root/.openlitespeed-drupal-bootstrap.env
+
+      echo "=== OpenLiteSpeed + Drupal bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret generator ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- randomise any CHANGE_ME passwords ---
+      [ "$DRUPAL_DB_PASS"      = "CHANGE_ME" ] && DRUPAL_DB_PASS="$(rand)"
+      [ "$DRUPAL_ACCOUNT_PASS" = "CHANGE_ME" ] && DRUPAL_ACCOUNT_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS"     = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+      [ "$OLS_ADMIN_PASS"      = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
+
+      # =========================================================================
+      # 1. Install OpenLiteSpeed + LSPHP from the official LiteSpeed apt repo
+      # =========================================================================
+      # fallback: noble repo until 26.04 published
+      if [ ! -f /etc/apt/sources.list.d/litespeed.list ]; then
+        wget -qO /tmp/lst_repo.sh https://repo.litespeed.sh
+        bash /tmp/lst_repo.sh
+        # The official script adds the repo for the running Ubuntu release; if
+        # no 26.04 (plucky/future codename) packages exist yet, pin to noble.
+        CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME}}")"
+        if ! apt-cache show openlitespeed >/dev/null 2>&1; then
+          # fallback: noble repo until 26.04 published
+          sed -i "s/${CODENAME}/noble/g" /etc/apt/sources.list.d/litespeed.list
+        fi
+        apt-get update -qq
+      fi
+
+      # Install OLS + LSPHP (idempotent)
+      LSPHP_PKG="lsphp${LSPHP_VER}"
+      apt-get install -y \
+        openlitespeed \
+        "${LSPHP_PKG}" \
+        "${LSPHP_PKG}-common" \
+        "${LSPHP_PKG}-mysql" \
+        "${LSPHP_PKG}-curl" \
+        "${LSPHP_PKG}-json" \
+        "${LSPHP_PKG}-opcache" \
+        "${LSPHP_PKG}-xml" \
+        "${LSPHP_PKG}-intl" \
+        "${LSPHP_PKG}-mbstring" \
+        "${LSPHP_PKG}-zip" \
+        "${LSPHP_PKG}-gd" \
+        "${LSPHP_PKG}-bcmath"
+
+      # Convenience symlink so 'php' works in PATH for Drush / Composer
+      LSPHP_BIN="/usr/local/lsws/lsphp${LSPHP_VER}/bin/php"
+      if [ -x "$LSPHP_BIN" ] && ! command -v php >/dev/null 2>&1; then
+        ln -sf "$LSPHP_BIN" /usr/local/bin/php
+      fi
+
+      # =========================================================================
+      # 2. Configure the OLS admin password
+      # =========================================================================
+      OLS_ADMIN_HASH="$(/usr/local/lsws/admin/fcgi-bin/admin_php -q \
+        /usr/local/lsws/admin/misc/htpasswd.php "${OLS_ADMIN_PASS}" 2>/dev/null || true)"
+
+      if [ -n "$OLS_ADMIN_HASH" ]; then
+        printf '%s:%s\n' "${OLS_ADMIN_USER}" "${OLS_ADMIN_HASH}" \
+          > /usr/local/lsws/admin/conf/htpasswd
+        chmod 600 /usr/local/lsws/admin/conf/htpasswd
+      fi
+
+      # =========================================================================
+      # 3. Tune LSPHP for Drupal
+      # =========================================================================
+      LSPHP_VER_DOT="${LSPHP_VER:0:1}.${LSPHP_VER:1}"
+      PHP_INI_DIR="/usr/local/lsws/lsphp${LSPHP_VER}/etc/php/${LSPHP_VER_DOT}/litespeed"
+      # fallback path used by some builds
+      [ -d "$PHP_INI_DIR" ] || PHP_INI_DIR="/usr/local/lsws/lsphp${LSPHP_VER}/etc"
+      PHP_INI="${PHP_INI_DIR}/php.ini"
+
+      if [ -f "$PHP_INI" ]; then
+        sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 64M/'    "$PHP_INI"
+        sed -ri 's/^;?post_max_size.*/post_max_size = 64M/'                "$PHP_INI"
+        sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'                 "$PHP_INI"
+        sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'      "$PHP_INI"
+        sed -ri 's/^;?max_input_vars.*/max_input_vars = 3000/'             "$PHP_INI"
+        sed -ri 's/^;?opcache\.enable[^_].*/opcache.enable=1/'             "$PHP_INI"
+        sed -ri 's/^;?opcache\.memory_consumption.*/opcache.memory_consumption=128/' "$PHP_INI"
+      fi
+
+      # =========================================================================
+      # 4. Secure MariaDB + create Drupal database
+      # =========================================================================
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${DRUPAL_DB_NAME}\`
+        DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${DRUPAL_DB_USER}'@'localhost'
+        IDENTIFIED BY '${DRUPAL_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${DRUPAL_DB_NAME}\`.* TO '${DRUPAL_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # =========================================================================
+      # 5. Install / upgrade Composer (ensure v2)
+      # =========================================================================
+      if ! command -v composer >/dev/null 2>&1; then
+        curl -fsSL https://getcomposer.org/installer \
+          | php -- --install-dir=/usr/local/bin --filename=composer
+      fi
+      composer self-update --2 2>/dev/null || true
+
+      # =========================================================================
+      # 6. Install Drupal via Composer
+      # =========================================================================
+      mkdir -p "$(dirname "$DRUPAL_PATH")"
+      if [ ! -f "${DRUPAL_PATH}/composer.json" ]; then
+        composer create-project "drupal/recommended-project:${DRUPAL_VERSION}" \
+          "$DRUPAL_PATH" --no-interaction --no-progress
+      fi
+
+      # Install Drush inside the project if missing
+      if [ ! -f "${DRUPAL_PATH}/vendor/bin/drush" ]; then
+        composer --working-dir="$DRUPAL_PATH" require drush/drush \
+          --no-interaction --no-progress
+      fi
+      DRUSH="${DRUPAL_PATH}/vendor/bin/drush"
+
+      # =========================================================================
+      # 7. Drupal settings.php
+      # =========================================================================
+      SITES_DIR="${DRUPAL_PATH}/web/sites/default"
+      mkdir -p "${SITES_DIR}/files"
+      if [ ! -f "${SITES_DIR}/settings.php" ]; then
+        cp "${SITES_DIR}/default.settings.php" "${SITES_DIR}/settings.php"
+      fi
+
+      # Append DB connection block once
+      if ! grep -q 'drupal_ols_bootstrap' "${SITES_DIR}/settings.php" 2>/dev/null; then
+        HASH_SALT="$(rand)$(rand)"
+        ESCAPED_DOMAIN="$(echo "$APP_DOMAIN" | sed 's/\./\\\\./g')"
+        cat >> "${SITES_DIR}/settings.php" <<PHPSETTINGS
+
+      # drupal_ols_bootstrap — added by openlitespeed-drupal-bootstrap.sh
+      \$databases['default']['default'] = [
+        'driver'    => 'mysql',
+        'database'  => '${DRUPAL_DB_NAME}',
+        'username'  => '${DRUPAL_DB_USER}',
+        'password'  => '${DRUPAL_DB_PASS}',
+        'host'      => 'localhost',
+        'port'      => '3306',
+        'prefix'    => '',
+        'collation' => 'utf8mb4_general_ci',
+        'namespace' => 'Drupal\\\\Core\\\\Database\\\\Driver\\\\mysql',
+      ];
+      \$settings['hash_salt'] = '${HASH_SALT}';
+      \$settings['update_free_access'] = FALSE;
+      \$settings['file_public_path'] = 'sites/default/files';
+      \$settings['trusted_host_patterns'][] = '^${ESCAPED_DOMAIN}\$';
+      PHPSETTINGS
+      fi
+
+      # =========================================================================
+      # 8. File permissions
+      # =========================================================================
+      chown -R www-data:www-data "$DRUPAL_PATH"
+      find "${DRUPAL_PATH}/web" -type d -exec chmod 755 {} \;
+      find "${DRUPAL_PATH}/web" -type f -exec chmod 644 {} \;
+      chmod 600 "${SITES_DIR}/settings.php"
+      chmod 755 "${SITES_DIR}/files"
+
+      # =========================================================================
+      # 9. Run Drupal site install via Drush
+      # =========================================================================
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      sudo -u www-data "$DRUSH" site:install standard \
+        --root="${DRUPAL_PATH}/web" \
+        --db-url="mysql://${DRUPAL_DB_USER}:${DRUPAL_DB_PASS}@localhost/${DRUPAL_DB_NAME}" \
+        --site-name="${DRUPAL_SITE_NAME}" \
+        --account-name="${DRUPAL_ACCOUNT_NAME}" \
+        --account-pass="${DRUPAL_ACCOUNT_PASS}" \
+        --account-mail="${DRUPAL_ACCOUNT_EMAIL}" \
+        --locale=en \
+        --yes 2>/dev/null || true
+
+      # re-fix permissions after install writes files
+      chown -R www-data:www-data "${DRUPAL_PATH}/web/sites/default/files"
+
+      # =========================================================================
+      # 10. Configure OpenLiteSpeed virtual host for Drupal
+      # =========================================================================
+      OLS_CONF_DIR="/usr/local/lsws/conf/vhosts/drupal"
+      mkdir -p "$OLS_CONF_DIR"
+
+      SERVER_NAMES="$APP_DOMAIN"
+      [ -n "$APP_DOMAIN_WWW" ] && SERVER_NAMES="${APP_DOMAIN} ${APP_DOMAIN_WWW}"
+
+      cat > "${OLS_CONF_DIR}/vhconf.conf" <<OLSCONF
+      docRoot                   ${DRUPAL_PATH}/web
+      vhDomain                  ${SERVER_NAMES}
+      adminEmails               ${DRUPAL_ACCOUNT_EMAIL}
+      enableGzip                1
+      enableBr                  1
+
+      index  {
+        useServer               0
+        indexFiles              index.php
+        autoIndex               0
+      }
+
+      errorlog  {
+        fileName                /var/log/openlitespeed/drupal-error.log
+        logLevel                ERROR
+        rollingSize             10M
+      }
+
+      accesslog  {
+        fileName                /var/log/openlitespeed/drupal-access.log
+        rollingSize             100M
+        keepDays                7
+        compressArchive         1
+      }
+
+      scripthandler  {
+        add                     lsapi:lsphp${LSPHP_VER} php
+      }
+
+      extprocessor lsphp${LSPHP_VER}  {
+        type                    lsapi
+        address                 uds://tmp/lshttpd/lsphp${LSPHP_VER}.sock
+        maxConns                10
+        env                     PHP_LSAPI_CHILDREN=10
+        initTimeout             60
+        retryTimeout            0
+        persistConn             1
+        respBuffer              0
+        autoStart               1
+        path                    /usr/local/lsws/lsphp${LSPHP_VER}/bin/lsphp
+        backlog                 100
+        instances               1
+        priority                0
+        memSoftLimit            2047M
+        memHardLimit            2047M
+        procSoftLimit           1400
+        procHardLimit           1500
+      }
+
+      # Drupal clean URLs — rewrite index.php
+      rewrite  {
+        enable                  1
+        autoLoadHtaccess        1
+        rules                   <<<END_RULES
+      RewriteCond %{REQUEST_FILENAME} !-f
+      RewriteCond %{REQUEST_FILENAME} !-d
+      RewriteRule ^(.*)$ index.php?q=\$1 [L,QSA]
+      END_RULES
+      }
+
+      # Deny private / hidden paths
+      context /.  {
+        location                /.
+        allowBrowse             0
+        accessControl  {
+          deny                  *
+        }
+      }
+      OLSCONF
+
+      # Add the virtual host to the main httpd_config.conf (idempotent)
+      OLS_MAIN_CONF="/usr/local/lsws/conf/httpd_config.conf"
+      if ! grep -q "drupal" "$OLS_MAIN_CONF" 2>/dev/null; then
+        cat >> "$OLS_MAIN_CONF" <<MAINCF
+
+      virtualhost drupal {
+        vhRoot                  ${OLS_CONF_DIR}
+        configFile              ${OLS_CONF_DIR}/vhconf.conf
+        allowSymbolLink         1
+        enableScript            1
+        restrained              0
+        setUIDMode              0
+      }
+      MAINCF
+      fi
+
+      # Bind the virtual host to port 80 (and 443 later) — add listener entry
+      if ! grep -q "listener.*drupal" "$OLS_MAIN_CONF" 2>/dev/null; then
+        cat >> "$OLS_MAIN_CONF" <<LSTNR
+
+      listener drupalHTTP {
+        address                 *:80
+        secure                  0
+        map                     drupal ${SERVER_NAMES}
+      }
+      LSTNR
+      fi
+
+      # =========================================================================
+      # 11. Firewall
+      # =========================================================================
+      ufw allow OpenSSH
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw allow "${OLS_ADMIN_PORT}/tcp"
+      ufw --force enable
+
+      # =========================================================================
+      # 12. fail2ban
+      # =========================================================================
+      systemctl enable --now fail2ban
+
+      # =========================================================================
+      # 13. Start / reload OpenLiteSpeed
+      # =========================================================================
+      systemctl enable lsws 2>/dev/null || true
+      if systemctl is-active --quiet lsws; then
+        /usr/local/lsws/bin/lswsctrl graceful 2>/dev/null || systemctl reload lsws || true
+      else
+        systemctl start lsws || true
+      fi
+
+      # =========================================================================
+      # 14. TLS via Let's Encrypt (certbot webroot / standalone — OLS has its own
+      #     ACME but certbot is simpler and provider-agnostic)
+      # =========================================================================
+      if [ "$ENABLE_TLS" = "true" ]; then
+        CERTBOT_DOMAINS="-d $APP_DOMAIN"
+        [ -n "$APP_DOMAIN_WWW" ] && CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $APP_DOMAIN_WWW"
+        # Use webroot so OLS keeps serving during challenge
+        certbot certonly --webroot \
+          -w "${DRUPAL_PATH}/web" \
+          --non-interactive --agree-tos \
+          -m "$LE_EMAIL" $CERTBOT_DOMAINS \
+          || echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot certonly --webroot -w ${DRUPAL_PATH}/web -d ${APP_DOMAIN}"
+
+        # Wire the cert into OLS if certbot succeeded
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        if [ -f "${CERT_DIR}/fullchain.pem" ]; then
+          # Add HTTPS listener
+          if ! grep -q "listener drupalHTTPS" "$OLS_MAIN_CONF" 2>/dev/null; then
+            cat >> "$OLS_MAIN_CONF" <<SSLCONF
+
+      listener drupalHTTPS {
+        address                 *:443
+        secure                  1
+        keyFile                 ${CERT_DIR}/privkey.pem
+        certFile                ${CERT_DIR}/fullchain.pem
+        map                     drupal ${SERVER_NAMES}
+      }
+      SSLCONF
+          fi
+          # Reload OLS to pick up SSL listener
+          /usr/local/lsws/bin/lswsctrl graceful 2>/dev/null || systemctl reload lsws || true
+          PROTO="https"
+        fi
+      fi
+
+      # =========================================================================
+      # 15. Credentials summary
+      # =========================================================================
+      cat > /root/openlitespeed-drupal-credentials.txt <<CREDS
+      ===== OpenLiteSpeed + Drupal install complete: $(date) =====
+
+      Drupal URL:              ${PROTO}://${APP_DOMAIN}
+      Drupal admin user:       ${DRUPAL_ACCOUNT_NAME}
+      Drupal admin password:   ${DRUPAL_ACCOUNT_PASS}
+      Drupal admin email:      ${DRUPAL_ACCOUNT_EMAIL}
+
+      Database name:           ${DRUPAL_DB_NAME}
+      Database user:           ${DRUPAL_DB_USER}
+      Database password:       ${DRUPAL_DB_PASS}
+      MySQL root password:     ${MYSQL_ROOT_PASS}
+
+      OLS admin panel:         http://$(hostname -I | awk '{print $1}'):${OLS_ADMIN_PORT}
+      OLS admin user:          ${OLS_ADMIN_USER}
+      OLS admin password:      ${OLS_ADMIN_PASS}
+
+      Drupal path:             ${DRUPAL_PATH}
+      Drush:                   ${DRUSH}
+      Bootstrap log:           /var/log/openlitespeed-drupal-bootstrap.log
+      CREDS
+      chmod 600 /root/openlitespeed-drupal-credentials.txt
+
+      echo "=== Bootstrap finished: $(date). Credentials: /root/openlitespeed-drupal-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openlitespeed-drupal-bootstrap.sh" ]
+
+final_message: "OpenLiteSpeed + Drupal bootstrap done after $UPTIME s. See /root/openlitespeed-drupal-credentials.txt and /var/log/openlitespeed-drupal-bootstrap.log"

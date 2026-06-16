@@ -1,0 +1,491 @@
+#cloud-config
+# =============================================================================
+# InvokeAI — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NVIDIA driver + CUDA toolkit + Python venv + InvokeAI + systemd
+#        Nginx reverse proxy + Certbot TLS + UFW + fail2ban + swap
+# -----------------------------------------------------------------------------
+# REQUIRES: a KVM VPS plan with a dedicated NVIDIA GPU.
+#   - Minimum: 1x NVIDIA GPU (Turing / Ampere or newer recommended), 16 GB RAM
+#   - Disk: at least 40 GB free AFTER OS; 100 GB+ strongly recommended for
+#     diffusion model checkpoints (SDXL ~6 GB, SD 1.5 ~2 GB each).
+#   - VRAM: 8 GB minimum; 16 GB+ for comfortable SDXL generation.
+#
+# EDIT the variables in write_files -> /root/.invokeai-bootstrap.env before
+# launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: invokeai
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GB helps survive pip installs / model loads on tight-memory VMs
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Base packages (NVIDIA driver + CUDA installed in bootstrap via CUDA keyring)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+
+packages:
+  # Core utilities
+  - curl
+  - wget
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  # Security
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  # Build tools (some InvokeAI/PyTorch wheels compile native extensions)
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - libffi-dev
+  - libglib2.0-0
+  - libsm6
+  - libxrender1
+  - libxext6
+  # Python
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  # GPU / CUDA helpers
+  - pciutils
+  - ocl-icd-opencl-dev
+  # Monitoring / ops helpers
+  - htop
+  - nvtop
+  - tmux
+  - jq
+  # Web / TLS
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # (a) Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.invokeai-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # InvokeAI bootstrap configuration — edit before first boot
+      # -----------------------------------------------------------------------
+
+      # Domain pointing at this server (leave blank or CHANGE_ME to skip TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS setup (requires APP_DOMAIN DNS)
+      ENABLE_TLS=false
+
+      # Port InvokeAI listens on internally (nginx proxies to this)
+      INVOKEAI_PORT=9090
+
+      # Linux user that owns and runs the InvokeAI service
+      INVOKEAI_USER=invokeai
+
+      # InvokeAI installation root
+      INVOKEAI_ROOT=/opt/invokeai
+
+      # Python venv path
+      VENV_DIR=/opt/invokeai-venv
+
+      # CUDA version tag — selects the PyTorch wheel index.
+      # "cu128" = CUDA 12.8 (driver 570+).  Change to "cu121" for older hosts.
+      CUDA_TAG=cu128
+
+      # PyTorch index URL (derived from CUDA_TAG; edit for nightlies)
+      TORCH_INDEX=https://download.pytorch.org/whl/${CUDA_TAG}
+
+      # InvokeAI version to install (pip install invokeai==X.Y.Z, or leave
+      # empty to install the latest stable release from PyPI).
+      INVOKEAI_VERSION=
+
+      # Admin password shown in /root/invokeai-credentials.txt.
+      # InvokeAI itself does not use a password by default; this is stored
+      # for reference and for any future auth wrapper.
+      ADMIN_PASS=CHANGE_ME
+
+  # --------------------------------------------------------------------------
+  # (b) Bootstrap shell script
+  # --------------------------------------------------------------------------
+  - path: /root/invokeai-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/invokeai-bootstrap.log) 2>&1
+      source /root/.invokeai-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator
+      # The '|| true' is required under set -e + pipefail (head -c closes
+      # the pipe before tr finishes, generating SIGPIPE).
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      log() { echo "[invokeai-bootstrap] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      log "=== InvokeAI bootstrap started ==="
+
+      # -----------------------------------------------------------------------
+      # Auto-generate ADMIN_PASS if still CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        sed -i "s/^ADMIN_PASS=CHANGE_ME/ADMIN_PASS=${ADMIN_PASS}/" /root/.invokeai-bootstrap.env
+        log "Auto-generated ADMIN_PASS"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Automatic security updates
+      # -----------------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+      systemctl enable --now unattended-upgrades
+
+      # -----------------------------------------------------------------------
+      # NVIDIA driver + CUDA toolkit
+      # Uses the ubuntu2404 / noble CUDA repo because the 26.04 line may not
+      # yet be published by NVIDIA at image build time.
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      log "Installing NVIDIA driver and CUDA toolkit..."
+
+      CUDA_KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
+      CUDA_KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/${CUDA_KEYRING_DEB}"
+
+      if ! dpkg -l cuda-keyring &>/dev/null; then
+        wget -q -O "/tmp/${CUDA_KEYRING_DEB}" "${CUDA_KEYRING_URL}"
+        dpkg -i "/tmp/${CUDA_KEYRING_DEB}"
+        rm -f "/tmp/${CUDA_KEYRING_DEB}"
+        apt-get update -qq
+      fi
+
+      # nvidia-open = open-kernel-module driver (preferred for Ampere+ GPUs)
+      # cuda-toolkit-12-8 = compiler, libraries, headers
+      command -v nvidia-smi &>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          nvidia-open \
+          cuda-toolkit-12-8
+
+      # Persist CUDA paths for all users / login shells
+      if [ ! -f /etc/profile.d/cuda.sh ]; then
+        cat > /etc/profile.d/cuda.sh <<'CUDAPROFILE'
+      export PATH="/usr/local/cuda/bin${PATH:+:${PATH}}"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+      CUDAPROFILE
+        chmod 644 /etc/profile.d/cuda.sh
+      fi
+      export PATH="/usr/local/cuda/bin${PATH:+:${PATH}}"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+      # -----------------------------------------------------------------------
+      # Dedicated system user for InvokeAI
+      # -----------------------------------------------------------------------
+      log "Creating system user '${INVOKEAI_USER}'..."
+      id "${INVOKEAI_USER}" &>/dev/null || \
+        useradd --system --shell /bin/bash \
+          --create-home --home-dir "${INVOKEAI_ROOT}" \
+          "${INVOKEAI_USER}"
+
+      # -----------------------------------------------------------------------
+      # Python venv
+      # -----------------------------------------------------------------------
+      log "Setting up Python venv at ${VENV_DIR}..."
+      mkdir -p "${VENV_DIR}"
+      python3 -m venv "${VENV_DIR}"
+      # shellcheck disable=SC1091
+      source "${VENV_DIR}/bin/activate"
+
+      pip install --upgrade pip setuptools wheel
+
+      # PyTorch with CUDA support (must be installed before InvokeAI)
+      log "Installing PyTorch (CUDA tag: ${CUDA_TAG})..."
+      pip install torch torchvision torchaudio --index-url "${TORCH_INDEX}"
+
+      # -----------------------------------------------------------------------
+      # InvokeAI
+      # -----------------------------------------------------------------------
+      log "Installing InvokeAI..."
+      if [ -n "${INVOKEAI_VERSION:-}" ]; then
+        pip install "invokeai==${INVOKEAI_VERSION}"
+      else
+        pip install invokeai
+      fi
+
+      deactivate
+
+      # -----------------------------------------------------------------------
+      # InvokeAI root directory and initial config
+      # -----------------------------------------------------------------------
+      log "Initialising InvokeAI root at ${INVOKEAI_ROOT}..."
+      mkdir -p "${INVOKEAI_ROOT}"
+
+      # Run invokeai-configure non-interactively to create the directory layout
+      # and download a default model (skip model download; let the user choose).
+      INVOKEAI_ROOT="${INVOKEAI_ROOT}" \
+        "${VENV_DIR}/bin/invokeai-configure" \
+          --yes \
+          --skip-sd-weights \
+          --skip-support-models \
+          2>/dev/null || true
+
+      # Ensure expected sub-directories exist (idempotent)
+      mkdir -p "${INVOKEAI_ROOT}/models/main"
+      mkdir -p "${INVOKEAI_ROOT}/models/lora"
+      mkdir -p "${INVOKEAI_ROOT}/models/controlnet"
+      mkdir -p "${INVOKEAI_ROOT}/outputs"
+      mkdir -p "${INVOKEAI_ROOT}/inputs"
+      mkdir -p "${INVOKEAI_ROOT}/databases"
+
+      # Fix ownership so the service user can write everything
+      chown -R "${INVOKEAI_USER}:${INVOKEAI_USER}" "${INVOKEAI_ROOT}" "${VENV_DIR}"
+
+      # -----------------------------------------------------------------------
+      # systemd service
+      # -----------------------------------------------------------------------
+      log "Installing systemd service..."
+
+      cat > /etc/systemd/system/invokeai.service <<SYSD
+      [Unit]
+      Description=InvokeAI Stable Diffusion UI
+      Documentation=https://invoke-ai.github.io/InvokeAI/
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=${INVOKEAI_USER}
+      Group=${INVOKEAI_USER}
+      WorkingDirectory=${INVOKEAI_ROOT}
+      Environment="INVOKEAI_ROOT=${INVOKEAI_ROOT}"
+      Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64"
+      ExecStart=${VENV_DIR}/bin/invokeai-web --host 127.0.0.1 --port ${INVOKEAI_PORT}
+      Restart=on-failure
+      RestartSec=15
+      TimeoutStartSec=300
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      systemctl daemon-reload
+      systemctl enable invokeai
+      systemctl start invokeai
+
+      # -----------------------------------------------------------------------
+      # Nginx reverse proxy
+      # -----------------------------------------------------------------------
+      log "Configuring Nginx reverse proxy..."
+
+      cat > /etc/nginx/sites-available/invokeai <<NGXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN:-_};
+
+          # Allow large file uploads (model checkpoints, images)
+          client_max_body_size 512M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${INVOKEAI_PORT};
+              proxy_http_version 1.1;
+              # WebSocket support (InvokeAI uses socket.io for live progress)
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 600s;
+              proxy_send_timeout 600s;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/invokeai /etc/nginx/sites-enabled/invokeai
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # -----------------------------------------------------------------------
+      # Certbot TLS (optional; never fails the boot if DNS not pointed yet)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN:-}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot --nginx --non-interactive --agree-tos \
+          --email "${LE_EMAIL}" \
+          --domains "${APP_DOMAIN}" \
+          --redirect \
+          || echo "WARN: certbot deferred — DNS not yet pointing here"
+      else
+        log "Skipping Certbot (ENABLE_TLS=${ENABLE_TLS} or APP_DOMAIN not configured)"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Firewall (UFW)
+      # -----------------------------------------------------------------------
+      log "Configuring UFW firewall..."
+
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      # InvokeAI backend only reachable via nginx; keep direct port blocked
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # fail2ban
+      # -----------------------------------------------------------------------
+      log "Configuring fail2ban..."
+
+      cat > /etc/fail2ban/jail.d/invokeai.conf <<'F2BJAIL'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      F2BJAIL
+
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # Write credentials file
+      # -----------------------------------------------------------------------
+      log "Writing credentials file..."
+
+      PUBLIC_IP="$(curl -sf --max-time 5 https://ipv4.icanhazip.com \
+                   || curl -sf --max-time 5 https://api.ipify.org \
+                   || hostname -I | awk '{print $1}')"
+
+      PROTO="http"
+      WEB_HOST="${APP_DOMAIN:-${PUBLIC_IP}}"
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN:-}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        PROTO="https"
+      fi
+
+      cat > /root/invokeai-credentials.txt <<CREDS
+      ============================================================
+      InvokeAI — Access Credentials
+      Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      ============================================================
+
+      NOTE: This app REQUIRES an NVIDIA GPU VPS.
+            Recommended minimum: 1x NVIDIA GPU, 8 GB VRAM, 16 GB RAM.
+            Disk: 40 GB minimum; 100 GB+ recommended for multiple models.
+            Large checkpoint models (SDXL ~6 GB) need additional space.
+
+      Public IP      : ${PUBLIC_IP}
+      App domain     : ${APP_DOMAIN:-Not configured}
+
+      Web UI (nginx) : ${PROTO}://${WEB_HOST}
+      Web UI (direct): http://${PUBLIC_IP}:${INVOKEAI_PORT}
+
+      Admin password : ${ADMIN_PASS}
+        (stored for reference; InvokeAI has no built-in auth by default)
+
+      Install root   : ${INVOKEAI_ROOT}
+      Python venv    : ${VENV_DIR}
+      CUDA tag       : ${CUDA_TAG}
+      Log file       : /var/log/invokeai-bootstrap.log
+      Service        : systemctl status invokeai
+
+      Models go in   : ${INVOKEAI_ROOT}/models/main/
+      LoRA adapters  : ${INVOKEAI_ROOT}/models/lora/
+      ControlNet     : ${INVOKEAI_ROOT}/models/controlnet/
+      Outputs        : ${INVOKEAI_ROOT}/outputs/
+
+      Next steps:
+        1. Point ${APP_DOMAIN:-<your-domain>} DNS A-record to ${PUBLIC_IP}
+        2. Download checkpoint models into ${INVOKEAI_ROOT}/models/main/
+           or use the InvokeAI web UI Model Manager to fetch from HuggingFace.
+        3. To enable TLS:
+             Edit /root/.invokeai-bootstrap.env: set ENABLE_TLS=true and
+             APP_DOMAIN / LE_EMAIL, then run:
+               certbot --nginx -d <your-domain> --email <you@example.com>
+        4. If the NVIDIA driver needs a reboot to activate, run:
+               reboot
+           then verify with: nvidia-smi
+        5. Check service health: systemctl status invokeai
+      ============================================================
+      CREDS
+      chmod 600 /root/invokeai-credentials.txt
+
+      log "=== InvokeAI bootstrap complete: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+      log "=== Credentials saved to /root/invokeai-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/invokeai-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  InvokeAI one-click app bootstrap has finished.
+  Elapsed time: $UPTIME seconds since boot.
+
+  IMPORTANT: This app REQUIRES an NVIDIA GPU.
+    Without a real GPU, InvokeAI will not start correctly.
+    If the driver needs activation, reboot and run: nvidia-smi
+
+  Access details and generated credentials:
+    cat /root/invokeai-credentials.txt
+
+  Service management:
+    systemctl status invokeai
+    journalctl -u invokeai -f
+
+  Bootstrap log:
+    /var/log/invokeai-bootstrap.log
+
+  Hardware requirements:
+    GPU: NVIDIA (Turing / Ampere+), 8 GB VRAM minimum
+    RAM: 16 GB+   Disk: 40 GB min, 100 GB+ recommended
+  ============================================================

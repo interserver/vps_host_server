@@ -1,0 +1,323 @@
+#cloud-config
+hostname: prometheus
+manage_etc_hosts: true
+timezone: UTC
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - gnupg
+  - ca-certificates
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - python3
+  - python3-pip
+  - tar
+  - gzip
+  - adduser
+
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+users:
+  - default
+
+write_files:
+  - path: /root/.prometheus-bootstrap.env
+    permissions: '0600'
+    content: |
+      # Operator-editable variables — change before first boot or re-run bootstrap
+      APP_DOMAIN=CHANGE_ME
+      LE_EMAIL=CHANGE_ME
+      ENABLE_TLS=false
+      # Prometheus does not have built-in auth; admin password is used
+      # to configure basic-auth via nginx reverse proxy if ENABLE_TLS=true
+      ADMIN_PASS=CHANGE_ME
+      # Prometheus listen port (internal)
+      PROM_PORT=9090
+      # Data retention period
+      RETENTION_TIME=15d
+      # Scrape interval
+      SCRAPE_INTERVAL=15s
+
+  - path: /root/prometheus-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/prometheus-bootstrap.log) 2>&1
+      source /root/.prometheus-bootstrap.env
+
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting Prometheus bootstrap..."
+
+      # ── Random secret helper (SIGPIPE-safe under set -e + pipefail) ──────────
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # ── Resolve admin password ────────────────────────────────────────────────
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ] || [ -z "${ADMIN_PASS}" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS=${ADMIN_PASS}"
+      fi
+
+      # ── System users ──────────────────────────────────────────────────────────
+      id prometheus &>/dev/null || useradd --system --no-create-home --shell /usr/sbin/nologin prometheus
+
+      # ── Detect latest Prometheus release ─────────────────────────────────────
+      ARCH="$(uname -m)"
+      case "${ARCH}" in
+        x86_64)  PROM_ARCH="amd64" ;;
+        aarch64) PROM_ARCH="arm64" ;;
+        armv7l)  PROM_ARCH="armv7" ;;
+        *)       PROM_ARCH="amd64" ;;
+      esac
+
+      PROM_VERSION="$(curl -fsSL https://api.github.com/repos/prometheus/prometheus/releases/latest \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")"
+      echo "Installing Prometheus ${PROM_VERSION} (${PROM_ARCH})"
+
+      PROM_TARBALL="prometheus-${PROM_VERSION}.linux-${PROM_ARCH}.tar.gz"
+      PROM_URL="https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${PROM_TARBALL}"
+
+      # ── Download & install binaries ───────────────────────────────────────────
+      TMP_DIR="$(mktemp -d)"
+      trap 'rm -rf "${TMP_DIR}"' EXIT
+
+      wget -q -O "${TMP_DIR}/${PROM_TARBALL}" "${PROM_URL}"
+      tar -xzf "${TMP_DIR}/${PROM_TARBALL}" -C "${TMP_DIR}"
+
+      PROM_DIR="${TMP_DIR}/prometheus-${PROM_VERSION}.linux-${PROM_ARCH}"
+
+      install -m 0755 "${PROM_DIR}/prometheus"        /usr/local/bin/prometheus
+      install -m 0755 "${PROM_DIR}/promtool"          /usr/local/bin/promtool
+
+      # ── Directories & consoles ────────────────────────────────────────────────
+      mkdir -p /etc/prometheus /var/lib/prometheus
+      cp -r "${PROM_DIR}/consoles"        /etc/prometheus/consoles
+      cp -r "${PROM_DIR}/console_libraries" /etc/prometheus/console_libraries
+      chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
+
+      # ── Prometheus config ─────────────────────────────────────────────────────
+      cat > /etc/prometheus/prometheus.yml <<PROMCFG
+      global:
+        scrape_interval:     ${SCRAPE_INTERVAL}
+        evaluation_interval: ${SCRAPE_INTERVAL}
+        scrape_timeout:      10s
+
+      alerting:
+        alertmanagers:
+          - static_configs:
+              - targets: []
+
+      rule_files: []
+
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:${PROM_PORT}']
+
+        - job_name: 'node'
+          static_configs:
+            - targets: ['localhost:9100']
+      PROMCFG
+
+      chown prometheus:prometheus /etc/prometheus/prometheus.yml
+
+      # ── systemd unit ─────────────────────────────────────────────────────────
+      cat > /etc/systemd/system/prometheus.service <<SYSD
+      [Unit]
+      Description=Prometheus Monitoring System
+      Documentation=https://prometheus.io/docs/introduction/overview/
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=prometheus
+      Group=prometheus
+      ExecStart=/usr/local/bin/prometheus \\
+          --config.file=/etc/prometheus/prometheus.yml \\
+          --storage.tsdb.path=/var/lib/prometheus \\
+          --storage.tsdb.retention.time=${RETENTION_TIME} \\
+          --web.console.templates=/etc/prometheus/consoles \\
+          --web.console.libraries=/etc/prometheus/console_libraries \\
+          --web.listen-address=127.0.0.1:${PROM_PORT} \\
+          --web.enable-lifecycle
+      Restart=on-failure
+      RestartSec=5
+      LimitNOFILE=65536
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      # ── Node Exporter (optional companion) ───────────────────────────────────
+      NODE_VERSION="$(curl -fsSL https://api.github.com/repos/prometheus/node_exporter/releases/latest \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")"
+      NODE_TARBALL="node_exporter-${NODE_VERSION}.linux-${PROM_ARCH}.tar.gz"
+      NODE_URL="https://github.com/prometheus/node_exporter/releases/download/v${NODE_VERSION}/${NODE_TARBALL}"
+
+      id node_exporter &>/dev/null || useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter
+
+      wget -q -O "${TMP_DIR}/${NODE_TARBALL}" "${NODE_URL}"
+      tar -xzf "${TMP_DIR}/${NODE_TARBALL}" -C "${TMP_DIR}"
+      install -m 0755 "${TMP_DIR}/node_exporter-${NODE_VERSION}.linux-${PROM_ARCH}/node_exporter" /usr/local/bin/node_exporter
+
+      cat > /etc/systemd/system/node_exporter.service <<NODESD
+      [Unit]
+      Description=Node Exporter
+      Documentation=https://github.com/prometheus/node_exporter
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=node_exporter
+      Group=node_exporter
+      ExecStart=/usr/local/bin/node_exporter
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+      NODESD
+
+      # ── nginx reverse proxy (with optional TLS / basic-auth) ─────────────────
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get install -y nginx apache2-utils certbot python3-certbot-nginx
+
+      # Generate htpasswd for basic auth (always create; TLS block uses it)
+      HTPASSWD_FILE="/etc/nginx/.prometheus-htpasswd"
+      htpasswd -bc "${HTPASSWD_FILE}" admin "${ADMIN_PASS}"
+      chmod 640 "${HTPASSWD_FILE}"
+      chown root:www-data "${HTPASSWD_FILE}"
+
+      # nginx vhost — plain HTTP first; certbot amends if TLS enabled
+      NGINX_CONF="/etc/nginx/sites-available/prometheus"
+      cat > "${NGINX_CONF}" <<NGINXCFG
+      server {
+          listen 80;
+          server_name ${APP_DOMAIN:-_};
+
+          auth_basic           "Prometheus";
+          auth_basic_user_file ${HTPASSWD_FILE};
+
+          location / {
+              proxy_pass         http://127.0.0.1:${PROM_PORT};
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 90;
+          }
+
+          location /-/reload {
+              deny all;
+          }
+      }
+      NGINXCFG
+
+      ln -sf "${NGINX_CONF}" /etc/nginx/sites-enabled/prometheus
+      rm -f /etc/nginx/sites-enabled/default
+
+      nginx -t
+
+      # ── TLS via Certbot (deferred gracefully if DNS not set) ─────────────────
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ] && [ -n "${APP_DOMAIN}" ]; then
+        certbot --nginx \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          --redirect \
+          --domain "${APP_DOMAIN}" || echo "WARN: certbot deferred — check DNS and re-run: certbot --nginx -d ${APP_DOMAIN}"
+      fi
+
+      # ── fail2ban ──────────────────────────────────────────────────────────────
+      cat > /etc/fail2ban/jail.d/prometheus.conf <<F2B
+      [sshd]
+      enabled  = true
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      F2B
+
+      # ── unattended-upgrades ───────────────────────────────────────────────────
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<AUTOUPG
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPG
+
+      # ── UFW firewall ──────────────────────────────────────────────────────────
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw --force enable
+
+      # ── Enable & start services ───────────────────────────────────────────────
+      systemctl daemon-reload
+      systemctl enable prometheus
+      systemctl start  prometheus
+      systemctl enable node_exporter
+      systemctl start  node_exporter
+      systemctl enable nginx
+      systemctl restart nginx
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # ── Write credentials file ────────────────────────────────────────────────
+      CRED_FILE="/root/prometheus-credentials.txt"
+      cat > "${CRED_FILE}" <<CREDS
+      ============================================================
+       Prometheus — Access Credentials
+       Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+      ============================================================
+
+      URL (HTTP)  : http://${APP_DOMAIN:-<server-ip>}/
+      URL (HTTPS) : https://${APP_DOMAIN:-<server-ip>}/  (if TLS enabled)
+
+      Basic-Auth Username : admin
+      Basic-Auth Password : ${ADMIN_PASS}
+
+      Prometheus API      : http://127.0.0.1:${PROM_PORT}  (localhost only)
+      Node Exporter       : http://127.0.0.1:9100/metrics  (localhost only)
+
+      RETENTION_TIME      : ${RETENTION_TIME}
+      SCRAPE_INTERVAL     : ${SCRAPE_INTERVAL}
+
+      ============================================================
+      To enable TLS later:
+        1. Edit /root/.prometheus-bootstrap.env
+           set ENABLE_TLS=true, APP_DOMAIN=<your-domain>, LE_EMAIL=<your-email>
+        2. Run: certbot --nginx -d <your-domain>
+      ============================================================
+      CREDS
+      chmod 600 "${CRED_FILE}"
+
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Prometheus bootstrap complete. See ${CRED_FILE}"
+
+runcmd:
+  - [ bash, -lc, "/root/prometheus-bootstrap.sh" ]
+
+final_message: |
+  Prometheus VPS bootstrap finished.
+  Credentials and URLs are in /root/prometheus-credentials.txt (chmod 600).
+  View logs: journalctl -u prometheus -f
+  Bootstrap log: /var/log/prometheus-bootstrap.log

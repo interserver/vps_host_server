@@ -1,0 +1,380 @@
+#cloud-config
+# =============================================================================
+# MinIO Object Storage — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: MinIO (official binary) + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# In-house equivalent of the Vultr/Bitnami MinIO Marketplace app.
+# Does NOT depend on Vultr metadata, APIs, object storage, or branding.
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.minio-bootstrap.env before first boot,
+# OR pass them in via your provisioner. Secrets are randomly generated
+# per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: minio
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so the provisioner can inject the customer SSH key.
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (codename-agnostic where possible)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - ca-certificates
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - htop
+  - gnupg
+  - lsb-release
+  - certbot
+  - python3-certbot-nginx
+  - nginx
+  - openssl
+  - jq
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GB; survives build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files dropped before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.minio-bootstrap.env
+    permissions: '0600'
+    content: |
+      # -----------------------------------------------------------------------
+      # MinIO bootstrap — operator-editable variables
+      # Set these before first boot OR let the script generate random secrets.
+      # -----------------------------------------------------------------------
+
+      # Domain pointed at this server (used for TLS + console URL)
+      APP_DOMAIN=minio.example.com
+
+      # Let's Encrypt contact email
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS (DNS must be live first)
+      ENABLE_TLS=true
+
+      # MinIO root credentials — set to CHANGE_ME to auto-generate
+      MINIO_ROOT_USER=CHANGE_ME
+      MINIO_ROOT_PASSWORD=CHANGE_ME
+
+      # MinIO data directory
+      MINIO_DATA_DIR=/mnt/minio-data
+
+      # MinIO API port (S3-compatible endpoint)
+      MINIO_API_PORT=9000
+
+      # MinIO console (web UI) port
+      MINIO_CONSOLE_PORT=9001
+
+      # OS user that runs the MinIO process
+      MINIO_USER=minio
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/minio-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/minio-bootstrap.log) 2>&1
+      source /root/.minio-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*"; }
+
+      log "=== MinIO bootstrap started ==="
+
+      # -----------------------------------------------------------------------
+      # Resolve secrets — generate if still CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${MINIO_ROOT_USER}" = "CHANGE_ME" ]; then
+        MINIO_ROOT_USER="minioadmin$(rand | head -c 8 || true)"
+      fi
+      if [ "${MINIO_ROOT_PASSWORD}" = "CHANGE_ME" ]; then
+        MINIO_ROOT_PASSWORD="$(rand)"
+      fi
+
+      # -----------------------------------------------------------------------
+      # System user for MinIO
+      # -----------------------------------------------------------------------
+      if ! id "${MINIO_USER}" &>/dev/null; then
+        useradd -r -s /usr/sbin/nologin -d "${MINIO_DATA_DIR}" "${MINIO_USER}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Data directory
+      # -----------------------------------------------------------------------
+      mkdir -p "${MINIO_DATA_DIR}"
+      chown -R "${MINIO_USER}:${MINIO_USER}" "${MINIO_DATA_DIR}"
+
+      # -----------------------------------------------------------------------
+      # Download MinIO server binary (official upstream)
+      # -----------------------------------------------------------------------
+      if ! command -v /usr/local/bin/minio &>/dev/null; then
+        log "Downloading MinIO server binary..."
+        ARCH="$(dpkg --print-architecture)"
+        case "${ARCH}" in
+          amd64)  MC_ARCH="amd64" ;;
+          arm64)  MC_ARCH="arm64" ;;
+          *)      MC_ARCH="amd64" ;;
+        esac
+        wget -qO /usr/local/bin/minio \
+          "https://dl.min.io/server/minio/release/linux-${MC_ARCH}/minio"
+        chmod +x /usr/local/bin/minio
+      fi
+
+      # -----------------------------------------------------------------------
+      # Download MinIO client (mc)
+      # -----------------------------------------------------------------------
+      if ! command -v /usr/local/bin/mc &>/dev/null; then
+        log "Downloading MinIO client (mc)..."
+        ARCH="$(dpkg --print-architecture)"
+        case "${ARCH}" in
+          amd64)  MC_ARCH="amd64" ;;
+          arm64)  MC_ARCH="arm64" ;;
+          *)      MC_ARCH="amd64" ;;
+        esac
+        wget -qO /usr/local/bin/mc \
+          "https://dl.min.io/client/mc/release/linux-${MC_ARCH}/mc"
+        chmod +x /usr/local/bin/mc
+      fi
+
+      # -----------------------------------------------------------------------
+      # Environment file for the systemd unit
+      # -----------------------------------------------------------------------
+      mkdir -p /etc/minio
+      cat > /etc/minio/minio.env <<ENVEOF
+      MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      MINIO_VOLUMES=${MINIO_DATA_DIR}
+      MINIO_OPTS="--console-address :${MINIO_CONSOLE_PORT}"
+      ENVEOF
+      chmod 640 /etc/minio/minio.env
+      chown root:${MINIO_USER} /etc/minio/minio.env
+
+      # -----------------------------------------------------------------------
+      # Systemd service unit
+      # -----------------------------------------------------------------------
+      cat > /etc/systemd/system/minio.service <<'SVCEOF'
+      [Unit]
+      Description=MinIO Object Storage
+      Documentation=https://min.io/docs/
+      Wants=network-online.target
+      After=network-online.target
+      AssertFileIsExecutable=/usr/local/bin/minio
+
+      [Service]
+      WorkingDirectory=/usr/local/
+
+      User=minio
+      Group=minio
+      ProtectProc=invisible
+
+      EnvironmentFile=/etc/minio/minio.env
+      ExecStartPre=/bin/bash -c "if [ -z \"${MINIO_VOLUMES}\" ]; then echo \"Variable MINIO_VOLUMES not set in /etc/minio/minio.env\"; exit 1; fi"
+      ExecStart=/usr/local/bin/minio server $MINIO_OPTS $MINIO_VOLUMES
+      # MinIO SIGTERM handler is SIGTERM — give it time to drain
+      KillSignal=SIGTERM
+      SendSIGKILL=yes
+      TimeoutStopSec=120
+
+      LimitNOFILE=1048576
+      LimitNPROC=64
+      TasksMax=infinity
+
+      # Hardening
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+      ProtectHome=yes
+      ProtectSystem=strict
+      ReadWritePaths=/mnt/minio-data /etc/minio
+
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCEOF
+
+      systemctl daemon-reload
+      systemctl enable minio
+      systemctl start minio
+
+      log "MinIO service started."
+
+      # -----------------------------------------------------------------------
+      # Firewall — UFW
+      # -----------------------------------------------------------------------
+      log "Configuring UFW..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow "${MINIO_API_PORT}/tcp"
+      ufw allow "${MINIO_CONSOLE_PORT}/tcp"
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw --force enable
+      log "UFW enabled."
+
+      # -----------------------------------------------------------------------
+      # fail2ban — protect SSH
+      # -----------------------------------------------------------------------
+      if ! systemctl is-enabled fail2ban &>/dev/null; then
+        systemctl enable fail2ban
+      fi
+      cat > /etc/fail2ban/jail.d/sshd-local.conf <<'F2BEOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      F2BEOF
+      systemctl restart fail2ban
+      log "fail2ban configured."
+
+      # -----------------------------------------------------------------------
+      # Automatic security updates
+      # -----------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUEOF
+      log "Automatic security updates enabled."
+
+      # -----------------------------------------------------------------------
+      # Nginx reverse proxy (terminates TLS; proxies API + Console)
+      # -----------------------------------------------------------------------
+      cat > /etc/nginx/sites-available/minio <<NGINXEOF
+      # MinIO reverse proxy — API (S3) + Console
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN};
+
+          # Allow large uploads
+          client_max_body_size 0;
+          proxy_buffering off;
+          proxy_request_buffering off;
+
+          location / {
+              proxy_pass http://127.0.0.1:${MINIO_CONSOLE_PORT};
+              proxy_set_header Host \$host;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$scheme;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade \$http_upgrade;
+              proxy_set_header Connection "upgrade";
+          }
+
+          location /s3/ {
+              rewrite ^/s3/(.*)\$ /\$1 break;
+              proxy_pass http://127.0.0.1:${MINIO_API_PORT};
+              proxy_set_header Host \$host;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$scheme;
+              # Required for S3 chunked uploads
+              proxy_http_version 1.1;
+              client_max_body_size 0;
+              proxy_buffering off;
+              proxy_request_buffering off;
+          }
+      }
+      NGINXEOF
+
+      ln -sf /etc/nginx/sites-available/minio /etc/nginx/sites-enabled/minio
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl restart nginx
+      log "Nginx configured."
+
+      # -----------------------------------------------------------------------
+      # Certbot TLS (deferred gracefully if DNS not live yet)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN}" != "minio.example.com" ]; then
+        log "Attempting Certbot for ${APP_DOMAIN}..."
+        certbot --nginx -d "${APP_DOMAIN}" \
+          --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" \
+          --redirect \
+          || echo "WARN: certbot deferred — ensure DNS is pointed and re-run: certbot --nginx -d ${APP_DOMAIN}"
+      else
+        log "WARN: TLS skipped — set ENABLE_TLS=true and APP_DOMAIN to a live hostname, then re-run certbot."
+      fi
+
+      # -----------------------------------------------------------------------
+      # Write credentials file
+      # -----------------------------------------------------------------------
+      SCHEME="http"
+      if [ "${ENABLE_TLS}" = "true" ] && certbot certificates 2>/dev/null | grep -q "${APP_DOMAIN}"; then
+        SCHEME="https"
+      fi
+
+      cat > /root/minio-credentials.txt <<CREDSEOF
+      ============================================================
+      MinIO Credentials — $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      ============================================================
+      Console URL    : ${SCHEME}://${APP_DOMAIN}/
+      S3 API URL     : ${SCHEME}://${APP_DOMAIN}/s3/
+      Direct API     : http://$(hostname -I | awk '{print $1}'):${MINIO_API_PORT}
+      Direct Console : http://$(hostname -I | awk '{print $1}'):${MINIO_CONSOLE_PORT}
+
+      Root User      : ${MINIO_ROOT_USER}
+      Root Password  : ${MINIO_ROOT_PASSWORD}
+
+      Data Directory : ${MINIO_DATA_DIR}
+      Log File       : /var/log/minio-bootstrap.log
+      ============================================================
+      KEEP THIS FILE SECURE — chmod 600 /root/minio-credentials.txt
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/minio-credentials.txt
+
+      log "=== MinIO bootstrap complete. Credentials: /root/minio-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/minio-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  MinIO bootstrap complete.
+  Credentials and URLs: /root/minio-credentials.txt
+  Bootstrap log:        /var/log/minio-bootstrap.log
+  ============================================================

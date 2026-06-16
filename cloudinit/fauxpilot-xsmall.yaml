@@ -1,0 +1,492 @@
+#cloud-config
+# =============================================================================
+# Fauxpilot (350M) — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NVIDIA driver + CUDA toolkit + Docker (Triton Inference Server) +
+#        Fauxpilot (CodeGen-350M) + Nginx reverse proxy + systemd service
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# REQUIRES: a KVM VPS plan with a dedicated NVIDIA GPU (≥ 6 GB VRAM), ≥ 40 GB
+#           disk, and ≥ 8 GB RAM. The 350M CodeGen model is the smallest
+#           supported; larger models (2B, 6B, 16B) need progressively more RAM
+#           and VRAM. The Triton Inference Server container adds ~8 GB of image.
+#
+# Fauxpilot exposes an OpenAI-compatible completions API so any editor that
+# supports the Copilot or FauxPilot plugin (VS Code extension: fauxpilot) can
+# use it as a local code-completion backend.
+#
+# EDIT the variables in the `write_files` -> /root/.fauxpilot-bootstrap.env
+# block before launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: fauxpilot
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so provisioner can inject customer SSH key + hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 G helps during Docker image pulls / model loads
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+
+packages:
+  # Core utilities
+  - curl
+  - wget
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  - jq
+  # Security
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  # Build tools
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - libffi-dev
+  # Python (for huggingface-hub CLI and helpers)
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  # GPU / CUDA detection helpers
+  - pciutils
+  # Nginx reverse proxy
+  - nginx
+  # Certbot TLS
+  - certbot
+  - python3-certbot-nginx
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.fauxpilot-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Fauxpilot bootstrap configuration — edit before first boot
+      # -----------------------------------------------------------------------
+
+      # Domain pointing at this server (leave blank / CHANGE_ME to skip TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS setup (requires APP_DOMAIN DNS)
+      ENABLE_TLS=false
+
+      # CodeGen model to load. Options:
+      #   Salesforce/codegen-350M-mono   (smallest — fits in ~6 GB VRAM)
+      #   Salesforce/codegen-2B-mono
+      #   Salesforce/codegen-6B-mono
+      #   Salesforce/codegen-16B-mono    (needs ≥ 40 GB VRAM / multi-GPU)
+      FAUXPILOT_MODEL=Salesforce/codegen-350M-mono
+
+      # Number of GPUs to expose to Triton (adjust for multi-GPU hosts)
+      NUM_GPUS=1
+
+      # Port the Fauxpilot API server listens on (Nginx proxies to this)
+      FAUXPILOT_PORT=5000
+
+      # Installation directory
+      FAUXPILOT_DIR=/opt/fauxpilot
+
+      # Model cache/storage directory (must have space for model weights)
+      MODEL_DIR=/opt/fauxpilot/models
+
+      # Python venv for huggingface-hub downloader
+      VENV_DIR=/opt/fauxpilot-venv
+
+      # CUDA version hint — used to select nvidia-container-toolkit repo.
+      # Leave as "ubuntu2404" (noble fallback; no 26.04 line yet).
+      CUDA_DISTRO=ubuntu2404
+
+  # --------------------------------------------------------------------------
+  # Bootstrap shell script
+  # --------------------------------------------------------------------------
+  - path: /root/fauxpilot-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/fauxpilot-bootstrap.log) 2>&1
+      source /root/.fauxpilot-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator (|| true required under pipefail)
+      # ------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Fauxpilot bootstrap started: $(date) ==="
+
+      # ------------------------------------------------------------------
+      # NVIDIA driver and CUDA toolkit
+      # ------------------------------------------------------------------
+      echo "--- Installing NVIDIA driver and CUDA toolkit ---"
+
+      # Add NVIDIA CUDA apt repo
+      # fallback: noble repo until 26.04 published
+      if ! dpkg -l 2>/dev/null | grep -q "cuda-keyring"; then
+        KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
+        wget -q "https://developer.download.nvidia.com/compute/cuda/repos/${CUDA_DISTRO}/x86_64/${KEYRING_DEB}" \
+          -O "/tmp/${KEYRING_DEB}"
+        dpkg -i "/tmp/${KEYRING_DEB}"
+        apt-get update -qq
+      fi
+
+      # Install NVIDIA open kernel module + CUDA toolkit if not already present
+      command -v nvidia-smi &>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          cuda-toolkit \
+          nvidia-open
+
+      # Persist CUDA paths for all future logins
+      cat > /etc/profile.d/cuda.sh <<'CUDAENV'
+      export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+      export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+      CUDAENV
+      chmod 644 /etc/profile.d/cuda.sh
+
+      export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+      export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+      # ------------------------------------------------------------------
+      # Docker Engine (needed for Triton Inference Server container)
+      # ------------------------------------------------------------------
+      echo "--- Installing Docker Engine ---"
+      if ! command -v docker &>/dev/null; then
+        # fallback: noble repo until 26.04 published
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+          | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+          https://download.docker.com/linux/ubuntu noble stable" \
+          > /etc/apt/sources.list.d/docker.list
+        # fallback: noble repo until 26.04 published
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      fi
+      systemctl enable --now docker
+
+      # ------------------------------------------------------------------
+      # NVIDIA Container Toolkit (lets Docker access the GPU)
+      # ------------------------------------------------------------------
+      echo "--- Installing NVIDIA Container Toolkit ---"
+      if ! dpkg -l 2>/dev/null | grep -q "nvidia-container-toolkit"; then
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+          | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        # fallback: noble repo until 26.04 published
+        curl -s "https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list" \
+          | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+          > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          nvidia-container-toolkit
+        nvidia-ctk runtime configure --runtime=docker
+        systemctl restart docker
+      fi
+
+      # ------------------------------------------------------------------
+      # Python venv + huggingface-hub for model download
+      # ------------------------------------------------------------------
+      echo "--- Setting up Python venv at ${VENV_DIR} ---"
+      mkdir -p "${VENV_DIR}"
+      python3 -m venv "${VENV_DIR}"
+      # shellcheck disable=SC1091
+      source "${VENV_DIR}/bin/activate"
+      pip install --upgrade pip setuptools wheel
+      pip install huggingface-hub
+      deactivate
+
+      # ------------------------------------------------------------------
+      # Clone Fauxpilot
+      # ------------------------------------------------------------------
+      echo "--- Cloning / updating Fauxpilot ---"
+      mkdir -p "${FAUXPILOT_DIR}"
+      if [ -d "${FAUXPILOT_DIR}/.git" ]; then
+        git -C "${FAUXPILOT_DIR}" pull --ff-only
+      else
+        git clone https://github.com/fauxpilot/fauxpilot.git "${FAUXPILOT_DIR}"
+      fi
+
+      # ------------------------------------------------------------------
+      # Download model weights via huggingface-hub
+      # ------------------------------------------------------------------
+      echo "--- Downloading model: ${FAUXPILOT_MODEL} ---"
+      mkdir -p "${MODEL_DIR}"
+
+      # Model short name (e.g. codegen-350M-mono) used as subdirectory
+      MODEL_SHORT="$(basename "${FAUXPILOT_MODEL}")"
+      MODEL_PATH="${MODEL_DIR}/${MODEL_SHORT}"
+
+      if [ ! -d "${MODEL_PATH}" ]; then
+        # shellcheck disable=SC1091
+        source "${VENV_DIR}/bin/activate"
+        huggingface-cli download "${FAUXPILOT_MODEL}" \
+          --local-dir "${MODEL_PATH}" \
+          --local-dir-use-symlinks False
+        deactivate
+      else
+        echo "  Model already present at ${MODEL_PATH}, skipping download."
+      fi
+
+      # ------------------------------------------------------------------
+      # Convert model to FasterTransformer format (Fauxpilot requirement)
+      # Fauxpilot ships a conversion script that runs inside Docker.
+      # ------------------------------------------------------------------
+      echo "--- Converting model to FasterTransformer format ---"
+      FT_MODEL_PATH="${MODEL_DIR}/${MODEL_SHORT}-ft"
+
+      if [ ! -d "${FT_MODEL_PATH}" ]; then
+        # Determine parameter count suffix used by the conversion script
+        case "${MODEL_SHORT}" in
+          *350M*) MODEL_CKPT="codegen-350M" ;;
+          *2B*)   MODEL_CKPT="codegen-2B"   ;;
+          *6B*)   MODEL_CKPT="codegen-6B"   ;;
+          *16B*)  MODEL_CKPT="codegen-16B"  ;;
+          *)      MODEL_CKPT="${MODEL_SHORT}" ;;
+        esac
+
+        docker run --rm --gpus all \
+          -v "${MODEL_PATH}:/model-src:ro" \
+          -v "${FT_MODEL_PATH}:/model-dst" \
+          ghcr.io/fauxpilot/fauxpilot:latest \
+          python3 /usr/local/lib/python3.10/dist-packages/fastertransformer/examples/pytorch/gptj/utils/huggingface_codegen_convert.py \
+            --in-file /model-src \
+            --saved-dir /model-dst \
+            --head-num 16 \
+            --tensor-para-size "${NUM_GPUS}" \
+            --weight-data-type fp16 \
+          || echo "WARN: model conversion step may need to be run manually after GPU driver loads"
+      else
+        echo "  Converted model already present at ${FT_MODEL_PATH}, skipping."
+      fi
+
+      # ------------------------------------------------------------------
+      # Fauxpilot environment config
+      # ------------------------------------------------------------------
+      echo "--- Writing Fauxpilot .env ---"
+      cat > "${FAUXPILOT_DIR}/.env" <<FPENV
+      # Fauxpilot runtime configuration
+      MODEL=${MODEL_SHORT}
+      MODEL_DIR=${FT_MODEL_PATH}
+      NUM_GPUS=${NUM_GPUS}
+      FASTAPI_PORT=${FAUXPILOT_PORT}
+      GPUS=all
+      FPENV
+
+      # ------------------------------------------------------------------
+      # systemd service (wraps docker compose)
+      # ------------------------------------------------------------------
+      echo "--- Installing systemd service ---"
+      cat > /etc/systemd/system/fauxpilot.service <<SYSD
+      [Unit]
+      Description=Fauxpilot AI Code Completion Server
+      After=network.target docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=simple
+      WorkingDirectory=${FAUXPILOT_DIR}
+      ExecStart=/usr/bin/docker compose up
+      ExecStop=/usr/bin/docker compose down
+      Restart=on-failure
+      RestartSec=15
+      TimeoutStartSec=600
+      Environment="COMPOSE_HTTP_TIMEOUT=300"
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      systemctl daemon-reload
+      systemctl enable fauxpilot
+      systemctl start fauxpilot || echo "WARN: fauxpilot service start deferred — GPU driver may need a reboot"
+
+      # ------------------------------------------------------------------
+      # Nginx reverse proxy
+      # ------------------------------------------------------------------
+      echo "--- Configuring Nginx ---"
+      cat > /etc/nginx/sites-available/fauxpilot <<NGXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN:-_};
+
+          client_max_body_size 10M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${FAUXPILOT_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/fauxpilot /etc/nginx/sites-enabled/fauxpilot
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # ------------------------------------------------------------------
+      # TLS (optional — only when ENABLE_TLS=true and APP_DOMAIN is set)
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        echo "--- Requesting Let's Encrypt certificate for ${APP_DOMAIN} ---"
+        certbot --nginx --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" || echo "WARN: certbot deferred — DNS not yet pointing here"
+      fi
+
+      # ------------------------------------------------------------------
+      # Firewall (ufw)
+      # ------------------------------------------------------------------
+      echo "--- Configuring UFW ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      # Direct API access (remove if you want Nginx-only access)
+      ufw allow "${FAUXPILOT_PORT}/tcp"
+      ufw --force enable
+
+      # ------------------------------------------------------------------
+      # fail2ban
+      # ------------------------------------------------------------------
+      echo "--- Enabling fail2ban ---"
+      systemctl enable --now fail2ban
+
+      # ------------------------------------------------------------------
+      # Automatic security updates
+      # ------------------------------------------------------------------
+      echo "--- Enabling unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+      systemctl enable --now unattended-upgrades
+
+      # ------------------------------------------------------------------
+      # Write credentials / instructions file
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf https://ipv4.icanhazip.com || curl -sf https://api.ipify.org || echo 'unknown')"
+
+      cat > /root/fauxpilot-credentials.txt <<CREDS
+      ============================================================
+      Fauxpilot (${MODEL_SHORT}) — Access & Credentials
+      Generated: $(date)
+      ============================================================
+
+      IMPORTANT — GPU REQUIRED:
+        This app requires a KVM VPS with a dedicated NVIDIA GPU.
+        Minimum: 1x GPU with ≥ 6 GB VRAM, 40 GB disk, 8 GB RAM.
+        Without a GPU the Triton Inference Server will fail to start.
+
+      IMPORTANT — LARGE DISK:
+        The ${MODEL_SHORT} weights occupy ~700 MB on disk plus the
+        FasterTransformer conversion artifacts (~1.5 GB) and the
+        Triton Docker image (~8 GB). Ensure ≥ 40 GB disk is provisioned.
+
+      ============================================================
+
+      Public IP   : ${PUBLIC_IP}
+      App domain  : ${APP_DOMAIN:-Not configured}
+
+      API endpoint (direct)  : http://${PUBLIC_IP}:${FAUXPILOT_PORT}/v1/engines
+      API endpoint (nginx)   : http://${APP_DOMAIN:-${PUBLIC_IP}}/v1/engines
+      API endpoint (TLS)     : https://${APP_DOMAIN:-<set APP_DOMAIN and enable TLS>}/v1/engines
+
+      OpenAI-compatible base URL for VS Code plugin:
+        http://${PUBLIC_IP}:${FAUXPILOT_PORT}/v1
+
+      VS Code extension: search "fauxpilot" in the Extensions marketplace.
+      Set the "fauxpilot.server" setting to the API endpoint above.
+
+      Model loaded   : ${FAUXPILOT_MODEL}
+      Model path     : ${FT_MODEL_PATH}
+      Install dir    : ${FAUXPILOT_DIR}
+      Log file       : /var/log/fauxpilot-bootstrap.log
+      Service        : systemctl status fauxpilot
+      Docker logs    : docker compose -f ${FAUXPILOT_DIR}/docker-compose.yml logs -f
+
+      ============================================================
+      Next steps:
+        1. Reboot if the NVIDIA driver was just installed:
+             reboot
+        2. Verify GPU is recognised after reboot:
+             nvidia-smi
+        3. Check service status:
+             systemctl status fauxpilot
+        4. If model conversion failed during first boot, re-run:
+             /root/fauxpilot-bootstrap.sh
+        5. Point ${APP_DOMAIN} DNS A-record to ${PUBLIC_IP}
+        6. Set ENABLE_TLS=true in /root/.fauxpilot-bootstrap.env and re-run
+           the bootstrap or run certbot manually.
+      ============================================================
+      CREDS
+      chmod 600 /root/fauxpilot-credentials.txt
+
+      echo "=== Fauxpilot bootstrap complete: $(date) ==="
+      echo "=== Credentials: /root/fauxpilot-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/fauxpilot-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  Fauxpilot (350M) one-click app bootstrap has completed.
+  SSH in as root and read /root/fauxpilot-credentials.txt for
+  API endpoint details and next steps.
+
+  IMPORTANT: This app REQUIRES an NVIDIA GPU with >= 6 GB VRAM.
+  If the GPU driver was just installed, reboot and then run:
+    systemctl status fauxpilot
+  to confirm the service is up.
+
+  A LARGE DISK (>= 40 GB) is required for model weights +
+  Docker images.
+  ============================================================

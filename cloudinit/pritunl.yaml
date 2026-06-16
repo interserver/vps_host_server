@@ -1,0 +1,425 @@
+#cloud-config
+# =============================================================================
+# Pritunl VPN Server — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Pritunl Community + MongoDB (from vendor apt repos)
+#        UFW firewall + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# Pritunl is an open-source enterprise VPN server built on OpenVPN with a
+# clean web UI.  Admin panel is on HTTPS port 443; VPN tunnels run on
+# configurable UDP ports (default 1194).
+#
+# EDIT the variables in write_files -> /root/.pritunl-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# =============================================================================
+
+hostname: pritunl
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during MongoDB + Pritunl install on small instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; Pritunl + MongoDB installed from vendor repos
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - openssl
+  - sudo
+  - net-tools
+  - iproute2
+  - iptables
+  - jq
+  - certbot
+  - python3-certbot
+  - psmisc
+  - acl
+  - locales
+  - software-properties-common
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.pritunl-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # Pritunl Bootstrap — edit BEFORE first boot
+      # or before re-running the bootstrap script.
+      # ============================================================
+
+      # Fully-qualified domain name for the Pritunl admin web UI
+      # (must resolve to this server's public IP for TLS to work)
+      APP_DOMAIN=vpn.example.com
+
+      # E-mail address for Let's Encrypt certificate registration
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve, cert issuance is deferred
+      # gracefully — re-run: certbot certonly --standalone -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # Pritunl web admin panel password for the 'pritunl' superuser.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+      # UDP port for the first VPN server (Pritunl can add more via UI)
+      # Pritunl supports port ranges; default single port is 1194
+      VPN_UDP_PORT=1194
+
+      # Additional TCP port for VPN clients that can't use UDP (optional)
+      # Set to "none" to skip opening this port in the firewall
+      VPN_TCP_PORT=none
+
+  # ---------- fail2ban configuration ----------
+  - path: /etc/fail2ban/jail.d/pritunl.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+
+  # ---------- unattended security upgrades ----------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # ---------- main bootstrap script ----------
+  - path: /root/pritunl-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/pritunl-bootstrap.log) 2>&1
+      source /root/.pritunl-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string.
+      # The '|| true' is required — head closes the pipe before urandom
+      # is exhausted, which raises SIGPIPE; under set -e + pipefail this
+      # would abort the script without it.
+      # ------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Pritunl Bootstrap started at $(date -u) ==="
+
+      export DEBIAN_FRONTEND=noninteractive
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (stored in credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. System locale
+      # ------------------------------------------------------------------
+      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+      fi
+      export LANG=en_US.UTF-8
+      export LC_ALL=en_US.UTF-8
+
+      # ------------------------------------------------------------------
+      # 3. Configure automatic security updates
+      # ------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOEOF
+
+      # ------------------------------------------------------------------
+      # 4. Enable IP forwarding (required for VPN routing)
+      # ------------------------------------------------------------------
+      echo "Enabling IP forwarding..."
+      sysctl -w net.ipv4.ip_forward=1
+      sysctl -w net.ipv6.conf.all.forwarding=1
+      grep -q '^net.ipv4.ip_forward' /etc/sysctl.conf \
+        && sed -i 's/^.*net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf \
+        || echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+      grep -q '^net.ipv6.conf.all.forwarding' /etc/sysctl.conf \
+        && sed -i 's/^.*net.ipv6.conf.all.forwarding.*/net.ipv6.conf.all.forwarding=1/' /etc/sysctl.conf \
+        || echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.conf
+
+      # ------------------------------------------------------------------
+      # 5. Add MongoDB 7.0 apt repository
+      #    Pritunl requires MongoDB as its backend datastore.
+      #    MongoDB does not yet publish a 26.04 release line;
+      #    # fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      echo "Adding MongoDB 7.0 repository..."
+      mkdir -p /usr/share/keyrings
+      if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
+        curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
+          | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+      fi
+      # fallback: noble repo until 26.04 published
+      cat > /etc/apt/sources.list.d/mongodb-org-7.0.list <<'MONGOEOF'
+      deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse
+      MONGOEOF
+
+      # ------------------------------------------------------------------
+      # 6. Add Pritunl apt repository
+      #    Official repo; no 26.04 line yet.
+      #    # fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      echo "Adding Pritunl repository..."
+      if [ ! -f /usr/share/keyrings/pritunl-archive-keyring.gpg ]; then
+        curl -fsSL https://raw.githubusercontent.com/pritunl/pgp/master/pritunl_repo_pub.asc \
+          | gpg --dearmor -o /usr/share/keyrings/pritunl-archive-keyring.gpg
+      fi
+      # fallback: noble repo until 26.04 published
+      cat > /etc/apt/sources.list.d/pritunl.list <<'PRITUNLEOF'
+      deb [ signed-by=/usr/share/keyrings/pritunl-archive-keyring.gpg ] https://repo.pritunl.com/stable/apt noble main
+      PRITUNLEOF
+
+      # ------------------------------------------------------------------
+      # 7. Install WireGuard kernel module (used by Pritunl for WireGuard links)
+      # ------------------------------------------------------------------
+      echo "Installing WireGuard..."
+      apt-get install -y --no-install-recommends wireguard-tools
+
+      # ------------------------------------------------------------------
+      # 8. Install MongoDB + Pritunl
+      # ------------------------------------------------------------------
+      apt-get update -y
+      echo "Installing MongoDB 7.0..."
+      apt-get install -y --no-install-recommends mongodb-org
+      echo "Installing Pritunl..."
+      apt-get install -y --no-install-recommends pritunl
+
+      # ------------------------------------------------------------------
+      # 9. Enable and start MongoDB, then Pritunl
+      # ------------------------------------------------------------------
+      echo "Starting MongoDB..."
+      systemctl enable --now mongod
+      # Wait up to 30s for MongoDB to be ready
+      for i in $(seq 1 30); do
+        mongosh --quiet --eval "db.adminCommand('ping')" >/dev/null 2>&1 && break || true
+        sleep 1
+      done
+      echo "Starting Pritunl..."
+      systemctl enable --now pritunl
+
+      # ------------------------------------------------------------------
+      # 10. Retrieve the Pritunl setup key (needed for first-time web setup)
+      # ------------------------------------------------------------------
+      echo "Retrieving Pritunl setup key..."
+      SETUP_KEY=""
+      for i in $(seq 1 30); do
+        SETUP_KEY="$(pritunl setup-key 2>/dev/null || true)"
+        [ -n "${SETUP_KEY}" ] && break || true
+        sleep 2
+      done
+
+      # ------------------------------------------------------------------
+      # 11. Set the Pritunl default admin password
+      #     pritunl reset-password prints: username: USER  password: PASS
+      #     We override with our generated/operator-set password.
+      # ------------------------------------------------------------------
+      echo "Setting Pritunl admin password..."
+      DEFAULT_CREDS="$(pritunl reset-password 2>/dev/null || true)"
+      DEFAULT_USER="$(echo "${DEFAULT_CREDS}" | awk '/username:/{print $2}' | head -1)"
+      DEFAULT_USER="${DEFAULT_USER:-pritunl}"
+
+      # Pritunl stores passwords as SHA512; use the built-in method
+      # to set it via the mongo shell (idempotent).
+      PASS_HASH="$(python3 -c "
+      import hashlib, os, sys
+      p = sys.argv[1].encode()
+      h = hashlib.sha512(p).hexdigest()
+      print(h)
+      " "${ADMIN_PASS}" 2>/dev/null || true)"
+
+      if [ -n "${PASS_HASH}" ]; then
+        mongosh pritunl --quiet --eval \
+          "db.administrators.updateOne({username:'${DEFAULT_USER}'},{'\$set':{password:'${PASS_HASH}',auth_type:'local'}},{upsert:true})" \
+          >/dev/null 2>&1 || echo "WARN: Could not set password via mongo — use pritunl reset-password after boot."
+      fi
+
+      # ------------------------------------------------------------------
+      # 12. Firewall — UFW
+      #     Pritunl ports:
+      #       22    TCP    SSH
+      #       80    TCP    HTTP (ACME challenge / redirect)
+      #       443   TCP    Pritunl HTTPS admin + client portal
+      #       1194  UDP    VPN data tunnel (default; matches VPN_UDP_PORT)
+      # ------------------------------------------------------------------
+      echo "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw allow "${VPN_UDP_PORT}/udp"
+      # Optional TCP VPN port
+      if [ "${VPN_TCP_PORT}" != "none" ] && [ -n "${VPN_TCP_PORT}" ]; then
+        ufw allow "${VPN_TCP_PORT}/tcp"
+        echo "UFW: opened VPN_TCP_PORT ${VPN_TCP_PORT}/tcp"
+      fi
+      ufw --force enable
+      echo "UFW rules applied."
+
+      # ------------------------------------------------------------------
+      # 13. fail2ban — SSH protection
+      # ------------------------------------------------------------------
+      systemctl enable --now fail2ban
+      echo "fail2ban configured."
+
+      # ------------------------------------------------------------------
+      # 14. Optional TLS with Certbot (standalone mode)
+      #     Pritunl uses its own web server on port 443; we request a cert
+      #     via standalone (port 80) and then configure Pritunl to use it.
+      # ------------------------------------------------------------------
+      CERT_DIR="(not yet issued)"
+      TLS_NOTE="TLS not requested or APP_DOMAIN is placeholder."
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "vpn.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        # Port 80 already open in UFW above; Pritunl not on 80 so standalone works
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+
+        if [ -f "${CERT_DIR}/fullchain.pem" ]; then
+          echo "Configuring Pritunl to use Let's Encrypt certificate..."
+          # Pritunl reads cert paths from its config (MongoDB-backed)
+          # Easiest idempotent approach: write renewal hook + let Pritunl
+          # pick up the Let's Encrypt paths via its UI or pritunl command.
+          pritunl set app.server_cert "$(cat "${CERT_DIR}/fullchain.pem")" 2>/dev/null || true
+          pritunl set app.server_key  "$(cat "${CERT_DIR}/privkey.pem")"  2>/dev/null || true
+          systemctl restart pritunl || true
+          TLS_NOTE="TLS issued for ${APP_DOMAIN}. Cert: ${CERT_DIR}"
+
+          # Certbot renewal hook to keep Pritunl cert current
+          mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+          cat > /etc/letsencrypt/renewal-hooks/deploy/pritunl.sh <<'HOOKEOF'
+      #!/usr/bin/env bash
+      set -euo pipefail
+      DOMAIN="$(ls /etc/letsencrypt/live/ | head -1)"
+      CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
+      pritunl set app.server_cert "$(cat "${CERT_DIR}/fullchain.pem")" 2>/dev/null || true
+      pritunl set app.server_key  "$(cat "${CERT_DIR}/privkey.pem")"  2>/dev/null || true
+      systemctl restart pritunl || true
+      HOOKEOF
+          chmod 700 /etc/letsencrypt/renewal-hooks/deploy/pritunl.sh
+          echo "Certbot renewal hook installed."
+        else
+          TLS_NOTE="WARN: certbot deferred — DNS not yet pointed to this server."
+        fi
+      fi
+
+      # ------------------------------------------------------------------
+      # 15. Determine server public IP for credentials file
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf --max-time 5 https://api4.my-ip.io/v2/fast.json 2>/dev/null \
+        | jq -r '.ip // empty' 2>/dev/null \
+        || hostname -I 2>/dev/null | awk '{print $1}' \
+        || echo 'unknown')"
+
+      # ------------------------------------------------------------------
+      # 16. Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      PANEL_HOST="${APP_DOMAIN}"
+      if [ "${APP_DOMAIN}" = "vpn.example.com" ] || [ -z "${APP_DOMAIN}" ]; then
+        PANEL_HOST="${PUBLIC_IP}"
+      fi
+
+      cat > /root/pritunl-credentials.txt <<CREDSEOF
+      ============================================================
+       Pritunl Bootstrap Complete — $(date -u)
+      ============================================================
+
+       Admin Panel URL : https://${PANEL_HOST}/
+       Admin Username  : ${DEFAULT_USER}
+       Admin Password  : ${ADMIN_PASS}
+
+       Setup Key       : ${SETUP_KEY:-"(run: pritunl setup-key)"}
+         (Enter this key at https://${PANEL_HOST}/ on first visit to
+          complete initial database configuration)
+
+       Public IP       : ${PUBLIC_IP}
+       VPN UDP Port    : ${VPN_UDP_PORT}
+       VPN TCP Port    : ${VPN_TCP_PORT}
+
+       TLS             : ${TLS_NOTE}
+
+       MongoDB         : 127.0.0.1:27017 (db: pritunl, local only)
+       Log             : /var/log/pritunl-bootstrap.log
+       Pritunl log     : journalctl -u pritunl -f
+
+      ============================================================
+       Next steps:
+        1. Open https://${PANEL_HOST}/ in your browser
+        2. Enter the Setup Key above (one-time database setup)
+        3. Log in with the username/password above
+        4. Create an Organization → User → Server → Attach org to server
+        5. Add a route (e.g. 0.0.0.0/0) and Start the server
+        6. Users download their .ovpn or WireGuard profile from the
+           Pritunl client portal (https://${PANEL_HOST}/login)
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/pritunl-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials in /root/pritunl-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/pritunl-bootstrap.sh" ]
+
+final_message: "Pritunl bootstrap done after $UPTIME s. See /root/pritunl-credentials.txt and /var/log/pritunl-bootstrap.log"

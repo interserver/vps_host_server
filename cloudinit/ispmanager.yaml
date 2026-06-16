@@ -1,0 +1,323 @@
+#cloud-config
+# =============================================================================
+# ISPmanager 6 — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: ISPmanager 6 (official non-interactive installer, BYOL) + UFW +
+#        fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.ispmanager-bootstrap.env before
+# launching (or inject via provisioner). Passwords are random per-boot when
+# left as CHANGE_ME.
+#
+# LICENSING: ISPmanager is a commercial product. After first boot, activate
+# your licence inside the panel at https://<IP>:1500/ispmgr or via
+# /usr/local/mgr5/bin/mgrctl -m ispmgr licmanager.activate key=<YOUR_KEY>
+# =============================================================================
+
+hostname: ispmanager
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default (cloud-init injects customer SSH key here)
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — minimal bootstrap set; ISPmanager installer pulls its own deps
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - net-tools
+  - jq
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.ispmanager-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ISPmanager bootstrap environment
+      # Edit these before first boot, or inject via provisioner.
+
+      # Fully-qualified domain name used for the panel (and optional TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email used for Let's Encrypt registration
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS after install
+      # (requires DNS already pointed to this server)
+      ENABLE_TLS=true
+
+      # ISPmanager root/admin panel password
+      # Leave as CHANGE_ME to auto-generate a random value at runtime
+      ADMIN_PASS=CHANGE_ME
+
+      # ISPmanager edition: lite | pro | host
+      # lite  — single-server control panel (most common BYOL option)
+      # pro   — reseller / VPS provider edition
+      # host  — shared hosting provider edition
+      ISPMGR_EDITION=lite
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/ispmanager-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/ispmanager-bootstrap.log) 2>&1
+      source /root/.ispmanager-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== ISPmanager bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${ADMIN_PASS}" == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — basic SSH protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # ISPmanager ports:
+      #   1500  — panel HTTPS (ISPmanager web UI)
+      #   22    — SSH
+      #   80    — HTTP  (hosted sites / ACME challenge)
+      #   443   — HTTPS (hosted sites)
+      #   21    — FTP (passive range opened by ISPmanager's own firewalld rules)
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'HTTP'
+      ufw allow 443/tcp  comment 'HTTPS'
+      ufw allow 1500/tcp comment 'ISPmanager panel'
+      ufw allow 21/tcp   comment 'FTP'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # ISPmanager 6 official non-interactive installer
+      # Installer ref: https://docs.ispmanager.com/ispmanager6-user-en/installation
+      # The script auto-detects OS; Ubuntu 24.04 (noble) packages are used
+      # when no 26.04 line is published yet — the installer handles the fallback.
+      # fallback: noble repo until 26.04 published
+      # ----------------------------------------------------------------
+      echo "=== Downloading ISPmanager installer ==="
+      export DEBIAN_FRONTEND=noninteractive
+
+      curl -fsSL https://download.ispmanager.com/install.sh -o /tmp/ispmanager-install.sh
+      chmod +x /tmp/ispmanager-install.sh
+
+      # Run the official installer non-interactively.
+      # --nodemands   skip interactive licence/domain prompts
+      # --release 6   pin to ISPmanager 6 branch
+      # Edition is passed as the first positional argument accepted by the script.
+      echo "=== Installing ISPmanager 6 (${ISPMGR_EDITION} edition) — this may take 5-15 min ==="
+      bash /tmp/ispmanager-install.sh \
+          ispmgr \
+          --release 6 \
+          --nodemands \
+          || {
+              echo "WARN: ISPmanager installer returned non-zero; checking service status..."
+          }
+
+      # ----------------------------------------------------------------
+      # Wait for ISPmanager service to be up (max 180 s)
+      # ----------------------------------------------------------------
+      echo "=== Waiting for ISPmanager service ==="
+      TIMEOUT=180
+      ELAPSED=0
+      ISPMGR_BIN=/usr/local/mgr5/bin/mgrctl
+      until [ -x "${ISPMGR_BIN}" ] || [ $ELAPSED -ge $TIMEOUT ]; do
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+      done
+
+      if [ ! -x "${ISPMGR_BIN}" ]; then
+          echo "WARN: mgrctl not found after ${TIMEOUT}s — installer may still be running"
+      else
+          echo "=== ISPmanager binary found at ${ISPMGR_BIN} ==="
+
+          # Set the root panel password via mgrctl
+          # ISPmanager uses the system root password for the 'root' panel login
+          # by default; set it explicitly so we have a known credential.
+          echo "root:${ADMIN_PASS}" | chpasswd || \
+              echo "WARN: could not set root password via chpasswd"
+
+          # Allow a brief settle time for the panel daemon
+          sleep 10
+
+          # Verify panel is responding
+          curl -sk "https://127.0.0.1:1500/ispmgr" -o /dev/null -w "%{http_code}\n" \
+              || echo "WARN: panel health-check returned non-200; it may still be initialising"
+      fi
+
+      # ----------------------------------------------------------------
+      # Optional: Certbot TLS for the panel domain
+      # ISPmanager has its own certificate management, but we can seed
+      # a certificate for the panel hostname.
+      # Skipped (non-fatal) when DNS is not yet pointing here.
+      # ----------------------------------------------------------------
+      if [[ "${ENABLE_TLS}" == "true" && "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+          # Install certbot if not already present
+          command -v certbot >/dev/null 2>&1 || apt-get install -y certbot
+
+          # Temporarily open 80 for ACME standalone; ISPmanager may already
+          # bind 80 — use --webroot if ISPmanager is serving on 80.
+          certbot certonly \
+              --standalone \
+              --non-interactive \
+              --agree-tos \
+              --email "${LE_EMAIL}" \
+              -d "${APP_DOMAIN}" \
+              --preferred-challenges http \
+              || echo "WARN: certbot deferred — DNS may not point here yet"
+
+          # Copy certificate into ISPmanager cert store if obtained
+          if [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
+              CERT_DIR=/usr/local/mgr5/etc/ssl
+              mkdir -p "${CERT_DIR}"
+              cp "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" \
+                  "${CERT_DIR}/ispmgr.crt"
+              cp "/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem" \
+                  "${CERT_DIR}/ispmgr.key"
+              # Reload ISPmanager to pick up the new certificate
+              systemctl restart ispmgr 2>/dev/null || true
+              echo "=== TLS certificate installed for ${APP_DOMAIN} ==="
+          fi
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      PUBLIC_IP="$(curl -fsSL --max-time 10 https://api4.my-ip.io/ip 2>/dev/null \
+          || hostname -I | awk '{print $1}')"
+      PANEL_HOST="${APP_DOMAIN:-${PUBLIC_IP}}"
+
+      cat > /root/ispmanager-credentials.txt <<CREDS
+      ============================================================
+       ISPmanager 6 — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       Panel URL       : https://${PANEL_HOST}:1500/ispmgr
+       Panel login     : root
+       Panel password  : ${ADMIN_PASS}  (system root password)
+
+       Edition         : ${ISPMGR_EDITION}
+
+       Firewall open ports:
+         22   — SSH
+         80   — HTTP (hosted sites)
+         443  — HTTPS (hosted sites)
+         1500 — ISPmanager panel (HTTPS)
+         21   — FTP
+
+       Log file        : /var/log/ispmanager-bootstrap.log
+       ISPmanager logs : /usr/local/mgr5/var/
+
+       LICENSING (BYOL):
+         ISPmanager requires a commercial licence. Activate it after
+         first login via:
+           Panel → Settings → Licence Manager
+         or via CLI:
+           /usr/local/mgr5/bin/mgrctl -m ispmgr \\
+               licmanager.activate key=<YOUR_LICENCE_KEY>
+
+       IMPORTANT:
+         - Change the root/panel password after first login.
+         - Point your domain DNS to this server's IP before enabling TLS.
+      ============================================================
+      CREDS
+      chmod 600 /root/ispmanager-credentials.txt
+
+      echo ""
+      echo "=== ISPmanager bootstrap complete $(date -u) ==="
+      echo "=== Panel URL    : https://${PANEL_HOST}:1500/ispmgr"
+      echo "=== Panel login  : root"
+      echo "=== Panel pass   : ${ADMIN_PASS}"
+      echo "=== Full creds   : /root/ispmanager-credentials.txt"
+      echo "=== BYOL: activate your licence inside the panel ==="
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/ispmanager-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   ISPmanager 6 bootstrap complete.
+   Panel URL   : https://YOUR_IP_OR_DOMAIN:1500/ispmgr
+   Login       : root  (panel password in /root/ispmanager-credentials.txt)
+   Log         : /var/log/ispmanager-bootstrap.log
+   BYOL        : Activate your licence inside the panel after first login.
+  ============================================================

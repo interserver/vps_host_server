@@ -1,0 +1,362 @@
+#cloud-config
+# =============================================================================
+# Ant Media Server Enterprise Edition — Ubuntu 26.04 cloud-init user-data
+# Stack: Ant Media Server EE (BYOL) + UFW firewall + fail2ban + Certbot
+#        unattended-upgrades + swap
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.ant-media-bootstrap.env
+# block (domain, email, admin password) before launching, OR let the boot
+# generate random credentials (check /root/ant-media-credentials.txt after
+# first boot).
+# -----------------------------------------------------------------------------
+# LICENSING: Ant Media Server Enterprise Edition requires a commercial license.
+# After install, activate via the web dashboard using your license key.
+# This image ships UNCONFIGURED / BYOL — no license key is embedded.
+# =============================================================================
+
+hostname: ant-media-server
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so provisioners can inject SSH keys
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (codename-agnostic; installs available at Ubuntu 26.04 launch)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - unzip
+  - git
+  - htop
+  - net-tools
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - certbot
+  - openjdk-17-jdk-headless
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GB to survive build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.ant-media-bootstrap.env
+    permissions: '0600'
+    content: |
+      # Ant Media Server Enterprise Edition — operator configuration
+      # Edit these before first boot or let the bootstrap generate defaults.
+
+      # Domain name pointed at this server's IP (for TLS / HTTPS).
+      # Leave empty to skip Certbot and use HTTP only.
+      APP_DOMAIN=""
+
+      # Email for Let's Encrypt certificate notifications.
+      LE_EMAIL="admin@example.com"
+
+      # Set to "true" to request a TLS certificate via Certbot.
+      # Will only succeed if APP_DOMAIN resolves to this server's IP.
+      ENABLE_TLS=true
+
+      # Ant Media Server version to install.
+      # Leave "latest" to pull the newest EE release from GitHub.
+      AMS_VERSION=latest
+
+      # Admin panel password (auto-generated at boot if set to CHANGE_ME).
+      ADMIN_PASS=CHANGE_ME
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/ant-media-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/ant-media-bootstrap.log) 2>&1
+      source /root/.ant-media-bootstrap.env
+
+      echo "=== Ant Media Server Enterprise Edition bootstrap starting ==="
+      echo "=== $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # Random-secret helper — SIGPIPE-safe under set -e + pipefail
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # -----------------------------------------------------------------------
+      # Generate secrets when placeholders are left as-is
+      # -----------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "ADMIN_PASS=${ADMIN_PASS}" >> /root/.ant-media-bootstrap.env
+      fi
+
+      # -----------------------------------------------------------------------
+      # System: locale, time zone, automatic security updates
+      # -----------------------------------------------------------------------
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get install -y unattended-upgrades
+
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADES'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADES
+
+      dpkg-reconfigure -f noninteractive unattended-upgrades
+
+      # -----------------------------------------------------------------------
+      # Java (Ant Media requires JDK 17)
+      # -----------------------------------------------------------------------
+      if ! command -v java &>/dev/null; then
+        apt-get install -y openjdk-17-jdk-headless
+      fi
+      java -version
+
+      # -----------------------------------------------------------------------
+      # Ant Media Server Enterprise Edition installer
+      # -----------------------------------------------------------------------
+      mkdir -p /opt/ant-media
+
+      AMS_INSTALL_SCRIPT=/tmp/ams-install.sh
+
+      if [ "${AMS_VERSION}" = "latest" ]; then
+        # Resolve latest EE release tag from GitHub
+        AMS_VERSION="$(curl -fsSL \
+          https://api.github.com/repos/ant-media/Ant-Media-Server/releases/latest \
+          | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')" || true
+        echo "Resolved AMS_VERSION=${AMS_VERSION}"
+        # Persist resolved version
+        sed -i "s|^AMS_VERSION=.*|AMS_VERSION=${AMS_VERSION}|" /root/.ant-media-bootstrap.env
+      fi
+
+      # Download the official install script from Ant Media GitHub
+      echo "Downloading Ant Media install.sh ..."
+      curl -fsSL \
+        "https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh" \
+        -o "${AMS_INSTALL_SCRIPT}"
+      chmod +x "${AMS_INSTALL_SCRIPT}"
+
+      # The official script accepts -i <zip_or_url> for Enterprise and -e
+      # for the edition flag on some versions.  We pass the EE jar URL if
+      # the version was resolved; otherwise let the script pull the latest.
+      if [ -n "${AMS_VERSION:-}" ] && [ "${AMS_VERSION}" != "latest" ]; then
+        AMS_DOWNLOAD_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_VERSION}/ant-media-server-enterprise-${AMS_VERSION}.zip"
+        echo "Installing from: ${AMS_DOWNLOAD_URL}"
+        bash "${AMS_INSTALL_SCRIPT}" -i "${AMS_DOWNLOAD_URL}" || {
+          echo "WARN: versioned install failed, retrying without version pin"
+          bash "${AMS_INSTALL_SCRIPT}" -e enterprise || true
+        }
+      else
+        bash "${AMS_INSTALL_SCRIPT}" -e enterprise || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # Wait for antmedia service to exist, then enable + start
+      # -----------------------------------------------------------------------
+      for i in $(seq 1 30); do
+        if systemctl list-unit-files antmedia.service &>/dev/null; then
+          break
+        fi
+        echo "Waiting for antmedia.service to be registered ... (${i}/30)"
+        sleep 5
+      done
+
+      systemctl daemon-reload || true
+      systemctl enable antmedia || true
+      systemctl start antmedia || true
+
+      # Give the server a moment to initialise
+      sleep 10
+
+      # -----------------------------------------------------------------------
+      # Set admin password via Ant Media REST management API
+      # (AMS runs on 5080 by default)
+      # -----------------------------------------------------------------------
+      AMS_API="http://127.0.0.1:5080/WebRTCAppEE/rest/v2"
+
+      for i in $(seq 1 24); do
+        if curl -sf "${AMS_API}/version" &>/dev/null; then
+          break
+        fi
+        echo "Waiting for AMS REST API ... (${i}/24)"
+        sleep 5
+      done
+
+      # Change default admin credentials  (default: admin / admin)
+      curl -sf -X POST "${AMS_API}/users/initial-user" \
+        -H "Content-Type: application/json" \
+        -d "{\"firstName\":\"Admin\",\"lastName\":\"Admin\",\"email\":\"${LE_EMAIL}\",\"password\":\"${ADMIN_PASS}\",\"userType\":\"ADMIN\"}" \
+        || echo "WARN: initial-user endpoint not available; set password manually in the dashboard"
+
+      # -----------------------------------------------------------------------
+      # UFW firewall
+      # -----------------------------------------------------------------------
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 5080/tcp  comment 'Ant Media HTTP'
+      ufw allow 5443/tcp  comment 'Ant Media HTTPS'
+      ufw allow 1935/tcp  comment 'RTMP'
+      ufw allow 4200/tcp  comment 'RTSP'
+      ufw allow 5000:65000/udp comment 'WebRTC / RTP'
+      echo "y" | ufw enable
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # fail2ban — protect SSH
+      # -----------------------------------------------------------------------
+      if ! command -v fail2ban-server &>/dev/null; then
+        apt-get install -y fail2ban
+      fi
+
+      cat > /etc/fail2ban/jail.local <<'FAIL2BAN'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      logpath = %(sshd_log)s
+      backend = %(sshd_backend)s
+      FAIL2BAN
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # -----------------------------------------------------------------------
+      # Certbot TLS (only if APP_DOMAIN is set)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN:-}" ] && [ "${ENABLE_TLS}" = "true" ]; then
+        echo "Requesting TLS certificate for ${APP_DOMAIN} ..."
+        certbot certonly --standalone --non-interactive --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --pre-hook  "systemctl stop antmedia || true" \
+          --post-hook "systemctl start antmedia || true" \
+          || echo "WARN: certbot deferred — DNS not yet pointed at this IP"
+
+        # Auto-renew
+        systemctl enable certbot.timer 2>/dev/null || true
+
+        # Ant Media uses its own keystore; copy the certificates so AMS can
+        # serve HTTPS on 5443 (operator must configure the keystore via the
+        # AMS dashboard or REST API with the cert paths below).
+        if [ -d "/etc/letsencrypt/live/${APP_DOMAIN}" ]; then
+          echo "TLS cert ready at /etc/letsencrypt/live/${APP_DOMAIN}/"
+          echo "Configure Ant Media HTTPS via dashboard → SSL Settings."
+        fi
+      else
+        echo "INFO: APP_DOMAIN not set or ENABLE_TLS=false — skipping Certbot."
+      fi
+
+      # -----------------------------------------------------------------------
+      # Write credentials file
+      # -----------------------------------------------------------------------
+      AMS_PANEL_URL="http://$(hostname -I | awk '{print $1}'):5080"
+      if [ -n "${APP_DOMAIN:-}" ]; then
+        AMS_PANEL_URL="http://${APP_DOMAIN}:5080"
+        if [ "${ENABLE_TLS}" = "true" ]; then
+          AMS_PANEL_URL="https://${APP_DOMAIN}:5443"
+        fi
+      fi
+
+      cat > /root/ant-media-credentials.txt <<CREDS
+      ============================================================
+       Ant Media Server Enterprise Edition — Access Credentials
+      ============================================================
+      Generated : $(date -u)
+      Server IP : $(hostname -I | awk '{print $1}')
+
+      Dashboard URL : ${AMS_PANEL_URL}
+      Admin Email   : ${LE_EMAIL}
+      Admin Password: ${ADMIN_PASS}
+
+      RTMP Ingest   : rtmp://$(hostname -I | awk '{print $1}'):1935/live
+      WebRTC        : http://$(hostname -I | awk '{print $1}'):5080/WebRTCAppEE/
+
+      LICENSING
+      ---------
+      Ant Media Server Enterprise Edition requires a commercial license.
+      After logging in, go to Dashboard → License to activate your key.
+      Obtain a license at: https://antmedia.io/
+
+      TLS / HTTPS
+      -----------
+      APP_DOMAIN : ${APP_DOMAIN:-"(not configured — edit /root/.ant-media-bootstrap.env)"}
+      LE_EMAIL   : ${LE_EMAIL}
+      ENABLE_TLS : ${ENABLE_TLS}
+
+      Cert path (if issued): /etc/letsencrypt/live/${APP_DOMAIN:-DOMAIN}/
+
+      PORTS
+      -----
+      22    SSH
+      80    HTTP (redirect)
+      443   HTTPS
+      5080  Ant Media HTTP dashboard / streams
+      5443  Ant Media HTTPS dashboard / streams
+      1935  RTMP
+      4200  RTSP
+      5000-65000/UDP  WebRTC / RTP
+
+      LOG
+      ---
+      /var/log/ant-media-bootstrap.log
+      /usr/local/antmedia/log/
+      ============================================================
+      CREDS
+
+      chmod 600 /root/ant-media-credentials.txt
+
+      echo ""
+      echo "=== Ant Media Server EE bootstrap complete ==="
+      echo "=== Dashboard: ${AMS_PANEL_URL} ==="
+      echo "=== Credentials saved to /root/ant-media-credentials.txt ==="
+      echo "=== $(date -u) ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/ant-media-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   Ant Media Server Enterprise Edition is being configured.
+   First-boot setup takes 3-8 minutes. Track progress:
+     tail -f /var/log/ant-media-bootstrap.log
+   Credentials (URL, admin password, license info):
+     cat /root/ant-media-credentials.txt
+   BYOL: activate your license at https://antmedia.io/
+  ============================================================

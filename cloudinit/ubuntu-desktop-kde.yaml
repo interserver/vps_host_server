@@ -1,0 +1,257 @@
+#cloud-config
+# =============================================================================
+# Ubuntu Desktop (KDE) "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: KDE Plasma desktop + xrdp + TigerVNC + ufw + fail2ban + swap
+#        Non-root sudo user created with random password; RDP on 3389, VNC on 5901
+# NOTE: Requires a plan with at least 2 GB RAM.
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.kde-bootstrap.env before launch.
+# Secrets auto-randomize if left as CHANGE_ME.
+# =============================================================================
+
+hostname: ubuntu-desktop-kde
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - xrdp
+  - tigervnc-standalone-server
+  - tigervnc-common
+  - kde-plasma-desktop
+  - sddm
+  - dbus-x11
+  - xorg
+  - xorgxrdp
+  - pulseaudio
+  - pavucontrol
+  - sudo
+  - wget
+  - htop
+  - nano
+  - net-tools
+  - openssh-server
+
+# ----------------------------------------------------------------------------
+# Swap (helps survive build-time memory spikes; required for 2 GB plans)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.kde-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      DESKTOP_USER="kdeuser"           # non-root sudo user for RDP/VNC sessions
+      DESKTOP_PASS="CHANGE_ME"         # login password (auto-randomised if unchanged)
+      VNC_PASS="CHANGE_ME"             # TigerVNC password (max 8 chars used)
+      RDP_PORT="3389"                  # xrdp port
+      VNC_PORT="5901"                  # TigerVNC display :1
+
+  # --- fail2ban jail config ---------------------------------------------------
+  - path: /etc/fail2ban/jail.d/kde-desktop.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [rdp-blacklist]
+      enabled  = true
+      filter   = rdp-security-log
+      logpath  = /var/log/xrdp.log
+      maxretry = 5
+      bantime  = 1h
+      port     = 3389
+
+  # --- fail2ban rdp filter ----------------------------------------------------
+  - path: /etc/fail2ban/filter.d/rdp-security-log.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Definition]
+      failregex = .*XRDP.*Authentication failure.*<HOST>
+                  .*xrdp_mm_process_login_response.*login failed.*
+      ignoreregex =
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- xrdp startwm.sh: launch KDE session for all users ---------------------
+  - path: /etc/xrdp/startwm.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/sh
+      # xrdp session launcher — starts KDE Plasma
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      exec /bin/bash --login -c "startplasma-x11"
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/kde-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/kde-bootstrap.log) 2>&1
+      source /root/.kde-bootstrap.env
+
+      echo "=== KDE Desktop bootstrap started: $(date) ==="
+
+      # --- random secret helper (SIGPIPE-safe under set -e + pipefail) ------
+      rand()    { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      rand_vnc(){ LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 8  || true; }
+
+      [ "$DESKTOP_PASS" = "CHANGE_ME" ] && DESKTOP_PASS="$(rand)"
+      [ "$VNC_PASS"     = "CHANGE_ME" ] && VNC_PASS="$(rand_vnc)"
+
+      # --- create desktop sudo user if not already present ------------------
+      if ! id "$DESKTOP_USER" >/dev/null 2>&1; then
+        useradd -m -s /bin/bash -G sudo,audio,video "$DESKTOP_USER"
+      fi
+      echo "${DESKTOP_USER}:${DESKTOP_PASS}" | chpasswd
+
+      # --- ensure KDE packages are installed (idempotent) -------------------
+      if ! dpkg -l kde-plasma-desktop >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+          kde-plasma-desktop sddm dbus-x11 xorg xrdp tigervnc-standalone-server \
+          tigervnc-common xorgxrdp pulseaudio
+      fi
+
+      # --- configure xrdp ---------------------------------------------------
+      # Ensure ssl-cert group membership for xrdp
+      adduser xrdp ssl-cert 2>/dev/null || true
+
+      # Use the KDE startwm.sh (already written by write_files)
+      # Patch xrdp.ini port (idempotent)
+      sed -i "s|^port=.*|port=${RDP_PORT}|" /etc/xrdp/xrdp.ini
+
+      systemctl enable xrdp
+      systemctl restart xrdp
+
+      # --- configure TigerVNC for the desktop user --------------------------
+      VNC_HOME="/home/${DESKTOP_USER}"
+      VNC_CFG="${VNC_HOME}/.vnc"
+      mkdir -p "$VNC_CFG"
+
+      # Write VNC password file (vncpasswd expects an 8-char max passwd)
+      echo "$VNC_PASS" | vncpasswd -f > "${VNC_CFG}/passwd"
+      chmod 600 "${VNC_CFG}/passwd"
+      chown -R "${DESKTOP_USER}:${DESKTOP_USER}" "$VNC_CFG"
+
+      # VNC xstartup — launch KDE Plasma
+      cat > "${VNC_CFG}/xstartup" <<'VNCSTART'
+      #!/bin/sh
+      unset SESSION_MANAGER
+      unset DBUS_SESSION_BUS_ADDRESS
+      exec /bin/bash --login -c "startplasma-x11"
+      VNCSTART
+      chmod 755 "${VNC_CFG}/xstartup"
+      chown "${DESKTOP_USER}:${DESKTOP_USER}" "${VNC_CFG}/xstartup"
+
+      # Create a systemd user service for vncserver so it starts on boot
+      VNC_SVC_DIR="/etc/systemd/system"
+      cat > "${VNC_SVC_DIR}/vncserver@.service" <<VNCSVC
+      [Unit]
+      Description=TigerVNC server display %i
+      After=syslog.target network.target
+
+      [Service]
+      Type=forking
+      User=${DESKTOP_USER}
+      WorkingDirectory=${VNC_HOME}
+      PIDFile=${VNC_HOME}/.vnc/%H:%i.pid
+      ExecStartPre=/bin/bash -c 'vncserver -kill :%i > /dev/null 2>&1 || :'
+      ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x1024 :%i
+      ExecStop=/usr/bin/vncserver -kill :%i
+
+      [Install]
+      WantedBy=multi-user.target
+      VNCSVC
+
+      systemctl daemon-reload
+      systemctl enable vncserver@1.service
+      systemctl restart vncserver@1.service || true
+
+      # --- enable SDDM display manager (needed for local console) -----------
+      systemctl enable sddm || true
+
+      # --- firewall: SSH + RDP + VNC only -----------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw allow "${RDP_PORT}/tcp"   comment 'xrdp'
+      ufw allow "${VNC_PORT}/tcp"   comment 'TigerVNC'
+      ufw --force enable
+
+      # --- fail2ban ---------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --- write credentials summary ----------------------------------------
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      cat > /root/kde-credentials.txt <<CREDS
+      ===== Ubuntu Desktop (KDE) bootstrap complete: $(date) =====
+
+      Connect via RDP (Windows Remote Desktop / Remmina):
+        Host     : ${SERVER_IP}:${RDP_PORT}
+        Username : ${DESKTOP_USER}
+        Password : ${DESKTOP_PASS}
+
+      Connect via VNC (TigerVNC / RealVNC / Remmina):
+        Host     : ${SERVER_IP}:${VNC_PORT}
+        VNC pass : ${VNC_PASS}
+
+      SSH login : ssh ${DESKTOP_USER}@${SERVER_IP}
+                  (or: ssh root@${SERVER_IP})
+
+      Log       : /var/log/kde-bootstrap.log
+      CREDS
+      chmod 600 /root/kde-credentials.txt
+
+      echo "=== KDE Desktop bootstrap finished: $(date) ==="
+      echo "=== Credentials saved to /root/kde-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/kde-bootstrap.sh" ]
+
+final_message: "Ubuntu Desktop (KDE) bootstrap done after $UPTIME s. Connect via RDP :3389 or VNC :5901. See /root/kde-credentials.txt and /var/log/kde-bootstrap.log"

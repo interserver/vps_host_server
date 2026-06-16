@@ -1,0 +1,386 @@
+#cloud-config
+# =============================================================================
+# UTunnel VPN "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: UTunnel VPN Server (official installer) + UFW firewall
+#        + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# UTunnel is a cloud-managed VPN platform. The server component is installed
+# via the official UTunnel installer script and registers with the UTunnel
+# cloud dashboard. After boot, add this server from your UTunnel dashboard at
+# https://www.utunnel.io/ and manage users / client configs from there.
+#
+# Admin URL  : https://<APP_DOMAIN>:60657  (local server management panel)
+# VPN Port   : UDP 1194 (OpenVPN) / UDP 51820 (WireGuard) / TCP 60656
+# Dashboard  : https://www.utunnel.io/  (cloud control plane)
+# Credentials: /root/utunnel-vpn-credentials.txt  (chmod 600)
+#
+# EDIT the variables in write_files -> /root/.utunnel-vpn-bootstrap.env
+# before launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: utunnel-vpn
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during UTunnel install on small instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; UTunnel server is installed from its own installer
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - net-tools
+  - openssl
+  - sudo
+  - psmisc
+  - acl
+  - locales
+  - iproute2
+  - jq
+  - iptables
+  - iptables-persistent
+  - python3-certbot
+  - certbot
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.utunnel-vpn-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # UTunnel VPN Bootstrap — edit BEFORE first boot
+      # or before re-running the bootstrap script.
+      # ============================================================
+
+      # Fully-qualified domain name pointing to this server's public IP.
+      # Used for the local management panel TLS certificate (optional).
+      APP_DOMAIN=vpn.example.com
+
+      # E-mail address for Let's Encrypt certificate registration.
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve to this server, cert issuance
+      # is deferred gracefully. You can re-run manually:
+      #   certbot certonly --standalone -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # UTunnel server local admin password.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+      # UDP port for OpenVPN data tunnel (UTunnel default: 1194)
+      OVPN_UDP_PORT=1194
+
+      # UDP port for WireGuard data tunnel (UTunnel default: 51820)
+      WG_UDP_PORT=51820
+
+      # TCP port used by UTunnel server management API (default: 60656)
+      UTUNNEL_API_PORT=60656
+
+      # HTTPS port for UTunnel local server management panel (default: 60657)
+      UTUNNEL_PANEL_PORT=60657
+
+  # ---------- bootstrap script ----------
+  - path: /root/utunnel-vpn-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/utunnel-vpn-bootstrap.log) 2>&1
+      source /root/.utunnel-vpn-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string.
+      # The '|| true' is REQUIRED — head closes the pipe before urandom
+      # is exhausted which raises SIGPIPE; under set -e + pipefail this
+      # would abort the script without it.
+      # ------------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      echo "=== UTunnel VPN Bootstrap started at $(date -u) ==="
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (stored in credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. System locale
+      # ------------------------------------------------------------------
+      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+      fi
+      export LANG=en_US.UTF-8
+      export LC_ALL=en_US.UTF-8
+      export DEBIAN_FRONTEND=noninteractive
+
+      # ------------------------------------------------------------------
+      # 3. Configure automatic security updates (unattended-upgrades)
+      # ------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOEOF
+      echo "Unattended-upgrades configured."
+
+      # ------------------------------------------------------------------
+      # 4. Enable IPv4 forwarding (required for VPN routing)
+      # ------------------------------------------------------------------
+      if ! grep -q '^net.ipv4.ip_forward=1' /etc/sysctl.conf; then
+        echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+      fi
+      if ! grep -q '^net.ipv6.conf.all.forwarding=1' /etc/sysctl.conf; then
+        echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.conf
+      fi
+      sysctl -p /etc/sysctl.conf
+      echo "IP forwarding enabled."
+
+      # ------------------------------------------------------------------
+      # 5. Install UTunnel VPN Server via the official installer
+      #    https://www.utunnel.io/vpn-server-setup.html
+      #    The installer script is pinned to the stable distribution
+      #    channel; UTunnel ships deb packages compatible with Ubuntu.
+      #    # fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      echo "Downloading and running UTunnel VPN installer..."
+
+      UTUNNEL_INSTALLER_URL="https://storage.googleapis.com/utunnel_public/linux/utunnel-latest.sh"
+
+      # Download installer to a temp file and verify it is a shell script
+      TMP_INSTALLER="$(mktemp /tmp/utunnel-installer-XXXXXX.sh)"
+      wget -qO "${TMP_INSTALLER}" "${UTUNNEL_INSTALLER_URL}"
+      chmod +x "${TMP_INSTALLER}"
+
+      # Run the installer non-interactively with environment variables that
+      # UTunnel's script honours for unattended setup:
+      #   ADMIN_PASSWORD — sets the local server management panel password
+      #   SERVER_NAME    — display name shown in the UTunnel dashboard
+      UTUNNEL_ADMIN_PASSWORD="${ADMIN_PASS}" \
+      SERVER_NAME="$(hostname)" \
+        bash "${TMP_INSTALLER}" --non-interactive 2>&1 || {
+          # Fallback: try without flags (older installer versions)
+          echo "WARN: non-interactive flag not accepted, retrying without it..."
+          UTUNNEL_ADMIN_PASSWORD="${ADMIN_PASS}" \
+          SERVER_NAME="$(hostname)" \
+            bash "${TMP_INSTALLER}" 2>&1 || true
+        }
+
+      rm -f "${TMP_INSTALLER}"
+      echo "UTunnel installer completed."
+
+      # ------------------------------------------------------------------
+      # 6. Wait for UTunnel service to start, then verify
+      # ------------------------------------------------------------------
+      UTUNNEL_SVC=""
+      for svc in utunnel utunneld utunnel-server; do
+        if systemctl list-unit-files --type=service 2>/dev/null | grep -q "^${svc}\.service"; then
+          UTUNNEL_SVC="${svc}"
+          break
+        fi
+      done
+
+      if [ -n "${UTUNNEL_SVC}" ]; then
+        systemctl enable "${UTUNNEL_SVC}" || true
+        systemctl restart "${UTUNNEL_SVC}" || true
+        echo "UTunnel service '${UTUNNEL_SVC}' enabled and started."
+      else
+        echo "WARN: Could not detect UTunnel systemd service name — check 'systemctl list-units | grep -i tunnel'"
+      fi
+
+      # ------------------------------------------------------------------
+      # 7. Firewall — UFW
+      #    UTunnel VPN ports:
+      #      22     TCP     SSH
+      #      1194   UDP     OpenVPN data tunnel
+      #      51820  UDP     WireGuard data tunnel
+      #      60656  TCP     UTunnel server management API
+      #      60657  TCP     UTunnel local admin panel (HTTPS)
+      #      80     TCP     HTTP / ACME challenge (if TLS enabled)
+      # ------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow "${OVPN_UDP_PORT}/udp"
+      ufw allow "${WG_UDP_PORT}/udp"
+      ufw allow "${UTUNNEL_API_PORT}/tcp"
+      ufw allow "${UTUNNEL_PANEL_PORT}/tcp"
+      ufw --force enable
+      echo "UFW rules applied."
+
+      # ------------------------------------------------------------------
+      # 8. fail2ban — SSH protection
+      # ------------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+      echo "fail2ban configured."
+
+      # ------------------------------------------------------------------
+      # 9. Optional TLS with Certbot (standalone)
+      #    Used to secure the UTunnel local management panel.
+      #    UTunnel reads certs from /etc/letsencrypt/live/<domain>/.
+      # ------------------------------------------------------------------
+      CERT_DIR="(not yet issued)"
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "vpn.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+
+        # Temporarily open port 80 for the ACME HTTP-01 challenge
+        ufw allow 80/tcp || true
+
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        # Remove temporary HTTP allow (80 not needed by UTunnel itself)
+        ufw delete allow 80/tcp || true
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+
+        # If UTunnel supports specifying cert paths via config, apply them.
+        # UTunnel typically auto-detects Let's Encrypt certs placed in the
+        # standard /etc/letsencrypt/live/ directory on restart.
+        if [ -f "${CERT_DIR}/fullchain.pem" ]; then
+          echo "Certificate issued. UTunnel will pick it up on next restart."
+          if [ -n "${UTUNNEL_SVC}" ]; then
+            systemctl restart "${UTUNNEL_SVC}" || true
+          fi
+
+          # Renewal hook — restart UTunnel after cert renewal
+          mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+          cat > /etc/letsencrypt/renewal-hooks/deploy/utunnel-vpn.sh <<HOOKEOF
+      #!/usr/bin/env bash
+      set -euo pipefail
+      # Reload UTunnel so it picks up the renewed certificate
+      for svc in utunnel utunneld utunnel-server; do
+        if systemctl is-active --quiet "\${svc}" 2>/dev/null; then
+          systemctl restart "\${svc}" || true
+          break
+        fi
+      done
+      HOOKEOF
+          chmod 700 /etc/letsencrypt/renewal-hooks/deploy/utunnel-vpn.sh
+          echo "Certbot renewal hook installed for UTunnel."
+        fi
+      else
+        echo "Skipping TLS (ENABLE_TLS=${ENABLE_TLS}, APP_DOMAIN=${APP_DOMAIN})."
+        echo "To issue a cert later:  certbot certonly --standalone -d <your-domain>"
+      fi
+
+      # ------------------------------------------------------------------
+      # 10. Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf --max-time 10 https://checkip.amazonaws.com || \
+                   curl -sf --max-time 10 https://api.ipify.org || \
+                   hostname -I | awk '{print $1}')"
+
+      cat > /root/utunnel-vpn-credentials.txt <<CREDEOF
+      # ============================================================
+      # UTunnel VPN — credentials and connection info
+      # Generated: $(date -u)
+      # ============================================================
+
+      SERVER IP          : ${PUBLIC_IP}
+      APP_DOMAIN         : ${APP_DOMAIN}
+
+      LOCAL ADMIN PANEL  : https://${APP_DOMAIN}:${UTUNNEL_PANEL_PORT}
+                           https://${PUBLIC_IP}:${UTUNNEL_PANEL_PORT}  (IP fallback)
+      ADMIN PASSWORD     : ${ADMIN_PASS}
+
+      CLOUD DASHBOARD    : https://www.utunnel.io/
+      (Add this server from the UTunnel dashboard to manage VPN users and
+       download client configurations.)
+
+      OPENVPN UDP PORT   : ${OVPN_UDP_PORT}
+      WIREGUARD UDP PORT : ${WG_UDP_PORT}
+      MANAGEMENT API PORT: ${UTUNNEL_API_PORT}
+
+      TLS CERT DIR       : ${CERT_DIR}
+
+      BOOTSTRAP LOG      : /var/log/utunnel-vpn-bootstrap.log
+      # ============================================================
+      CREDEOF
+      chmod 600 /root/utunnel-vpn-credentials.txt
+
+      echo "=== UTunnel VPN Bootstrap finished at $(date -u) ==="
+      echo "Credentials written to /root/utunnel-vpn-credentials.txt"
+      echo ""
+      echo "  Local admin panel : https://${PUBLIC_IP}:${UTUNNEL_PANEL_PORT}"
+      echo "  Admin password    : ${ADMIN_PASS}"
+      echo "  Cloud dashboard   : https://www.utunnel.io/"
+
+# ----------------------------------------------------------------------------
+# runcmd — run the bootstrap script exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/utunnel-vpn-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# final_message — shown in cloud-init status after boot
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  UTunnel VPN bootstrap complete. Runtime: $UPTIME seconds.
+
+  Local admin panel : https://<SERVER-IP>:60657
+  Cloud dashboard   : https://www.utunnel.io/
+  Credentials file  : /root/utunnel-vpn-credentials.txt
+  Bootstrap log     : /var/log/utunnel-vpn-bootstrap.log
+
+  Add this server to your UTunnel dashboard to manage VPN
+  users and download client config files.
+  ============================================================

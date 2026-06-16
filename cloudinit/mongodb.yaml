@@ -1,0 +1,385 @@
+#cloud-config
+# =============================================================================
+# MongoDB Community Edition "one-click app" — Ubuntu 26.04 cloud-init user-data
+# Stack: MongoDB Community (official MongoDB apt repo) bound to localhost
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.mongodb-bootstrap.env
+# block before launching, OR pass them in via your provisioner.
+# MONGO_ADMIN_PASS is generated randomly per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: mongodb
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (base tooling; MongoDB itself is added via vendor repo in bootstrap)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - gnupg
+  - ca-certificates
+  - curl
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - htop
+  - jq
+  - python3-pip
+
+# ----------------------------------------------------------------------------
+# Swap (helps mongod survive memory pressure on small instances)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files and bootstrap script dropped to disk
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable env block -------------------------------------------
+  - path: /root/.mongodb-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT (or leave passwords as CHANGE_ME for random) -----
+
+      # MongoDB admin user password (user: mongoadmin)
+      MONGO_ADMIN_PASS="CHANGE_ME"
+
+      # Admin username
+      MONGO_ADMIN_USER="mongoadmin"
+
+      # MongoDB bind IP — 127.0.0.1 means localhost only (recommended default)
+      MONGO_BIND_IP="127.0.0.1"
+
+      # MongoDB port
+      MONGO_PORT="27017"
+
+      # Authentication database (admin is the standard superuser db)
+      MONGO_AUTH_DB="admin"
+
+      # WiredTiger cache size in GB (leave empty for MongoDB auto-sizing: ~50% of RAM)
+      # MONGO_CACHE_SIZE_GB=""
+
+  # --- fail2ban — protect SSH ------------------------------------------------
+  - path: /etc/fail2ban/jail.d/mongodb.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+  # --- unattended-upgrades (security patches only) ---------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- sysctl / ulimit tuning for MongoDB ------------------------------------
+  - path: /etc/sysctl.d/99-mongodb.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # MongoDB recommends disabling transparent hugepages (done in bootstrap)
+      # and tuning vm.swappiness
+      vm.swappiness=1
+      # Increase max open files / map count for large datasets
+      vm.max_map_count=262144
+
+  - path: /etc/security/limits.d/99-mongodb.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # MongoDB needs many open files and locked memory regions
+      mongodb soft nofile 64000
+      mongodb hard nofile 64000
+      mongodb soft nproc  32000
+      mongodb hard nproc  32000
+      mongodb soft memlock unlimited
+      mongodb hard memlock unlimited
+
+  # --- systemd override: raise file/process limits for mongod.service --------
+  - path: /etc/systemd/system/mongod.service.d/override.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Service]
+      LimitNOFILE=64000
+      LimitNPROC=32000
+      LimitMEMLOCK=infinity
+
+  # --- disable transparent huge pages at boot --------------------------------
+  - path: /etc/rc.local
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/sh
+      # Disable Transparent Huge Pages — MongoDB strongly recommends this
+      if [ -f /sys/kernel/mm/transparent_hugepage/enabled ]; then
+        echo never > /sys/kernel/mm/transparent_hugepage/enabled
+      fi
+      if [ -f /sys/kernel/mm/transparent_hugepage/defrag ]; then
+        echo never > /sys/kernel/mm/transparent_hugepage/defrag
+      fi
+      exit 0
+
+  # --- systemd unit to disable THP on boot -----------------------------------
+  - path: /etc/systemd/system/disable-thp.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Disable Transparent Huge Pages (MongoDB recommendation)
+      After=network.target
+      Before=mongod.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled; echo never > /sys/kernel/mm/transparent_hugepage/defrag'
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/mongodb-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/mongodb-bootstrap.log) 2>&1
+      source /root/.mongodb-bootstrap.env
+
+      echo "=== MongoDB bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random password generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Generate password if left as CHANGE_ME
+      [ "${MONGO_ADMIN_PASS}" = "CHANGE_ME" ] && MONGO_ADMIN_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. Disable Transparent Huge Pages (MongoDB requirement)
+      # -----------------------------------------------------------------------
+      systemctl daemon-reload
+      systemctl enable --now disable-thp.service || true
+
+      # Also apply immediately in case THP is already active
+      if [ -f /sys/kernel/mm/transparent_hugepage/enabled ]; then
+        echo never > /sys/kernel/mm/transparent_hugepage/enabled
+      fi
+      if [ -f /sys/kernel/mm/transparent_hugepage/defrag ]; then
+        echo never > /sys/kernel/mm/transparent_hugepage/defrag
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. Apply sysctl tuning
+      # -----------------------------------------------------------------------
+      sysctl --system -q
+
+      # -----------------------------------------------------------------------
+      # 3. Add the official MongoDB apt repository
+      # -----------------------------------------------------------------------
+      # fallback: noble repo until 26.04 published
+      MONGO_APT_CODENAME="noble"
+      MONGO_KEYRING="/usr/share/keyrings/mongodb-server-8.0.gpg"
+
+      if [ ! -f "${MONGO_KEYRING}" ]; then
+        curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc \
+          | gpg --dearmor -o "${MONGO_KEYRING}"
+      fi
+
+      echo "deb [ arch=amd64,arm64 signed-by=${MONGO_KEYRING} ] https://repo.mongodb.org/apt/ubuntu ${MONGO_APT_CODENAME}/mongodb-org/8.0 multiverse" \
+        > /etc/apt/sources.list.d/mongodb-org-8.0.list
+
+      apt-get update -qq
+
+      # -----------------------------------------------------------------------
+      # 4. Install MongoDB Community Edition
+      # -----------------------------------------------------------------------
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        mongodb-org \
+        mongodb-org-database \
+        mongodb-org-tools \
+        mongodb-mongosh
+
+      # Pin MongoDB packages to prevent accidental upgrades to incompatible versions
+      for pkg in mongodb-org mongodb-org-database mongodb-org-mongos mongodb-org-server mongodb-org-shell mongodb-org-tools; do
+        echo "${pkg} hold" | dpkg --set-selections 2>/dev/null || true
+      done
+
+      # -----------------------------------------------------------------------
+      # 5. Configure MongoDB (mongod.conf)
+      # -----------------------------------------------------------------------
+      cat > /etc/mongod.conf <<MONGOCFG
+      # mongod.conf — generated by mongodb-bootstrap.sh
+
+      # Storage
+      storage:
+        dbPath: /var/lib/mongodb
+        journal:
+          enabled: true
+      ${MONGO_CACHE_SIZE_GB:+  wiredTiger:
+          engineConfig:
+            cacheSizeGB: ${MONGO_CACHE_SIZE_GB}}
+
+      # Logging
+      systemLog:
+        destination: file
+        logAppend: true
+        path: /var/log/mongodb/mongod.log
+
+      # Network
+      net:
+        port: ${MONGO_PORT}
+        bindIp: ${MONGO_BIND_IP}
+
+      # Process management
+      processManagement:
+        timeZoneInfo: /usr/share/zoneinfo
+
+      # Security — enabled after admin user is created
+      security:
+        authorization: disabled
+      MONGOCFG
+
+      # -----------------------------------------------------------------------
+      # 6. Enable and start MongoDB (auth disabled for initial user creation)
+      # -----------------------------------------------------------------------
+      systemctl daemon-reload
+      systemctl enable mongod
+      systemctl start  mongod
+
+      # Wait up to 90 seconds for mongod to become responsive
+      echo "Waiting for MongoDB to start..."
+      MONGO_READY=0
+      for i in $(seq 1 18); do
+        if mongosh --quiet --port "${MONGO_PORT}" --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
+          MONGO_READY=1
+          break
+        fi
+        echo "  attempt ${i}/18 …"
+        sleep 5
+      done
+
+      if [ "${MONGO_READY}" -eq 0 ]; then
+        echo "WARN: MongoDB not responding after 90s — check journalctl -u mongod"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. Create admin user with random password
+      # -----------------------------------------------------------------------
+      if [ "${MONGO_READY}" -eq 1 ]; then
+        mongosh --quiet --port "${MONGO_PORT}" <<MONGOJS
+      use admin
+      if (db.getUser("${MONGO_ADMIN_USER}") === null) {
+        db.createUser({
+          user: "${MONGO_ADMIN_USER}",
+          pwd:  "${MONGO_ADMIN_PASS}",
+          roles: [
+            { role: "userAdminAnyDatabase", db: "admin" },
+            { role: "readWriteAnyDatabase", db: "admin" },
+            { role: "dbAdminAnyDatabase",   db: "admin" },
+            { role: "clusterAdmin",         db: "admin" }
+          ]
+        });
+        print("Admin user created.");
+      } else {
+        print("Admin user already exists — skipping.");
+      }
+      MONGOJS
+      else
+        echo "WARN: Skipping admin user creation — mongod not ready"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 8. Enable authentication and restart mongod
+      # -----------------------------------------------------------------------
+      sed -i 's/authorization: disabled/authorization: enabled/' /etc/mongod.conf
+      systemctl restart mongod
+
+      # Wait for restart
+      echo "Waiting for authenticated mongod to start..."
+      for i in $(seq 1 12); do
+        if mongosh --quiet \
+              --port "${MONGO_PORT}" \
+              --username "${MONGO_ADMIN_USER}" \
+              --password "${MONGO_ADMIN_PASS}" \
+              --authenticationDatabase "${MONGO_AUTH_DB}" \
+              --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
+          echo "MongoDB is up with authentication enabled."
+          break
+        fi
+        echo "  restart attempt ${i}/12 …"
+        sleep 5
+      done
+
+      # -----------------------------------------------------------------------
+      # 9. Firewall — SSH only (MongoDB bound to 127.0.0.1; not exposed)
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 10. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 11. Write credentials file
+      # -----------------------------------------------------------------------
+      cat > /root/mongodb-credentials.txt <<CREDS
+      ===== MongoDB bootstrap complete: $(date) =====
+
+      Endpoint  : mongodb://${MONGO_BIND_IP}:${MONGO_PORT}
+      (bound to localhost — use SSH tunnel or configure net.bindIp to expose)
+
+      Admin credentials
+        Username         : ${MONGO_ADMIN_USER}
+        Password         : ${MONGO_ADMIN_PASS}
+        Auth database    : ${MONGO_AUTH_DB}
+
+      Connection string (local):
+        mongosh "mongodb://${MONGO_ADMIN_USER}:${MONGO_ADMIN_PASS}@${MONGO_BIND_IP}:${MONGO_PORT}/${MONGO_AUTH_DB}"
+
+      SSH tunnel from your workstation:
+        ssh -L 27017:127.0.0.1:27017 root@<SERVER_IP>
+        then connect: mongosh "mongodb://${MONGO_ADMIN_USER}:${MONGO_ADMIN_PASS}@127.0.0.1:27017/admin"
+
+      Logs      : /var/log/mongodb/mongod.log
+      Config    : /etc/mongod.conf
+      Bootstrap : /var/log/mongodb-bootstrap.log
+      CREDS
+      chmod 600 /root/mongodb-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials in /root/mongodb-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/mongodb-bootstrap.sh" ]
+
+final_message: "MongoDB Community Edition bootstrap done after $UPTIME s. See /root/mongodb-credentials.txt and /var/log/mongodb-bootstrap.log"

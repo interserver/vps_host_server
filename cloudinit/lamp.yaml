@@ -1,0 +1,229 @@
+#cloud-config
+# =============================================================================
+# LAMP Stack — Ubuntu 26.04 cloud-init user-data
+# Stack: Apache 2.4 + PHP (mod_php) + MariaDB + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.lamp-bootstrap.env before
+# launching, OR pass them via your provisioner.
+# Passwords are randomised per-boot when left as CHANGE_ME.
+# =============================================================================
+
+hostname: lamp
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep `default` so provisioners can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apache2
+  - mariadb-server
+  - mariadb-client
+  - php
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-mbstring
+  - php-xml
+  - php-zip
+  - php-intl
+  - php-bcmath
+  - libapache2-mod-php
+  - certbot
+  - python3-certbot-apache
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (2 GB helps small instances survive MariaDB + PHP memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable variables -------------------------------------------
+  - path: /root/.lamp-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE before first boot (or supply via provisioner) -----
+      APP_DOMAIN="example.com"        # primary domain (no scheme, no trailing slash)
+      LE_EMAIL="admin@example.com"    # Let's Encrypt registration / expiry email
+      ENABLE_TLS="true"               # set to false to skip certbot (e.g. DNS not pointed yet)
+
+      # MariaDB passwords — randomised on first boot if left as CHANGE_ME
+      MYSQL_ROOT_PASS="CHANGE_ME"
+      APP_DB_NAME="lampdb"
+      APP_DB_USER="lampuser"
+      APP_DB_PASS="CHANGE_ME"
+
+      # Web-root path
+      WEB_ROOT="/var/www/html"
+
+  # --- Apache virtual-host for the app ---------------------------------------
+  - path: /etc/apache2/sites-available/lamp.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      <VirtualHost *:80>
+          ServerName APP_DOMAIN_PLACEHOLDER
+          DocumentRoot /var/www/html
+
+          DirectoryIndex index.php index.html
+
+          <Directory /var/www/html>
+              AllowOverride All
+              Require all granted
+              Options -Indexes +FollowSymLinks
+          </Directory>
+
+          # Security headers
+          Header always set X-Frame-Options "SAMEORIGIN"
+          Header always set X-Content-Type-Options "nosniff"
+          Header always set X-XSS-Protection "1; mode=block"
+          Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+          ErrorLog  ${APACHE_LOG_DIR}/lamp-error.log
+          CustomLog ${APACHE_LOG_DIR}/lamp-access.log combined
+      </VirtualHost>
+
+  # --- fail2ban local config (SSH + Apache) -----------------------------------
+  - path: /etc/fail2ban/jail.d/lamp.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [apache-auth]
+      enabled = true
+
+      [apache-badbots]
+      enabled = true
+
+      [apache-noscript]
+      enabled = true
+
+  # --- unattended automatic security upgrades ---------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script --------------------------------------------------
+  - path: /root/lamp-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/lamp-bootstrap.log) 2>&1
+      source /root/.lamp-bootstrap.env
+
+      echo "=== LAMP bootstrap started: $(date) ==="
+
+      # --- random-secret helper (SIGPIPE-safe under set -e + pipefail) ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+      [ "$APP_DB_PASS"     = "CHANGE_ME" ] && APP_DB_PASS="$(rand)"
+
+      # --- enable required Apache modules ------------------------------------
+      a2enmod rewrite headers ssl
+      a2dissite 000-default || true
+
+      # --- configure Apache virtual host ------------------------------------
+      sed -i "s|APP_DOMAIN_PLACEHOLDER|${APP_DOMAIN}|g" /etc/apache2/sites-available/lamp.conf
+      a2ensite lamp.conf
+      apache2ctl configtest && systemctl reload apache2
+
+      # --- drop a simple "it works" landing page ----------------------------
+      mkdir -p "${WEB_ROOT}"
+      cat > "${WEB_ROOT}/index.php" <<'PHP'
+      <?php
+      phpinfo();
+      PHP
+      chown -R www-data:www-data "${WEB_ROOT}"
+      chmod -R 755 "${WEB_ROOT}"
+
+      # --- secure MariaDB + create application database ---------------------
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${APP_DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${APP_DB_USER}'@'localhost' IDENTIFIED BY '${APP_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${APP_DB_NAME}\`.* TO '${APP_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --- firewall: allow SSH + HTTP + HTTPS only -------------------------
+      ufw allow OpenSSH
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw --force enable
+
+      # --- fail2ban ---------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt (deferred gracefully if DNS not ready) -----
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        certbot --apache --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" --redirect || \
+          echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot --apache -d ${APP_DOMAIN}"
+      fi
+
+      PROTO="http"; [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+
+      # --- write credentials summary (chmod 600) ----------------------------
+      cat > /root/lamp-credentials.txt <<CREDS
+      ===== LAMP install complete: $(date) =====
+      URL:             ${PROTO}://${APP_DOMAIN}
+      Web root:        ${WEB_ROOT}
+
+      MariaDB root:    ${MYSQL_ROOT_PASS}
+      DB name:         ${APP_DB_NAME}
+      DB user:         ${APP_DB_USER}
+      DB pass:         ${APP_DB_PASS}
+
+      Apache config:   /etc/apache2/sites-available/lamp.conf
+      Bootstrap log:   /var/log/lamp-bootstrap.log
+      CREDS
+      chmod 600 /root/lamp-credentials.txt
+
+      echo "=== LAMP bootstrap finished. Credentials in /root/lamp-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once all files are in place
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/lamp-bootstrap.sh" ]
+
+final_message: "LAMP bootstrap done after $UPTIME s. See /root/lamp-credentials.txt and /var/log/lamp-bootstrap.log"

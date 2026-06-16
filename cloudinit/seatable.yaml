@@ -1,0 +1,478 @@
+#cloud-config
+# =============================================================================
+# SeaTable "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: SeaTable Community Edition (official vendor apt repo) + MariaDB +
+#        memcached + nginx reverse proxy + UFW + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# SeaTable vendor apt repo: https://download.seatable.io/packages/seatable-server/
+# # fallback: noble repo until 26.04 published
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.seatable-bootstrap.env before
+# launching (or inject via provisioner). Secrets are random per-boot when
+# left as CHANGE_ME.
+# =============================================================================
+
+hostname: seatable
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve 'default' so the provisioner can inject the customer's SSH key
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — base tooling; SeaTable + MariaDB pulled in via vendor repos
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - mariadb-server
+  - mariadb-client
+  - memcached
+  - libmemcached-tools
+  - python3-pip
+  - python3-venv
+  - net-tools
+  - htop
+  - jq
+  - rsync
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.seatable-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # SeaTable bootstrap environment
+      # Edit these before first boot, or inject via provisioner.
+
+      # Fully-qualified domain name for this SeaTable instance
+      APP_DOMAIN=CHANGE_ME
+
+      # Email used for Let's Encrypt certificate registration
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to request a Certbot TLS certificate.
+      # Requires DNS pointing to this server before boot — skipped (non-fatal) otherwise.
+      ENABLE_TLS=true
+
+      # SeaTable admin credentials
+      # Leave passwords as CHANGE_ME to auto-generate random values at runtime
+      ADMIN_EMAIL=CHANGE_ME
+      ADMIN_PASS=CHANGE_ME
+
+      # Database credentials (auto-generated if left as CHANGE_ME)
+      DB_ROOT_PASS=CHANGE_ME
+      DB_SEATABLE_PASS=CHANGE_ME
+
+      # SeaTable service bind port (behind nginx; do NOT expose directly)
+      SEATABLE_PORT=8000
+
+      # SeaTable version to install (leave empty for latest)
+      SEATABLE_VERSION=
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/seatable-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/seatable-bootstrap.log) 2>&1
+      source /root/.seatable-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== SeaTable bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${ADMIN_PASS}"       == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+      [[ "${ADMIN_EMAIL}"      == "CHANGE_ME" ]] && ADMIN_EMAIL="admin@${APP_DOMAIN:-localhost}"
+      [[ "${DB_ROOT_PASS}"     == "CHANGE_ME" ]] && DB_ROOT_PASS="$(rand)"
+      [[ "${DB_SEATABLE_PASS}" == "CHANGE_ME" ]] && DB_SEATABLE_PASS="$(rand)"
+
+      export DEBIAN_FRONTEND=noninteractive
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — SSH + nginx protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+
+      [nginx-http-auth]
+      enabled = true
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall — allow only SSH + HTTP + HTTPS
+      # SeaTable itself binds to localhost:8000; nginx proxies 80/443
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'HTTP'
+      ufw allow 443/tcp  comment 'HTTPS'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # MariaDB — secure installation
+      # ----------------------------------------------------------------
+      echo "=== Configuring MariaDB ==="
+      systemctl enable --now mariadb
+
+      # Set root password and remove insecure defaults
+      mysql -u root <<MYSQL_INIT
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost','127.0.0.1','::1');
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      FLUSH PRIVILEGES;
+      MYSQL_INIT
+
+      # Create SeaTable databases and user
+      mysql -u root -p"${DB_ROOT_PASS}" <<MYSQL_SETUP
+      CREATE DATABASE IF NOT EXISTS ccnet_db CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS seafile_db CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS dtable_db CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+      CREATE USER IF NOT EXISTS 'seatable'@'localhost' IDENTIFIED BY '${DB_SEATABLE_PASS}';
+      GRANT ALL PRIVILEGES ON ccnet_db.*   TO 'seatable'@'localhost';
+      GRANT ALL PRIVILEGES ON seafile_db.* TO 'seatable'@'localhost';
+      GRANT ALL PRIVILEGES ON dtable_db.*  TO 'seatable'@'localhost';
+      FLUSH PRIVILEGES;
+      MYSQL_SETUP
+
+      echo "=== MariaDB configured ==="
+
+      # ----------------------------------------------------------------
+      # memcached — bind to localhost only
+      # ----------------------------------------------------------------
+      sed -i 's/^-l .*/-l 127.0.0.1/' /etc/memcached.conf 2>/dev/null || true
+      systemctl enable --now memcached
+
+      # ----------------------------------------------------------------
+      # SeaTable vendor apt repo
+      # # fallback: noble repo until 26.04 published
+      # Repo: https://download.seatable.io/packages/seatable-server/
+      # ----------------------------------------------------------------
+      echo "=== Adding SeaTable apt repository ==="
+      curl -fsSL https://linux.seatable.io/pub.key | gpg --dearmor \
+          -o /usr/share/keyrings/seatable-keyring.gpg
+
+      # Use noble (24.04) repo line as fallback — no 26.04 line yet
+      cat > /etc/apt/sources.list.d/seatable.list <<'SEATABLEREPO'
+      # fallback: noble repo until 26.04 published
+      deb [arch=amd64 signed-by=/usr/share/keyrings/seatable-keyring.gpg] https://linux.seatable.io/ce/ubuntu noble main
+      SEATABLEREPO
+
+      apt-get update -qq
+
+      # ----------------------------------------------------------------
+      # Install SeaTable Community Edition
+      # ----------------------------------------------------------------
+      echo "=== Installing SeaTable CE ==="
+      if [[ -n "${SEATABLE_VERSION:-}" ]]; then
+          apt-get install -y "seatable-server=${SEATABLE_VERSION}"
+      else
+          apt-get install -y seatable-server
+      fi
+
+      # ----------------------------------------------------------------
+      # SeaTable configuration — ccnet.conf, seafile.conf, dtable_web_settings.py
+      # ----------------------------------------------------------------
+      SEATABLE_DIR=/opt/seatable
+      CONF_DIR="${SEATABLE_DIR}/seatable/conf"
+      mkdir -p "${CONF_DIR}"
+
+      SERVER_IP="$(curl -fsSL https://api4.my-ip.io/ip 2>/dev/null || hostname -I | awk '{print $1}')"
+      SERVICE_URL="http://${APP_DOMAIN:-${SERVER_IP}}"
+      [[ "${ENABLE_TLS}" == "true" && "${APP_DOMAIN}" != "CHANGE_ME" ]] && SERVICE_URL="https://${APP_DOMAIN}"
+
+      # ccnet.conf
+      cat > "${CONF_DIR}/ccnet.conf" <<CCNET
+      [General]
+      SERVICE_URL = ${SERVICE_URL}
+
+      [Database]
+      ENGINE = mysql
+      HOST = 127.0.0.1
+      PORT = 3306
+      USER = seatable
+      PASSWD = ${DB_SEATABLE_PASS}
+      DB = ccnet_db
+      CONNECTION_CHARSET = utf8
+      CCNET
+
+      # seafile.conf
+      cat > "${CONF_DIR}/seafile.conf" <<SEAFILE
+      [fileserver]
+      port = 8082
+
+      [database]
+      type = mysql
+      host = 127.0.0.1
+      port = 3306
+      user = seatable
+      password = ${DB_SEATABLE_PASS}
+      db_name = seafile_db
+      connection_charset = utf8
+      SEAFILE
+
+      # dtable_web_settings.py
+      SECRET_KEY="$(rand)$(rand)"
+      cat > "${CONF_DIR}/dtable_web_settings.py" <<DTWEB
+      # SeaTable web settings
+      SECRET_KEY = '${SECRET_KEY}'
+      SERVICE_URL = '${SERVICE_URL}'
+      FILE_SERVER_ROOT = '${SERVICE_URL}/seafhttp'
+
+      DATABASES = {
+          'default': {
+              'ENGINE': 'django.db.backends.mysql',
+              'NAME': 'dtable_db',
+              'USER': 'seatable',
+              'PASSWORD': '${DB_SEATABLE_PASS}',
+              'HOST': '127.0.0.1',
+              'PORT': '3306',
+          }
+      }
+
+      CACHES = {
+          'default': {
+              'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+              'LOCATION': '127.0.0.1:11211',
+          }
+      }
+
+      TIME_ZONE = 'UTC'
+      LANGUAGE_CODE = 'en'
+      SITE_BASE = '${SERVICE_URL}'
+      SITE_NAME = 'SeaTable'
+      SITE_TITLE = 'SeaTable'
+      ENABLE_SIGNUP = False
+      ACTIVATE_AFTER_REGISTRATION = False
+      SEND_EMAIL_ON_ADDING_SYSTEM_MEMBER = False
+      DTWEB
+
+      chmod 600 "${CONF_DIR}/ccnet.conf" "${CONF_DIR}/seafile.conf" "${CONF_DIR}/dtable_web_settings.py"
+
+      # ----------------------------------------------------------------
+      # Ensure seatable runs as www-data
+      # ----------------------------------------------------------------
+      if id seatable &>/dev/null; then
+          usermod -s /bin/false seatable 2>/dev/null || true
+      else
+          useradd --system --no-create-home --shell /bin/false seatable 2>/dev/null || true
+      fi
+      chown -R www-data:www-data "${SEATABLE_DIR}" 2>/dev/null || \
+          chown -R seatable:seatable "${SEATABLE_DIR}" 2>/dev/null || true
+
+      # ----------------------------------------------------------------
+      # Initialise and start SeaTable
+      # ----------------------------------------------------------------
+      echo "=== Initialising SeaTable databases ==="
+      if [[ -f "${SEATABLE_DIR}/seatable/scripts/seatable.sh" ]]; then
+          bash "${SEATABLE_DIR}/seatable/scripts/seatable.sh" init \
+              --seatable-mysql-host=127.0.0.1 \
+              --seatable-mysql-port=3306 \
+              --seatable-mysql-user=seatable \
+              --seatable-mysql-password="${DB_SEATABLE_PASS}" \
+              2>/dev/null || echo "WARN: seatable.sh init may have partially run — continuing"
+      fi
+
+      echo "=== Starting SeaTable services ==="
+      systemctl enable --now seatable 2>/dev/null || \
+          (bash "${SEATABLE_DIR}/seatable/scripts/seatable.sh" start && \
+           echo "WARN: no systemd unit; started via script") || \
+          echo "WARN: seatable start failed — check /var/log/seatable-bootstrap.log"
+
+      # ----------------------------------------------------------------
+      # Create SeaTable admin user
+      # ----------------------------------------------------------------
+      echo "=== Creating admin user ==="
+      MANAGE_PY="${SEATABLE_DIR}/seatable/scripts/seatable.sh"
+      if [[ -f "${MANAGE_PY}" ]]; then
+          bash "${MANAGE_PY}" superuser \
+              "${ADMIN_EMAIL}" "${ADMIN_PASS}" 2>/dev/null || \
+          echo "WARN: could not create admin via seatable.sh superuser — try manually after boot"
+      fi
+
+      # ----------------------------------------------------------------
+      # nginx reverse proxy configuration
+      # ----------------------------------------------------------------
+      echo "=== Configuring nginx ==="
+      NGINX_CONF=/etc/nginx/sites-available/seatable
+      cat > "${NGINX_CONF}" <<NGINXCONF
+      upstream seatable {
+          server 127.0.0.1:8000;
+      }
+
+      server {
+          listen 80;
+          server_name ${APP_DOMAIN:-_};
+
+          client_max_body_size 100M;
+
+          location / {
+              proxy_pass         http://seatable;
+              proxy_set_header   Host              \$host;
+              proxy_set_header   X-Real-IP         \$remote_addr;
+              proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 300s;
+              proxy_connect_timeout 75s;
+          }
+
+          # Seafile file server
+          location /seafhttp {
+              rewrite ^/seafhttp(.*)$ \$1 break;
+              proxy_pass         http://127.0.0.1:8082;
+              proxy_set_header   Host              \$host;
+              proxy_set_header   X-Real-IP         \$remote_addr;
+              proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              client_max_body_size 0;
+              proxy_connect_timeout 36000s;
+              proxy_read_timeout    36000s;
+              proxy_send_timeout    36000s;
+              send_timeout          36000s;
+          }
+
+          # SeaTable static media
+          location /media {
+              root ${SEATABLE_DIR}/seatable;
+          }
+      }
+      NGINXCONF
+
+      ln -sf "${NGINX_CONF}" /etc/nginx/sites-enabled/seatable
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # ----------------------------------------------------------------
+      # Optional Certbot TLS — non-fatal if DNS not yet pointed here
+      # ----------------------------------------------------------------
+      if [[ "${ENABLE_TLS}" == "true" && "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+          certbot --nginx \
+              --non-interactive \
+              --agree-tos \
+              --email "${LE_EMAIL}" \
+              -d "${APP_DOMAIN}" \
+              --redirect \
+              || echo "WARN: certbot deferred — DNS may not point here yet"
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      cat > /root/seatable-credentials.txt <<CREDS
+      ============================================================
+       SeaTable CE — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       URL              : ${SERVICE_URL}
+       Admin email      : ${ADMIN_EMAIL}
+       Admin password   : ${ADMIN_PASS}
+
+       MariaDB root password   : ${DB_ROOT_PASS}
+       MariaDB seatable user   : seatable
+       MariaDB seatable pass   : ${DB_SEATABLE_PASS}
+       Databases               : ccnet_db  seafile_db  dtable_db
+
+       SeaTable config dir     : /opt/seatable/seatable/conf/
+       nginx site config       : /etc/nginx/sites-available/seatable
+       Bootstrap log           : /var/log/seatable-bootstrap.log
+
+       Firewall open ports     : 22 (SSH) | 80 (HTTP) | 443 (HTTPS)
+
+       IMPORTANT: Change the admin password after first login.
+      ============================================================
+      CREDS
+      chmod 600 /root/seatable-credentials.txt
+
+      echo ""
+      echo "=== SeaTable bootstrap complete $(date -u) ==="
+      echo "=== URL         : ${SERVICE_URL}"
+      echo "=== Admin email : ${ADMIN_EMAIL}"
+      echo "=== Admin pass  : ${ADMIN_PASS}"
+      echo "=== Full creds  : /root/seatable-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/seatable-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   SeaTable CE bootstrap complete.
+   URL         : http://YOUR_IP_OR_DOMAIN  (or https:// if TLS enabled)
+   Admin creds : /root/seatable-credentials.txt
+   Log         : /var/log/seatable-bootstrap.log
+  ============================================================

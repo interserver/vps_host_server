@@ -1,0 +1,373 @@
+#cloud-config
+
+hostname: miniconda
+manage_etc_hosts: true
+timezone: UTC
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - git
+  - bzip2
+  - ca-certificates
+  - libglib2.0-0
+  - libxext6
+  - libsm6
+  - libxrender1
+  - build-essential
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - software-properties-common
+  - gnupg
+  - lsb-release
+  - sudo
+  - htop
+  - screen
+  - tmux
+  - jq
+  # NVIDIA driver + CUDA dependencies (GPU plan required)
+  - pciutils
+  - linux-headers-generic
+
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+users:
+  - default
+
+write_files:
+  - path: /root/.miniconda-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # Miniconda Bootstrap — Operator-Editable Variables
+      # GPU plan required: NVIDIA GPU + CUDA + large disk (>=50 GB)
+      # ============================================================
+
+      # Conda environment name to create
+      CONDA_ENV_NAME="ml"
+
+      # Python version for the conda environment
+      PYTHON_VERSION="3.11"
+
+      # Optional: pre-install ML packages into the env (space-separated)
+      # Leave empty to skip; add e.g. "numpy pandas scikit-learn torch"
+      ML_PACKAGES="numpy pandas scikit-learn matplotlib jupyter"
+
+      # NVIDIA / CUDA: set to "true" to install NVIDIA driver + CUDA toolkit
+      INSTALL_NVIDIA=true
+
+      # CUDA version to install via conda (e.g. 12.4, 11.8)
+      CUDA_VERSION="12.4"
+
+      # JupyterLab: set to "true" to install and enable JupyterLab server
+      ENABLE_JUPYTER=true
+
+      # Jupyter port (opened in ufw)
+      JUPYTER_PORT=8888
+
+      # Jupyter password — set to CHANGE_ME to auto-generate a random one
+      JUPYTER_PASS=CHANGE_ME
+
+      # (Optional) TLS via Certbot — requires DNS pointed at this server
+      APP_DOMAIN=
+      LE_EMAIL=
+      ENABLE_TLS=false
+
+  - path: /root/miniconda-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/miniconda-bootstrap.log) 2>&1
+      source /root/.miniconda-bootstrap.env
+
+      echo "=== Miniconda Bootstrap starting at $(date) ==="
+      echo "=== NOTE: GPU plan required for full AI/ML capability ==="
+
+      # ── Helper: generate random secret (SIGPIPE-safe under set -e + pipefail) ──
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # ── Resolve auto-generated secrets ──────────────────────────────────────────
+      if [ "${JUPYTER_PASS}" = "CHANGE_ME" ]; then
+        JUPYTER_PASS="$(rand)"
+      fi
+
+      # ── Automatic security updates ───────────────────────────────────────────────
+      echo "=== Configuring unattended-upgrades ==="
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUEOF
+
+      # ── fail2ban ─────────────────────────────────────────────────────────────────
+      echo "=== Configuring fail2ban ==="
+      cat > /etc/fail2ban/jail.local <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable --now fail2ban
+
+      # ── UFW firewall ─────────────────────────────────────────────────────────────
+      echo "=== Configuring UFW ==="
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      if [ "${ENABLE_JUPYTER}" = "true" ]; then
+        ufw allow "${JUPYTER_PORT}/tcp"
+      fi
+      ufw --force enable
+
+      # ── NVIDIA Driver + CUDA (skip if no GPU detected or INSTALL_NVIDIA=false) ──
+      GPU_DETECTED=false
+      if lspci 2>/dev/null | grep -qi 'NVIDIA\|GeForce\|Quadro\|Tesla'; then
+        GPU_DETECTED=true
+      fi
+
+      if [ "${INSTALL_NVIDIA}" = "true" ] && [ "${GPU_DETECTED}" = "true" ]; then
+        echo "=== Installing NVIDIA driver via ubuntu-drivers ==="
+        apt-get install -y ubuntu-drivers-common
+        ubuntu-drivers autoinstall || echo "WARN: ubuntu-drivers autoinstall failed; reboot may be needed"
+
+        echo "=== Adding CUDA keyring (noble repo — fallback until 26.04 published) ==="
+        CUDA_KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb"
+        TMP_DEB="$(mktemp /tmp/cuda-keyring.XXXXXX.deb)"
+        curl -fsSL "${CUDA_KEYRING_URL}" -o "${TMP_DEB}" || \
+          wget -q "${CUDA_KEYRING_URL}" -O "${TMP_DEB}"
+        dpkg -i "${TMP_DEB}"
+        rm -f "${TMP_DEB}"
+        # fallback: noble repo until 26.04 published
+        apt-get update -y
+        apt-get install -y cuda-toolkit || echo "WARN: cuda-toolkit install failed; check NVIDIA repo compatibility"
+      elif [ "${INSTALL_NVIDIA}" = "true" ] && [ "${GPU_DETECTED}" = "false" ]; then
+        echo "WARN: INSTALL_NVIDIA=true but no NVIDIA GPU detected — skipping driver install"
+        echo "WARN: Ensure this is a GPU-capable VPS plan to use CUDA/ML workloads"
+      fi
+
+      # ── Miniconda installation ────────────────────────────────────────────────────
+      MINICONDA_DIR="/opt/miniconda3"
+      MINICONDA_INSTALLER="/tmp/miniconda-installer.sh"
+
+      if [ ! -d "${MINICONDA_DIR}" ]; then
+        echo "=== Downloading Miniconda3 ==="
+        curl -fsSL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" \
+          -o "${MINICONDA_INSTALLER}" || \
+          wget -q "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" \
+            -O "${MINICONDA_INSTALLER}"
+
+        echo "=== Installing Miniconda3 to ${MINICONDA_DIR} ==="
+        bash "${MINICONDA_INSTALLER}" -b -p "${MINICONDA_DIR}"
+        rm -f "${MINICONDA_INSTALLER}"
+      else
+        echo "Miniconda already installed at ${MINICONDA_DIR}, skipping"
+      fi
+
+      # Make conda available system-wide
+      CONDA_BIN="${MINICONDA_DIR}/bin/conda"
+      ln -sf "${CONDA_BIN}" /usr/local/bin/conda
+      ln -sf "${MINICONDA_DIR}/bin/activate" /usr/local/bin/activate-conda
+
+      # Shell init snippet for all interactive shells
+      if ! grep -q 'miniconda3' /etc/profile.d/conda.sh 2>/dev/null; then
+        "${CONDA_BIN}" init bash
+        cat > /etc/profile.d/conda.sh <<CONDAEOF
+      # Miniconda3 — added by miniconda-bootstrap
+      . "${MINICONDA_DIR}/etc/profile.d/conda.sh"
+      CONDAEOF
+      fi
+
+      # ── Update conda base ─────────────────────────────────────────────────────────
+      echo "=== Updating conda base ==="
+      "${CONDA_BIN}" update -n base -c defaults conda -y
+
+      # ── Create ML conda environment ───────────────────────────────────────────────
+      echo "=== Creating conda environment '${CONDA_ENV_NAME}' (Python ${PYTHON_VERSION}) ==="
+      if ! "${CONDA_BIN}" env list | grep -q "^${CONDA_ENV_NAME} "; then
+        if [ "${INSTALL_NVIDIA}" = "true" ] && [ "${GPU_DETECTED}" = "true" ]; then
+          # Install pytorch with CUDA support via conda-forge
+          "${CONDA_BIN}" create -n "${CONDA_ENV_NAME}" python="${PYTHON_VERSION}" \
+            -c conda-forge -c nvidia -y
+        else
+          "${CONDA_BIN}" create -n "${CONDA_ENV_NAME}" python="${PYTHON_VERSION}" \
+            -c conda-forge -y
+        fi
+      else
+        echo "Conda env '${CONDA_ENV_NAME}' already exists, skipping create"
+      fi
+
+      # ── Install ML packages into the env ─────────────────────────────────────────
+      if [ -n "${ML_PACKAGES}" ]; then
+        echo "=== Installing ML packages: ${ML_PACKAGES} ==="
+        # shellcheck disable=SC2086
+        "${CONDA_BIN}" install -n "${CONDA_ENV_NAME}" -c conda-forge -y ${ML_PACKAGES}
+      fi
+
+      # ── JupyterLab ────────────────────────────────────────────────────────────────
+      JUPYTER_CONFIG_DIR="/root/.jupyter"
+      if [ "${ENABLE_JUPYTER}" = "true" ]; then
+        echo "=== Installing JupyterLab ==="
+        "${CONDA_BIN}" install -n "${CONDA_ENV_NAME}" -c conda-forge jupyterlab notebook -y
+
+        JUPYTER_BIN="${MINICONDA_DIR}/envs/${CONDA_ENV_NAME}/bin/jupyter"
+
+        # Generate hashed password
+        JUPYTER_PASS_HASH="$("${MINICONDA_DIR}/envs/${CONDA_ENV_NAME}/bin/python" -c \
+          "from jupyter_server.auth import passwd; print(passwd('${JUPYTER_PASS}'))" \
+          2>/dev/null || \
+          "${MINICONDA_DIR}/envs/${CONDA_ENV_NAME}/bin/python" -c \
+          "from notebook.auth import passwd; print(passwd('${JUPYTER_PASS}'))")"
+
+        mkdir -p "${JUPYTER_CONFIG_DIR}"
+        cat > "${JUPYTER_CONFIG_DIR}/jupyter_server_config.py" <<JSCEOF
+      c.ServerApp.ip = '0.0.0.0'
+      c.ServerApp.port = ${JUPYTER_PORT}
+      c.ServerApp.open_browser = False
+      c.ServerApp.password = '${JUPYTER_PASS_HASH}'
+      c.ServerApp.allow_root = True
+      c.ServerApp.root_dir = '/root'
+      JSCEOF
+
+        # Also write notebook config for compatibility
+        cat > "${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py" <<JNCEOF
+      c.NotebookApp.ip = '0.0.0.0'
+      c.NotebookApp.port = ${JUPYTER_PORT}
+      c.NotebookApp.open_browser = False
+      c.NotebookApp.password = '${JUPYTER_PASS_HASH}'
+      c.NotebookApp.allow_root = True
+      JNCEOF
+
+        # systemd service for JupyterLab
+        cat > /etc/systemd/system/jupyterlab.service <<SVCEOF
+      [Unit]
+      Description=JupyterLab Server (conda env: ${CONDA_ENV_NAME})
+      After=network.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/root
+      Environment="PATH=${MINICONDA_DIR}/envs/${CONDA_ENV_NAME}/bin:${MINICONDA_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      ExecStart=${MINICONDA_DIR}/envs/${CONDA_ENV_NAME}/bin/jupyter lab \
+          --config=${JUPYTER_CONFIG_DIR}/jupyter_server_config.py \
+          --no-browser --ip=0.0.0.0 --port=${JUPYTER_PORT}
+      Restart=on-failure
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCEOF
+
+        systemctl daemon-reload
+        systemctl enable --now jupyterlab
+      fi
+
+      # ── Optional TLS via Certbot ──────────────────────────────────────────────────
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ] && [ -n "${LE_EMAIL}" ]; then
+        echo "=== Installing Certbot (snap) ==="
+        snap install core 2>/dev/null; snap refresh core 2>/dev/null || true
+        snap install --classic certbot 2>/dev/null || apt-get install -y certbot
+        ln -sf /snap/bin/certbot /usr/local/bin/certbot 2>/dev/null || true
+
+        echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+        certbot certonly --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --pre-hook  "systemctl stop jupyterlab 2>/dev/null || true" \
+          --post-hook "systemctl start jupyterlab 2>/dev/null || true" \
+          || echo "WARN: certbot deferred — point DNS to this IP before retrying"
+
+        # Certbot renewal timer
+        systemctl enable --now snap.certbot.renew.timer 2>/dev/null || \
+          systemctl enable --now certbot.timer 2>/dev/null || true
+      fi
+
+      # ── Write credentials file ────────────────────────────────────────────────────
+      SERVER_IP="$(curl -sf https://checkip.amazonaws.com 2>/dev/null || hostname -I | awk '{print $1}')"
+      CRED_FILE="/root/miniconda-credentials.txt"
+      cat > "${CRED_FILE}" <<CREDEOF
+      ================================================================
+      Miniconda One-Click App — Credentials
+      Generated: $(date -u)
+      ================================================================
+
+      IMPORTANT: GPU plan required for CUDA/ML workloads.
+      Recommended disk: >= 50 GB (conda envs + datasets can be large).
+
+      Miniconda install path : ${MINICONDA_DIR}
+      Conda environment      : ${CONDA_ENV_NAME}  (Python ${PYTHON_VERSION})
+      Activate env           : source /opt/miniconda3/etc/profile.d/conda.sh && conda activate ${CONDA_ENV_NAME}
+
+      CREDEOF
+
+      if [ "${ENABLE_JUPYTER}" = "true" ]; then
+        cat >> "${CRED_FILE}" <<CREDEOF
+      JupyterLab URL         : http://${SERVER_IP}:${JUPYTER_PORT}
+      JupyterLab Password    : ${JUPYTER_PASS}
+      JupyterLab service     : systemctl status jupyterlab
+
+      CREDEOF
+      fi
+
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ]; then
+        cat >> "${CRED_FILE}" <<CREDEOF
+      TLS Domain             : ${APP_DOMAIN}
+      Let's Encrypt email    : ${LE_EMAIL}
+
+      CREDEOF
+      fi
+
+      if [ "${INSTALL_NVIDIA}" = "true" ] && [ "${GPU_DETECTED}" = "true" ]; then
+        CUDA_VER="$(nvcc --version 2>/dev/null | grep 'release' | awk '{print $6}' | tr -d ',' || echo 'see /usr/local/cuda/version.txt')"
+        cat >> "${CRED_FILE}" <<CREDEOF
+      NVIDIA GPU detected    : yes
+      CUDA version           : ${CUDA_VER}
+      Check GPU              : nvidia-smi
+
+      CREDEOF
+      fi
+
+      cat >> "${CRED_FILE}" <<CREDEOF
+      Log file               : /var/log/miniconda-bootstrap.log
+      ================================================================
+      CREDEOF
+
+      chmod 600 "${CRED_FILE}"
+      echo "=== Credentials written to ${CRED_FILE} ==="
+      echo "=== Miniconda Bootstrap COMPLETE at $(date) ==="
+
+runcmd:
+  - [ bash, -lc, "/root/miniconda-bootstrap.sh" ]
+
+final_message: |
+  =============================================================
+  Miniconda one-click app is ready!
+  * Credentials: /root/miniconda-credentials.txt
+  * Bootstrap log: /var/log/miniconda-bootstrap.log
+  * GPU/CUDA note: this app requires a GPU VPS plan with
+    NVIDIA hardware for full AI/ML capability.
+  * Conda env activation: source /opt/miniconda3/etc/profile.d/conda.sh
+    then: conda activate ml
+  * JupyterLab (if enabled): http://<SERVER_IP>:8888
+  =============================================================

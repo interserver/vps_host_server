@@ -1,0 +1,290 @@
+#cloud-config
+hostname: odoo
+manage_etc_hosts: true
+timezone: UTC
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - python3
+  - python3-pip
+  - python3-dev
+  - python3-venv
+  - libxml2-dev
+  - libxslt1-dev
+  - libldap2-dev
+  - libsasl2-dev
+  - libjpeg-dev
+  - libpq-dev
+  - build-essential
+  - node-less
+  - npm
+  - xfonts-75dpi
+  - xfonts-base
+  - postgresql
+  - postgresql-client
+  - git
+
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+users:
+  - default
+
+write_files:
+  - path: /root/.odoo-bootstrap.env
+    permissions: '0600'
+    content: |
+      # Operator-editable variables — change these before first boot or
+      # re-run /root/odoo-bootstrap.sh after editing.
+      APP_DOMAIN=odoo.example.com
+      LE_EMAIL=admin@example.com
+      ENABLE_TLS=true
+      ADMIN_PASS=CHANGE_ME
+      DB_PASS=CHANGE_ME
+      ODOO_VERSION=17
+
+  - path: /root/odoo-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/odoo-bootstrap.log) 2>&1
+      source /root/.odoo-bootstrap.env
+
+      # ── helpers ────────────────────────────────────────────────────────────
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "[odoo-bootstrap] starting at $(date -u)"
+
+      # ── resolve secrets ────────────────────────────────────────────────────
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+      fi
+      if [ "${DB_PASS}" = "CHANGE_ME" ]; then
+        DB_PASS="$(rand)"
+      fi
+
+      # ── system packages already installed by cloud-init packages: block ────
+      # Install wkhtmltopdf (PDF rendering) — grab the noble deb if no 26.04 build yet
+      if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+        WKHTML_DEB="wkhtmltox_0.12.6.1-3.jammy_amd64.deb"
+        WKHTML_URL="https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/${WKHTML_DEB}"
+        wget -q -O "/tmp/${WKHTML_DEB}" "${WKHTML_URL}"
+        dpkg -i "/tmp/${WKHTML_DEB}" || apt-get install -f -y
+        rm -f "/tmp/${WKHTML_DEB}"
+      fi
+
+      # ── Odoo apt repository ────────────────────────────────────────────────
+      # fallback: noble repo until 26.04 published
+      if [ ! -f /etc/apt/sources.list.d/odoo.list ]; then
+        curl -fsSL https://nightly.odoo.com/odoo.key \
+          | gpg --dearmor -o /usr/share/keyrings/odoo-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/odoo-keyring.gpg] https://nightly.odoo.com/${ODOO_VERSION}.0/nightly/deb/ ./" \
+          > /etc/apt/sources.list.d/odoo.list
+        apt-get update -qq
+      fi
+
+      if ! command -v odoo >/dev/null 2>&1; then
+        apt-get install -y odoo
+      fi
+
+      # ── PostgreSQL user + database ─────────────────────────────────────────
+      # Odoo uses its own Linux system user (created by the package) as PG role
+      if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='odoo'" | grep -q 1; then
+        sudo -u postgres psql -c "CREATE ROLE odoo WITH LOGIN PASSWORD '${DB_PASS}' CREATEDB;"
+      fi
+
+      # ── Odoo configuration ─────────────────────────────────────────────────
+      mkdir -p /etc/odoo
+      cat > /etc/odoo/odoo.conf <<EOF
+      [options]
+      admin_passwd = ${ADMIN_PASS}
+      db_host = False
+      db_port = False
+      db_user = odoo
+      db_password = ${DB_PASS}
+      addons_path = /usr/lib/python3/dist-packages/odoo/addons
+      logfile = /var/log/odoo/odoo.log
+      log_level = warn
+      xmlrpc_port = 8069
+      proxy_mode = True
+      EOF
+
+      chown odoo:odoo /etc/odoo/odoo.conf
+      chmod 640 /etc/odoo/odoo.conf
+
+      # ── log directory ──────────────────────────────────────────────────────
+      mkdir -p /var/log/odoo
+      chown odoo:odoo /var/log/odoo
+
+      # ── enable + start Odoo ────────────────────────────────────────────────
+      systemctl enable odoo
+      systemctl restart odoo
+
+      # ── Nginx reverse proxy ────────────────────────────────────────────────
+      cat > /etc/nginx/sites-available/odoo <<'NGINXCONF'
+      upstream odoo_backend {
+          server 127.0.0.1:8069;
+      }
+      upstream odoo_longpoll {
+          server 127.0.0.1:8072;
+      }
+
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name _;
+
+          # Proxy headers
+          proxy_set_header X-Forwarded-Host $host;
+          proxy_set_header X-Forwarded-For  $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Real-IP $remote_addr;
+
+          # Buffer settings
+          proxy_buffers 16 64k;
+          proxy_buffer_size 128k;
+          proxy_read_timeout 720s;
+          proxy_connect_timeout 720s;
+          proxy_send_timeout 720s;
+
+          # Gzip
+          gzip on;
+          gzip_types text/css text/less text/plain text/xml application/xml application/json application/javascript;
+
+          # Static files served by Nginx
+          location ~* /web/static/ {
+              proxy_cache_valid 200 90m;
+              proxy_buffering on;
+              expires 864000;
+              proxy_pass http://odoo_backend;
+          }
+
+          # Longpolling
+          location /longpolling {
+              proxy_pass http://odoo_longpoll;
+          }
+
+          # All other requests
+          location / {
+              proxy_redirect off;
+              proxy_pass http://odoo_backend;
+          }
+
+          # Increase upload size
+          client_max_body_size 100m;
+      }
+      NGINXCONF
+
+      rm -f /etc/nginx/sites-enabled/default
+      ln -sf /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/odoo
+      nginx -t
+      systemctl enable nginx
+      systemctl restart nginx
+
+      # ── TLS via Certbot ────────────────────────────────────────────────────
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ] && [ "${APP_DOMAIN}" != "odoo.example.com" ]; then
+        certbot --nginx \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          --domains "${APP_DOMAIN}" \
+          --redirect \
+          || echo "WARN: certbot deferred — DNS may not be pointed yet"
+      else
+        echo "WARN: certbot deferred — set APP_DOMAIN and ENABLE_TLS=true then re-run certbot manually"
+      fi
+
+      # ── Firewall ───────────────────────────────────────────────────────────
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw --force enable
+
+      # ── fail2ban ───────────────────────────────────────────────────────────
+      cat > /etc/fail2ban/jail.d/odoo.conf <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      filter  = sshd
+      logpath = /var/log/auth.log
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      logpath  = /var/log/nginx/error.log
+      F2B
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # ── automatic security updates ─────────────────────────────────────────
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades-odoo <<'UNATT'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UNATT
+
+      cat > /etc/apt/apt.conf.d/20auto-upgrades-odoo <<'AUTOUPG'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      AUTOUPG
+
+      systemctl enable unattended-upgrades
+      systemctl restart unattended-upgrades
+
+      # ── credentials file ───────────────────────────────────────────────────
+      PROTO="http"
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN}" != "odoo.example.com" ]; then
+        PROTO="https"
+      fi
+
+      cat > /root/odoo-credentials.txt <<CREDS
+      # Odoo Credentials — $(date -u)
+      URL:            ${PROTO}://${APP_DOMAIN}
+      Odoo Master PW: ${ADMIN_PASS}
+      DB Role:        odoo
+      DB Password:    ${DB_PASS}
+      Config file:    /etc/odoo/odoo.conf
+      Log file:       /var/log/odoo/odoo.log
+      Bootstrap log:  /var/log/odoo-bootstrap.log
+      CREDS
+      chmod 600 /root/odoo-credentials.txt
+
+      echo "[odoo-bootstrap] complete at $(date -u)"
+      echo "[odoo-bootstrap] credentials saved to /root/odoo-credentials.txt"
+
+runcmd:
+  - [ bash, -lc, "/root/odoo-bootstrap.sh" ]
+
+final_message: |
+  Odoo bootstrap complete. SSH in as root and read /root/odoo-credentials.txt
+  for the admin password and database credentials.
+  If TLS was deferred, point your DNS A record to this server's IP then run:
+    certbot --nginx --non-interactive --agree-tos --email <EMAIL> --domains <DOMAIN> --redirect

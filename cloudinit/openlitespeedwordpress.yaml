@@ -1,0 +1,554 @@
+#cloud-config
+# =============================================================================
+# OpenLiteSpeed WordPress "one-click app" — Ubuntu 26.04 LTS cloud-init
+# Stack: OpenLiteSpeed + LSPHP + MariaDB + WP-CLI + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.openlitespeedwordpress-bootstrap.env
+# before launching, OR inject them via your provisioner.
+# Passwords are randomised per-boot when left as CHANGE_ME.
+# =============================================================================
+
+hostname: openlitespeedwordpress
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve default (provisioner injects customer SSH key + hostname)
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# NOTE: OpenLiteSpeed and LSPHP are installed from the OpenLiteSpeed repo
+#       inside the bootstrap script (no native Ubuntu 26.04 package yet).
+#       The packages below are apt-available prerequisites.
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - mariadb-server
+  - mariadb-client
+  - certbot
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - wget
+  - git
+  - htop
+  - software-properties-common
+  - gnupg2
+  - lsb-release
+  - ca-certificates
+  - cron
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive OLS + MariaDB memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable bootstrap variables ---------------------------------
+  - path: /root/.openlitespeedwordpress-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE -----
+      APP_DOMAIN="example.com"          # primary domain (no scheme)
+      APP_DOMAIN_WWW="www.example.com"  # www alias (set empty to skip)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (e.g. DNS not pointed yet)
+
+      WP_TITLE="My WordPress Site"
+      WP_ADMIN_USER="siteadmin"
+      WP_ADMIN_EMAIL="admin@example.com"
+
+      # DB creds — randomised on first boot if left as CHANGE_ME
+      WP_DB_NAME="wordpress"
+      WP_DB_USER="wp_user"
+      WP_DB_PASS="CHANGE_ME"
+      WP_ADMIN_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      # OpenLiteSpeed WebAdmin console credentials (port 7080)
+      OLS_ADMIN_USER="admin"
+      OLS_ADMIN_PASS="CHANGE_ME"
+
+      WP_PATH="/var/www/wordpress"
+
+      # LSPHP major version to install (lsphp84 for PHP 8.4)
+      LSPHP_VER="lsphp84"
+
+  # --- fail2ban configuration ------------------------------------------------
+  - path: /etc/fail2ban/jail.d/openlitespeedwordpress.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime  = 1h
+
+      [nginx-http-auth]
+      enabled  = false
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/openlitespeedwordpress-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openlitespeedwordpress-bootstrap.log) 2>&1
+      source /root/.openlitespeedwordpress-bootstrap.env
+
+      echo "=== OpenLiteSpeed WordPress bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret generator ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- randomise any CHANGE_ME passwords ---
+      [ "$WP_DB_PASS"      = "CHANGE_ME" ] && WP_DB_PASS="$(rand)"
+      [ "$WP_ADMIN_PASS"   = "CHANGE_ME" ] && WP_ADMIN_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+      [ "$OLS_ADMIN_PASS"  = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. Add OpenLiteSpeed repository
+      #    fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if [ ! -f /etc/apt/sources.list.d/openlitespeed.list ]; then
+        wget -qO /tmp/openlitespeed.pub https://repo.litespeed.sh
+        # The official install script sets up the repo automatically
+        bash /tmp/openlitespeed.pub || true
+
+        # If the above script did not create a sources file, add manually
+        if [ ! -f /etc/apt/sources.list.d/openlitespeed.list ] && \
+           [ ! -f /etc/apt/sources.list.d/litespeed.list ]; then
+          wget -qO /usr/share/keyrings/openlitespeed.asc \
+            https://repo.litespeed.sh/openlitespeed.asc 2>/dev/null || \
+          curl -fsSL https://openlitespeed.org/public/OpenLiteSpeedKey.asc \
+            -o /usr/share/keyrings/openlitespeed.asc
+          # fallback: noble repo until 26.04 published
+          echo "deb [signed-by=/usr/share/keyrings/openlitespeed.asc] https://repo.litespeed.sh noble main" \
+            > /etc/apt/sources.list.d/openlitespeed.list
+        fi
+        apt-get update -qq
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. Install OpenLiteSpeed + LSPHP
+      # -----------------------------------------------------------------------
+      command -v lshttpd >/dev/null 2>&1 || apt-get install -y openlitespeed
+      command -v /usr/local/lsws/lsphp84/bin/php >/dev/null 2>&1 || \
+        apt-get install -y \
+          "${LSPHP_VER}" \
+          "${LSPHP_VER}-common" \
+          "${LSPHP_VER}-mysql" \
+          "${LSPHP_VER}-opcache" \
+          "${LSPHP_VER}-curl" \
+          "${LSPHP_VER}-gd" \
+          "${LSPHP_VER}-mbstring" \
+          "${LSPHP_VER}-xml" \
+          "${LSPHP_VER}-zip" \
+          "${LSPHP_VER}-intl" \
+          "${LSPHP_VER}-imagick" \
+          "${LSPHP_VER}-bcmath" || true
+
+      # Derive the PHP binary path from LSPHP_VER (e.g. lsphp84 -> 8.4)
+      LSPHP_NUM="${LSPHP_VER#lsphp}"                         # e.g. 84
+      LSPHP_MAJOR="${LSPHP_NUM:0:1}"                          # e.g. 8
+      LSPHP_MINOR="${LSPHP_NUM:1}"                            # e.g. 4
+      LSPHP_DOTVER="${LSPHP_MAJOR}.${LSPHP_MINOR}"           # e.g. 8.4
+      PHP_BIN="/usr/local/lsws/${LSPHP_VER}/bin/php"
+      # Fallback to system php if LSPHP binary not installed
+      if [ ! -x "$PHP_BIN" ]; then
+        PHP_BIN="$(command -v php || true)"
+      fi
+      echo "PHP binary: ${PHP_BIN}"
+
+      # Create a convenience symlink so WP-CLI can use lsphp
+      ln -sf "$PHP_BIN" /usr/local/bin/php 2>/dev/null || true
+
+      # -----------------------------------------------------------------------
+      # 3. Configure LSPHP for WordPress
+      # -----------------------------------------------------------------------
+      LSPHP_INI_DIR="/usr/local/lsws/${LSPHP_VER}/etc/php/${LSPHP_DOTVER}"
+      for INI_FILE in \
+          "${LSPHP_INI_DIR}/litespeed/php.ini" \
+          "${LSPHP_INI_DIR}/fpm/php.ini" \
+          "/etc/php/${LSPHP_DOTVER}/litespeed/php.ini" \
+          "/etc/php/${LSPHP_DOTVER}/fpm/php.ini"; do
+        if [ -f "$INI_FILE" ]; then
+          sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 64M/'  "$INI_FILE"
+          sed -ri 's/^;?post_max_size.*/post_max_size = 64M/'               "$INI_FILE"
+          sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'                "$INI_FILE"
+          sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'     "$INI_FILE"
+          sed -ri 's/^;?max_input_vars.*/max_input_vars = 3000/'            "$INI_FILE"
+          sed -ri 's/^;?opcache\.enable[^_].*/opcache.enable=1/'            "$INI_FILE"
+          sed -ri 's/^;?opcache\.memory_consumption.*/opcache.memory_consumption=128/' "$INI_FILE"
+          echo "Tuned PHP ini: $INI_FILE"
+          break
+        fi
+      done
+
+      # -----------------------------------------------------------------------
+      # 4. Configure OpenLiteSpeed admin password
+      # -----------------------------------------------------------------------
+      OLS_HTPASSWD="/usr/local/lsws/admin/conf/htpasswd"
+      if [ -f "$OLS_HTPASSWD" ] || [ -d "$(dirname "$OLS_HTPASSWD")" ]; then
+        OLS_PASS_HASH="$(/usr/local/lsws/admin/fcgi-bin/admin_php* -q \
+          /usr/local/lsws/admin/misc/htpasswd.php "$OLS_ADMIN_PASS" 2>/dev/null || \
+          python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1],crypt.mksalt(crypt.METHOD_SHA512)))" \
+          "$OLS_ADMIN_PASS" 2>/dev/null || echo "$OLS_ADMIN_PASS")"
+        echo "${OLS_ADMIN_USER}:${OLS_PASS_HASH}" > "$OLS_HTPASSWD"
+        echo "OLS admin password set."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 5. Configure OpenLiteSpeed vhost for WordPress
+      # -----------------------------------------------------------------------
+      OLS_CONF_DIR="/usr/local/lsws/conf"
+      OLS_VHOST_DIR="${OLS_CONF_DIR}/vhosts/wordpress"
+      mkdir -p "$OLS_VHOST_DIR"
+      mkdir -p "$WP_PATH"
+      mkdir -p "${OLS_VHOST_DIR}/logs"
+
+      # Virtual host config
+      cat > "${OLS_VHOST_DIR}/vhconf.conf" <<'OLSVHOST'
+      docRoot                   $VH_ROOT/html
+      enableGzip                1
+      enableBr                  1
+
+      index  {
+        useServer               0
+        indexFiles              index.php, index.html
+      }
+
+      errorlog  {
+        useServer               0
+        fileName                $VH_ROOT/logs/error.log
+        logLevel                ERROR
+        rollingSize             10M
+      }
+
+      accesslog  {
+        useServer               0
+        fileName                $VH_ROOT/logs/access.log
+        rollingSize             10M
+        keepDays                7
+      }
+
+      scripthandler  {
+        add                     lsapi:$VH_NAME  php
+      }
+
+      extprocessor $VH_NAME {
+        type                    lsapi
+        address                 uds://tmp/lshttpd/$VH_NAME.sock
+        maxConns                35
+        env                     PHP_LSAPI_CHILDREN=35
+        initTimeout             60
+        retryTimeout            0
+        persistConn             1
+        respBuffer              0
+        autoStart               1
+        path                    PHP_BIN_PLACEHOLDER
+        backlog                 100
+        instances               1
+        runOnStartUp            2
+        priority                0
+        memSoftLimit            2047M
+        memHardLimit            2047M
+        procSoftLimit           400
+        procHardLimit           500
+      }
+
+      rewrite  {
+        enable                  1
+        autoLoadHtaccess        1
+        rules                   <<<END_OF_RULE
+        RewriteRule .* - [E=noabort:1]
+        END_OF_RULE
+      }
+
+      # WordPress .htaccess rewrite (fallback if autoLoadHtaccess fails)
+      context / {
+        allowBrowse             1
+        rewrite  {
+          enable                1
+          inherit               0
+          rules                 <<<END_OF_RULE
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteRule . /index.php [L]
+          END_OF_RULE
+        }
+      }
+
+      # Security: block sensitive paths
+      context /wp-content/uploads {
+        allowBrowse             1
+        rewrite  {
+          enable                1
+          rules                 <<<END_OF_RULE
+          RewriteRule \.php$ - [F]
+          END_OF_RULE
+        }
+      }
+
+      # Deny XML-RPC
+      context /xmlrpc.php {
+        allowBrowse             0
+      }
+      OLSVHOST
+
+      # Replace PHP_BIN_PLACEHOLDER with actual path
+      sed -i "s|PHP_BIN_PLACEHOLDER|${PHP_BIN}|g" "${OLS_VHOST_DIR}/vhconf.conf"
+
+      # Create the docroot symlink to WP_PATH
+      mkdir -p "${OLS_VHOST_DIR}/html"
+      # We'll symlink OLS vhost html to WP_PATH after WP install
+
+      # -----------------------------------------------------------------------
+      # 6. Add vhost to OLS httpd_config.conf (idempotent)
+      # -----------------------------------------------------------------------
+      OLS_HTTP_CONF="${OLS_CONF_DIR}/httpd_config.conf"
+      if [ -f "$OLS_HTTP_CONF" ] && ! grep -q "virtualhost wordpress" "$OLS_HTTP_CONF"; then
+        cat >> "$OLS_HTTP_CONF" <<OLSMAIN
+
+      virtualhost wordpress {
+        vhRoot                  /usr/local/lsws/conf/vhosts/wordpress
+        configFile              \$SERVER_ROOT/conf/vhosts/wordpress/vhconf.conf
+        allowSymbolLink         1
+        enableScript            1
+        restrained              0
+        setUIDMode              2
+      }
+
+      listener HTTP {
+        address                 *:80
+        secure                  0
+        map                     wordpress *
+      }
+
+      listener HTTPS {
+        address                 *:443
+        secure                  1
+        keyFile                 /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem
+        certFile                /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem
+        map                     wordpress *
+      }
+      OLSMAIN
+        echo "Vhost appended to OLS httpd_config.conf"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. Secure MariaDB + create WordPress database
+      # -----------------------------------------------------------------------
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${WP_DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${WP_DB_NAME}\`.* TO '${WP_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # -----------------------------------------------------------------------
+      # 8. Install WP-CLI
+      # -----------------------------------------------------------------------
+      if ! command -v wp >/dev/null 2>&1; then
+        curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+          -o /usr/local/bin/wp
+        chmod +x /usr/local/bin/wp
+      fi
+
+      # -----------------------------------------------------------------------
+      # 9. Download + configure + install WordPress
+      # -----------------------------------------------------------------------
+      mkdir -p "$WP_PATH"
+      chown -R www-data:www-data "$WP_PATH"
+
+      wp --allow-root --path="$WP_PATH" core download --force
+      wp --allow-root --path="$WP_PATH" config create \
+          --dbname="$WP_DB_NAME" \
+          --dbuser="$WP_DB_USER" \
+          --dbpass="$WP_DB_PASS" \
+          --dbhost="localhost" \
+          --dbcharset="utf8mb4" \
+          --skip-check
+
+      # WordPress hardening constants
+      wp --allow-root --path="$WP_PATH" config set WP_AUTO_UPDATE_CORE minor
+      wp --allow-root --path="$WP_PATH" config set DISALLOW_FILE_EDIT true --raw
+      wp --allow-root --path="$WP_PATH" config set FS_METHOD direct
+
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      wp --allow-root --path="$WP_PATH" core install \
+          --url="${PROTO}://${APP_DOMAIN}" \
+          --title="$WP_TITLE" \
+          --admin_user="$WP_ADMIN_USER" \
+          --admin_password="$WP_ADMIN_PASS" \
+          --admin_email="$WP_ADMIN_EMAIL" \
+          --skip-email
+
+      # Pretty permalinks
+      wp --allow-root --path="$WP_PATH" rewrite structure '/%postname%/'
+      wp --allow-root --path="$WP_PATH" option update blog_public 1
+
+      # LiteSpeed Cache plugin (optimised for OLS)
+      wp --allow-root --path="$WP_PATH" plugin install litespeed-cache --activate || true
+
+      chown -R www-data:www-data "$WP_PATH"
+      find "$WP_PATH" -type d -exec chmod 755 {} \;
+      find "$WP_PATH" -type f -exec chmod 644 {} \;
+      chmod 600 "${WP_PATH}/wp-config.php"
+
+      # Point OLS vhost html dir at WP install
+      rm -rf "${OLS_VHOST_DIR}/html"
+      ln -sfn "$WP_PATH" "${OLS_VHOST_DIR}/html"
+
+      # -----------------------------------------------------------------------
+      # 10. Add WordPress .htaccess for OLS rewrite
+      # -----------------------------------------------------------------------
+      if [ ! -f "${WP_PATH}/.htaccess" ]; then
+        cat > "${WP_PATH}/.htaccess" <<'HTACCESS'
+      # BEGIN WordPress
+      <IfModule mod_rewrite.c>
+      RewriteEngine On
+      RewriteBase /
+      RewriteRule ^index\.php$ - [L]
+      RewriteCond %{REQUEST_FILENAME} !-f
+      RewriteCond %{REQUEST_FILENAME} !-d
+      RewriteRule . /index.php [L]
+      </IfModule>
+      # END WordPress
+      HTACCESS
+        chown www-data:www-data "${WP_PATH}/.htaccess"
+        chmod 644 "${WP_PATH}/.htaccess"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 11. Start / reload OpenLiteSpeed
+      # -----------------------------------------------------------------------
+      systemctl enable --now lsws 2>/dev/null || \
+        systemctl enable --now openlitespeed 2>/dev/null || \
+        /usr/local/lsws/bin/lswsctrl start || true
+
+      # Grace-reload so vhost config is picked up
+      /usr/local/lsws/bin/lswsctrl restart || true
+
+      # -----------------------------------------------------------------------
+      # 12. Firewall
+      # -----------------------------------------------------------------------
+      ufw allow OpenSSH
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw allow 7080/tcp   # OLS WebAdmin console
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 13. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 14. TLS via Let's Encrypt (certbot standalone or webroot)
+      #     OLS does not have a native certbot plugin — use webroot or standalone
+      # -----------------------------------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        CERTBOT_DOMAINS="-d ${APP_DOMAIN}"
+        [ -n "$APP_DOMAIN_WWW" ] && CERTBOT_DOMAINS="${CERTBOT_DOMAINS} -d ${APP_DOMAIN_WWW}"
+
+        # Use webroot authenticator since OLS is already listening on port 80
+        certbot certonly --webroot \
+            --webroot-path="$WP_PATH" \
+            --non-interactive --agree-tos \
+            -m "$LE_EMAIL" \
+            $CERTBOT_DOMAINS \
+            || echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot certonly --webroot --webroot-path=${WP_PATH} -m ${LE_EMAIL} -d ${APP_DOMAIN}"
+
+        # If cert obtained, patch the OLS HTTPS listener cert paths and reload
+        if [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
+          if grep -q "certFile" "${OLS_HTTP_CONF}" 2>/dev/null; then
+            sed -i "s|certFile.*|certFile                /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem|" \
+              "$OLS_HTTP_CONF" || true
+            sed -i "s|keyFile.*|keyFile                 /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem|" \
+              "$OLS_HTTP_CONF" || true
+            /usr/local/lsws/bin/lswsctrl restart || true
+          fi
+          # Update WP siteurl/home to https
+          wp --allow-root --path="$WP_PATH" option update siteurl "https://${APP_DOMAIN}"
+          wp --allow-root --path="$WP_PATH" option update home "https://${APP_DOMAIN}"
+        fi
+
+        # Certbot auto-renewal cron (certbot installs its own timer, but ensure it)
+        command -v certbot >/dev/null 2>&1 && \
+          echo "0 3 * * * root certbot renew --quiet --post-hook '/usr/local/lsws/bin/lswsctrl restart'" \
+          > /etc/cron.d/certbot-ols-renew || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 15. Write operator credentials summary
+      # -----------------------------------------------------------------------
+      cat > /root/openlitespeedwordpress-credentials.txt <<CREDS
+      ===== OpenLiteSpeed WordPress install complete: $(date) =====
+
+      WordPress Site URL:       ${PROTO}://${APP_DOMAIN}
+      WordPress Admin URL:      ${PROTO}://${APP_DOMAIN}/wp-admin/
+      WordPress Admin User:     ${WP_ADMIN_USER}
+      WordPress Admin Password: ${WP_ADMIN_PASS}
+      WordPress Admin Email:    ${WP_ADMIN_EMAIL}
+
+      OLS WebAdmin URL:         https://$(hostname -I | awk '{print $1}'):7080/
+      OLS WebAdmin User:        ${OLS_ADMIN_USER}
+      OLS WebAdmin Password:    ${OLS_ADMIN_PASS}
+
+      MariaDB name:             ${WP_DB_NAME}
+      MariaDB user:             ${WP_DB_USER}
+      MariaDB password:         ${WP_DB_PASS}
+      MariaDB root password:    ${MYSQL_ROOT_PASS}
+
+      WordPress path:           ${WP_PATH}
+      Bootstrap log:            /var/log/openlitespeedwordpress-bootstrap.log
+      CREDS
+      chmod 600 /root/openlitespeedwordpress-credentials.txt
+
+      echo "=== Bootstrap finished: $(date). Credentials: /root/openlitespeedwordpress-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openlitespeedwordpress-bootstrap.sh" ]
+
+final_message: "OpenLiteSpeed WordPress bootstrap done after $UPTIME s. See /root/openlitespeedwordpress-credentials.txt and /var/log/openlitespeedwordpress-bootstrap.log"

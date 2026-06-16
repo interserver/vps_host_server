@@ -1,0 +1,391 @@
+#cloud-config
+# =============================================================================
+# ComfyUI — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NVIDIA driver + CUDA toolkit + Python venv + ComfyUI + systemd
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# REQUIRES: a KVM VPS plan with a dedicated NVIDIA GPU and ≥ 40 GB disk.
+# Without a real GPU this image will install but ComfyUI will run on CPU only
+# (significantly slower).
+#
+# EDIT the variables in the `write_files` -> /root/.comfyui-bootstrap.env block
+# before launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: comfyui
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep default so provisioner can inject customer SSH key + hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 G helps during pip installs / model loads on memory-constrained VMs
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+
+packages:
+  # Core utilities
+  - curl
+  - wget
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  # Security
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  # Build tools needed for some Python wheels
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - libffi-dev
+  # Python
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  # GPU / CUDA helpers
+  - pciutils
+  - ocl-icd-opencl-dev
+  # Nginx (optional reverse proxy / health endpoint)
+  - nginx
+  # Certbot (LE TLS)
+  - certbot
+  - python3-certbot-nginx
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.comfyui-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # ComfyUI bootstrap configuration — edit before first boot
+      # -----------------------------------------------------------------------
+
+      # Domain pointing at this server (leave blank to skip TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS setup (requires APP_DOMAIN DNS)
+      ENABLE_TLS=false
+
+      # Port ComfyUI listens on (internal; nginx proxies to this)
+      COMFYUI_PORT=8188
+
+      # Linux user that owns and runs the ComfyUI service
+      COMFYUI_USER=comfyui
+
+      # Installation directory
+      COMFYUI_DIR=/opt/comfyui
+
+      # Python venv path
+      VENV_DIR=/opt/comfyui-venv
+
+      # CUDA version hint — used to select the correct PyTorch wheel index.
+      # Leave as "cu128" for CUDA 12.8 (driver 570+). Change to "cu121" for
+      # CUDA 12.1 (driver 530+) if your host runs an older driver stack.
+      CUDA_TAG=cu128
+
+      # PyTorch index URL derived from CUDA_TAG (edit if you need a nightly)
+      TORCH_INDEX=https://download.pytorch.org/whl/${CUDA_TAG}
+
+      # Admin password for the ComfyUI management UI (auto-generated if CHANGE_ME)
+      COMFYUI_ADMIN_PASS=CHANGE_ME
+
+  # --------------------------------------------------------------------------
+  # Bootstrap shell script
+  # --------------------------------------------------------------------------
+  - path: /root/comfyui-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/comfyui-bootstrap.log) 2>&1
+      source /root/.comfyui-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator (|| true required under pipefail)
+      # ------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== ComfyUI bootstrap started: $(date) ==="
+
+      # ------------------------------------------------------------------
+      # Replace CHANGE_ME defaults with random values
+      # ------------------------------------------------------------------
+      if [ "${COMFYUI_ADMIN_PASS}" = "CHANGE_ME" ]; then
+        COMFYUI_ADMIN_PASS="$(rand)"
+      fi
+
+      # ------------------------------------------------------------------
+      # System user for ComfyUI
+      # ------------------------------------------------------------------
+      id "${COMFYUI_USER}" &>/dev/null || useradd --system --shell /bin/bash \
+        --create-home --home-dir "${COMFYUI_DIR}" "${COMFYUI_USER}"
+
+      # ------------------------------------------------------------------
+      # NVIDIA driver and CUDA toolkit
+      # ------------------------------------------------------------------
+      echo "--- Installing NVIDIA driver and CUDA toolkit ---"
+
+      # Add NVIDIA CUDA apt repo (noble / 24.04 line — fallback: noble repo until 26.04 published)
+      if ! dpkg -l | grep -q "cuda-keyring"; then
+        KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
+        wget -q "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/${KEYRING_DEB}" \
+          -O "/tmp/${KEYRING_DEB}"
+        dpkg -i "/tmp/${KEYRING_DEB}"
+        apt-get update -qq
+      fi
+
+      # Install latest production NVIDIA driver + CUDA runtime
+      # (cuda meta-package pulls the matching driver automatically)
+      command -v nvidia-smi &>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          cuda-toolkit \
+          nvidia-open
+
+      # Persist CUDA paths for all future logins
+      cat > /etc/profile.d/cuda.sh <<'CUDAENV'
+      export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+      export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+      CUDAENV
+      chmod 644 /etc/profile.d/cuda.sh
+
+      # Source CUDA paths in this script right now
+      export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+      export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+      # ------------------------------------------------------------------
+      # Python venv
+      # ------------------------------------------------------------------
+      echo "--- Setting up Python venv at ${VENV_DIR} ---"
+      mkdir -p "${VENV_DIR}"
+      python3 -m venv "${VENV_DIR}"
+      # shellcheck disable=SC1091
+      source "${VENV_DIR}/bin/activate"
+
+      pip install --upgrade pip setuptools wheel
+
+      # PyTorch with CUDA support
+      echo "--- Installing PyTorch (CUDA tag: ${CUDA_TAG}) ---"
+      pip install torch torchvision torchaudio --index-url "${TORCH_INDEX}"
+
+      # ------------------------------------------------------------------
+      # ComfyUI
+      # ------------------------------------------------------------------
+      echo "--- Cloning / updating ComfyUI ---"
+      mkdir -p "${COMFYUI_DIR}"
+      if [ -d "${COMFYUI_DIR}/.git" ]; then
+        git -C "${COMFYUI_DIR}" pull --ff-only
+      else
+        git clone https://github.com/comfyanonymous/ComfyUI.git "${COMFYUI_DIR}"
+      fi
+
+      # Install ComfyUI Python dependencies inside the venv
+      pip install -r "${COMFYUI_DIR}/requirements.txt"
+
+      # Directories expected by ComfyUI
+      mkdir -p "${COMFYUI_DIR}/models/checkpoints"
+      mkdir -p "${COMFYUI_DIR}/models/loras"
+      mkdir -p "${COMFYUI_DIR}/models/vae"
+      mkdir -p "${COMFYUI_DIR}/output"
+      mkdir -p "${COMFYUI_DIR}/input"
+      mkdir -p "${COMFYUI_DIR}/custom_nodes"
+
+      # Ownership
+      chown -R "${COMFYUI_USER}:${COMFYUI_USER}" "${COMFYUI_DIR}" "${VENV_DIR}"
+
+      deactivate
+
+      # ------------------------------------------------------------------
+      # systemd service
+      # ------------------------------------------------------------------
+      echo "--- Installing systemd service ---"
+      cat > /etc/systemd/system/comfyui.service <<SYSD
+      [Unit]
+      Description=ComfyUI Stable Diffusion UI
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=${COMFYUI_USER}
+      Group=${COMFYUI_USER}
+      WorkingDirectory=${COMFYUI_DIR}
+      ExecStart=${VENV_DIR}/bin/python main.py --listen 127.0.0.1 --port ${COMFYUI_PORT}
+      Restart=on-failure
+      RestartSec=10
+      Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64"
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      systemctl daemon-reload
+      systemctl enable comfyui
+      systemctl start comfyui
+
+      # ------------------------------------------------------------------
+      # Nginx reverse proxy
+      # ------------------------------------------------------------------
+      echo "--- Configuring Nginx ---"
+      cat > /etc/nginx/sites-available/comfyui <<NGXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN:-_};
+
+          client_max_body_size 512M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${COMFYUI_PORT};
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/comfyui /etc/nginx/sites-enabled/comfyui
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # ------------------------------------------------------------------
+      # TLS (optional — only when ENABLE_TLS=true and APP_DOMAIN is set)
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        echo "--- Requesting Let's Encrypt certificate for ${APP_DOMAIN} ---"
+        certbot --nginx --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" || echo "WARN: certbot deferred — DNS not yet pointing here"
+      fi
+
+      # ------------------------------------------------------------------
+      # Firewall (ufw)
+      # ------------------------------------------------------------------
+      echo "--- Configuring UFW ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      # Direct access to ComfyUI port (remove if you want Nginx-only access)
+      ufw allow "${COMFYUI_PORT}/tcp"
+      ufw --force enable
+
+      # ------------------------------------------------------------------
+      # fail2ban
+      # ------------------------------------------------------------------
+      echo "--- Enabling fail2ban ---"
+      systemctl enable --now fail2ban
+
+      # ------------------------------------------------------------------
+      # Automatic security updates
+      # ------------------------------------------------------------------
+      echo "--- Enabling unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+      systemctl enable --now unattended-upgrades
+
+      # ------------------------------------------------------------------
+      # Write credentials file
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf https://ipv4.icanhazip.com || curl -sf https://api.ipify.org || echo 'unknown')"
+
+      cat > /root/comfyui-credentials.txt <<CREDS
+      ============================================================
+      ComfyUI — Access Credentials
+      Generated: $(date)
+      ============================================================
+
+      NOTE: A GPU VPS plan is REQUIRED for hardware-accelerated inference.
+            Minimum recommended: 1x NVIDIA GPU, 40 GB disk, 8 GB RAM.
+            Large diffusion models (≥ 5 GB) need even more disk space.
+
+      Public IP  : ${PUBLIC_IP}
+      App domain : ${APP_DOMAIN:-Not configured}
+
+      ComfyUI UI (direct): http://${PUBLIC_IP}:${COMFYUI_PORT}
+      ComfyUI UI (nginx) : http://${APP_DOMAIN:-${PUBLIC_IP}}
+      ComfyUI UI (TLS)   : https://${APP_DOMAIN:-<set APP_DOMAIN and enable TLS>}
+
+      Admin password : ${COMFYUI_ADMIN_PASS}
+
+      Install dir    : ${COMFYUI_DIR}
+      Python venv    : ${VENV_DIR}
+      CUDA tag       : ${CUDA_TAG}
+      Log file       : /var/log/comfyui-bootstrap.log
+      Service        : systemctl status comfyui
+
+      Models go in   : ${COMFYUI_DIR}/models/checkpoints/
+      Outputs        : ${COMFYUI_DIR}/output/
+      Custom nodes   : ${COMFYUI_DIR}/custom_nodes/
+
+      Next steps:
+        1. Upload a checkpoint model to ${COMFYUI_DIR}/models/checkpoints/
+        2. Point ${APP_DOMAIN} DNS A-record to ${PUBLIC_IP}
+        3. Set ENABLE_TLS=true in /root/.comfyui-bootstrap.env and re-run
+           the bootstrap or run certbot manually.
+        4. Restart ComfyUI if you add custom nodes:
+             systemctl restart comfyui
+      ============================================================
+      CREDS
+      chmod 600 /root/comfyui-credentials.txt
+
+      echo "=== ComfyUI bootstrap complete: $(date) ==="
+      echo "=== Credentials: /root/comfyui-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/comfyui-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  ComfyUI one-click app is installed and running.
+  SSH in as root and read /root/comfyui-credentials.txt for
+  access details, generated passwords, and next steps.
+
+  IMPORTANT: This app REQUIRES an NVIDIA GPU. Without one,
+  inference will fall back to CPU (extremely slow).
+  ============================================================

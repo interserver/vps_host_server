@@ -1,0 +1,297 @@
+#cloud-config
+# =============================================================================
+# Ant Media Server Community Edition — Ubuntu 26.04 cloud-init user-data
+# Stack: Ant Media Server (native install via vendor script) + Nginx reverse
+#        proxy + Certbot TLS + UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.ant-media-bootstrap.env
+# before launching, or supply them via your provisioner.
+# =============================================================================
+
+hostname: ant-media-server
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject SSH key + hostname later
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: antmedia
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd runs)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - unzip
+  - git
+  - htop
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - certbot
+  - nginx
+  - python3-certbot-nginx
+  - apt-transport-https
+  - software-properties-common
+  - net-tools
+  - openssl
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory / JVM spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.ant-media-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      APP_DOMAIN="ams.example.com"      # FQDN pointing to this server
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (e.g. DNS not ready)
+
+      # Ant Media Server admin credentials (web dashboard)
+      # ADMIN_PASS is randomised on first boot if left as CHANGE_ME
+      ADMIN_USER="admin"
+      ADMIN_PASS="CHANGE_ME"
+
+      # AMS version to install (leave 'latest' for the current community release)
+      AMS_VERSION="latest"
+
+      # Install path (do not change unless you know what you're doing)
+      AMS_INSTALL_DIR="/usr/local/antmedia"
+
+  # --- fail2ban jail for SSH + Nginx ------------------------------------------
+  - path: /etc/fail2ban/jail.d/ant-media.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- Nginx reverse-proxy vhost (HTTP; certbot upgrades to HTTPS) ------------
+  - path: /etc/nginx/sites-available/ant-media.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # Ant Media Server reverse proxy
+      # HTTP block — certbot will add HTTPS and redirect when TLS is enabled
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name AMS_DOMAIN_PLACEHOLDER;
+
+          # Let's Encrypt ACME challenge
+          location /.well-known/acme-challenge/ {
+              root /var/www/html;
+          }
+
+          # Proxy all other traffic to AMS
+          location / {
+              proxy_pass         http://127.0.0.1:5080;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade           $http_upgrade;
+              proxy_set_header   Connection        "upgrade";
+              proxy_set_header   Host              $host;
+              proxy_set_header   X-Real-IP         $remote_addr;
+              proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              proxy_read_timeout 86400;
+          }
+      }
+
+  # --- main bootstrap script --------------------------------------------------
+  - path: /root/ant-media-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/ant-media-bootstrap.log) 2>&1
+      source /root/.ant-media-bootstrap.env
+
+      echo "=== Ant Media Server CE bootstrap started: $(date) ==="
+
+      # --- random password helper (SIGPIPE-safe under set -e + pipefail) -----
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$ADMIN_PASS" = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # --- install Java 11 (required by AMS) ---------------------------------
+      echo "--- Installing Java 11 ---"
+      if ! command -v java >/dev/null 2>&1; then
+        apt-get install -y openjdk-11-jdk
+      fi
+      export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+      echo "JAVA_HOME=$JAVA_HOME"
+
+      # --- download + install Ant Media Server CE ----------------------------
+      echo "--- Downloading Ant Media Server Community Edition ---"
+      mkdir -p /tmp/ams-install
+      cd /tmp/ams-install
+
+      if [ "$AMS_VERSION" = "latest" ]; then
+        # Resolve latest release tag from GitHub releases API
+        AMS_TAG="$(curl -fsSL \
+          'https://api.github.com/repos/ant-media/Ant-Media-Server/releases/latest' \
+          | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+        echo "Latest AMS tag: $AMS_TAG"
+      else
+        AMS_TAG="$AMS_VERSION"
+      fi
+
+      # Build the download URL — community edition zip is released as
+      # ant-media-server-community-<version>.zip on GitHub releases
+      AMS_ZIP_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-community-${AMS_TAG}.zip"
+      echo "Downloading: $AMS_ZIP_URL"
+      curl -fsSL -o /tmp/ams-install/ant-media-server.zip "$AMS_ZIP_URL" || {
+        echo "WARN: failed to fetch $AMS_ZIP_URL — trying without 'v' prefix"
+        TAG_STRIPPED="${AMS_TAG#v}"
+        AMS_ZIP_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-community-${TAG_STRIPPED}.zip"
+        curl -fsSL -o /tmp/ams-install/ant-media-server.zip "$AMS_ZIP_URL"
+      }
+
+      # The official AMS installer script handles extraction + systemd setup
+      # Download it separately (bundled in the zip as install.sh)
+      unzip -q /tmp/ams-install/ant-media-server.zip -d /tmp/ams-install/ams_extracted
+      INSTALL_SH="$(find /tmp/ams-install/ams_extracted -name 'install.sh' | head -1)"
+      if [ -z "$INSTALL_SH" ]; then
+        echo "install.sh not found in zip — aborting"
+        exit 1
+      fi
+      chmod +x "$INSTALL_SH"
+      bash "$INSTALL_SH" -i /tmp/ams-install/ant-media-server.zip
+
+      # --- enable + start AMS service ----------------------------------------
+      echo "--- Enabling ant-media-server service ---"
+      systemctl enable --now antmedia || systemctl enable --now ant-media-server || true
+
+      # Wait up to 60 s for AMS to start listening on 5080
+      echo "--- Waiting for AMS to listen on port 5080 ---"
+      for i in $(seq 1 30); do
+        if ss -tlnp 2>/dev/null | grep -q ':5080'; then
+          echo "AMS is up (after ${i}x2 s)"
+          break
+        fi
+        sleep 2
+      done
+
+      # --- configure the admin password via AMS REST API --------------------
+      echo "--- Setting admin credentials ---"
+      # AMS community edition REST management endpoint
+      curl -fsSL -X POST \
+        "http://127.0.0.1:5080/WebRTCAppEE/rest/v2/users/initial-user" \
+        -H "Content-Type: application/json" \
+        -d "{\"firstName\":\"Admin\",\"lastName\":\"User\",\"email\":\"${ADMIN_USER}\",\"password\":\"${ADMIN_PASS}\"}" \
+        || echo "WARN: initial user creation via REST API failed — may already exist or endpoint may differ"
+
+      # --- Nginx vhost -------------------------------------------------------
+      echo "--- Configuring Nginx reverse proxy ---"
+      sed -i "s|AMS_DOMAIN_PLACEHOLDER|${APP_DOMAIN}|g" /etc/nginx/sites-available/ant-media.conf
+      ln -sf /etc/nginx/sites-available/ant-media.conf /etc/nginx/sites-enabled/ant-media.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # --- TLS via Let's Encrypt --------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        echo "--- Requesting TLS certificate ---"
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" --redirect \
+          || echo "WARN: certbot deferred (DNS not pointed yet). Re-run: certbot --nginx -d $APP_DOMAIN"
+      fi
+
+      # --- firewall ---------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw allow 80/tcp    # HTTP / ACME
+      ufw allow 443/tcp   # HTTPS
+      # AMS native ports (exposed directly for RTMP / WebRTC / etc.)
+      ufw allow 1935/tcp  # RTMP
+      ufw allow 4444/tcp  # RTMPS (TLS RTMP)
+      ufw allow 5080/tcp  # HTTP dashboard (loopback-proxied, but allow for direct access)
+      ufw allow 5443/tcp  # HTTPS dashboard (direct TLS)
+      # WebRTC UDP port range
+      ufw allow 50000:60000/udp
+      ufw --force enable
+      ufw status verbose
+
+      # --- fail2ban ---------------------------------------------------------
+      echo "--- Starting fail2ban ---"
+      systemctl enable --now fail2ban
+
+      # --- write credentials ------------------------------------------------
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      cat > /root/ant-media-credentials.txt <<CREDS
+      ===== Ant Media Server CE install complete: $(date) =====
+      Dashboard URL:  ${PROTO}://${APP_DOMAIN}
+      Direct HTTP:    http://$(hostname -I | awk '{print $1}'):5080
+      Admin user:     ${ADMIN_USER}
+      Admin password: ${ADMIN_PASS}
+      Install dir:    ${AMS_INSTALL_DIR}
+
+      Log file:       /var/log/ant-media-bootstrap.log
+      AMS log:        /var/log/antmedia/antmedia.log  (or journalctl -u antmedia)
+
+      Ports allowed through UFW:
+        22/tcp   (SSH)
+        80/tcp   (HTTP / Let's Encrypt)
+        443/tcp  (HTTPS)
+        1935/tcp (RTMP)
+        4444/tcp (RTMPS)
+        5080/tcp (AMS HTTP)
+        5443/tcp (AMS HTTPS)
+        50000-60000/udp (WebRTC)
+      CREDS
+      chmod 600 /root/ant-media-credentials.txt
+
+      # --- cleanup ----------------------------------------------------------
+      rm -rf /tmp/ams-install
+
+      echo "=== Bootstrap finished: $(date). See /root/ant-media-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once (runcmd runs as root after cloud-init modules complete)
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/ant-media-bootstrap.sh" ]
+
+final_message: "Ant Media Server CE bootstrap done after $UPTIME s. See /root/ant-media-credentials.txt and /var/log/ant-media-bootstrap.log"

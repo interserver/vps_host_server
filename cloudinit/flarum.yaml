@@ -1,0 +1,343 @@
+#cloud-config
+# =============================================================================
+# Flarum "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Nginx + PHP-FPM + MariaDB + Composer + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.flarum-bootstrap.env block
+# (domain, email, db creds, admin info) before launching, OR pass them via
+# your provisioner. Passwords default to random per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: flarum
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — provisioner injects the customer SSH key via 'default'
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - mariadb-server
+  - mariadb-client
+  - php-fpm
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-mbstring
+  - php-xml
+  - php-intl
+  - php-zip
+  - php-bcmath
+  - php-tokenizer
+  - php-dom
+  - php-json
+  - php-fileinfo
+  - php-ctype
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive Composer + MariaDB memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable bootstrap variables ---------------------------------
+  - path: /root/.flarum-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE -----
+      APP_DOMAIN="example.com"          # primary domain (no scheme, no trailing slash)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (e.g. DNS not pointed yet)
+
+      FLARUM_FORUM_TITLE="My Flarum Community"
+      ADMIN_USER="admin"
+      ADMIN_EMAIL="admin@example.com"
+      ADMIN_PASS="CHANGE_ME"            # random if left as CHANGE_ME
+
+      # DB credentials — passwords default to random if left as CHANGE_ME
+      DB_NAME="flarum"
+      DB_USER="flarum_user"
+      DB_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      FLARUM_PATH="/var/www/flarum"
+
+  # --- Nginx vhost (HTTP placeholder; certbot rewrites it for HTTPS) ---------
+  - path: /etc/nginx/sites-available/flarum.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name FLARUM_SERVER_NAME_PLACEHOLDER;
+
+          root /var/www/flarum/public;
+          index index.php index.html;
+
+          client_max_body_size 32M;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          location / {
+              try_files $uri $uri/ /index.php?$query_string;
+          }
+
+          location ~ \.php$ {
+              include snippets/fastcgi-php.conf;
+              fastcgi_pass unix:FLARUM_FPM_SOCK_PLACEHOLDER;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              include fastcgi_params;
+          }
+
+          # Flarum asset caching
+          location ~* \.(?:css|js|woff2?|ttf|svg|gif|jpe?g|png|webp|ico)$ {
+              expires max;
+              log_not_found off;
+              access_log off;
+          }
+
+          # Block direct access outside public/
+          location ~ /\. {
+              deny all;
+          }
+      }
+
+  # --- fail2ban — SSH + Nginx protection ------------------------------------
+  - path: /etc/fail2ban/jail.d/flarum.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+      [nginx-limit-req]
+      enabled = true
+
+  # --- unattended security upgrades -----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/flarum-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/flarum-bootstrap.log) 2>&1
+      source /root/.flarum-bootstrap.env
+
+      echo "=== Flarum bootstrap started: $(date) ==="
+
+      # --- random password helper (SIGPIPE-safe under set -e + pipefail) ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$DB_PASS"         = "CHANGE_ME" ] && DB_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+      [ "$ADMIN_PASS"      = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # --- detect PHP-FPM socket ---
+      PHP_FPM_SOCK="$(find /run/php -name 'php*-fpm.sock' 2>/dev/null | head -n1 || true)"
+      echo "PHP-FPM socket: ${PHP_FPM_SOCK}"
+
+      # --- tune PHP for Flarum ---
+      PHP_INI="$(php -i 2>/dev/null | awk -F'=> ' '/Loaded Configuration File/{print $2}' | head -1 || true)"
+      if [ -f "${PHP_INI:-}" ]; then
+        sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 32M/' "$PHP_INI"
+        sed -ri 's/^;?post_max_size.*/post_max_size = 32M/'             "$PHP_INI"
+        sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'              "$PHP_INI"
+        sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'   "$PHP_INI"
+      fi
+      systemctl restart "php*-fpm" 2>/dev/null || systemctl restart php-fpm || true
+
+      # --- install Composer if not present ---
+      if ! command -v composer >/dev/null 2>&1; then
+        echo "Installing Composer..."
+        EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
+        php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+        ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+        if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+          echo "ERROR: Composer installer checksum mismatch" >&2
+          rm -f composer-setup.php
+          exit 1
+        fi
+        php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+        rm -f composer-setup.php
+      fi
+
+      # --- secure MariaDB + create DB ---
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --- install Flarum via Composer ---
+      mkdir -p "$FLARUM_PATH"
+      if [ ! -f "${FLARUM_PATH}/composer.json" ]; then
+        echo "Creating Flarum project in ${FLARUM_PATH}..."
+        sudo -u www-data composer create-project flarum/flarum "${FLARUM_PATH}" \
+          --stability=stable --no-interaction --no-progress 2>&1
+      else
+        echo "Flarum project directory already exists, skipping create-project."
+      fi
+
+      # --- generate config.php for Flarum ---
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      cat > "${FLARUM_PATH}/config.php" <<PHPEOF
+      <?php return [
+          'debug'    => false,
+          'database' => [
+              'driver'    => 'mysql',
+              'host'      => 'localhost',
+              'port'      => '3306',
+              'database'  => '${DB_NAME}',
+              'username'  => '${DB_USER}',
+              'password'  => '${DB_PASS}',
+              'charset'   => 'utf8mb4',
+              'collation' => 'utf8mb4_unicode_ci',
+              'prefix'    => '',
+              'strict'    => false,
+              'engine'    => 'InnoDB',
+          ],
+          'url'   => '${PROTO}://${APP_DOMAIN}',
+          'paths' => [
+              'api'   => 'api',
+              'admin' => 'admin',
+          ],
+      ];
+      PHPEOF
+
+      # --- run Flarum installer via CLI ---
+      cd "$FLARUM_PATH"
+      sudo -u www-data php flarum install \
+        --file="${FLARUM_PATH}/config.php" \
+        --site-title="${FLARUM_FORUM_TITLE}" \
+        --admin-email="${ADMIN_EMAIL}" \
+        --admin-username="${ADMIN_USER}" \
+        --admin-password="${ADMIN_PASS}" 2>&1 || {
+        echo "WARN: flarum install command failed; attempting JSON-based install..."
+        # Fallback: provide install data as JSON via stdin
+        sudo -u www-data php flarum install <<JSONEOF
+      {
+        "siteTitle": "${FLARUM_FORUM_TITLE}",
+        "mysqlHost": "localhost",
+        "mysqlPort": "3306",
+        "mysqlDatabase": "${DB_NAME}",
+        "mysqlUsername": "${DB_USER}",
+        "mysqlPassword": "${DB_PASS}",
+        "mysqlPrefix": "",
+        "adminUsername": "${ADMIN_USER}",
+        "adminEmail": "${ADMIN_EMAIL}",
+        "adminPassword": "${ADMIN_PASS}",
+        "adminPasswordConfirmation": "${ADMIN_PASS}"
+      }
+      JSONEOF
+      }
+
+      # --- fix ownership + permissions ---
+      chown -R www-data:www-data "$FLARUM_PATH"
+      find "$FLARUM_PATH" -type d -exec chmod 755 {} \;
+      find "$FLARUM_PATH" -type f -exec chmod 644 {} \;
+      chmod -R 775 "${FLARUM_PATH}/storage" "${FLARUM_PATH}/public/assets" 2>/dev/null || true
+
+      # --- Nginx vhost ---
+      sed -i "s|FLARUM_SERVER_NAME_PLACEHOLDER|${APP_DOMAIN}|g"   /etc/nginx/sites-available/flarum.conf
+      sed -i "s|FLARUM_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|g"    /etc/nginx/sites-available/flarum.conf
+      ln -sf /etc/nginx/sites-available/flarum.conf /etc/nginx/sites-enabled/flarum.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # --- firewall ---
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban ---
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt ---
+      if [ "$ENABLE_TLS" = "true" ]; then
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" --redirect || \
+          echo "WARN: certbot deferred — DNS not yet pointed. Re-run: certbot --nginx -d ${APP_DOMAIN}"
+      fi
+
+      # --- write credentials summary ---
+      cat > /root/flarum-credentials.txt <<EOF
+      ===== Flarum install complete: $(date) =====
+      URL:          ${PROTO}://${APP_DOMAIN}
+      Admin user:   ${ADMIN_USER}
+      Admin pass:   ${ADMIN_PASS}
+      Admin email:  ${ADMIN_EMAIL}
+
+      DB name:      ${DB_NAME}
+      DB user:      ${DB_USER}
+      DB pass:      ${DB_PASS}
+      MySQL root:   ${MYSQL_ROOT_PASS}
+
+      Flarum path:  ${FLARUM_PATH}
+      Log:          /var/log/flarum-bootstrap.log
+      EOF
+      chmod 600 /root/flarum-credentials.txt
+
+      echo "=== Flarum bootstrap finished: $(date). Credentials in /root/flarum-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/flarum-bootstrap.sh" ]
+
+final_message: "Flarum bootstrap done after $UPTIME s. See /root/flarum-credentials.txt and /var/log/flarum-bootstrap.log"

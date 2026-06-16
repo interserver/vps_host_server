@@ -1,0 +1,404 @@
+#cloud-config
+# =============================================================================
+# OpenLiteSpeed + Node.js "one-click app" — Ubuntu 26.04 LTS cloud-init
+# Stack: OpenLiteSpeed web server + Node.js LTS (via NodeSource)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+#        Certbot TLS (optional, skipped gracefully if DNS not ready)
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.openlitespeednodejs-bootstrap.env
+# before launching, OR leave the defaults — random secrets are generated at boot.
+# =============================================================================
+
+hostname: openlitespeednodejs
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep `default` so provisioners can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages — OpenLiteSpeed and NodeSource repos are added in the bootstrap
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - certbot
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - git
+  - htop
+  - openssl
+  - wget
+  - python3
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive install-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files dropped to disk before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable variables -------------------------------------------
+  - path: /root/.openlitespeednodejs-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE before first boot -----
+      APP_DOMAIN="example.com"          # primary domain (no scheme, no trailing slash)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration e-mail
+      ENABLE_TLS="true"                 # set to false to skip certbot (DNS not pointed yet)
+
+      # OpenLiteSpeed WebAdmin console
+      OLS_ADMIN_USER="admin"            # WebAdmin login user
+      OLS_ADMIN_PASS="CHANGE_ME"        # WebAdmin password — CHANGE_ME → random at boot
+
+      # Node.js app settings
+      APP_PORT="3000"                   # port the Node.js process listens on (localhost only)
+      APP_DIR="/var/www/nodejsapp"      # where app files live
+      NODE_MAJOR="22"                   # NodeSource LTS major version
+
+      # Random app secret — left as CHANGE_ME means generated at boot
+      APP_SECRET="CHANGE_ME"
+
+  # --- fail2ban jails --------------------------------------------------------
+  - path: /etc/fail2ban/jail.d/openlitespeednodejs.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/openlitespeednodejs-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openlitespeednodejs-bootstrap.log) 2>&1
+      source /root/.openlitespeednodejs-bootstrap.env
+
+      echo "=== OpenLiteSpeed+NodeJS bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret generator (set -e + pipefail safe) ------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$OLS_ADMIN_PASS" = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
+      [ "$APP_SECRET"     = "CHANGE_ME" ] && APP_SECRET="$(rand)"
+
+      # =========================================================================
+      # 1. Install OpenLiteSpeed via official repo
+      # =========================================================================
+      if ! command -v lshttpd >/dev/null 2>&1; then
+        echo "--- Installing OpenLiteSpeed ---"
+        # fallback: noble repo until 26.04 published
+        wget -qO /tmp/ols-repo.sh https://repo.litespeed.sh
+        bash /tmp/ols-repo.sh
+        apt-get install -y openlitespeed
+      else
+        echo "OpenLiteSpeed already installed: $(lshttpd -v 2>&1 | head -1)"
+      fi
+
+      # =========================================================================
+      # 2. Install Node.js LTS via NodeSource
+      # =========================================================================
+      if ! command -v node >/dev/null 2>&1; then
+        echo "--- Installing Node.js ${NODE_MAJOR}.x LTS ---"
+        # fallback: noble repo until 26.04 published
+        curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+        apt-get install -y nodejs
+      else
+        echo "Node.js already installed: $(node --version)"
+      fi
+
+      echo "Node.js: $(node --version)  npm: $(npm --version)"
+
+      # =========================================================================
+      # 3. Create app directory and 'it works' Node.js app
+      # =========================================================================
+      mkdir -p "${APP_DIR}"
+
+      cat > "${APP_DIR}/index.js" <<'NODEAPP'
+      'use strict';
+      const http = require('http');
+
+      const PORT   = parseInt(process.env.APP_PORT   || '3000', 10);
+      const SECRET = process.env.APP_SECRET || 'not-set';
+
+      const server = http.createServer((req, res) => {
+        if (req.url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', runtime: 'nodejs', version: process.version }));
+          return;
+        }
+        const html = `<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>OpenLiteSpeed + Node.js</title>
+        <style>
+          body { font-family: system-ui, sans-serif; display: flex; align-items: center;
+                 justify-content: center; min-height: 100vh; margin: 0; background: #0d1117; color: #e6edf3; }
+          .card { text-align: center; padding: 2.5rem 3.5rem; border: 1px solid #30363d;
+                  border-radius: 12px; background: #161b22; }
+          h1   { font-size: 2.2rem; margin: 0 0 .5rem; }
+          p    { color: #8b949e; margin: .3rem 0; }
+          code { background: #21262d; padding: .1rem .4rem; border-radius: 4px; font-size: .9rem; }
+          .badge { display: inline-block; margin: .3rem .2rem;
+                   border-radius: 6px; padding: .2rem .8rem; font-size: .8rem; }
+          .ols  { background: #1a7f37; color: #fff; }
+          .node { background: #5fa04e; color: #fff; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>It works!</h1>
+          <p>OpenLiteSpeed is proxying to Node.js on InterServer.</p>
+          <p>Edit <code>${APP_DIR}/index.js</code> to get started.</p>
+          <div>
+            <span class="badge ols">OpenLiteSpeed</span>
+            <span class="badge node">Node.js ${process.version}</span>
+          </div>
+        </div>
+      </body>
+      </html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      });
+
+      server.listen(PORT, '127.0.0.1', () => {
+        console.log('Node.js app listening on http://127.0.0.1:' + PORT);
+      });
+      NODEAPP
+
+      # Expand APP_DIR in the heredoc output (sed after writing)
+      sed -i "s|\${APP_DIR}|${APP_DIR}|g" "${APP_DIR}/index.js"
+
+      chown -R www-data:www-data "${APP_DIR}"
+
+      # --- runtime env for systemd --------------------------------------------
+      cat > /etc/nodejsapp.env <<ENVFILE
+      APP_PORT=${APP_PORT}
+      APP_SECRET=${APP_SECRET}
+      NODE_ENV=production
+      ENVFILE
+      chmod 600 /etc/nodejsapp.env
+
+      # =========================================================================
+      # 4. systemd unit for the Node.js app
+      # =========================================================================
+      cat > /etc/systemd/system/nodejsapp.service <<UNIT
+      [Unit]
+      Description=Node.js application (OpenLiteSpeed backend)
+      After=network.target
+      Wants=network.target
+
+      [Service]
+      Type=simple
+      User=www-data
+      Group=www-data
+      WorkingDirectory=${APP_DIR}
+      Environment="HOME=${APP_DIR}"
+      EnvironmentFile=/etc/nodejsapp.env
+      ExecStart=/usr/bin/node ${APP_DIR}/index.js
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=nodejsapp
+
+      [Install]
+      WantedBy=multi-user.target
+      UNIT
+
+      systemctl daemon-reload
+      systemctl enable --now nodejsapp
+
+      # =========================================================================
+      # 5. Configure OpenLiteSpeed
+      # =========================================================================
+      OLS_CONF_DIR="/usr/local/lsws"
+      OLS_VHOST_DIR="${OLS_CONF_DIR}/conf/vhosts/nodejsapp"
+      OLS_WEBROOT="/var/www/html"
+
+      mkdir -p "${OLS_VHOST_DIR}"
+      mkdir -p "${OLS_WEBROOT}"
+
+      # Set WebAdmin password
+      "${OLS_CONF_DIR}/admin/misc/admpass.sh" "${OLS_ADMIN_USER}" "${OLS_ADMIN_PASS}" 2>/dev/null || \
+        echo "WARN: admpass.sh not found — set WebAdmin password manually"
+
+      # --- Main httpd_config.conf: add vhost + listener -----------------------
+      # Write a minimal vhost config
+      cat > "${OLS_VHOST_DIR}/vhconf.conf" <<VHCONF
+      docRoot                   ${OLS_WEBROOT}
+      enableGzip                1
+
+      extprocessor nodejs {
+        type                    proxy
+        address                 127.0.0.1:${APP_PORT}
+        maxConns                100
+        initTimeout             60
+        retryTimeout            0
+        respBuffer              0
+      }
+
+      rewrite  {
+        enable                  1
+      }
+
+      context / {
+        type                    proxy
+        handler                 nodejs
+        addDefaultCharset       off
+      }
+      VHCONF
+
+      # --- Patch or create a minimal httpd_config.conf listener/vhost stanza --
+      HTTPD_CONF="${OLS_CONF_DIR}/conf/httpd_config.conf"
+
+      # Add listener on port 80 if not already defined
+      if ! grep -q "listener HTTP" "${HTTPD_CONF}" 2>/dev/null; then
+        cat >> "${HTTPD_CONF}" <<LSTN
+
+      listener HTTP {
+        address                 *:80
+        secure                  0
+        map                     nodejsapp ${APP_DOMAIN}
+      }
+      LSTN
+      fi
+
+      # Add vhost stanza if not already defined
+      if ! grep -q "virtualhost nodejsapp" "${HTTPD_CONF}" 2>/dev/null; then
+        cat >> "${HTTPD_CONF}" <<VHOST
+
+      virtualhost nodejsapp {
+        vhRoot                  ${OLS_WEBROOT}
+        configFile              ${OLS_VHOST_DIR}/vhconf.conf
+        allowSymbolLink         1
+        enableScript            1
+        restrained              0
+      }
+      VHOST
+      fi
+
+      # =========================================================================
+      # 6. Firewall (ufw)
+      # =========================================================================
+      ufw allow OpenSSH
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw allow 8088/tcp   # OpenLiteSpeed WebAdmin (restrict IP after setup)
+      ufw --force enable
+
+      # =========================================================================
+      # 7. Start / restart OpenLiteSpeed
+      # =========================================================================
+      systemctl enable lshttpd 2>/dev/null || true
+      if systemctl is-active --quiet lshttpd; then
+        systemctl restart lshttpd
+      else
+        systemctl start lshttpd || "${OLS_CONF_DIR}/bin/lswsctrl" start 2>/dev/null || true
+      fi
+
+      # =========================================================================
+      # 8. fail2ban
+      # =========================================================================
+      systemctl enable --now fail2ban
+
+      # =========================================================================
+      # 9. TLS via Let's Encrypt (certbot standalone — OLS handles renewal hooks)
+      # =========================================================================
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        systemctl stop lshttpd 2>/dev/null || true
+        certbot certonly --standalone --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" || \
+          echo "WARN: certbot deferred (DNS not pointed yet?). Re-run: certbot certonly --standalone -d ${APP_DOMAIN}"
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        if [ -d "${CERT_DIR}" ]; then
+          # Add HTTPS listener to OLS config
+          if ! grep -q "listener HTTPS" "${HTTPD_CONF}" 2>/dev/null; then
+            cat >> "${HTTPD_CONF}" <<HTTPSLISTN
+
+      listener HTTPS {
+        address                 *:443
+        secure                  1
+        keyFile                 ${CERT_DIR}/privkey.pem
+        certFile                ${CERT_DIR}/fullchain.pem
+        map                     nodejsapp ${APP_DOMAIN}
+      }
+      HTTPSLISTN
+          fi
+        fi
+        systemctl start lshttpd || "${OLS_CONF_DIR}/bin/lswsctrl" start 2>/dev/null || true
+      fi
+
+      # =========================================================================
+      # 10. Write credentials summary
+      # =========================================================================
+      PROTO="http"
+      [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+
+      cat > /root/openlitespeednodejs-credentials.txt <<CREDS
+      ===== OpenLiteSpeed + Node.js install complete: $(date) =====
+
+      Site URL:          ${PROTO}://${APP_DOMAIN}
+      Health check:      ${PROTO}://${APP_DOMAIN}/health
+      WebAdmin console:  http://$(hostname -I | awk '{print $1}'):8088
+      WebAdmin user:     ${OLS_ADMIN_USER}
+      WebAdmin pass:     ${OLS_ADMIN_PASS}
+      App secret:        ${APP_SECRET}
+      App directory:     ${APP_DIR}
+
+      Logs:
+        Bootstrap:       /var/log/openlitespeednodejs-bootstrap.log
+        Node.js app:     journalctl -u nodejsapp -f
+        OLS access:      /usr/local/lsws/logs/access.log
+        OLS error:       /usr/local/lsws/logs/error.log
+
+      NOTE: Restrict port 8088 after initial setup:
+        ufw delete allow 8088/tcp && ufw allow from YOUR_IP to any port 8088
+      CREDS
+      chmod 600 /root/openlitespeednodejs-credentials.txt
+
+      echo "=== OpenLiteSpeed+NodeJS bootstrap finished. See /root/openlitespeednodejs-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openlitespeednodejs-bootstrap.sh" ]
+
+final_message: "OpenLiteSpeed+NodeJS bootstrap done after $UPTIME s. See /root/openlitespeednodejs-credentials.txt and /var/log/openlitespeednodejs-bootstrap.log"

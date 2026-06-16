@@ -1,0 +1,331 @@
+#cloud-config
+hostname: moosefs
+manage_etc_hosts: true
+timezone: UTC
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - gnupg
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - fail2ban
+  - ufw
+  - unattended-upgrades
+  - apt-listchanges
+  - python3
+
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+users:
+  - default
+
+write_files:
+  - path: /root/.moosefs-bootstrap.env
+    permissions: '0600'
+    content: |
+      # MooseFS operator-editable configuration
+      # Edit these before first boot or re-run the bootstrap script
+      APP_DOMAIN=CHANGE_ME
+      LE_EMAIL=CHANGE_ME
+      ENABLE_TLS=false
+      # MooseFS master admin password (set CHANGE_ME to auto-generate)
+      ADMIN_PASS=CHANGE_ME
+      # MooseFS chunk server data directory
+      CHUNKSERVER_DATA_DIR=/mnt/moosefs-chunks
+      # MooseFS metalogger enable (true/false)
+      ENABLE_METALOGGER=true
+      # MooseFS CGI web interface port
+      MFSCGI_PORT=9425
+
+  - path: /root/moosefs-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/moosefs-bootstrap.log) 2>&1
+      source /root/.moosefs-bootstrap.env
+
+      echo "[moosefs-bootstrap] Starting at $(date)"
+
+      # ── Random secret helper (SIGPIPE-safe under set -e + pipefail) ──────────
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # ── Resolve admin password ─────────────────────────────────────────────
+      if [ "$ADMIN_PASS" = "CHANGE_ME" ] || [ -z "$ADMIN_PASS" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "[moosefs-bootstrap] Generated ADMIN_PASS"
+      fi
+
+      # ── Wait for apt lock ──────────────────────────────────────────────────
+      echo "[moosefs-bootstrap] Waiting for apt lock..."
+      for i in $(seq 1 30); do
+        flock -n /var/lib/dpkg/lock-frontend true 2>/dev/null && break || true
+        sleep 5
+      done
+
+      # ── MooseFS apt repo ──────────────────────────────────────────────────
+      # fallback: noble repo until 26.04 published
+      echo "[moosefs-bootstrap] Adding MooseFS apt repository..."
+      curl -fsSL https://ppa.moosefs.com/moosefs.key | gpg --dearmor -o /usr/share/keyrings/moosefs-archive-keyring.gpg
+
+      # Detect Ubuntu codename; fall back to noble if 26.04 has no repo line yet
+      CODENAME="$(lsb_release -sc 2>/dev/null || echo noble)"
+      if ! curl -fsSL --head "https://ppa.moosefs.com/moosefs-3/apt/ubuntu/${CODENAME}/" | grep -q "HTTP/[12].* 200"; then
+        echo "[moosefs-bootstrap] No repo for ${CODENAME}, falling back to noble"
+        # fallback: noble repo until 26.04 published
+        CODENAME=noble
+      fi
+
+      cat > /etc/apt/sources.list.d/moosefs.list <<EOF
+      # MooseFS 3 official repository
+      # fallback: noble repo until 26.04 published
+      deb [signed-by=/usr/share/keyrings/moosefs-archive-keyring.gpg] https://ppa.moosefs.com/moosefs-3/apt/ubuntu/${CODENAME} ${CODENAME} main
+      EOF
+
+      apt-get update -qq
+
+      # ── Install MooseFS components ────────────────────────────────────────
+      echo "[moosefs-bootstrap] Installing MooseFS..."
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        moosefs-master \
+        moosefs-chunkserver \
+        moosefs-metalogger \
+        moosefs-client \
+        moosefs-cgi \
+        moosefs-cgiserv
+
+      # ── Configure MooseFS Master ──────────────────────────────────────────
+      echo "[moosefs-bootstrap] Configuring MooseFS master..."
+
+      # Copy default config files if not present
+      [ -f /etc/mfs/mfsmaster.cfg ] || cp /etc/mfs/mfsmaster.cfg.sample /etc/mfs/mfsmaster.cfg
+      [ -f /etc/mfs/mfsexports.cfg ] || cp /etc/mfs/mfsexports.cfg.sample /etc/mfs/mfsexports.cfg
+      [ -f /etc/mfs/mfstopology.cfg ] || cp /etc/mfs/mfstopology.cfg.sample /etc/mfs/mfstopology.cfg 2>/dev/null || true
+
+      # Set master metadata directory permissions
+      chown -R mfs:mfs /var/lib/mfs 2>/dev/null || true
+
+      # Generate initial metadata if not exists
+      if [ ! -f /var/lib/mfs/metadata.mfs ] && [ ! -f /var/lib/mfs/metadata.mfs.back ]; then
+        echo "[moosefs-bootstrap] Initialising MooseFS metadata..."
+        mfsmaster -a 2>/dev/null || true
+      fi
+
+      # Set admin password via mfspasswd tool or config
+      # MooseFS uses .mfsmaster.cfg or mfspassword files
+      echo "[moosefs-bootstrap] Setting MooseFS master admin credentials..."
+      cat > /etc/mfs/mfsmaster.cfg <<MFSCFG
+      # MooseFS Master configuration
+      WORKING_USER = mfs
+      WORKING_GROUP = mfs
+      SYSLOG_IDENT = mfsmaster
+      LOCK_MEMORY = 0
+      # Bind to all interfaces (clients need to reach the master)
+      MATOML_LISTEN_HOST = 0.0.0.0
+      MATOCL_LISTEN_HOST = 0.0.0.0
+      MATOML_LISTEN_PORT = 9419
+      MATOCL_LISTEN_PORT = 9421
+      MATOCS_LISTEN_PORT = 9422
+      # Admin password (used by mfscli/CGI)
+      ADMIN_PASSWD = ${ADMIN_PASS}
+      MFSCFG
+
+      # ── Configure MooseFS Chunk Server ────────────────────────────────────
+      echo "[moosefs-bootstrap] Configuring MooseFS chunk server..."
+      mkdir -p "${CHUNKSERVER_DATA_DIR}"
+      chown mfs:mfs "${CHUNKSERVER_DATA_DIR}"
+
+      [ -f /etc/mfs/mfschunkserver.cfg ] || cp /etc/mfs/mfschunkserver.cfg.sample /etc/mfs/mfschunkserver.cfg
+
+      # Chunk server data paths
+      echo "${CHUNKSERVER_DATA_DIR}" > /etc/mfs/mfshdd.cfg
+      chown mfs:mfs /etc/mfs/mfshdd.cfg
+
+      cat > /etc/mfs/mfschunkserver.cfg <<CSCFG
+      WORKING_USER = mfs
+      WORKING_GROUP = mfs
+      MASTER_HOST = 127.0.0.1
+      MASTER_PORT = 9422
+      HDD_CONF_FILENAME = /etc/mfs/mfshdd.cfg
+      CSSERV_LISTEN_HOST = 0.0.0.0
+      CSSERV_LISTEN_PORT = 9422
+      CSCFG
+
+      # ── Configure MooseFS Metalogger ──────────────────────────────────────
+      if [ "$ENABLE_METALOGGER" = "true" ]; then
+        echo "[moosefs-bootstrap] Configuring MooseFS metalogger..."
+        [ -f /etc/mfs/mfsmetalogger.cfg ] || cp /etc/mfs/mfsmetalogger.cfg.sample /etc/mfs/mfsmetalogger.cfg
+        cat > /etc/mfs/mfsmetalogger.cfg <<MLCFG
+      WORKING_USER = mfs
+      WORKING_GROUP = mfs
+      MASTER_HOST = 127.0.0.1
+      MASTER_PORT = 9419
+      MLCFG
+      fi
+
+      # ── Configure MooseFS exports ─────────────────────────────────────────
+      echo "[moosefs-bootstrap] Configuring MooseFS exports..."
+      cat > /etc/mfs/mfsexports.cfg <<EXPCFG
+      # MooseFS exports — allow all clients full access to root
+      *                   /       rw,alldirs,maproot=0
+      EXPCFG
+
+      # ── Configure CGI web interface ───────────────────────────────────────
+      echo "[moosefs-bootstrap] Configuring MooseFS CGI server..."
+      cat > /etc/mfs/mfscgiserv.cfg <<CGICFG
+      WORKING_USER = mfs
+      WORKING_GROUP = mfs
+      BIND_HOST = 127.0.0.1
+      PORT = ${MFSCGI_PORT}
+      CGICFG
+
+      # ── Start and enable services ─────────────────────────────────────────
+      echo "[moosefs-bootstrap] Enabling and starting MooseFS services..."
+      systemctl daemon-reload
+
+      # Start master first (metadata must be ready)
+      systemctl enable moosefs-master
+      systemctl start moosefs-master
+      sleep 3
+
+      # Start chunk server
+      systemctl enable moosefs-chunkserver
+      systemctl start moosefs-chunkserver
+
+      # Start metalogger if enabled
+      if [ "$ENABLE_METALOGGER" = "true" ]; then
+        systemctl enable moosefs-metalogger
+        systemctl start moosefs-metalogger
+      fi
+
+      # Start CGI server (listen on localhost only)
+      systemctl enable moosefs-cgiserv
+      systemctl start moosefs-cgiserv
+
+      # ── Configure automatic security updates ──────────────────────────────
+      echo "[moosefs-bootstrap] Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+          "${distro_id}ESMApps:${distro_codename}-apps-security";
+          "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::MinimalSteps "true";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUCONF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUCONF
+
+      systemctl enable unattended-upgrades
+      systemctl start unattended-upgrades
+
+      # ── Fail2ban ───────────────────────────────────────────────────────────
+      echo "[moosefs-bootstrap] Configuring fail2ban..."
+      cat > /etc/fail2ban/jail.local <<'F2BCONF'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BCONF
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # ── UFW firewall ───────────────────────────────────────────────────────
+      echo "[moosefs-bootstrap] Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      # SSH
+      ufw allow 22/tcp comment 'SSH'
+      # MooseFS master ports
+      ufw allow 9419/tcp comment 'MooseFS metalogger<->master'
+      ufw allow 9420/tcp comment 'MooseFS master-to-master'
+      ufw allow 9421/tcp comment 'MooseFS client<->master'
+      ufw allow 9422/tcp comment 'MooseFS chunkserver<->master/client'
+      # MooseFS chunk server
+      ufw allow 9423/tcp comment 'MooseFS chunkserver replication'
+      # CGI web interface is localhost-only (9425); expose only if needed
+      ufw --force enable
+      echo "[moosefs-bootstrap] UFW status:"
+      ufw status verbose
+
+      # ── TLS / Certbot (optional, deferred if DNS not ready) ──────────────
+      if [ "$ENABLE_TLS" = "true" ] && [ "$APP_DOMAIN" != "CHANGE_ME" ] && [ -n "$APP_DOMAIN" ]; then
+        echo "[moosefs-bootstrap] Attempting Certbot certificate for ${APP_DOMAIN}..."
+        if ! command -v certbot &>/dev/null; then
+          DEBIAN_FRONTEND=noninteractive apt-get install -y certbot
+        fi
+        certbot certonly --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --http-01-port 80 \
+          || echo "WARN: certbot deferred — ensure DNS points to this host before retrying"
+      else
+        echo "[moosefs-bootstrap] TLS skipped (ENABLE_TLS=${ENABLE_TLS}, APP_DOMAIN=${APP_DOMAIN})"
+      fi
+
+      # ── Write credentials file ─────────────────────────────────────────────
+      echo "[moosefs-bootstrap] Writing credentials file..."
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      cat > /root/moosefs-credentials.txt <<CREDS
+      ========================================================
+      MooseFS Cluster Credentials
+      Generated: $(date)
+      ========================================================
+
+      MooseFS Master Host : ${SERVER_IP}
+      Admin Password      : ${ADMIN_PASS}
+
+      MooseFS Ports:
+        Master (metalogger) : 9419/tcp
+        Master (GUI/client) : 9421/tcp
+        Master (chunkserver): 9422/tcp
+        Chunk server        : 9422/tcp
+        CGI Web Interface   : http://127.0.0.1:${MFSCGI_PORT}/mfs.cgi  (localhost only)
+
+      Mount command (from a client with moosefs-client installed):
+        mfsmount /mnt/mfs -H ${SERVER_IP}
+
+      CGI interface access (via SSH tunnel):
+        ssh -L ${MFSCGI_PORT}:127.0.0.1:${MFSCGI_PORT} root@${SERVER_IP}
+        Then open: http://127.0.0.1:${MFSCGI_PORT}/mfs.cgi
+
+      Chunk server data directory: ${CHUNKSERVER_DATA_DIR}
+      Bootstrap log             : /var/log/moosefs-bootstrap.log
+
+      SECURITY: Rotate ADMIN_PASS after first login.
+      ========================================================
+      CREDS
+      chmod 600 /root/moosefs-credentials.txt
+
+      echo "[moosefs-bootstrap] Done at $(date)"
+      echo "[moosefs-bootstrap] Credentials written to /root/moosefs-credentials.txt"
+
+runcmd:
+  - [ bash, -lc, "/root/moosefs-bootstrap.sh" ]
+
+final_message: |
+  MooseFS bootstrap complete. Credentials are in /root/moosefs-credentials.txt.
+  MooseFS master is running on port 9421 (client) and 9422 (chunkserver).
+  CGI web interface accessible at http://127.0.0.1:9425/mfs.cgi via SSH tunnel.
+  Review /var/log/moosefs-bootstrap.log for details.

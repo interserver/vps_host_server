@@ -1,0 +1,329 @@
+#cloud-config
+# =============================================================================
+# Grafana "one-click app" — Ubuntu 26.04 cloud-init user-data
+# Stack: Grafana OSS (official Grafana apt repo) on port 3000
+#        Optional Nginx reverse-proxy + Certbot TLS on 443
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.grafana-bootstrap.env
+# block before launching, OR pass them in via your provisioner.
+# ADMIN_PASS is generated randomly per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: grafana
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (base tooling; Grafana itself is added via vendor repo in bootstrap)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - gnupg
+  - ca-certificates
+  - curl
+  - wget
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - htop
+  - jq
+  - software-properties-common
+
+# ----------------------------------------------------------------------------
+# Swap (helps survive memory spikes during plugin compilation)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files and bootstrap script dropped to disk
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable env block -----------------------------------------
+  - path: /root/.grafana-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT (or leave passwords as CHANGE_ME for random) -----
+
+      # Grafana admin username and password
+      ADMIN_USER="admin"
+      ADMIN_PASS="CHANGE_ME"
+
+      # Optional: domain name for Nginx reverse-proxy + TLS
+      # Leave empty to skip Nginx vhost setup and access Grafana directly on port 3000
+      APP_DOMAIN=""
+
+      # Let's Encrypt email (used only when APP_DOMAIN is set)
+      LE_EMAIL="admin@example.com"
+
+      # Enable TLS via Certbot (only takes effect when APP_DOMAIN is also set)
+      ENABLE_TLS="true"
+
+      # Grafana server port (default 3000; UFW opened automatically)
+      GRAFANA_PORT="3000"
+
+      # Grafana organisation name shown in the UI
+      GRAFANA_ORG="InterServer"
+
+      # Grafana instance name
+      GRAFANA_INSTANCE_NAME="Grafana"
+
+  # --- fail2ban — protect SSH -----------------------------------------------
+  - path: /etc/fail2ban/jail.d/grafana.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+
+      [nginx-http-auth]
+      enabled  = true
+      maxretry = 5
+
+  # --- nginx default site (placeholder, replaced by bootstrap) ---------------
+  - path: /etc/nginx/sites-available/grafana
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # Placeholder — replaced by grafana-bootstrap.sh when APP_DOMAIN is set.
+      # If APP_DOMAIN is empty this file is never symlinked.
+      server {
+          listen 80 default_server;
+          server_name _;
+          location / {
+              return 301 http://$host:3000$request_uri;
+          }
+      }
+
+  # --- unattended-upgrades security config ----------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/grafana-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/grafana-bootstrap.log) 2>&1
+      source /root/.grafana-bootstrap.env
+
+      echo "=== Grafana bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random password generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Generate password if left as CHANGE_ME
+      [ "${ADMIN_PASS}" = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. Add the official Grafana apt repository
+      #    fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if [ ! -f /usr/share/keyrings/grafana-keyring.gpg ]; then
+        curl -fsSL https://apt.grafana.com/gpg.key \
+          | gpg --dearmor -o /usr/share/keyrings/grafana-keyring.gpg
+      fi
+
+      if [ ! -f /etc/apt/sources.list.d/grafana.list ]; then
+        echo "deb [signed-by=/usr/share/keyrings/grafana-keyring.gpg] https://apt.grafana.com stable main" \
+          > /etc/apt/sources.list.d/grafana.list
+      fi
+
+      apt-get update -qq
+
+      # -----------------------------------------------------------------------
+      # 2. Install Grafana OSS
+      # -----------------------------------------------------------------------
+      DEBIAN_FRONTEND=noninteractive apt-get install -y grafana
+
+      # -----------------------------------------------------------------------
+      # 3. Configure Grafana
+      # -----------------------------------------------------------------------
+      GRAFANA_INI="/etc/grafana/grafana.ini"
+
+      # Set the admin password via environment variable (Grafana reads GF_* vars)
+      # We also patch grafana.ini so it persists across restarts.
+
+      # Server section — bind to all interfaces on the configured port
+      sed -i "s|^;*http_port\s*=.*|http_port = ${GRAFANA_PORT}|" "${GRAFANA_INI}"
+
+      # If a domain is set, tell Grafana its public URL
+      if [ -n "${APP_DOMAIN}" ]; then
+        PROTO="http"
+        [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+        sed -i "s|^;*domain\s*=.*|domain = ${APP_DOMAIN}|"                  "${GRAFANA_INI}"
+        sed -i "s|^;*root_url\s*=.*|root_url = ${PROTO}://${APP_DOMAIN}/|" "${GRAFANA_INI}"
+      fi
+
+      # Instance name and default org
+      sed -i "s|^;*instance_name\s*=.*|instance_name = ${GRAFANA_INSTANCE_NAME}|" "${GRAFANA_INI}"
+
+      # Security section: set admin credentials
+      sed -i "s|^;*admin_user\s*=.*|admin_user = ${ADMIN_USER}|"       "${GRAFANA_INI}"
+      sed -i "s|^;*admin_password\s*=.*|admin_password = ${ADMIN_PASS}|" "${GRAFANA_INI}"
+
+      # Disable the "Change password" nag on first login (password already set)
+      sed -i "s|^;*disable_initial_admin_creation\s*=.*|disable_initial_admin_creation = false|" "${GRAFANA_INI}"
+
+      # -----------------------------------------------------------------------
+      # 4. Enable and start Grafana
+      # -----------------------------------------------------------------------
+      systemctl daemon-reload
+      systemctl enable grafana-server
+      systemctl start  grafana-server
+
+      # Wait up to 90 seconds for Grafana to become healthy
+      echo "Waiting for Grafana to start on port ${GRAFANA_PORT}..."
+      GRAFANA_READY=0
+      for i in $(seq 1 18); do
+        if curl -s --max-time 5 \
+               "http://127.0.0.1:${GRAFANA_PORT}/api/health" \
+               2>/dev/null | grep -q '"database": "ok"' ; then
+          GRAFANA_READY=1
+          break
+        fi
+        echo "  attempt ${i}/18 ..."
+        sleep 5
+      done
+
+      if [ "${GRAFANA_READY}" -eq 0 ]; then
+        echo "WARN: Grafana not responding after 90 s — check journalctl -u grafana-server"
+      else
+        echo "Grafana is up and healthy."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 5. Firewall
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+
+      # Always open the direct Grafana port so users can reach the UI even
+      # without a domain.  If a domain + TLS is configured, 80/443 are opened
+      # as well.
+      ufw allow "${GRAFANA_PORT}/tcp"
+
+      if [ -n "${APP_DOMAIN}" ]; then
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+      fi
+
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 6. Nginx reverse-proxy (only when APP_DOMAIN is set)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        cat > /etc/nginx/sites-available/grafana <<NGINXCONF
+      server {
+          listen 80;
+          server_name ${APP_DOMAIN};
+
+          # Certbot will inject a TLS server block below
+          location / {
+              proxy_pass         http://127.0.0.1:${GRAFANA_PORT};
+              proxy_set_header   Host              \$host;
+              proxy_set_header   X-Real-IP         \$remote_addr;
+              proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade           \$http_upgrade;
+              proxy_set_header   Connection        "upgrade";
+          }
+      }
+      NGINXCONF
+
+        ln -sf /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
+        rm -f /etc/nginx/sites-enabled/default
+        nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+        # 6a. TLS via Certbot
+        if [ "${ENABLE_TLS}" = "true" ]; then
+          certbot --nginx \
+            --non-interactive \
+            --agree-tos \
+            --email "${LE_EMAIL}" \
+            --redirect \
+            -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not pointed yet; re-run after DNS propagates"
+        fi
+      else
+        # No domain — disable Nginx entirely; Grafana is reachable on its port
+        systemctl disable --now nginx 2>/dev/null || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 8. Write credentials file (chmod 600)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        PROTO="http"
+        [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+        ACCESS_URL="${PROTO}://${APP_DOMAIN}/"
+      else
+        ACCESS_URL="http://<SERVER_IP>:${GRAFANA_PORT}/"
+      fi
+
+      cat > /root/grafana-credentials.txt <<CREDS
+      ===== Grafana bootstrap complete: $(date) =====
+
+      URL       : ${ACCESS_URL}
+      Direct    : http://<SERVER_IP>:${GRAFANA_PORT}/ (always available)
+
+      Admin login
+        Username : ${ADMIN_USER}
+        Password : ${ADMIN_PASS}
+
+      Configuration : /etc/grafana/grafana.ini
+      Data dir      : /var/lib/grafana/
+      Logs          : /var/log/grafana/grafana.log
+      Bootstrap log : /var/log/grafana-bootstrap.log
+
+      Service management:
+        systemctl status  grafana-server
+        systemctl restart grafana-server
+
+      Add a Prometheus data source via:
+        ${ACCESS_URL}connections/datasources
+      CREDS
+      chmod 600 /root/grafana-credentials.txt
+
+      echo "=== Grafana bootstrap finished. Credentials in /root/grafana-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/grafana-bootstrap.sh" ]
+
+final_message: "Grafana bootstrap done after $UPTIME s. See /root/grafana-credentials.txt and /var/log/grafana-bootstrap.log"

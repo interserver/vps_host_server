@@ -1,0 +1,309 @@
+#cloud-config
+# =============================================================================
+# Minecraft PaperSpigot "one-click app" -- Ubuntu 26.04 LTS cloud-init user-data
+# Stack: OpenJDK JRE + PaperSpigot server + systemd unit
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# Game ports: TCP 25565 (Java Edition)
+#             UDP 19132 (Bedrock Edition / Geyser plugin, optional)
+# -----------------------------------------------------------------------------
+# EDIT the variables in the write_files -> /root/.minecraft-bootstrap.env
+# block before launching.
+# =============================================================================
+
+hostname: minecraft
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users -- preserve cloud-provisioner injection of customer SSH key/hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - wget
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - openjdk-21-jre-headless
+  - screen
+  - jq
+  - htop
+  - git
+  - rsync
+  - python3
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.minecraft-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      # RCON allows remote console access to the server
+      RCON_PASS="CHANGE_ME"
+      # How much heap RAM to give the JVM (leave 512 MB for the OS)
+      JVM_XMS="1024M"
+      JVM_XMX="2048M"
+      # PaperSpigot version to install
+      # See: https://papermc.io/downloads/paper
+      PAPER_MC_VERSION="1.21.4"
+      # Server motd (Message of the Day shown in server list)
+      SERVER_MOTD="A Minecraft Server on InterServer"
+      # Max players allowed concurrently
+      MAX_PLAYERS="20"
+      # Server difficulty: peaceful, easy, normal, hard
+      DIFFICULTY="normal"
+      # Gamemode: survival, creative, adventure, spectator
+      GAMEMODE="survival"
+      # Enable PvP: true or false
+      ENABLE_PVP="true"
+      # Whitelist: true restricts to whitelisted players only
+      ENABLE_WHITELIST="false"
+
+  # --- helper Python script to resolve latest PaperMC build -----------------
+  - path: /usr/local/bin/paper-latest-build.py
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env python3
+      import sys
+      import json
+      data = json.load(sys.stdin)
+      builds = data.get('builds', [])
+      if builds:
+          print(builds[-1]['build'])
+      else:
+          print('')
+
+  # --- fail2ban jail config ---------------------------------------------------
+  - path: /etc/fail2ban/jail.d/minecraft-sshd.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- systemd service unit ---------------------------------------------------
+  - path: /etc/systemd/system/minecraft.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Minecraft PaperSpigot Server
+      Documentation=https://papermc.io
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=minecraft
+      Group=minecraft
+      WorkingDirectory=/opt/minecraft/server
+      EnvironmentFile=/etc/minecraft/server.env
+      ExecStart=/usr/bin/java \
+          -Xms${JVM_XMS} \
+          -Xmx${JVM_XMX} \
+          -XX:+UseG1GC \
+          -XX:+ParallelRefProcEnabled \
+          -XX:MaxGCPauseMillis=200 \
+          -XX:+UnlockExperimentalVMOptions \
+          -XX:+DisableExplicitGC \
+          -XX:+AlwaysPreTouch \
+          -XX:G1HeapWastePercent=5 \
+          -XX:G1MixedGCCountTarget=4 \
+          -XX:G1MixedGCLiveThresholdPercent=90 \
+          -XX:G1RSetUpdatingPauseTimePercent=5 \
+          -XX:SurvivorRatio=32 \
+          -XX:+PerfDisableSharedMem \
+          -XX:MaxTenuringThreshold=1 \
+          -Dusing.aikars.flags=https://mcflags.emc.gs \
+          -Daikars.new.flags=true \
+          -jar /opt/minecraft/server/paper.jar \
+          --nogui
+      Restart=on-failure
+      RestartSec=30
+      StandardInput=null
+      StandardOutput=journal
+      StandardError=journal
+      TimeoutStopSec=120
+      KillMode=mixed
+      KillSignal=SIGTERM
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/minecraft-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/minecraft-bootstrap.log) 2>&1
+      source /root/.minecraft-bootstrap.env
+
+      echo "=== Minecraft PaperSpigot bootstrap started: $(date) ==="
+
+      # random secret helper (SIGPIPE-safe under set -e + pipefail)
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      [ "$RCON_PASS" = "CHANGE_ME" ] && RCON_PASS="$(rand)"
+
+      # create dedicated minecraft user (idempotent)
+      if ! id -u minecraft >/dev/null 2>&1; then
+        useradd -r -m -d /opt/minecraft -s /usr/sbin/nologin minecraft
+      fi
+
+      # create server directory structure
+      mkdir -p /opt/minecraft/server
+      mkdir -p /etc/minecraft
+
+      # fetch latest PaperSpigot build for requested MC version
+      echo "Fetching PaperSpigot for Minecraft ${PAPER_MC_VERSION}..."
+      PAPER_API="https://api.papermc.io/v2/projects/paper/versions/${PAPER_MC_VERSION}/builds"
+
+      BUILD_JSON="$(curl -fsSL "${PAPER_API}" 2>/dev/null || echo '{}')"
+      LATEST_BUILD="$(echo "${BUILD_JSON}" | python3 /usr/local/bin/paper-latest-build.py 2>/dev/null || true)"
+
+      if [ -z "${LATEST_BUILD}" ]; then
+        echo "ERROR: Could not determine latest PaperSpigot build for ${PAPER_MC_VERSION}."
+        echo "       Check https://papermc.io/downloads/paper for available versions."
+        exit 1
+      fi
+
+      PAPER_JAR="paper-${PAPER_MC_VERSION}-${LATEST_BUILD}.jar"
+      PAPER_URL="https://api.papermc.io/v2/projects/paper/versions/${PAPER_MC_VERSION}/builds/${LATEST_BUILD}/downloads/${PAPER_JAR}"
+
+      if [ ! -f "/opt/minecraft/server/paper.jar" ]; then
+        echo "Downloading ${PAPER_JAR}..."
+        curl -fsSL "${PAPER_URL}" -o /opt/minecraft/server/paper.jar
+      fi
+
+      # accept the Mojang EULA (required to run the server)
+      cat > /opt/minecraft/server/eula.txt <<'EULA_BLOCK'
+      # By setting eula=true you indicate agreement to the Minecraft EULA.
+      # https://account.mojang.com/documents/minecraft_eula
+      eula=true
+      EULA_BLOCK
+
+      # write server.properties
+      cat > /opt/minecraft/server/server.properties <<PROPS_BLOCK
+      # Minecraft server properties -- generated by InterServer bootstrap
+      server-port=25565
+      query.port=25565
+      rcon.port=25575
+      enable-rcon=true
+      rcon.password=${RCON_PASS}
+      motd=${SERVER_MOTD}
+      max-players=${MAX_PLAYERS}
+      difficulty=${DIFFICULTY}
+      gamemode=${GAMEMODE}
+      pvp=${ENABLE_PVP}
+      white-list=${ENABLE_WHITELIST}
+      online-mode=true
+      spawn-protection=16
+      view-distance=10
+      simulation-distance=10
+      level-name=world
+      level-type=minecraft\:normal
+      spawn-monsters=true
+      spawn-animals=true
+      spawn-npcs=true
+      generate-structures=true
+      allow-flight=false
+      broadcast-console-to-ops=true
+      enable-query=false
+      prevent-proxy-connections=false
+      PROPS_BLOCK
+
+      # write EnvironmentFile for systemd (JVM heap settings)
+      cat > /etc/minecraft/server.env <<ENV_BLOCK
+      JVM_XMS=${JVM_XMS}
+      JVM_XMX=${JVM_XMX}
+      ENV_BLOCK
+      chmod 640 /etc/minecraft/server.env
+      chown root:minecraft /etc/minecraft/server.env
+
+      # set ownership
+      chown -R minecraft:minecraft /opt/minecraft
+
+      # enable and start Minecraft service
+      systemctl daemon-reload
+      systemctl enable minecraft
+      systemctl start minecraft
+
+      # firewall: SSH + Minecraft TCP 25565 + Bedrock UDP 19132
+      ufw allow OpenSSH
+      ufw allow 25565/tcp comment 'Minecraft Java Edition'
+      ufw allow 19132/udp comment 'Minecraft Bedrock/Geyser (optional)'
+      # RCON (25575) intentionally NOT opened -- local/tunnel access only
+      ufw --force enable
+
+      # fail2ban
+      systemctl enable --now fail2ban
+
+      # write credentials summary
+      cat > /root/minecraft-credentials.txt <<CREDS_BLOCK
+      ===== Minecraft PaperSpigot bootstrap complete: $(date) =====
+
+      Connect (Java Edition):    <this-server-ip>:25565
+      Bedrock/Geyser port (UDP): <this-server-ip>:19132  (plugin required)
+
+      RCON password : ${RCON_PASS}
+      RCON port     : 25575  (local only, not firewalled)
+      RCON connect  : mcrcon -H 127.0.0.1 -P 25575 -p "${RCON_PASS}"
+
+      Server files  : /opt/minecraft/server/
+      Server config : /opt/minecraft/server/server.properties
+      Logs          : /var/log/minecraft-bootstrap.log
+                      journalctl -u minecraft -f
+
+      Useful commands:
+        systemctl status minecraft
+        systemctl restart minecraft
+        journalctl -u minecraft -n 100 -f
+      CREDS_BLOCK
+      chmod 600 /root/minecraft-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials in /root/minecraft-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/minecraft-bootstrap.sh" ]
+
+final_message: "Minecraft PaperSpigot bootstrap done after $UPTIME s. See /root/minecraft-credentials.txt and /var/log/minecraft-bootstrap.log"

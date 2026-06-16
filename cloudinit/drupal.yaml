@@ -1,0 +1,358 @@
+#cloud-config
+# =============================================================================
+# Drupal "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Nginx + PHP-FPM + MariaDB + Composer + Drush + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.drupal-bootstrap.env before
+# launching, OR inject them via your provisioner. Passwords are randomised
+# per-boot when left as the defaults (CHANGE_ME).
+# =============================================================================
+
+hostname: drupal
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve default (provisioner injects customer SSH key + hostname)
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - mariadb-server
+  - mariadb-client
+  - php-fpm
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-mbstring
+  - php-xml
+  - php-intl
+  - php-zip
+  - php-bcmath
+  - php-json
+  - php-opcache
+  - php-tokenizer
+  - php-dom
+  - php-simplexml
+  - php-pdo
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+  - composer
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive MariaDB + PHP memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable bootstrap variables ---------------------------------
+  - path: /root/.drupal-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE -----
+      APP_DOMAIN="example.com"          # primary domain (no scheme)
+      APP_DOMAIN_WWW="www.example.com"  # www alias (set empty to skip)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (e.g. DNS not pointed yet)
+
+      DRUPAL_SITE_NAME="My Drupal Site"
+      DRUPAL_ACCOUNT_NAME="siteadmin"
+      DRUPAL_ACCOUNT_EMAIL="admin@example.com"
+
+      # DB creds — randomised on first boot if left as CHANGE_ME
+      DRUPAL_DB_NAME="drupal"
+      DRUPAL_DB_USER="drupal_user"
+      DRUPAL_DB_PASS="CHANGE_ME"
+      DRUPAL_ACCOUNT_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      DRUPAL_PATH="/var/www/drupal"
+      DRUPAL_VERSION="^10"
+
+  # --- Nginx vhost (placeholder tokens replaced by bootstrap) ----------------
+  - path: /etc/nginx/sites-available/drupal.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name SERVER_NAMES_PLACEHOLDER;
+
+          root /var/www/drupal/web;
+          index index.php index.html;
+
+          client_max_body_size 64M;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          location / {
+              try_files $uri /index.php?$query_string;
+          }
+
+          location ~ '\.php$|^/update.php' {
+              include snippets/fastcgi-php.conf;
+              fastcgi_pass unix:PHP_FPM_SOCK_PLACEHOLDER;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              fastcgi_read_timeout 300;
+          }
+
+          # Drupal hardening — deny hidden files except .well-known
+          location ~ /\. {
+              deny all;
+          }
+          location ~* ^/sites/.*/private/ { deny all; }
+          location ~ ^/sites/[^/]+/files/.*\.php$ { deny all; }
+
+          # Static assets — aggressive cache
+          location ~* \.(css|js|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot)$ {
+              expires max;
+              log_not_found off;
+              access_log off;
+          }
+
+          # Drupal misc
+          location = /favicon.ico { log_not_found off; access_log off; }
+          location = /robots.txt  { allow all; log_not_found off; access_log off; }
+          location ~* /xmlrpc.php { deny all; }
+      }
+
+  # --- fail2ban configuration ------------------------------------------------
+  - path: /etc/fail2ban/jail.d/drupal.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime  = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/drupal-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/drupal-bootstrap.log) 2>&1
+      source /root/.drupal-bootstrap.env
+
+      echo "=== Drupal bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret generator ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- randomise any CHANGE_ME passwords ---
+      [ "$DRUPAL_DB_PASS"     = "CHANGE_ME" ] && DRUPAL_DB_PASS="$(rand)"
+      [ "$DRUPAL_ACCOUNT_PASS" = "CHANGE_ME" ] && DRUPAL_ACCOUNT_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS"    = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+
+      # --- detect PHP-FPM socket ---
+      PHP_FPM_SOCK="$(find /run/php -name 'php*-fpm.sock' 2>/dev/null | head -n1 || true)"
+      echo "PHP-FPM socket: ${PHP_FPM_SOCK}"
+
+      # --- tune PHP for Drupal ---
+      PHP_VER="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || true)"
+      FPM_INI="/etc/php/${PHP_VER}/fpm/php.ini"
+      if [ -f "$FPM_INI" ]; then
+        sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 64M/'  "$FPM_INI"
+        sed -ri 's/^;?post_max_size.*/post_max_size = 64M/'               "$FPM_INI"
+        sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'                "$FPM_INI"
+        sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'     "$FPM_INI"
+        sed -ri 's/^;?max_input_vars.*/max_input_vars = 3000/'            "$FPM_INI"
+        sed -ri 's/^;?opcache.enable.*/opcache.enable=1/'                  "$FPM_INI"
+        sed -ri 's/^;?opcache.memory_consumption.*/opcache.memory_consumption=128/' "$FPM_INI"
+      fi
+      systemctl restart "php${PHP_VER}-fpm" 2>/dev/null \
+        || systemctl restart php-fpm 2>/dev/null \
+        || true
+
+      # --- secure MariaDB + create Drupal DB ---
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${DRUPAL_DB_NAME}\`
+        DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${DRUPAL_DB_USER}'@'localhost'
+        IDENTIFIED BY '${DRUPAL_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${DRUPAL_DB_NAME}\`.* TO '${DRUPAL_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --- ensure composer is available globally (apt may provide an older one) ---
+      if ! command -v composer >/dev/null 2>&1; then
+        curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+      fi
+      # ensure at least Composer 2
+      composer self-update --2 2>/dev/null || true
+
+      # --- install Drupal via Composer (recommended method) ---
+      mkdir -p "$(dirname "$DRUPAL_PATH")"
+      if [ ! -f "${DRUPAL_PATH}/composer.json" ]; then
+        composer create-project "drupal/recommended-project:${DRUPAL_VERSION}" "$DRUPAL_PATH" \
+          --no-interaction --no-progress
+      fi
+
+      # --- install Drush inside the project ---
+      if ! command -v drush >/dev/null 2>&1 && \
+         [ ! -f "${DRUPAL_PATH}/vendor/bin/drush" ]; then
+        composer --working-dir="$DRUPAL_PATH" require drush/drush --no-interaction --no-progress
+      fi
+      DRUSH="${DRUPAL_PATH}/vendor/bin/drush"
+
+      # --- Drupal settings.php + services.yml setup ---
+      SITES_DIR="${DRUPAL_PATH}/web/sites/default"
+      mkdir -p "${SITES_DIR}/files"
+      if [ ! -f "${SITES_DIR}/settings.php" ]; then
+        cp "${SITES_DIR}/default.settings.php" "${SITES_DIR}/settings.php"
+      fi
+
+      # --- DB connection snippet appended once ---
+      if ! grep -q 'drupal_db_bootstrap' "${SITES_DIR}/settings.php" 2>/dev/null; then
+        cat >> "${SITES_DIR}/settings.php" <<PHPSETTINGS
+
+      # drupal_db_bootstrap — added by drupal-bootstrap.sh
+      \$databases['default']['default'] = [
+        'driver'    => 'mysql',
+        'database'  => '${DRUPAL_DB_NAME}',
+        'username'  => '${DRUPAL_DB_USER}',
+        'password'  => '${DRUPAL_DB_PASS}',
+        'host'      => 'localhost',
+        'port'      => '3306',
+        'prefix'    => '',
+        'collation' => 'utf8mb4_general_ci',
+        'namespace' => 'Drupal\\\\Core\\\\Database\\\\Driver\\\\mysql',
+        'driver'    => 'mysql',
+      ];
+      \$settings['hash_salt'] = '$(rand)$(rand)';
+      \$settings['update_free_access'] = FALSE;
+      \$settings['file_public_path'] = 'sites/default/files';
+      \$settings['trusted_host_patterns'][] = '^${APP_DOMAIN//./\\.}\$';
+      PHPSETTINGS
+      fi
+
+      # --- file permissions ---
+      chown -R www-data:www-data "$DRUPAL_PATH"
+      find "${DRUPAL_PATH}/web" -type d -exec chmod 755 {} \;
+      find "${DRUPAL_PATH}/web" -type f -exec chmod 644 {} \;
+      chmod 600 "${SITES_DIR}/settings.php"
+      chmod 755 "${SITES_DIR}/files"
+
+      # --- run Drupal site install via Drush ---
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      sudo -u www-data "$DRUSH" site:install standard \
+        --root="${DRUPAL_PATH}/web" \
+        --db-url="mysql://${DRUPAL_DB_USER}:${DRUPAL_DB_PASS}@localhost/${DRUPAL_DB_NAME}" \
+        --site-name="${DRUPAL_SITE_NAME}" \
+        --account-name="${DRUPAL_ACCOUNT_NAME}" \
+        --account-pass="${DRUPAL_ACCOUNT_PASS}" \
+        --account-mail="${DRUPAL_ACCOUNT_EMAIL}" \
+        --locale=en \
+        --yes \
+        2>/dev/null || true
+
+      # re-fix permissions after install writes files
+      chown -R www-data:www-data "${DRUPAL_PATH}/web/sites/default/files"
+
+      # --- Nginx vhost ---
+      SERVER_NAMES="$APP_DOMAIN"
+      [ -n "$APP_DOMAIN_WWW" ] && SERVER_NAMES="$APP_DOMAIN $APP_DOMAIN_WWW"
+      sed -i "s|SERVER_NAMES_PLACEHOLDER|${SERVER_NAMES}|g"   /etc/nginx/sites-available/drupal.conf
+      sed -i "s|PHP_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|g"   /etc/nginx/sites-available/drupal.conf
+      ln -sf /etc/nginx/sites-available/drupal.conf /etc/nginx/sites-enabled/drupal.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # --- firewall ---
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban ---
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt ---
+      if [ "$ENABLE_TLS" = "true" ]; then
+        CERTBOT_DOMAINS="-d $APP_DOMAIN"
+        [ -n "$APP_DOMAIN_WWW" ] && CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $APP_DOMAIN_WWW"
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" $CERTBOT_DOMAINS --redirect \
+          || echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot --nginx"
+      fi
+
+      # --- write operator credentials summary ---
+      cat > /root/drupal-credentials.txt <<CREDS
+      ===== Drupal install complete: $(date) =====
+      URL:                 ${PROTO}://${APP_DOMAIN}
+      Admin user:          ${DRUPAL_ACCOUNT_NAME}
+      Admin password:      ${DRUPAL_ACCOUNT_PASS}
+      Admin email:         ${DRUPAL_ACCOUNT_EMAIL}
+
+      DB name:             ${DRUPAL_DB_NAME}
+      DB user:             ${DRUPAL_DB_USER}
+      DB password:         ${DRUPAL_DB_PASS}
+      MySQL root password: ${MYSQL_ROOT_PASS}
+
+      Drupal path:         ${DRUPAL_PATH}
+      Drush:               ${DRUSH}
+      Bootstrap log:       /var/log/drupal-bootstrap.log
+      CREDS
+      chmod 600 /root/drupal-credentials.txt
+
+      echo "=== Bootstrap finished: $(date). Credentials: /root/drupal-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/drupal-bootstrap.sh" ]
+
+final_message: "Drupal bootstrap done after $UPTIME s. See /root/drupal-credentials.txt and /var/log/drupal-bootstrap.log"

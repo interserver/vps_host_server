@@ -1,0 +1,330 @@
+#cloud-config
+# =============================================================================
+# Jamulus — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Jamulus server (headless, apt) + JACK dummy audio driver
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Music port: 22124/udp (Jamulus default)
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.jamulus-bootstrap.env
+# before launching, or supply them via your provisioner.
+# =============================================================================
+
+hostname: jamulus
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject SSH key + hostname later
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd runs)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - net-tools
+  - htop
+  - git
+  - jackd2
+  - jamulus
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables — fill in before first boot
+  # --------------------------------------------------------------------------
+  - path: /root/.jamulus-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Jamulus bootstrap environment — edit BEFORE launching the instance
+      # -----------------------------------------------------------------------
+
+      # Human-readable name shown to Jamulus clients when they browse servers
+      SERVER_NAME="InterServer Jamulus"
+
+      # Maximum simultaneous musicians (default 10, max 150)
+      MAX_CHANNELS=10
+
+      # UDP port Jamulus listens on (default 22124)
+      JAMULUS_PORT=22124
+
+      # Genre/style tag shown in the server browser (optional, leave empty)
+      # Values: Any, Rock, Pop, Jazz, Classical, Choral, Folk, Punk, Latin, HipHop, Reggae
+      SERVER_GENRE=""
+
+      # Set to 'true' to register on the official Jamulus directory
+      # (publishes the server so anyone can find it in the built-in browser)
+      REGISTER_PUBLIC="false"
+
+      # If REGISTER_PUBLIC=true, set the directory server address
+      # Default Jamulus directory: anygenre1.jamulus.io:22224
+      DIRECTORY_SERVER="anygenre1.jamulus.io:22224"
+
+      # Path where Jamulus stores recordings (leave empty to disable recording)
+      RECORDING_DIR=""
+
+      # Optional welcome message shown to connecting clients (leave empty to omit)
+      WELCOME_MSG=""
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/jamulus-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/jamulus-bootstrap.log) 2>&1
+      source /root/.jamulus-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Jamulus bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # 1. Unattended-upgrades (automatic security updates)
+      # -----------------------------------------------------------------------
+      echo "--- Configuring unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      EOF
+      systemctl enable --now unattended-upgrades || true
+
+      # -----------------------------------------------------------------------
+      # 2. JACK dummy audio driver (required for headless Jamulus server)
+      # -----------------------------------------------------------------------
+      echo "--- Configuring JACK dummy audio ---"
+
+      # Ensure the 'jamulus' system user exists to run the service
+      id -u jamulus &>/dev/null || useradd --system --shell /usr/sbin/nologin --home /var/lib/jamulus --create-home jamulus
+
+      # Add jamulus user to audio group
+      usermod -aG audio jamulus || true
+
+      # Create jackd configuration directory
+      mkdir -p /var/lib/jamulus/.config/jack
+      cat > /var/lib/jamulus/.config/jack/conf.xml <<'JACKEOF'
+      <?xml version="1.0"?>
+      <!DOCTYPE jack_settings [
+      <!ELEMENT jack_settings (engine, driver, output_ports?, input_ports?, slavebackends?)>
+      <!ELEMENT engine (option)*>
+      <!ELEMENT driver (option)*>
+      <!ELEMENT option (#PCDATA)>
+      <!ELEMENT output_ports (port)*>
+      <!ELEMENT input_ports (port)*>
+      <!ELEMENT port (#PCDATA)>
+      <!ELEMENT slavebackends (driver)*>
+      ]>
+      <jack_settings>
+       <engine>
+        <option name="driver">dummy</option>
+        <option name="realtime">false</option>
+        <option name="verbose">false</option>
+       </engine>
+       <driver>
+        <option name="rate">48000</option>
+        <option name="period">1024</option>
+        <option name="nperiods">2</option>
+       </driver>
+      </jack_settings>
+      JACKEOF
+      chown -R jamulus:jamulus /var/lib/jamulus
+
+      # -----------------------------------------------------------------------
+      # 3. Systemd service for JACK dummy server
+      # -----------------------------------------------------------------------
+      echo "--- Creating jackd systemd service ---"
+      cat > /etc/systemd/system/jackd-dummy.service <<'EOF'
+      [Unit]
+      Description=JACK Audio Connection Kit (dummy driver for Jamulus)
+      Before=jamulus-server.service
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=jamulus
+      Group=audio
+      Environment=HOME=/var/lib/jamulus
+      ExecStart=/usr/bin/jackd --no-realtime -d dummy -r 48000 -p 1024
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      # -----------------------------------------------------------------------
+      # 4. Build Jamulus server flags from env vars
+      # -----------------------------------------------------------------------
+      echo "--- Building Jamulus server flags ---"
+      JAMULUS_OPTS="--server --nogui"
+      JAMULUS_OPTS="${JAMULUS_OPTS} --servername \"${SERVER_NAME}\""
+      JAMULUS_OPTS="${JAMULUS_OPTS} --numchannels ${MAX_CHANNELS}"
+      JAMULUS_OPTS="${JAMULUS_OPTS} --port ${JAMULUS_PORT}"
+
+      if [ -n "${SERVER_GENRE:-}" ]; then
+        JAMULUS_OPTS="${JAMULUS_OPTS} --genre ${SERVER_GENRE}"
+      fi
+
+      if [ "${REGISTER_PUBLIC:-false}" = "true" ]; then
+        JAMULUS_OPTS="${JAMULUS_OPTS} --directoryserver ${DIRECTORY_SERVER}"
+      else
+        JAMULUS_OPTS="${JAMULUS_OPTS} --directoryserver disabled"
+      fi
+
+      if [ -n "${RECORDING_DIR:-}" ]; then
+        mkdir -p "${RECORDING_DIR}"
+        chown jamulus:jamulus "${RECORDING_DIR}"
+        JAMULUS_OPTS="${JAMULUS_OPTS} --recording ${RECORDING_DIR}"
+      fi
+
+      if [ -n "${WELCOME_MSG:-}" ]; then
+        JAMULUS_OPTS="${JAMULUS_OPTS} --welcomemessage \"${WELCOME_MSG}\""
+      fi
+
+      # -----------------------------------------------------------------------
+      # 5. Systemd service for Jamulus server
+      # -----------------------------------------------------------------------
+      echo "--- Creating jamulus-server systemd service ---"
+      cat > /etc/systemd/system/jamulus-server.service <<EOF
+      [Unit]
+      Description=Jamulus Real-Time Collaborative Music Server
+      After=jackd-dummy.service network.target
+      Requires=jackd-dummy.service
+
+      [Service]
+      Type=simple
+      User=jamulus
+      Group=audio
+      Environment=HOME=/var/lib/jamulus
+      Environment=JACK_NO_AUDIO_RESERVATION=1
+      ExecStart=/usr/bin/jamulus ${JAMULUS_OPTS}
+      Restart=on-failure
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      # -----------------------------------------------------------------------
+      # 6. Firewall — allow SSH + Jamulus UDP port only
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow "${JAMULUS_PORT}/udp" comment 'Jamulus real-time audio'
+      ufw --force enable
+      echo "UFW status:"
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 7. Fail2ban (SSH brute-force protection)
+      # -----------------------------------------------------------------------
+      echo "--- Configuring fail2ban ---"
+      cat > /etc/fail2ban/jail.d/jamulus-defaults.conf <<'EOF'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      EOF
+      systemctl enable --now fail2ban || true
+
+      # -----------------------------------------------------------------------
+      # 8. Enable and start services
+      # -----------------------------------------------------------------------
+      echo "--- Enabling and starting Jamulus services ---"
+      systemctl daemon-reload
+      systemctl enable jackd-dummy.service
+      systemctl enable jamulus-server.service
+      systemctl start jackd-dummy.service
+      sleep 3
+      systemctl start jamulus-server.service || true
+
+      # -----------------------------------------------------------------------
+      # 9. Write credentials / connection info
+      # -----------------------------------------------------------------------
+      echo "--- Writing credentials file ---"
+      cat > /root/jamulus-credentials.txt <<CREDS
+      ======================================================
+        Jamulus Server — Connection Information
+      ======================================================
+      Server Name   : ${SERVER_NAME}
+      Host / IP     : $(hostname -I | awk '{print $1}')
+      UDP Port      : ${JAMULUS_PORT}
+      Max Musicians : ${MAX_CHANNELS}
+      Public Listing: ${REGISTER_PUBLIC}
+
+      HOW TO CONNECT:
+        1. Install Jamulus on your computer from https://jamulus.io
+        2. Open Jamulus -> Connect -> Manual Host Entry
+        3. Enter this server's IP and port: <IP>:${JAMULUS_PORT}
+
+      SERVICE MANAGEMENT:
+        systemctl status jamulus-server
+        systemctl restart jamulus-server
+        journalctl -u jamulus-server -f
+
+      Bootstrap log : /var/log/jamulus-bootstrap.log
+      ======================================================
+      CREDS
+      chmod 600 /root/jamulus-credentials.txt
+
+      echo "=== Jamulus bootstrap complete at $(date -u) ==="
+      echo "=== Connect to this server at $(hostname -I | awk '{print $1}'):${JAMULUS_PORT} (UDP) ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/jamulus-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in the console log when cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ==========================================================
+  Jamulus server is ready!
+  - Musicians connect via Jamulus client using UDP port 22124
+  - Service status: systemctl status jamulus-server
+  - Credentials:    cat /root/jamulus-credentials.txt
+  - Bootstrap log:  /var/log/jamulus-bootstrap.log
+  ==========================================================

@@ -1,0 +1,297 @@
+#cloud-config
+# =============================================================================
+# Easypanel — Ubuntu 26.04 LTS cloud-init user-data
+# Category: Control Panel (one-click app)
+# Installer: Easypanel official non-interactive installer (get.easypanel.io)
+# License: Free tier available; Pro features require subscription
+#          https://easypanel.io/pricing
+# -----------------------------------------------------------------------------
+# EDIT operator vars in /root/.easypanel-bootstrap.env before (or just after)
+# first boot, then re-run /root/easypanel-bootstrap.sh if needed.
+# =============================================================================
+
+hostname: easypanel
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — let provisioner inject SSH key + hostname; never delete default
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — cloud-init installs these before runcmd runs
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - python3-certbot
+  - jq
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB; survive build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.easypanel-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ---------------------------------------------------------------
+      # Easypanel bootstrap — edit these before first boot (or re-run
+      # /root/easypanel-bootstrap.sh after editing).
+      # ---------------------------------------------------------------
+
+      # Fully-qualified domain name for the Easypanel dashboard.
+      # Easypanel listens on port 3000 (and 443 via its built-in proxy).
+      APP_DOMAIN=easypanel.example.com
+
+      # Let's Encrypt registration e-mail (used if ENABLE_TLS=true).
+      LE_EMAIL=admin@example.com
+
+      # Set to 'true' to attempt Certbot TLS on first boot.
+      # Leave 'false' until DNS is pointed at this server.
+      ENABLE_TLS=false
+
+      # Initial Easypanel admin credentials.
+      # Leave ADMIN_PASS as CHANGE_ME and the script will generate a
+      # random password; change ADMIN_EMAIL to the desired login email.
+      ADMIN_EMAIL=admin@example.com
+      ADMIN_PASS=CHANGE_ME
+
+  # ---------- bootstrap shell script ----------
+  - path: /root/easypanel-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/easypanel-bootstrap.log) 2>&1
+      source /root/.easypanel-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helpers
+      # ----------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      log() { echo "[easypanel-bootstrap] $(date -u +%FT%TZ)  $*"; }
+
+      # ----------------------------------------------------------------
+      # Resolve admin password
+      # ----------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        log "Generated random ADMIN_PASS."
+      fi
+
+      # ----------------------------------------------------------------
+      # Automatic security updates
+      # ----------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      EOF
+
+      # ----------------------------------------------------------------
+      # Firewall — allow only SSH (22), HTTP (80), HTTPS (443),
+      # and Easypanel dashboard port (3000/TCP).
+      # Easypanel's built-in Traefik proxy also uses 80/443 for apps.
+      # ----------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'HTTP (Traefik proxy)'
+      ufw allow 443/tcp  comment 'HTTPS (Traefik proxy)'
+      ufw allow 3000/tcp comment 'Easypanel dashboard'
+      ufw --force enable
+      log "UFW enabled."
+
+      # ----------------------------------------------------------------
+      # fail2ban
+      # ----------------------------------------------------------------
+      log "Configuring fail2ban..."
+      if ! systemctl is-active --quiet fail2ban; then
+        systemctl enable --now fail2ban
+      fi
+      cat > /etc/fail2ban/jail.d/easypanel-ssh.conf <<'EOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      EOF
+      systemctl reload fail2ban || systemctl restart fail2ban
+
+      # ----------------------------------------------------------------
+      # Install Docker (required by Easypanel)
+      # Easypanel's own installer handles Docker, but we pre-install it
+      # to guarantee the correct version and enable idempotent re-runs.
+      # ----------------------------------------------------------------
+      log "Installing Docker CE..."
+      if command -v docker > /dev/null 2>&1; then
+        log "Docker already installed: $(docker --version)"
+      else
+        # Use the official Docker convenience script — codename-agnostic
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        sh /tmp/get-docker.sh
+        rm -f /tmp/get-docker.sh
+        systemctl enable --now docker
+        log "Docker installed: $(docker --version)"
+      fi
+
+      # ----------------------------------------------------------------
+      # Install Easypanel via official non-interactive installer
+      # Ref: https://easypanel.io/docs/installation
+      # The installer is a single curl-to-bash script that sets up
+      # Docker networks, volumes, and the easypanel container stack.
+      # ----------------------------------------------------------------
+      log "Downloading and running Easypanel installer..."
+      curl -sSL https://get.easypanel.io | sh
+      log "Easypanel installer completed."
+
+      # ----------------------------------------------------------------
+      # Wait for Easypanel API to become reachable (up to 5 min)
+      # ----------------------------------------------------------------
+      log "Waiting for Easypanel dashboard on port 3000..."
+      for i in $(seq 1 60); do
+        if curl -sf --max-time 5 "http://localhost:3000/" -o /dev/null 2>&1; then
+          log "Easypanel dashboard is up."
+          break
+        fi
+        sleep 5
+      done
+
+      # ----------------------------------------------------------------
+      # Bootstrap initial admin account via Easypanel API
+      # The /api/register endpoint is only available before any user
+      # exists (first-run only). We attempt it idempotently.
+      # ----------------------------------------------------------------
+      log "Attempting to register initial admin account..."
+      REG_RESP=$(curl -sf --max-time 15 \
+        -X POST "http://localhost:3000/api/register" \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASS}\"}" \
+        2>&1 || true)
+
+      if echo "${REG_RESP}" | grep -q '"token"'; then
+        log "Admin account created successfully."
+      else
+        log "Admin registration response: ${REG_RESP}"
+        log "NOTE: If registration was skipped, the admin account may already exist."
+      fi
+
+      # ----------------------------------------------------------------
+      # Certbot TLS (optional — only if DNS already resolves)
+      # Easypanel ships Traefik with built-in ACME; standalone certbot
+      # is a fallback for operators who need a cert before Easypanel
+      # ACME is configured via the UI.
+      # ----------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot certonly --standalone --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS may not be pointed yet."
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file
+      # ----------------------------------------------------------------
+      log "Writing credentials file..."
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      PANEL_URL="http://${APP_DOMAIN}:3000"
+      LOCAL_URL="http://${SERVER_IP}:3000"
+
+      cat > /root/easypanel-credentials.txt <<CREDS
+      ================================================================
+       Easypanel — InterServer One-Click App
+       Generated: $(date -u +%FT%TZ)
+      ================================================================
+
+      Dashboard URL (by domain, once DNS is configured):
+        ${PANEL_URL}
+
+      Dashboard URL (by IP, usable immediately):
+        ${LOCAL_URL}
+
+      Admin Email: ${ADMIN_EMAIL}
+      Admin Pass:  ${ADMIN_PASS}
+
+      ================================================================
+       GETTING STARTED
+      ================================================================
+      1. Open the dashboard URL above in your browser.
+      2. Log in with the credentials above.
+         (If registration was skipped, use the credentials you set
+          in /root/.easypanel-bootstrap.env.)
+      3. Point ${APP_DOMAIN} at this server's IP (${SERVER_IP}).
+      4. In Easypanel Settings → Domain, set your domain so Traefik
+         can obtain a Let's Encrypt certificate automatically.
+      5. Deploy your first app from the Easypanel project templates.
+
+      ================================================================
+       FIREWALL RULES (UFW)
+      ================================================================
+      Open ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3000 (dashboard)
+      Easypanel's Traefik proxy routes app traffic on 80/443.
+
+      ================================================================
+       OPERATOR VARS
+      ================================================================
+      Edit:  /root/.easypanel-bootstrap.env
+      Log:   /var/log/easypanel-bootstrap.log
+      ================================================================
+      CREDS
+      chmod 600 /root/easypanel-credentials.txt
+      log "Credentials written to /root/easypanel-credentials.txt"
+
+      # ----------------------------------------------------------------
+      # Final summary
+      # ----------------------------------------------------------------
+      log "============================================================"
+      log " Easypanel bootstrap complete."
+      log " Dashboard : ${LOCAL_URL}"
+      log " Credentials : /root/easypanel-credentials.txt"
+      log "============================================================"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/easypanel-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Console message shown after cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   Easypanel one-click app bootstrap finished.
+   Run:  cat /root/easypanel-credentials.txt
+   Log:  /var/log/easypanel-bootstrap.log
+  ============================================================

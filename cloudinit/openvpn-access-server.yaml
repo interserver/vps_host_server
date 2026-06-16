@@ -1,0 +1,401 @@
+#cloud-config
+# =============================================================================
+# OpenVPN Access Server (BYOL) — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: OpenVPN Access Server from official vendor apt repo
+#        UFW firewall + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.openvpn-access-server-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# A license key is NOT included — activate via the Admin Web UI after boot.
+# Commercial product: https://openvpn.net/access-server/
+# =============================================================================
+
+hostname: openvpn-as
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during OpenVPN AS install on small instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; OpenVPN AS itself is installed from its vendor repo
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - net-tools
+  - openssl
+  - sudo
+  - psmisc
+  - acl
+  - locales
+  - python3-certbot
+  - certbot
+  - iproute2
+  - jq
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.openvpn-access-server-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # OpenVPN Access Server Bootstrap — edit BEFORE first boot
+      # or before re-running the bootstrap script.
+      # ============================================================
+
+      # Fully-qualified domain name for the OpenVPN AS admin web UI
+      # (must resolve to this server's public IP for TLS to work)
+      APP_DOMAIN=vpn.example.com
+
+      # E-mail address for Let's Encrypt certificate registration
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve, cert issuance is deferred
+      # gracefully — you can re-run: certbot certonly --standalone -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # OpenVPN AS admin UI password for the 'openvpn' admin account.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+      # UDP port for OpenVPN data tunnel (default 1194)
+      OVPN_UDP_PORT=1194
+
+      # TCP port for OpenVPN data tunnel (default 443; also serves admin UI)
+      OVPN_TCP_PORT=443
+
+      # Admin web UI port (default 943)
+      OVPN_ADMIN_PORT=943
+
+  # ---------- bootstrap script ----------
+  - path: /root/openvpn-access-server-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openvpn-access-server-bootstrap.log) 2>&1
+      source /root/.openvpn-access-server-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string
+      # The '|| true' is required — head closes the pipe before urandom
+      # is exhausted, which raises SIGPIPE; under set -e + pipefail this
+      # would abort the script without it.
+      # ------------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      echo "=== OpenVPN Access Server Bootstrap started at $(date -u) ==="
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (stored in credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. System locale
+      # ------------------------------------------------------------------
+      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+      fi
+      export LANG=en_US.UTF-8
+      export LC_ALL=en_US.UTF-8
+      export DEBIAN_FRONTEND=noninteractive
+
+      # ------------------------------------------------------------------
+      # 3. Configure automatic security updates (unattended-upgrades)
+      # ------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOEOF
+
+      # ------------------------------------------------------------------
+      # 4. Add OpenVPN Access Server official apt repository
+      #    Source: https://openvpn.net/access-server/download/
+      #    The vendor ships packages for Ubuntu LTS releases; the noble
+      #    (24.04) repo is used as a fallback until a 26.04 line is
+      #    published.
+      #    # fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      echo "Adding OpenVPN Access Server repository..."
+
+      mkdir -p /usr/share/keyrings
+      if [ ! -f /usr/share/keyrings/openvpn-as-archive-keyring.gpg ]; then
+        wget -qO- "https://as-repository.openvpn.net/as/repo.gpg" \
+          | gpg --dearmor \
+          > /usr/share/keyrings/openvpn-as-archive-keyring.gpg
+      fi
+
+      # fallback: noble repo until 26.04 published
+      cat > /etc/apt/sources.list.d/openvpn-as.list <<'SRCEOF'
+      deb [arch=amd64 signed-by=/usr/share/keyrings/openvpn-as-archive-keyring.gpg] https://as-repository.openvpn.net/as/debian noble main
+      SRCEOF
+
+      apt-get update -y
+
+      # ------------------------------------------------------------------
+      # 5. Install OpenVPN Access Server
+      #    openvpn-as installs and pre-configures the AS daemon; it will
+      #    start on first boot but requires a license to unlock >2 VPN users.
+      # ------------------------------------------------------------------
+      echo "Installing openvpn-as package (this may take several minutes)..."
+      apt-get install -y openvpn-as
+      echo "openvpn-as package installed."
+
+      # ------------------------------------------------------------------
+      # 6. Set admin password for the built-in 'openvpn' account
+      #    /usr/local/openvpn_as/scripts/sacli is the AS management CLI
+      # ------------------------------------------------------------------
+      SACLI=/usr/local/openvpn_as/scripts/sacli
+
+      if [ -x "${SACLI}" ]; then
+        echo "Setting admin password for 'openvpn' account..."
+        "${SACLI}" --user openvpn --new_pass "${ADMIN_PASS}" SetLocalPassword
+        echo "Admin password set."
+      else
+        echo "WARN: sacli not found at ${SACLI} — password not set automatically."
+      fi
+
+      # ------------------------------------------------------------------
+      # 7. Configure OpenVPN AS ports via sacli (idempotent)
+      # ------------------------------------------------------------------
+      if [ -x "${SACLI}" ]; then
+        echo "Configuring OpenVPN AS ports..."
+        "${SACLI}" --key "vpn.daemon.0.listen.protocol"  --value "udp"           ConfigPut || true
+        "${SACLI}" --key "vpn.daemon.0.listen.port"      --value "${OVPN_UDP_PORT}" ConfigPut || true
+        "${SACLI}" --key "vpn.server.daemon.tcp.port"    --value "${OVPN_TCP_PORT}" ConfigPut || true
+        "${SACLI}" --key "admin_ui.https.port"           --value "${OVPN_ADMIN_PORT}" ConfigPut || true
+        "${SACLI}" --key "cs.https.port"                 --value "${OVPN_TCP_PORT}" ConfigPut || true
+        "${SACLI}" Start || true
+        echo "OpenVPN AS port configuration applied."
+      fi
+
+      # ------------------------------------------------------------------
+      # 8. Firewall — UFW
+      #    OpenVPN AS ports:
+      #      22    TCP       SSH
+      #      943   TCP       Admin web UI (HTTPS)
+      #      443   TCP       Client web portal + OpenVPN TCP tunnel
+      #      1194  UDP       OpenVPN UDP data tunnel (default)
+      #      80    TCP       HTTP (ACME challenge / redirect, if TLS enabled)
+      # ------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow "${OVPN_ADMIN_PORT}/tcp"
+      ufw allow "${OVPN_TCP_PORT}/tcp"
+      ufw allow "${OVPN_UDP_PORT}/udp"
+      ufw --force enable
+      echo "UFW rules applied."
+
+      # ------------------------------------------------------------------
+      # 9. fail2ban — basic SSH protection
+      # ------------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+      echo "fail2ban configured."
+
+      # ------------------------------------------------------------------
+      # 10. Optional TLS with Certbot (standalone; AS uses its own web server)
+      #     If APP_DOMAIN resolves, issue a cert and configure AS to use it.
+      #     OpenVPN AS reads PEM key/cert via ConfigPut; restart AS after.
+      # ------------------------------------------------------------------
+      CERT_DIR="(not yet issued)"
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "vpn.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+
+        # Temporarily open port 80 for the ACME HTTP-01 challenge
+        ufw allow 80/tcp || true
+
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        # Restore UFW (80 only needed for ACME)
+        ufw delete allow 80/tcp || true
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+
+        # Feed the cert into OpenVPN AS if sacli is available and cert exists
+        if [ -x "${SACLI}" ] && [ -f "${CERT_DIR}/fullchain.pem" ]; then
+          echo "Configuring OpenVPN AS to use Let's Encrypt certificate..."
+          "${SACLI}" --key "cs.ca_bundle"   --value "$(cat ${CERT_DIR}/fullchain.pem)" ConfigPut || true
+          "${SACLI}" --key "cs.priv_key"    --value "$(cat ${CERT_DIR}/privkey.pem)"   ConfigPut || true
+          "${SACLI}" Start || true
+          echo "Certificate configured in OpenVPN AS."
+
+          # Set up certbot renewal hook to restart AS after renewal
+          mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+          cat > /etc/letsencrypt/renewal-hooks/deploy/openvpn-as.sh <<HOOKEOF
+      #!/usr/bin/env bash
+      set -euo pipefail
+      SACLI=/usr/local/openvpn_as/scripts/sacli
+      CERT_DIR=/etc/letsencrypt/live/${APP_DOMAIN}
+      if [ -x "\${SACLI}" ] && [ -f "\${CERT_DIR}/fullchain.pem" ]; then
+        "\${SACLI}" --key "cs.ca_bundle" --value "\$(cat \${CERT_DIR}/fullchain.pem)" ConfigPut || true
+        "\${SACLI}" --key "cs.priv_key"  --value "\$(cat \${CERT_DIR}/privkey.pem)"   ConfigPut || true
+        "\${SACLI}" Start || true
+      fi
+      HOOKEOF
+          chmod 700 /etc/letsencrypt/renewal-hooks/deploy/openvpn-as.sh
+          echo "Certbot renewal hook installed."
+        fi
+      else
+        echo "TLS deferred: APP_DOMAIN is placeholder or ENABLE_TLS!=true"
+      fi
+
+      # ------------------------------------------------------------------
+      # 11. Enable and start OpenVPN AS service
+      # ------------------------------------------------------------------
+      systemctl enable openvpnas || true
+      systemctl start  openvpnas || true
+      echo "OpenVPN AS service enabled and started."
+
+      # ------------------------------------------------------------------
+      # 12. Determine server public IP for credentials file
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf --max-time 5 https://api4.my-ip.io/v2/fast.json 2>/dev/null \
+        | jq -r '.ip // empty' 2>/dev/null \
+        || hostname -I 2>/dev/null | awk '{print $1}' \
+        || echo 'unknown')"
+
+      # ------------------------------------------------------------------
+      # 13. Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      ADMIN_URL="https://${APP_DOMAIN}:${OVPN_ADMIN_PORT}/admin"
+      CLIENT_URL="https://${APP_DOMAIN}:${OVPN_TCP_PORT}/"
+      if [ "${APP_DOMAIN}" = "vpn.example.com" ] || [ -z "${APP_DOMAIN}" ]; then
+        ADMIN_URL="https://${PUBLIC_IP}:${OVPN_ADMIN_PORT}/admin"
+        CLIENT_URL="https://${PUBLIC_IP}:${OVPN_TCP_PORT}/"
+      fi
+
+      cat > /root/openvpn-access-server-credentials.txt <<CREDSEOF
+      ============================================================
+      OpenVPN Access Server (BYOL) — Deployment Credentials
+      Generated: $(date -u)
+      ============================================================
+
+      Server Public IP       : ${PUBLIC_IP}
+
+      Admin Web UI URL       : ${ADMIN_URL}
+      Client Portal URL      : ${CLIENT_URL}
+        (Connect with an OpenVPN client to this server)
+
+      Admin Username         : openvpn
+      Admin Password         : ${ADMIN_PASS}
+
+      OpenVPN Connect Client : https://openvpn.net/client/
+
+      NOTE: OpenVPN Access Server is a commercial (BYOL) product.
+      The built-in free tier supports up to 2 simultaneous VPN connections.
+      To unlock additional connections, purchase and activate a license:
+        1. Log in to the Admin Web UI above.
+        2. Navigate to Configuration -> Licensing.
+        3. Enter your activation key or subscribe at: https://openvpn.net/
+
+      TLS Certificate path   : ${CERT_DIR}
+      Let's Encrypt e-mail   : ${LE_EMAIL}
+
+      Firewall (UFW) open ports:
+        22    TCP     SSH
+        80    TCP     HTTP (ACME challenge only, during cert issuance)
+        ${OVPN_ADMIN_PORT}   TCP     Admin Web UI (HTTPS)
+        ${OVPN_TCP_PORT}   TCP     OpenVPN TCP tunnel + Client Portal
+        ${OVPN_UDP_PORT}   UDP     OpenVPN UDP tunnel
+
+      Activation steps:
+        1. Point ${APP_DOMAIN} to this server's public IP (${PUBLIC_IP}).
+        2. Open the Admin Web UI: ${ADMIN_URL}
+        3. Log in with username 'openvpn' and the password above.
+        4. Navigate to Configuration -> Licensing and enter your key.
+        5. Download the OpenVPN Connect client from: https://openvpn.net/client/
+        6. Connect to: ${CLIENT_URL} to download your client profile.
+        7. If TLS was deferred, run:
+             certbot certonly --standalone -d ${APP_DOMAIN} --email ${LE_EMAIL}
+           then re-run the relevant sacli ConfigPut steps or re-run this script.
+
+      Management CLI: /usr/local/openvpn_as/scripts/sacli
+      Log file:       /var/log/openvpn-access-server-bootstrap.log
+      AS log:         /var/log/openvpnas.log
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/openvpn-access-server-credentials.txt
+
+      echo "=== OpenVPN Access Server Bootstrap completed at $(date -u) ==="
+      echo "=== Credentials saved to /root/openvpn-access-server-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openvpn-access-server-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  OpenVPN Access Server (BYOL) bootstrap complete.
+  - Credentials : /root/openvpn-access-server-credentials.txt
+  - Log          : /var/log/openvpn-access-server-bootstrap.log
+  - Admin Web UI : https://<YOUR-IP-OR-DOMAIN>:943/admin
+  - Admin user   : openvpn  (password in credentials file)
+  - A valid OpenVPN AS license key is required to support >2 VPN users.
+    Activate at: Configuration -> Licensing in the Admin Web UI.
+  ============================================================

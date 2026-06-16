@@ -1,0 +1,276 @@
+#cloud-config
+# =============================================================================
+# LEMP Stack — Ubuntu 26.04 cloud-init user-data
+# Stack: Nginx + MariaDB + PHP-FPM + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.lemp-bootstrap.env block
+# (domain, email, db creds) before launching, OR pass them in via your
+# provisioner. Passwords default to random per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: lemp
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject customer SSH key + hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - mariadb-server
+  - mariadb-client
+  - php-fpm
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-mbstring
+  - php-xml
+  - php-zip
+  - php-bcmath
+  - php-intl
+  - php-cli
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive MariaDB + PHP memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.lemp-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT (or let provisioner substitute them) -----
+      APP_DOMAIN="example.com"         # primary domain served by Nginx (no scheme)
+      APP_DOMAIN_WWW="www.example.com" # www alias; set empty to skip
+      LE_EMAIL="admin@example.com"     # Let's Encrypt registration e-mail
+      ENABLE_TLS="true"                # false = skip certbot (e.g. DNS not pointed yet)
+
+      # DB credentials — passwords randomised at boot when left as CHANGE_ME
+      DB_NAME="lemp_app"
+      DB_USER="lemp_user"
+      DB_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      # Web-root for the demo page / your application
+      WEB_ROOT="/var/www/lemp"
+
+  # --- fail2ban jails for sshd + nginx ----------------------------------------
+  - path: /etc/fail2ban/jail.d/lemp.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- Nginx virtual-host skeleton (placeholders replaced in bootstrap) --------
+  - path: /etc/nginx/sites-available/lemp.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name LEMP_SERVER_NAMES;
+
+          root /var/www/lemp;
+          index index.php index.html;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+
+          location ~ \.php$ {
+              include snippets/fastcgi-php.conf;
+              fastcgi_pass unix:LEMP_FPM_SOCK;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              include fastcgi_params;
+          }
+
+          location ~ /\.ht {
+              deny all;
+          }
+
+          location = /favicon.ico { log_not_found off; access_log off; }
+          location = /robots.txt  { log_not_found off; access_log off; allow all; }
+      }
+
+  # --- main bootstrap script --------------------------------------------------
+  - path: /root/lemp-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/lemp-bootstrap.log) 2>&1
+      source /root/.lemp-bootstrap.env
+
+      echo "=== LEMP bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random-secret helper ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- fill in random passwords where left as CHANGE_ME ---
+      [ "$DB_PASS"         = "CHANGE_ME" ] && DB_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+
+      # --- detect PHP-FPM socket (version-agnostic) ---
+      PHP_FPM_SOCK="$(find /run/php -name 'php*-fpm.sock' 2>/dev/null | sort -V | tail -n1 || true)"
+      if [ -z "$PHP_FPM_SOCK" ]; then
+        echo "ERROR: no PHP-FPM socket found under /run/php" >&2
+        exit 1
+      fi
+      echo "PHP-FPM socket: $PHP_FPM_SOCK"
+
+      # --- enable + start services ---
+      systemctl enable --now nginx
+      systemctl enable --now mariadb
+
+      # --- harden MariaDB + create application database ---
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --- web root + demo page (idempotent) ---
+      mkdir -p "$WEB_ROOT"
+      if [ ! -f "${WEB_ROOT}/index.php" ]; then
+        cat > "${WEB_ROOT}/index.php" <<'PHPEOF'
+      <?php
+      // LEMP stack demo page — replace with your application
+      $host    = htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'localhost');
+      $phpver  = phpversion();
+      $ngver   = shell_exec('nginx -v 2>&1') ?: 'nginx';
+      $dbver   = shell_exec("mysql -uroot -e 'SELECT VERSION()' --skip-column-names 2>/dev/null") ?: 'MariaDB';
+      ?><!DOCTYPE html>
+      <html lang="en">
+      <head><meta charset="UTF-8"><title>LEMP on <?= $host ?></title>
+      <style>body{font-family:sans-serif;max-width:600px;margin:4rem auto;color:#333}
+      h1{color:#009688}code{background:#f4f4f4;padding:2px 6px;border-radius:3px}</style>
+      </head>
+      <body>
+      <h1>LEMP Stack is running</h1>
+      <p>Host: <code><?= $host ?></code></p>
+      <p>PHP: <code><?= $phpver ?></code></p>
+      <p>Nginx: <code><?= trim($ngver) ?></code></p>
+      <p>DB: <code><?= trim($dbver) ?></code></p>
+      <p>Replace <code>/var/www/lemp/index.php</code> with your application.</p>
+      </body></html>
+      PHPEOF
+      fi
+      chown -R www-data:www-data "$WEB_ROOT"
+      chmod -R 755 "$WEB_ROOT"
+
+      # --- configure Nginx vhost ---
+      SERVER_NAMES="$APP_DOMAIN"
+      [ -n "$APP_DOMAIN_WWW" ] && SERVER_NAMES="$APP_DOMAIN $APP_DOMAIN_WWW"
+      sed -i "s|LEMP_SERVER_NAMES|${SERVER_NAMES}|" /etc/nginx/sites-available/lemp.conf
+      sed -i "s|LEMP_FPM_SOCK|${PHP_FPM_SOCK}|"     /etc/nginx/sites-available/lemp.conf
+      ln -sf /etc/nginx/sites-available/lemp.conf /etc/nginx/sites-enabled/lemp.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # --- firewall ---
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban ---
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt (non-fatal if DNS not yet pointed) ---
+      if [ "$ENABLE_TLS" = "true" ]; then
+        CERTBOT_DOMAINS="-d $APP_DOMAIN"
+        [ -n "$APP_DOMAIN_WWW" ] && CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $APP_DOMAIN_WWW"
+        certbot --nginx --non-interactive --agree-tos \
+            -m "$LE_EMAIL" $CERTBOT_DOMAINS --redirect \
+            || echo "WARN: certbot deferred — re-run once DNS is pointed: certbot --nginx"
+      fi
+
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      # --- write credentials summary ---
+      cat > /root/lemp-credentials.txt <<CREDS
+      ===== LEMP bootstrap complete: $(date) =====
+      URL:             ${PROTO}://${APP_DOMAIN}
+      Web root:        ${WEB_ROOT}
+
+      MariaDB name:    ${DB_NAME}
+      MariaDB user:    ${DB_USER}
+      MariaDB pass:    ${DB_PASS}
+      MariaDB root:    ${MYSQL_ROOT_PASS}
+
+      PHP-FPM socket:  ${PHP_FPM_SOCK}
+      Log:             /var/log/lemp-bootstrap.log
+      CREDS
+      chmod 600 /root/lemp-credentials.txt
+
+      echo "=== LEMP bootstrap finished: $(date) ==="
+      echo "=== Credentials saved to /root/lemp-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once, after write_files are in place
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/lemp-bootstrap.sh" ]
+
+final_message: "LEMP bootstrap done after $UPTIME s. See /root/lemp-credentials.txt and /var/log/lemp-bootstrap.log"

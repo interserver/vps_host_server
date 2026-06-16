@@ -1,0 +1,573 @@
+#cloud-config
+# =============================================================================
+# Magento 2 "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Nginx + PHP-FPM 8.2 + MariaDB + OpenSearch + Redis + Varnish
+#        Composer + Magento CLI + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.magento-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# Passwords/keys default to random per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: magento
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve injected SSH key / default cloud user
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - mariadb-server
+  - mariadb-client
+  # PHP 8.2 (from ondrej/php PPA — see bootstrap for repo setup)
+  - software-properties-common
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - curl
+  - unzip
+  - git
+  - htop
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - redis-server
+  - varnish
+  # Java for OpenSearch
+  - default-jre-headless
+  # build tools for some Magento PHP extensions
+  - build-essential
+  - libssl-dev
+
+# ----------------------------------------------------------------------------
+# Swap (Magento + OpenSearch are memory-hungry at build time)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable variables ------------------------------------------
+  - path: /root/.magento-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ===== EDIT THESE BEFORE BOOT (or let the bootstrap randomise passwords) =====
+      APP_DOMAIN="example.com"           # primary domain (no scheme)
+      LE_EMAIL="admin@example.com"       # Let's Encrypt registration e-mail
+      ENABLE_TLS="true"                  # set false to skip certbot when DNS not pointed
+
+      # Magento admin credentials
+      ADMIN_FIRSTNAME="Store"
+      ADMIN_LASTNAME="Admin"
+      ADMIN_EMAIL="admin@example.com"
+      ADMIN_USER="admin"
+      ADMIN_PASS="CHANGE_ME"             # randomised if left as CHANGE_ME
+
+      # Magento store details
+      STORE_NAME="My Magento Store"
+      STORE_CURRENCY="USD"
+      STORE_LANGUAGE="en_US"
+      STORE_TIMEZONE="America/New_York"
+
+      # Database credentials
+      MAGENTO_DB_NAME="magento"
+      MAGENTO_DB_USER="magento"
+      MAGENTO_DB_PASS="CHANGE_ME"        # randomised if left as CHANGE_ME
+      MYSQL_ROOT_PASS="CHANGE_ME"        # randomised if left as CHANGE_ME
+
+      # Magento public/private Marketplace keys (required for composer install)
+      # Obtain at: https://commercemarketplace.adobe.com/customer/accessKeys/
+      MAGENTO_PUBLIC_KEY="CHANGE_ME"
+      MAGENTO_PRIVATE_KEY="CHANGE_ME"
+
+      # Magento edition: "community" or "enterprise"
+      MAGENTO_EDITION="community"
+      # Magento version pinned (set "latest" to let composer pick)
+      MAGENTO_VERSION="2.4.7"
+
+      MAGENTO_PATH="/var/www/magento"
+
+  # --- Nginx vhost (HTTP placeholder — TLS injected by certbot) -------------
+  - path: /etc/nginx/sites-available/magento.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      upstream fastcgi_backend {
+          server unix:PHP_FPM_SOCK_PLACEHOLDER;
+      }
+
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name DOMAIN_PLACEHOLDER;
+
+          set $MAGE_ROOT MAGENTO_PATH_PLACEHOLDER;
+          set $MAGE_DEBUG_SHOW_ARGS 0;
+
+          root $MAGE_ROOT/pub;
+          index index.php;
+
+          autoindex off;
+          charset UTF-8;
+          client_max_body_size 64M;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          location /setup {
+              root $MAGE_ROOT;
+              location ~ ^/setup/index.php {
+                  fastcgi_pass   fastcgi_backend;
+                  fastcgi_index  index.php;
+                  fastcgi_param  PHP_FLAG  "session.auto_start=off\n suhosin.session.cryptua=off";
+                  fastcgi_param  PHP_VALUE "memory_limit=756M \n max_execution_time=600";
+                  fastcgi_read_timeout 600s;
+                  fastcgi_connect_timeout 600s;
+                  fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+                  include        fastcgi_params;
+              }
+              location ~ ^/setup/(?!pub/). { deny all; }
+              location ~ ^/setup/pub/ { add_header X-Frame-Options "SAMEORIGIN"; }
+          }
+
+          location / {
+              try_files $uri $uri/ /index.php?$args;
+          }
+
+          location /pub {
+              location ~ ^/pub/media/(downloadable|customer|import|custom_options|theme_customization/.*\.xml) {
+                  deny all;
+              }
+              alias $MAGE_ROOT/pub;
+              add_header X-Frame-Options "SAMEORIGIN";
+          }
+
+          location /static/ {
+              location ~ ^/static/version\d*/(.*)$ { /static/$1 last; }
+              expires max;
+              add_header Cache-Control "public";
+              add_header X-Frame-Options "SAMEORIGIN";
+          }
+
+          location /media/ {
+              try_files $uri $uri/ /get.php?$args;
+              location ~ ^/media/theme_customization/.*\.xml { deny all; }
+              location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2|json)$ {
+                  add_header Cache-Control "public";
+                  expires +1y;
+                  if (!-f $request_filename) { rewrite ^/media/(.*)$ /get.php?$args last; }
+              }
+              location ~* \.(zip|gz|gzip|bz2|csv|xml)$ {
+                  add_header Cache-Control "no-store";
+                  expires off;
+                  if (!-f $request_filename) { rewrite ^/media/(.*)$ /get.php?$args last; }
+              }
+              if (!-f $request_filename) { rewrite ^/media/(.*)$ /get.php?$args last; }
+              add_header X-Frame-Options "SAMEORIGIN";
+          }
+
+          location /errors/ { try_files $uri =404; }
+          location ~ ^/errors/.*\.(xml|phtml)$ { deny all; }
+
+          location ~ [^/]\.php(/|$) {
+              fastcgi_pass   fastcgi_backend;
+              fastcgi_index  index.php;
+              fastcgi_param  PHP_FLAG  "session.auto_start=off\n suhosin.session.cryptua=off";
+              fastcgi_param  PHP_VALUE "memory_limit=756M \n max_execution_time=18000";
+              fastcgi_read_timeout 600s;
+              fastcgi_connect_timeout 600s;
+              fastcgi_param  MAGE_MODE production;
+              fastcgi_param  HTTPS $https if_not_empty;
+              fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              fastcgi_split_path_info ^((?U).+\.php)(/?.+)$;
+              fastcgi_param  PATH_INFO $fastcgi_path_info;
+              include        fastcgi_params;
+          }
+
+          location ~* (\.php$|\.phtml$|\.htaccess$|\.git) { deny all; }
+          location ~ /\.(?!well-known).* { deny all; }
+          gzip on;
+          gzip_disable "msie6";
+          gzip_comp_level 6;
+          gzip_min_length 1100;
+          gzip_buffers 16 8k;
+          gzip_proxied any;
+          gzip_types text/plain text/css text/js text/xml text/javascript application/javascript application/x-javascript application/json application/xml application/xml+rss;
+      }
+
+  # --- fail2ban jails -------------------------------------------------------
+  - path: /etc/fail2ban/jail.d/magento.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades ----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- OpenSearch config (single-node, development mode) -------------------
+  - path: /etc/opensearch/opensearch.yml
+    permissions: '0640'
+    owner: root:root
+    content: |
+      cluster.name: magento
+      node.name: node-1
+      path.data: /var/lib/opensearch
+      path.logs: /var/log/opensearch
+      network.host: 127.0.0.1
+      http.port: 9200
+      discovery.type: single-node
+      plugins.security.disabled: true
+
+  # --- PHP-FPM pool tuning for Magento -------------------------------------
+  - path: /etc/php/8.2/fpm/pool.d/magento.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [magento]
+      user = www-data
+      group = www-data
+      listen = /run/php/php8.2-fpm-magento.sock
+      listen.owner = www-data
+      listen.group = www-data
+      listen.mode = 0660
+      pm = dynamic
+      pm.max_children = 20
+      pm.start_servers = 4
+      pm.min_spare_servers = 2
+      pm.max_spare_servers = 6
+      pm.process_idle_timeout = 60s
+      pm.max_requests = 500
+      php_admin_value[memory_limit] = 756M
+      php_admin_value[max_execution_time] = 600
+      php_admin_value[upload_max_filesize] = 64M
+      php_admin_value[post_max_size] = 64M
+      php_admin_value[realpath_cache_size] = 10M
+      php_admin_value[realpath_cache_ttl] = 7200
+      php_admin_flag[display_errors] = off
+      php_admin_value[error_log] = /var/log/php8.2-fpm-magento.log
+
+  # --- main bootstrap script -----------------------------------------------
+  - path: /root/magento-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/magento-bootstrap.log) 2>&1
+      source /root/.magento-bootstrap.env
+
+      echo "=== Magento bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random secret generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Randomise passwords left as CHANGE_ME
+      [ "$ADMIN_PASS"       = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+      [ "$MAGENTO_DB_PASS"  = "CHANGE_ME" ] && MAGENTO_DB_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS"  = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. PHP 8.2 via ondrej/php PPA
+      # -----------------------------------------------------------------------
+      if ! dpkg -l php8.2-fpm &>/dev/null; then
+        add-apt-repository -y ppa:ondrej/php
+        apt-get update -qq
+      fi
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        php8.2-fpm php8.2-cli php8.2-common \
+        php8.2-mysql php8.2-xml php8.2-xmlrpc php8.2-curl \
+        php8.2-gd php8.2-imagick php8.2-cli php8.2-dev \
+        php8.2-imap php8.2-mbstring php8.2-opcache php8.2-soap \
+        php8.2-zip php8.2-intl php8.2-bcmath php8.2-gmp \
+        php8.2-redis php8.2-sockets
+
+      # -----------------------------------------------------------------------
+      # 2. Composer 2
+      # -----------------------------------------------------------------------
+      if ! command -v composer >/dev/null 2>&1; then
+        curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+      fi
+      composer self-update --2 || true
+
+      # -----------------------------------------------------------------------
+      # 3. OpenSearch (community repo — no 26.04 line yet)
+      # -----------------------------------------------------------------------
+      if ! command -v opensearch >/dev/null 2>&1 && [ ! -f /etc/apt/sources.list.d/opensearch.list ]; then
+        curl -fsSL https://artifacts.opensearch.org/publickeys/opensearch.pgp \
+          | gpg --dearmor -o /usr/share/keyrings/opensearch-keyring.gpg
+        # fallback: noble repo until 26.04 published
+        echo "deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg arch=amd64] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main" \
+          > /etc/apt/sources.list.d/opensearch.list
+        apt-get update -qq
+        OPENSEARCH_INITIAL_ADMIN_PASSWORD="$(rand)$(rand)Aa1!" \
+          DEBIAN_FRONTEND=noninteractive apt-get install -y opensearch || true
+      fi
+
+      # Configure JVM heap (half of total RAM, min 512m max 4g)
+      TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+      HEAP_MB=$(( TOTAL_MEM_KB / 1024 / 2 ))
+      HEAP_MB=$(( HEAP_MB < 512  ? 512  : HEAP_MB ))
+      HEAP_MB=$(( HEAP_MB > 4096 ? 4096 : HEAP_MB ))
+      sed -i "s/^-Xms.*/-Xms${HEAP_MB}m/" /etc/opensearch/jvm.options 2>/dev/null || \
+        echo "-Xms${HEAP_MB}m" >> /etc/opensearch/jvm.options
+      sed -i "s/^-Xmx.*/-Xmx${HEAP_MB}m/" /etc/opensearch/jvm.options 2>/dev/null || \
+        echo "-Xmx${HEAP_MB}m" >> /etc/opensearch/jvm.options
+
+      # vm.max_map_count required by OpenSearch
+      sysctl -w vm.max_map_count=262144
+      grep -q 'vm.max_map_count' /etc/sysctl.conf || echo 'vm.max_map_count=262144' >> /etc/sysctl.conf
+
+      systemctl enable --now opensearch 2>/dev/null || true
+      # Wait up to 60 s for OpenSearch to come up
+      for i in $(seq 1 12); do
+        curl -sf http://127.0.0.1:9200/_cluster/health &>/dev/null && break || sleep 5
+      done
+
+      # -----------------------------------------------------------------------
+      # 4. MariaDB — secure install + create database
+      # -----------------------------------------------------------------------
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${MAGENTO_DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${MAGENTO_DB_USER}'@'localhost' IDENTIFIED BY '${MAGENTO_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${MAGENTO_DB_NAME}\`.* TO '${MAGENTO_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # -----------------------------------------------------------------------
+      # 5. Redis
+      # -----------------------------------------------------------------------
+      systemctl enable --now redis-server
+
+      # -----------------------------------------------------------------------
+      # 6. PHP 8.2 tuning & FPM restart
+      # -----------------------------------------------------------------------
+      PHP_INI="/etc/php/8.2/fpm/php.ini"
+      if [ -f "$PHP_INI" ]; then
+        sed -ri 's/^;?opcache\.enable\s*=.*/opcache.enable=1/'                             "$PHP_INI"
+        sed -ri 's/^;?opcache\.enable_cli\s*=.*/opcache.enable_cli=1/'                     "$PHP_INI"
+        sed -ri 's/^;?opcache\.memory_consumption\s*=.*/opcache.memory_consumption=512/'   "$PHP_INI"
+        sed -ri 's/^;?opcache\.max_accelerated_files\s*=.*/opcache.max_accelerated_files=60000/' "$PHP_INI"
+        sed -ri 's/^;?opcache\.consistency_checks\s*=.*/opcache.consistency_checks=0/'     "$PHP_INI"
+        sed -ri 's/^;?opcache\.validate_timestamps\s*=.*/opcache.validate_timestamps=0/'   "$PHP_INI"
+      fi
+      # Disable the default www pool if it exists (use our magento pool instead)
+      [ -f /etc/php/8.2/fpm/pool.d/www.conf ] && mv /etc/php/8.2/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf.disabled || true
+      systemctl enable --now php8.2-fpm
+      systemctl restart php8.2-fpm
+
+      PHP_FPM_SOCK="/run/php/php8.2-fpm-magento.sock"
+
+      # -----------------------------------------------------------------------
+      # 7. Magento download via Composer
+      # -----------------------------------------------------------------------
+      mkdir -p "$MAGENTO_PATH"
+      chown -R www-data:www-data "$MAGENTO_PATH"
+
+      # Configure composer auth for Adobe Marketplace
+      if [ "$MAGENTO_PUBLIC_KEY" != "CHANGE_ME" ] && [ "$MAGENTO_PRIVATE_KEY" != "CHANGE_ME" ]; then
+        sudo -u www-data composer config -g \
+          http-basic.repo.magento.com "$MAGENTO_PUBLIC_KEY" "$MAGENTO_PRIVATE_KEY"
+      fi
+
+      # Accept Adobe developer terms (non-interactive)
+      sudo -u www-data composer config -g repos.magento composer https://repo.magento.com/
+
+      PKG="magento/project-community-edition"
+      [ "$MAGENTO_EDITION" = "enterprise" ] && PKG="magento/project-enterprise-edition"
+
+      if [ "$MAGENTO_VERSION" = "latest" ]; then
+        VER_CONSTRAINT="${PKG}"
+      else
+        VER_CONSTRAINT="${PKG}:${MAGENTO_VERSION}"
+      fi
+
+      if [ ! -f "${MAGENTO_PATH}/composer.json" ]; then
+        sudo -u www-data composer create-project \
+          --repository-url=https://repo.magento.com/ \
+          "$VER_CONSTRAINT" "$MAGENTO_PATH" --no-interaction
+      fi
+
+      chown -R www-data:www-data "$MAGENTO_PATH"
+
+      # -----------------------------------------------------------------------
+      # 8. Magento install
+      # -----------------------------------------------------------------------
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+      BASE_URL="${PROTO}://${APP_DOMAIN}/"
+
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" setup:install \
+        --base-url="$BASE_URL" \
+        --db-host="127.0.0.1" \
+        --db-name="$MAGENTO_DB_NAME" \
+        --db-user="$MAGENTO_DB_USER" \
+        --db-password="$MAGENTO_DB_PASS" \
+        --admin-firstname="$ADMIN_FIRSTNAME" \
+        --admin-lastname="$ADMIN_LASTNAME" \
+        --admin-email="$ADMIN_EMAIL" \
+        --admin-user="$ADMIN_USER" \
+        --admin-password="$ADMIN_PASS" \
+        --language="$STORE_LANGUAGE" \
+        --currency="$STORE_CURRENCY" \
+        --timezone="$STORE_TIMEZONE" \
+        --use-rewrites=1 \
+        --search-engine=opensearch \
+        --opensearch-host=127.0.0.1 \
+        --opensearch-port=9200 \
+        --session-save=redis \
+        --session-save-redis-host=127.0.0.1 \
+        --session-save-redis-port=6379 \
+        --session-save-redis-db=2 \
+        --cache-backend=redis \
+        --cache-backend-redis-server=127.0.0.1 \
+        --cache-backend-redis-port=6379 \
+        --cache-backend-redis-db=0 \
+        --page-cache=redis \
+        --page-cache-redis-server=127.0.0.1 \
+        --page-cache-redis-port=6379 \
+        --page-cache-redis-db=1 \
+        --backend-frontname=admin \
+        --no-interaction
+
+      # Switch to production mode
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" deploy:mode:set production --skip-compilation || true
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" setup:di:compile
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" setup:static-content:deploy -f "$STORE_LANGUAGE" en_US
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" indexer:reindex
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" cache:flush
+
+      # Permissions per Magento docs
+      chown -R www-data:www-data "$MAGENTO_PATH"
+      find "$MAGENTO_PATH" -type d -exec chmod 770 {} \;
+      find "$MAGENTO_PATH" -type f -exec chmod 660 {} \;
+      chmod +x "${MAGENTO_PATH}/bin/magento"
+
+      # -----------------------------------------------------------------------
+      # 9. Magento crontab
+      # -----------------------------------------------------------------------
+      sudo -u www-data php "${MAGENTO_PATH}/bin/magento" cron:install
+      systemctl enable --now cron 2>/dev/null || systemctl enable --now crond 2>/dev/null || true
+
+      # -----------------------------------------------------------------------
+      # 10. Nginx vhost
+      # -----------------------------------------------------------------------
+      sed -i "s|DOMAIN_PLACEHOLDER|${APP_DOMAIN}|g"           /etc/nginx/sites-available/magento.conf
+      sed -i "s|PHP_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|g"   /etc/nginx/sites-available/magento.conf
+      sed -i "s|MAGENTO_PATH_PLACEHOLDER|${MAGENTO_PATH}|g"   /etc/nginx/sites-available/magento.conf
+
+      ln -sf /etc/nginx/sites-available/magento.conf /etc/nginx/sites-enabled/magento.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # -----------------------------------------------------------------------
+      # 11. Firewall (UFW)
+      # -----------------------------------------------------------------------
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 12. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 13. TLS via Let's Encrypt (non-fatal if DNS not pointed)
+      # -----------------------------------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" --redirect \
+          || echo "WARN: certbot deferred — DNS not pointed. Re-run: certbot --nginx"
+        # Update Magento base URL if TLS succeeded
+        if certbot certificates 2>/dev/null | grep -q "$APP_DOMAIN"; then
+          sudo -u www-data php "${MAGENTO_PATH}/bin/magento" config:set web/secure/base_url "https://${APP_DOMAIN}/"
+          sudo -u www-data php "${MAGENTO_PATH}/bin/magento" config:set web/unsecure/base_url "https://${APP_DOMAIN}/"
+          sudo -u www-data php "${MAGENTO_PATH}/bin/magento" cache:flush
+        fi
+      fi
+
+      # -----------------------------------------------------------------------
+      # 14. Write credentials summary (chmod 600)
+      # -----------------------------------------------------------------------
+      cat > /root/magento-credentials.txt <<CREDS
+      ===== Magento 2 install complete: $(date) =====
+      URL:                  ${PROTO}://${APP_DOMAIN}/
+      Admin panel:          ${PROTO}://${APP_DOMAIN}/admin/
+      Admin user:           ${ADMIN_USER}
+      Admin password:       ${ADMIN_PASS}
+      Admin email:          ${ADMIN_EMAIL}
+
+      Store name:           ${STORE_NAME}
+      Edition:              ${MAGENTO_EDITION}
+      Version:              ${MAGENTO_VERSION}
+
+      Database name:        ${MAGENTO_DB_NAME}
+      Database user:        ${MAGENTO_DB_USER}
+      Database password:    ${MAGENTO_DB_PASS}
+      MySQL root password:  ${MYSQL_ROOT_PASS}
+
+      Magento path:         ${MAGENTO_PATH}
+      OpenSearch:           http://127.0.0.1:9200
+      Redis:                127.0.0.1:6379
+      PHP-FPM socket:       ${PHP_FPM_SOCK}
+
+      Bootstrap log:        /var/log/magento-bootstrap.log
+      CREDS
+      chmod 600 /root/magento-credentials.txt
+
+      echo "=== Magento bootstrap finished: $(date) ==="
+      echo "=== Credentials saved to /root/magento-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run once
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/magento-bootstrap.sh" ]
+
+final_message: "Magento 2 bootstrap done after $UPTIME s. Credentials in /root/magento-credentials.txt — see /var/log/magento-bootstrap.log for details."

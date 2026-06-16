@@ -1,0 +1,339 @@
+#cloud-config
+# =============================================================================
+# Immich "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Immich (Docker Compose) + Nginx reverse proxy
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Immich is a self-hosted photo and video backup / browsing solution.
+# https://immich.app
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.immich-bootstrap.env block
+# before launching. Secrets below are generated randomly per-boot if left as
+# CHANGE_ME defaults.
+# =============================================================================
+
+hostname: immich
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key / hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - git
+  - htop
+  - jq
+  - wget
+  - python3
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory spikes; Immich pulls large images)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk ahead of the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.immich-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      APP_DOMAIN="example.com"          # hostname / primary domain (no scheme)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (DNS not pointed yet)
+      ADMIN_PASS="CHANGE_ME"            # Immich first-admin password (set on first login page)
+      DB_PASSWORD="CHANGE_ME"           # PostgreSQL password for immich user
+      REDIS_PASSWORD="CHANGE_ME"        # Redis auth password
+      # Data directory — photos persisted here; back this up!
+      IMMICH_DATA_DIR="/opt/immich/library"
+
+  # --- fail2ban jail config ---------------------------------------------------
+  - path: /etc/fail2ban/jail.d/immich.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades -------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- nginx reverse-proxy vhost (bootstrap replaces APP_DOMAIN_PLACEHOLDER) --
+  - path: /etc/nginx/sites-available/immich.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name APP_DOMAIN_PLACEHOLDER;
+
+          # Let's Encrypt ACME challenge
+          location /.well-known/acme-challenge/ { root /var/www/html; }
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          # Immich needs large uploads (videos)
+          client_max_body_size 50000M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:2283;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade $http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host $host;
+              proxy_set_header   X-Real-IP $remote_addr;
+              proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              proxy_read_timeout 600s;
+              proxy_send_timeout 600s;
+              proxy_buffering    off;
+          }
+      }
+
+  # --- Docker Compose project for Immich -------------------------------------
+  - path: /opt/immich/docker-compose.yml
+    permissions: '0640'
+    owner: root:root
+    content: |
+      # Immich Docker Compose — do not rename this file; bootstrap sources it.
+      # Version strings are filled in at bootstrap time.
+      version: "3.9"
+
+      services:
+        immich-server:
+          image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+          restart: unless-stopped
+          volumes:
+            - ${IMMICH_DATA_DIR:-/opt/immich/library}:/usr/src/app/upload
+            - /etc/localtime:/etc/localtime:ro
+          env_file:
+            - .env
+          ports:
+            - "127.0.0.1:2283:3001"
+          depends_on:
+            - redis
+            - database
+          healthcheck:
+            disable: false
+
+        immich-machine-learning:
+          image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+          restart: unless-stopped
+          volumes:
+            - model-cache:/cache
+          env_file:
+            - .env
+          healthcheck:
+            disable: false
+
+        redis:
+          image: docker.io/redis:6.2-alpine
+          restart: unless-stopped
+          command: >
+            redis-server
+            --requirepass ${REDIS_PASSWORD:-changeme}
+          healthcheck:
+            test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+            interval: 15s
+            timeout: 5s
+            retries: 5
+
+        database:
+          image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0
+          restart: unless-stopped
+          environment:
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+            POSTGRES_USER: immich
+            POSTGRES_DB: immich
+          volumes:
+            - pg-data:/var/lib/postgresql/data
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U immich"]
+            interval: 15s
+            timeout: 5s
+            retries: 5
+
+      volumes:
+        model-cache:
+        pg-data:
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/immich-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/immich-bootstrap.log) 2>&1
+      source /root/.immich-bootstrap.env
+
+      echo "=== Immich bootstrap started: $(date) ==="
+
+      # --- random secret helper (SIGPIPE-safe under set -e + pipefail) ------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$DB_PASSWORD"    = "CHANGE_ME" ] && DB_PASSWORD="$(rand)"
+      [ "$REDIS_PASSWORD" = "CHANGE_ME" ] && REDIS_PASSWORD="$(rand)"
+      # ADMIN_PASS is set on the Immich first-login web page; generate a
+      # suggestion here so the credentials file has something readable.
+      [ "$ADMIN_PASS"     = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # --- install Docker CE via official script (distro-agnostic) ----------
+      if ! command -v docker >/dev/null 2>&1; then
+        echo "Installing Docker CE..."
+        # fallback: noble repo until 26.04 published
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        sh /tmp/get-docker.sh
+        rm -f /tmp/get-docker.sh
+      fi
+      systemctl enable --now docker
+
+      # --- Docker Compose v2 plugin -----------------------------------------
+      if ! docker compose version >/dev/null 2>&1; then
+        COMPOSE_VER="$(curl -fsSL https://api.github.com/repos/docker/compose/releases/latest \
+          | jq -r '.tag_name' 2>/dev/null || echo 'v2.27.1')"
+        COMPOSE_URL="https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-$(uname -m)"
+        mkdir -p /usr/local/lib/docker/cli-plugins
+        curl -fsSL "$COMPOSE_URL" -o /usr/local/lib/docker/cli-plugins/docker-compose
+        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+      fi
+      echo "Docker  : $(docker --version)"
+      echo "Compose : $(docker compose version)"
+
+      # --- Create data directories (owned by immich process uid 1000) -------
+      mkdir -p "${IMMICH_DATA_DIR}"
+      chmod 755 "${IMMICH_DATA_DIR}"
+
+      # --- Fetch the latest Immich release tag ------------------------------
+      IMMICH_VERSION="$(curl -fsSL https://api.github.com/repos/immich-app/immich/releases/latest \
+        | jq -r '.tag_name' 2>/dev/null || echo 'release')"
+      echo "Immich release: ${IMMICH_VERSION}"
+
+      # --- Write the Compose .env file --------------------------------------
+      cat > /opt/immich/.env <<DOTENV
+      # Generated by immich-bootstrap.sh — $(date)
+      IMMICH_VERSION=${IMMICH_VERSION}
+      DB_PASSWORD=${DB_PASSWORD}
+      REDIS_PASSWORD=${REDIS_PASSWORD}
+      IMMICH_DATA_DIR=${IMMICH_DATA_DIR}
+      DB_HOSTNAME=database
+      DB_USERNAME=immich
+      DB_DATABASE_NAME=immich
+      REDIS_HOSTNAME=redis
+      UPLOAD_LOCATION=${IMMICH_DATA_DIR}
+      DOTENV
+      chmod 600 /opt/immich/.env
+
+      # Substitute the data-dir placeholder in docker-compose.yml
+      sed -i "s|\${IMMICH_DATA_DIR:-/opt/immich/library}|${IMMICH_DATA_DIR}|g" \
+        /opt/immich/docker-compose.yml || true
+
+      # --- Pull images + start stack ----------------------------------------
+      cd /opt/immich
+      docker compose pull
+      docker compose up -d
+
+      # --- nginx vhost: replace domain placeholder --------------------------
+      sed -i "s|APP_DOMAIN_PLACEHOLDER|${APP_DOMAIN}|" \
+        /etc/nginx/sites-available/immich.conf
+      ln -sf /etc/nginx/sites-available/immich.conf \
+        /etc/nginx/sites-enabled/immich.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # --- Firewall: SSH + HTTP + HTTPS only --------------------------------
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban ---------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt (non-fatal if DNS not pointed yet) ---------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" --redirect \
+          || echo "WARN: certbot deferred — re-run once DNS points here: certbot --nginx -d ${APP_DOMAIN}"
+      fi
+
+      PROTO="http"
+      [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      # --- Write credentials summary (chmod 600) ----------------------------
+      cat > /root/immich-credentials.txt <<CREDS
+      ===== Immich bootstrap complete: $(date) =====
+
+      Web UI       : ${PROTO}://${APP_DOMAIN}/
+      First login  : Create your admin account at the URL above on first visit.
+      Suggested pw : ${ADMIN_PASS}    <-- use this (or your own) when prompted
+
+      DB password  : ${DB_PASSWORD}
+      Redis pw     : ${REDIS_PASSWORD}
+
+      Library dir  : ${IMMICH_DATA_DIR}
+      Compose dir  : /opt/immich/
+      Log          : /var/log/immich-bootstrap.log
+      Immich ver   : ${IMMICH_VERSION}
+
+      Useful commands:
+        docker compose -f /opt/immich/docker-compose.yml ps
+        docker compose -f /opt/immich/docker-compose.yml logs -f
+        docker compose -f /opt/immich/docker-compose.yml pull && \
+          docker compose -f /opt/immich/docker-compose.yml up -d   # upgrade
+      CREDS
+      chmod 600 /root/immich-credentials.txt
+
+      echo "=== Immich bootstrap finished: $(date) ==="
+      echo "=== Credentials in /root/immich-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once all write_files have been placed
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/immich-bootstrap.sh" ]
+
+final_message: "Immich bootstrap done after $UPTIME s. See /root/immich-credentials.txt and /var/log/immich-bootstrap.log"

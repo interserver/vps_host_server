@@ -1,0 +1,460 @@
+#cloud-config
+# =============================================================================
+# IceWarp Server 14 — AlmaLinux 9 (RHEL 9) cloud-init user-data
+# Stack: IceWarp 14 email & collaboration server (BYOL) +
+#        firewalld + fail2ban + dnf-automatic (auto security updates)
+# -----------------------------------------------------------------------------
+# IceWarp is a COMMERCIAL product — a valid license key must be purchased from
+# https://www.icewarp.com/ and applied through the IceWarp Admin Console
+# (https://<hostname>:32000) after first boot.
+# This image installs IceWarp UNCONFIGURED (BYOL — Bring Your Own License).
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.icewarp-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# =============================================================================
+
+hostname: icewarp
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during IceWarp startup on smaller instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; IceWarp itself is installed from vendor tarball
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - tar
+  - gzip
+  - openssl
+  - perl
+  - libstdc++
+  - glibc
+  - ca-certificates
+  - net-tools
+  - firewalld
+  - fail2ban
+  - fail2ban-firewalld
+  - dnf-automatic
+  - postfix
+  - rsyslog
+  - logrotate
+  - cronie
+  - sudo
+  - htop
+  - psmisc
+  - policycoreutils-python-utils
+  - certbot
+
+# ----------------------------------------------------------------------------
+# Files written to disk before runcmd fires
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.icewarp-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ===================================================================
+      # IceWarp Bootstrap — edit BEFORE first boot or before re-running
+      # ===================================================================
+
+      # Fully-qualified domain name for this mail/collaboration server.
+      # Must resolve to this server's public IP for TLS and mail to work.
+      APP_DOMAIN=mail.example.com
+
+      # Hostname portion used for the mail server identity (often same as
+      # APP_DOMAIN or a subdomain of your organisation's domain).
+      MAIL_DOMAIN=example.com
+
+      # E-mail address for Let's Encrypt certificate registration
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve to this IP, cert issuance is
+      # deferred gracefully — re-run: certbot certonly --standalone -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # IceWarp Admin Console password.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+      # IceWarp download base URL (RHEL 9 / x86_64 tarball — with antivirus engine).
+      # Change to the without-av URL if you do not need AV:
+      #   https://dl.icewarp.com/server/RedHat/RedHat9/icewarp14/without-av/IceWarpServer-14.3.0_RHEL9_x64.tar.gz
+      ICEWARP_URL=https://dl.icewarp.com/server/RedHat/RedHat9/icewarp14/IceWarpServer-14.3.0_RHEL9_x64.tar.gz
+
+      # SHA-256 checksum of the tarball above (from vendor .sha256 file).
+      # Update this if you change ICEWARP_URL to a different version.
+      ICEWARP_SHA256=034f44ec3227c1d9d9a05b55708b385c31f5d501d18e70729c41390d2137a7ce
+
+  # ---------- bootstrap script ----------
+  - path: /root/icewarp-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/icewarp-bootstrap.log) 2>&1
+      source /root/.icewarp-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string.
+      # The '|| true' is REQUIRED — head closes the pipe before urandom is
+      # exhausted, raising SIGPIPE; under set -e + pipefail this would
+      # abort the script without it.
+      # ------------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      echo "=== IceWarp Bootstrap started at $(date -u) ==="
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (saved to credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. Disable SELinux enforcement during install (IceWarp installer
+      #    does not ship SELinux policy modules; re-enable after).
+      # ------------------------------------------------------------------
+      if command -v setenforce >/dev/null 2>&1; then
+        setenforce 0 || true
+        sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config 2>/dev/null || true
+        echo "SELinux set to permissive."
+      fi
+
+      # ------------------------------------------------------------------
+      # 3. Stop and disable postfix — IceWarp provides its own MTA.
+      # ------------------------------------------------------------------
+      systemctl stop postfix 2>/dev/null || true
+      systemctl disable postfix 2>/dev/null || true
+      echo "postfix stopped and disabled."
+
+      # ------------------------------------------------------------------
+      # 4. Configure dnf-automatic for security-only automatic updates
+      # ------------------------------------------------------------------
+      if [ -f /etc/dnf/automatic.conf ]; then
+        sed -i \
+          -e 's/^upgrade_type.*/upgrade_type = security/' \
+          -e 's/^apply_updates.*/apply_updates = yes/' \
+          -e 's/^emit_via.*/emit_via = stdio/' \
+          /etc/dnf/automatic.conf
+        systemctl enable --now dnf-automatic.timer
+        echo "dnf-automatic configured for security updates."
+      fi
+
+      # ------------------------------------------------------------------
+      # 5. Firewall — firewalld
+      #    IceWarp required ports:
+      #      25    TCP  SMTP
+      #      110   TCP  POP3
+      #      143   TCP  IMAP
+      #      465   TCP  SMTPS (implicit TLS)
+      #      587   TCP  SMTP submission
+      #      993   TCP  IMAPS
+      #      995   TCP  POP3S
+      #      80    TCP  HTTP (WebClient / ACME challenge)
+      #      443   TCP  HTTPS (WebClient)
+      #      32000 TCP  IceWarp Admin Console
+      #      4000  TCP  IceWarp Sync (ActiveSync / EWS management)
+      # ------------------------------------------------------------------
+      systemctl enable --now firewalld
+      # Drop all non-default inbound; ensure SSH stays open
+      firewall-cmd --set-default-zone=drop
+      firewall-cmd --permanent --zone=drop --add-service=ssh
+      # Mail protocols
+      firewall-cmd --permanent --zone=drop --add-port=25/tcp
+      firewall-cmd --permanent --zone=drop --add-port=110/tcp
+      firewall-cmd --permanent --zone=drop --add-port=143/tcp
+      firewall-cmd --permanent --zone=drop --add-port=465/tcp
+      firewall-cmd --permanent --zone=drop --add-port=587/tcp
+      firewall-cmd --permanent --zone=drop --add-port=993/tcp
+      firewall-cmd --permanent --zone=drop --add-port=995/tcp
+      # Web interfaces
+      firewall-cmd --permanent --zone=drop --add-port=80/tcp
+      firewall-cmd --permanent --zone=drop --add-port=443/tcp
+      # IceWarp administration
+      firewall-cmd --permanent --zone=drop --add-port=32000/tcp
+      firewall-cmd --permanent --zone=drop --add-port=4000/tcp
+      firewall-cmd --reload
+      echo "firewalld rules applied."
+
+      # ------------------------------------------------------------------
+      # 6. fail2ban — SSH + mail service protection
+      # ------------------------------------------------------------------
+      mkdir -p /etc/fail2ban/jail.d
+      cat > /etc/fail2ban/jail.d/icewarp.local <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+
+      [postfix]
+      enabled  = true
+      port     = smtp,465,587
+      filter   = postfix
+      logpath  = /var/log/maillog
+
+      [dovecot]
+      enabled  = true
+      port     = pop3,pop3s,imap,imaps
+      filter   = dovecot
+      logpath  = /var/log/maillog
+      F2BEOF
+      systemctl enable --now fail2ban
+      echo "fail2ban configured."
+
+      # ------------------------------------------------------------------
+      # 7. Download and verify IceWarp tarball
+      # ------------------------------------------------------------------
+      INSTALL_TMP="/tmp/icewarp-install"
+      mkdir -p "${INSTALL_TMP}"
+      TARBALL="${INSTALL_TMP}/icewarp.tar.gz"
+
+      echo "Downloading IceWarp tarball from ${ICEWARP_URL} ..."
+      wget -q --show-progress -O "${TARBALL}" "${ICEWARP_URL}" \
+        || { echo "ERROR: Download failed. Check ICEWARP_URL in /root/.icewarp-bootstrap.env"; exit 1; }
+
+      echo "Verifying checksum..."
+      echo "${ICEWARP_SHA256}  ${TARBALL}" | sha256sum -c - \
+        || { echo "ERROR: SHA-256 checksum mismatch — tarball may be corrupt."; exit 1; }
+      echo "Checksum OK."
+
+      # ------------------------------------------------------------------
+      # 8. Extract and install IceWarp
+      #    The tarball extracts to a directory; run install.sh inside it.
+      #    IceWarp 14 install.sh on Linux accepts:
+      #      --silent      suppress interactive prompts
+      #      --accept-eula accept the End User License Agreement
+      #    Installation target: /opt/icewarp/
+      # ------------------------------------------------------------------
+      echo "Extracting IceWarp tarball..."
+      tar -xzf "${TARBALL}" -C "${INSTALL_TMP}"
+
+      # Find the install script (may be in a subdirectory)
+      INSTALL_SH=$(find "${INSTALL_TMP}" -maxdepth 2 -name "install.sh" | head -1)
+      if [ -z "${INSTALL_SH}" ]; then
+        echo "ERROR: install.sh not found inside the tarball — inspect ${INSTALL_TMP}"
+        ls -la "${INSTALL_TMP}"
+        exit 1
+      fi
+
+      INSTALL_DIR=$(dirname "${INSTALL_SH}")
+      chmod +x "${INSTALL_SH}"
+
+      echo "Running IceWarp installer (this may take several minutes)..."
+      cd "${INSTALL_DIR}"
+      # Accept EULA and run silently; fall back to interactive if --silent unknown
+      bash install.sh --silent --accept-eula 2>/dev/null \
+        || bash install.sh --accept-eula 2>/dev/null \
+        || { echo "ERROR: IceWarp installer failed. Check /var/log/icewarp-bootstrap.log"; exit 1; }
+      cd /
+
+      echo "IceWarp installer finished."
+
+      # ------------------------------------------------------------------
+      # 9. Enable and start IceWarp service
+      # ------------------------------------------------------------------
+      # IceWarp installs either a systemd unit or an init.d script
+      if systemctl list-unit-files | grep -q "icewarp.service"; then
+        systemctl enable icewarp
+        systemctl start  icewarp
+        echo "IceWarp started via systemd."
+      elif [ -f /etc/init.d/icewarp ]; then
+        chkconfig icewarp on 2>/dev/null || true
+        /etc/init.d/icewarp start
+        echo "IceWarp started via init.d."
+      else
+        echo "WARN: IceWarp service unit not found — check /opt/icewarp/ manually."
+      fi
+
+      # Give IceWarp a moment to initialise before setting the admin password
+      sleep 10
+
+      # ------------------------------------------------------------------
+      # 10. Set IceWarp Admin Console password via tool.sh
+      #     /opt/icewarp/tool.sh is the IceWarp CLI management tool.
+      #     Set domain, hostname and admin password non-interactively.
+      # ------------------------------------------------------------------
+      TOOL="/opt/icewarp/tool.sh"
+      if [ -x "${TOOL}" ]; then
+        echo "Configuring IceWarp via tool.sh..."
+        # Set the primary mail domain
+        "${TOOL}" set system C_AS_HostName "${APP_DOMAIN}"             2>/dev/null || true
+        "${TOOL}" set system C_Accounts_Domain "${MAIL_DOMAIN}"        2>/dev/null || true
+        # Set postmaster / system admin password
+        "${TOOL}" set account postmaster@"${MAIL_DOMAIN}" password "${ADMIN_PASS}" 2>/dev/null || true
+        echo "IceWarp base configuration applied."
+      else
+        echo "WARN: /opt/icewarp/tool.sh not found — configure IceWarp via Admin Console."
+      fi
+
+      # ------------------------------------------------------------------
+      # 11. Optional TLS with Certbot (standalone, non-fatal if DNS is
+      #     not yet pointed at this server).
+      #     IceWarp can use the resulting certs from:
+      #       /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem
+      #       /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem
+      #     Configure cert paths in Admin Console:
+      #       Mail Service -> SMTP -> SSL/TLS -> Certificate file
+      # ------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "mail.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        # Temporarily stop IceWarp's own port-80 listener so standalone can bind
+        systemctl stop icewarp 2>/dev/null || true
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        # Restart IceWarp regardless of certbot outcome
+        systemctl start icewarp 2>/dev/null || true
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        if [ -d "${CERT_DIR}" ]; then
+          # Point IceWarp at the issued certificate via tool.sh
+          if [ -x "${TOOL}" ]; then
+            "${TOOL}" set system C_System_Security_Certificate_File "${CERT_DIR}/fullchain.pem" 2>/dev/null || true
+            "${TOOL}" set system C_System_Security_Certificate_Key  "${CERT_DIR}/privkey.pem"   2>/dev/null || true
+          fi
+          # Add a cron job to renew and reload
+          cat > /etc/cron.d/certbot-icewarp <<'CRONEOF'
+      0 3 * * * root certbot renew --quiet --pre-hook "systemctl stop icewarp" --post-hook "systemctl start icewarp"
+      CRONEOF
+          echo "Certbot certificate installed and auto-renewal configured."
+        fi
+      else
+        echo "TLS deferred: APP_DOMAIN is placeholder or ENABLE_TLS!=true"
+        CERT_DIR="(not yet issued)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 12. Clean up download artefacts
+      # ------------------------------------------------------------------
+      rm -rf "${INSTALL_TMP}"
+      echo "Installer artefacts cleaned up."
+
+      # ------------------------------------------------------------------
+      # 13. Write credentials summary (chmod 600)
+      # ------------------------------------------------------------------
+      SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
+
+      cat > /root/icewarp-credentials.txt <<CREDSEOF
+      ============================================================
+      IceWarp Server 14 — Deployment Credentials
+      Generated : $(date -u)
+      ============================================================
+
+      Admin Console URL : https://${APP_DOMAIN}:32000
+      Fallback URL      : https://${SERVER_IP}:32000
+
+      WebClient URL     : https://${APP_DOMAIN}/
+      Fallback WebClient: https://${SERVER_IP}/
+
+      Admin / Postmaster account : postmaster@${MAIL_DOMAIN}
+      Admin password             : ${ADMIN_PASS}
+
+      Mail domain     : ${MAIL_DOMAIN}
+      Server hostname : ${APP_DOMAIN}
+
+      TLS Certificate : ${CERT_DIR}
+      LE email        : ${LE_EMAIL}
+
+      ============================================================
+      LICENSING — REQUIRED BEFORE USE
+      ============================================================
+      IceWarp is a commercial product. You MUST obtain and activate
+      a valid license key before the server is fully functional.
+
+      Activation steps:
+        1. Point ${APP_DOMAIN} DNS A record to ${SERVER_IP}
+        2. Open the Admin Console: https://${APP_DOMAIN}:32000
+           (or https://${SERVER_IP}:32000 while DNS propagates)
+        3. Log in with: postmaster@${MAIL_DOMAIN} / (password above)
+        4. Navigate to System -> License -> Activate
+        5. Enter your IceWarp license key
+           (purchase or trial at https://www.icewarp.com/)
+        6. If TLS was deferred, re-run:
+             systemctl stop icewarp
+             certbot certonly --standalone -d ${APP_DOMAIN} --email ${LE_EMAIL}
+             systemctl start icewarp
+           Then configure cert paths in Admin Console:
+             Mail Service -> SMTP -> SSL/TLS
+
+      ============================================================
+      Firewall (firewalld) open ports:
+        22    TCP  SSH
+        25    TCP  SMTP
+        80    TCP  HTTP  (WebClient / ACME)
+        110   TCP  POP3
+        143   TCP  IMAP
+        443   TCP  HTTPS (WebClient)
+        465   TCP  SMTPS (implicit TLS)
+        587   TCP  SMTP submission
+        993   TCP  IMAPS
+        995   TCP  POP3S
+        4000  TCP  IceWarp Sync (ActiveSync / EWS)
+        32000 TCP  IceWarp Admin Console
+
+      IceWarp install dir  : /opt/icewarp/
+      IceWarp CLI tool     : /opt/icewarp/tool.sh
+      Bootstrap log        : /var/log/icewarp-bootstrap.log
+      IceWarp service logs : journalctl -u icewarp  (or /opt/icewarp/logs/)
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/icewarp-credentials.txt
+
+      echo "=== IceWarp Bootstrap completed at $(date -u) ==="
+      echo "=== Credentials saved to /root/icewarp-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/icewarp-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  IceWarp Server 14 bootstrap complete.
+  - Credentials : /root/icewarp-credentials.txt
+  - Log         : /var/log/icewarp-bootstrap.log
+  - Admin Console: https://<your-domain>:32000
+  - A valid IceWarp license key is required to activate the server.
+    Purchase or start a trial at https://www.icewarp.com/
+  ============================================================

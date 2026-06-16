@@ -1,0 +1,362 @@
+#cloud-config
+# =============================================================================
+# Uptime Kuma "one-click app" — Ubuntu 26.04 cloud-init user-data
+# Stack: Uptime Kuma (Node.js app, run as www-data via systemd) on port 3001
+#        Optional Nginx reverse-proxy + Certbot TLS on 443
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.uptime-kuma-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# ADMIN_PASS is generated randomly per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: uptime-kuma
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (Node.js itself is installed via NodeSource in the bootstrap)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - gnupg
+  - ca-certificates
+  - curl
+  - wget
+  - git
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - htop
+  - jq
+  - software-properties-common
+
+# ----------------------------------------------------------------------------
+# Swap (survive npm install / build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files and bootstrap script dropped to disk
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable env block ------------------------------------------
+  - path: /root/.uptime-kuma-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT (or leave password as CHANGE_ME for random) -----
+
+      # Uptime Kuma admin password (generated randomly if left as CHANGE_ME)
+      ADMIN_PASS="CHANGE_ME"
+
+      # Optional: domain name for Nginx reverse-proxy + TLS
+      # Leave empty to skip Nginx vhost setup and access Uptime Kuma directly on port 3001
+      APP_DOMAIN=""
+
+      # Let's Encrypt email (used only when APP_DOMAIN is set)
+      LE_EMAIL="admin@example.com"
+
+      # Enable TLS via Certbot (only takes effect when APP_DOMAIN is also set)
+      ENABLE_TLS="true"
+
+      # Uptime Kuma listen port (default 3001; UFW opened automatically)
+      KUMA_PORT="3001"
+
+      # Uptime Kuma install directory
+      KUMA_DIR="/opt/uptime-kuma"
+
+      # Node.js major version to install via NodeSource
+      NODE_MAJOR="20"
+
+  # --- fail2ban — protect SSH -----------------------------------------------
+  - path: /etc/fail2ban/jail.d/uptime-kuma.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+  # --- unattended-upgrades security config ----------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/uptime-kuma-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/uptime-kuma-bootstrap.log) 2>&1
+      source /root/.uptime-kuma-bootstrap.env
+
+      echo "=== Uptime Kuma bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random password generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Generate password if left as CHANGE_ME
+      [ "${ADMIN_PASS}" = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. Install Node.js via NodeSource
+      #    fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if ! command -v node &>/dev/null; then
+        KEYRING="/usr/share/keyrings/nodesource.gpg"
+        if [ ! -f "${KEYRING}" ]; then
+          curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+            | gpg --dearmor -o "${KEYRING}"
+        fi
+
+        SOURCES="/etc/apt/sources.list.d/nodesource.list"
+        if [ ! -f "${SOURCES}" ]; then
+          # fallback: noble repo until 26.04 published
+          echo "deb [signed-by=${KEYRING}] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+            > "${SOURCES}"
+        fi
+
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+      fi
+      node --version
+      npm --version
+
+      # -----------------------------------------------------------------------
+      # 2. Create system user to run Uptime Kuma (as www-data already exists)
+      #    We use www-data consistent with project conventions.
+      # -----------------------------------------------------------------------
+      # Ensure www-data home directory exists for npm cache
+      mkdir -p /var/www
+      chown www-data:www-data /var/www
+
+      # -----------------------------------------------------------------------
+      # 3. Clone / update Uptime Kuma
+      # -----------------------------------------------------------------------
+      mkdir -p "${KUMA_DIR}"
+      if [ ! -d "${KUMA_DIR}/.git" ]; then
+        git clone --depth 1 https://github.com/louislam/uptime-kuma.git "${KUMA_DIR}"
+      else
+        git -C "${KUMA_DIR}" pull --ff-only || true
+      fi
+
+      chown -R www-data:www-data "${KUMA_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 4. Install npm dependencies
+      # -----------------------------------------------------------------------
+      cd "${KUMA_DIR}"
+      sudo -u www-data npm install --production 2>&1
+
+      # -----------------------------------------------------------------------
+      # 5. Create a data directory for Uptime Kuma database
+      # -----------------------------------------------------------------------
+      DATA_DIR="${KUMA_DIR}/data"
+      mkdir -p "${DATA_DIR}"
+      chown -R www-data:www-data "${DATA_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 6. Create systemd service unit
+      # -----------------------------------------------------------------------
+      cat > /etc/systemd/system/uptime-kuma.service <<UNIT
+      [Unit]
+      Description=Uptime Kuma - Self-hosted monitoring tool
+      Documentation=https://github.com/louislam/uptime-kuma
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=www-data
+      Group=www-data
+      WorkingDirectory=${KUMA_DIR}
+      ExecStart=/usr/bin/node server/server.js
+      Environment="NODE_ENV=production"
+      Environment="DATA_DIR=${DATA_DIR}"
+      Restart=on-failure
+      RestartSec=10
+      LimitNOFILE=65535
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=uptime-kuma
+
+      [Install]
+      WantedBy=multi-user.target
+      UNIT
+
+      systemctl daemon-reload
+      systemctl enable uptime-kuma
+      systemctl start uptime-kuma
+
+      # Wait up to 90 seconds for Uptime Kuma to become reachable
+      echo "Waiting for Uptime Kuma to start on port ${KUMA_PORT}..."
+      KUMA_READY=0
+      for i in $(seq 1 18); do
+        if curl -sf --max-time 5 "http://127.0.0.1:${KUMA_PORT}/" &>/dev/null; then
+          KUMA_READY=1
+          break
+        fi
+        echo "  attempt ${i}/18 ..."
+        sleep 5
+      done
+
+      if [ "${KUMA_READY}" -eq 0 ]; then
+        echo "WARN: Uptime Kuma not responding after 90 s — check journalctl -u uptime-kuma"
+      else
+        echo "Uptime Kuma is up and reachable."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. Set the admin password via Uptime Kuma's built-in CLI
+      #    (available in uptime-kuma >= 1.23; skipped gracefully if not present)
+      # -----------------------------------------------------------------------
+      if node "${KUMA_DIR}/extra/reset-password.js" --help &>/dev/null 2>&1; then
+        sudo -u www-data node "${KUMA_DIR}/extra/reset-password.js" \
+          --username admin \
+          --password "${ADMIN_PASS}" \
+          --dataDir "${DATA_DIR}" || echo "WARN: password reset skipped — set via UI on first login"
+      else
+        echo "INFO: Password reset script not found — set admin password via the web UI on first access."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 8. Firewall (UFW)
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+
+      # Always open the direct Uptime Kuma port
+      ufw allow "${KUMA_PORT}/tcp"
+
+      if [ -n "${APP_DOMAIN}" ]; then
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+      fi
+
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 9. Nginx reverse-proxy (only when APP_DOMAIN is set)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        cat > /etc/nginx/sites-available/uptime-kuma <<NGINXCONF
+      server {
+          listen 80;
+          server_name ${APP_DOMAIN};
+
+          location / {
+              proxy_pass         http://127.0.0.1:${KUMA_PORT};
+              proxy_set_header   Host              \$host;
+              proxy_set_header   X-Real-IP         \$remote_addr;
+              proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_http_version 1.1;
+              # WebSocket support (Uptime Kuma uses Socket.IO)
+              proxy_set_header   Upgrade           \$http_upgrade;
+              proxy_set_header   Connection        "upgrade";
+              proxy_cache_bypass \$http_upgrade;
+              proxy_read_timeout 900s;
+          }
+      }
+      NGINXCONF
+
+        ln -sf /etc/nginx/sites-available/uptime-kuma /etc/nginx/sites-enabled/uptime-kuma
+        rm -f /etc/nginx/sites-enabled/default
+        nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+        # 9a. TLS via Certbot
+        if [ "${ENABLE_TLS}" = "true" ]; then
+          certbot --nginx \
+            --non-interactive \
+            --agree-tos \
+            --email "${LE_EMAIL}" \
+            --redirect \
+            -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not pointed yet; re-run after DNS propagates"
+        fi
+      else
+        # No domain — disable Nginx entirely; Uptime Kuma is reachable on its port
+        systemctl disable --now nginx 2>/dev/null || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 10. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 11. Write credentials file (chmod 600)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        PROTO="http"
+        [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+        ACCESS_URL="${PROTO}://${APP_DOMAIN}/"
+      else
+        ACCESS_URL="http://<SERVER_IP>:${KUMA_PORT}/"
+      fi
+
+      cat > /root/uptime-kuma-credentials.txt <<CREDS
+      ===== Uptime Kuma bootstrap complete: $(date) =====
+
+      URL       : ${ACCESS_URL}
+      Direct    : http://<SERVER_IP>:${KUMA_PORT}/ (always available)
+
+      Admin login
+        Username : admin
+        Password : ${ADMIN_PASS}
+        NOTE     : If the password reset script was unavailable, set the
+                   password through the web UI on first access.
+
+      Install dir   : ${KUMA_DIR}
+      Data dir      : ${DATA_DIR}
+      Bootstrap log : /var/log/uptime-kuma-bootstrap.log
+
+      Service management:
+        systemctl status  uptime-kuma
+        systemctl restart uptime-kuma
+        journalctl -u uptime-kuma -f
+      CREDS
+      chmod 600 /root/uptime-kuma-credentials.txt
+
+      echo "=== Uptime Kuma bootstrap finished. Credentials in /root/uptime-kuma-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/uptime-kuma-bootstrap.sh" ]
+
+final_message: "Uptime Kuma bootstrap done after $UPTIME s. See /root/uptime-kuma-credentials.txt and /var/log/uptime-kuma-bootstrap.log"

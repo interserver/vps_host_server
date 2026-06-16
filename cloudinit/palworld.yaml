@@ -1,0 +1,350 @@
+#cloud-config
+# =============================================================================
+# Palworld Dedicated Server — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: SteamCMD + Palworld Dedicated Server (App ID 2394010) + systemd unit
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Game ports: 8211/udp (game) + 27015/udp (Steam query) + 25575/tcp (RCON)
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.palworld-bootstrap.env
+# before launching, or supply them via your provisioner.
+# =============================================================================
+
+hostname: palworld
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject SSH key + hostname later
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd runs)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - net-tools
+  - htop
+  - git
+  - unzip
+  - tar
+  - jq
+  - lib32gcc-s1
+  - lib32stdc++6
+  - libsdl2-2.0-0
+  - libc6-i386
+  - screen
+  - openssl
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables — fill in before first boot
+  # --------------------------------------------------------------------------
+  - path: /root/.palworld-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Palworld bootstrap environment — edit BEFORE launching instance
+      # -----------------------------------------------------------------------
+
+      # Public name shown in the server browser
+      SERVER_NAME="InterServer Palworld"
+
+      # Server description
+      SERVER_DESC="Powered by InterServer"
+
+      # Server admin/RCON password (set to CHANGE_ME to auto-generate)
+      ADMIN_PASS="CHANGE_ME"
+
+      # Server password (leave empty for public server)
+      SERVER_PASS=""
+
+      # Maximum number of concurrent players (1–32)
+      MAX_PLAYERS="16"
+
+      # Game port (UDP) — clients connect here
+      GAME_PORT="8211"
+
+      # Steam query port (UDP) — server browser discovery
+      QUERY_PORT="27015"
+
+      # RCON port (TCP) — remote console management
+      RCON_PORT="25575"
+
+      # Enable RCON (true/false)
+      ENABLE_RCON="true"
+
+      # Server install directory
+      PALWORLD_DIR="/opt/palworld"
+
+      # Service run-as user
+      PALWORLD_USER="steam"
+
+      # SteamCMD install directory
+      STEAMCMD_DIR="/opt/steamcmd"
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/palworld-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/palworld-bootstrap.log) 2>&1
+      source /root/.palworld-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Palworld bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # 1. Auto-generate secrets when left at CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. Automatic security updates
+      # -----------------------------------------------------------------------
+      echo "--- Configuring unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'APTEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      APTEOF
+      systemctl enable --now unattended-upgrades || true
+
+      # -----------------------------------------------------------------------
+      # 3. Create the steam system user
+      # -----------------------------------------------------------------------
+      echo "--- Creating steam system user ---"
+      id -u "${PALWORLD_USER}" &>/dev/null || \
+        useradd --system --shell /bin/bash \
+                --home-dir "/home/${PALWORLD_USER}" \
+                --create-home "${PALWORLD_USER}"
+
+      mkdir -p "${PALWORLD_DIR}" "${STEAMCMD_DIR}"
+      chown "${PALWORLD_USER}:${PALWORLD_USER}" "${PALWORLD_DIR}" "${STEAMCMD_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 4. Enable i386 architecture (needed by steamcmd)
+      # -----------------------------------------------------------------------
+      echo "--- Enabling i386 architecture for SteamCMD ---"
+      dpkg --add-architecture i386
+      apt-get update -qq
+
+      # Install any i386 libs that may not have been installed yet
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        lib32gcc-s1 lib32stdc++6 libc6-i386 libsdl2-2.0-0 || true
+
+      # -----------------------------------------------------------------------
+      # 5. Install SteamCMD
+      # -----------------------------------------------------------------------
+      echo "--- Installing SteamCMD ---"
+      if [ ! -f "${STEAMCMD_DIR}/steamcmd.sh" ]; then
+        STEAMCMD_TGZ="/tmp/steamcmd_linux.tar.gz"
+        curl -fsSL -o "${STEAMCMD_TGZ}" \
+          "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+        tar -xzf "${STEAMCMD_TGZ}" -C "${STEAMCMD_DIR}"
+        rm -f "${STEAMCMD_TGZ}"
+        chown -R "${PALWORLD_USER}:${PALWORLD_USER}" "${STEAMCMD_DIR}"
+      else
+        echo "SteamCMD already present — skipping download."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 6. Install / update Palworld Dedicated Server via SteamCMD
+      #    App ID 2394010 — anonymous login is supported for this free server binary
+      # -----------------------------------------------------------------------
+      echo "--- Installing/updating Palworld Dedicated Server (App 2394010) ---"
+      sudo -u "${PALWORLD_USER}" "${STEAMCMD_DIR}/steamcmd.sh" \
+        +login anonymous \
+        +force_install_dir "${PALWORLD_DIR}" \
+        +app_update 2394010 validate \
+        +quit
+
+      # -----------------------------------------------------------------------
+      # 7. Write PalWorldSettings.ini
+      # -----------------------------------------------------------------------
+      echo "--- Writing PalWorldSettings.ini ---"
+      SETTINGS_DIR="${PALWORLD_DIR}/Pal/Saved/Config/LinuxServer"
+      mkdir -p "${SETTINGS_DIR}"
+
+      cat > "${SETTINGS_DIR}/PalWorldSettings.ini" <<SETTINGS
+      [/Script/Pal.PalGameWorldSettings]
+      OptionSettings=(Difficulty=None,DayTimeSpeedRate=1.000000,NightTimeSpeedRate=1.000000,ExpRate=1.000000,PalCaptureRate=1.000000,PalSpawnNumRate=1.000000,PalDamageRateAttack=1.000000,PalDamageRateDefense=1.000000,PlayerDamageRateAttack=1.000000,PlayerDamageRateDefense=1.000000,PlayerStomachDecreaceRate=1.000000,PlayerStaminaDecreaceRate=1.000000,PlayerAutoHPRegeneRate=1.000000,PlayerAutoHpRegeneRateInSleep=1.000000,PalStomachDecreaceRate=1.000000,PalStaminaDecreaceRate=1.000000,PalAutoHPRegeneRate=1.000000,PalAutoHpRegeneRateInSleep=1.000000,BuildObjectDamageRate=1.000000,BuildObjectDeteriorationDamageRate=1.000000,CollectionDropRate=1.000000,CollectionObjectHpRate=1.000000,CollectionObjectRespawnSpeedRate=1.000000,EnemyDropItemRate=1.000000,DeathPenalty=All,bEnablePlayerToPlayerDamage=False,bEnableFriendlyFire=False,bEnableInvaderEnemy=True,bActiveUNKO=False,bEnableAimAssistPad=True,bEnableAimAssistKeyboard=False,DropItemMaxNum=3000,DropItemMaxNum_UNKO=100,BaseCampMaxNum=128,BaseCampWorkerMaxNum=15,DropItemAliveMaxHours=1.000000,bAutoResetGuildNoOnlinePlayers=False,AutoResetGuildTimeNoOnlinePlayers=72.000000,GuildPlayerMaxNum=20,PalEggDefaultHatchingTime=72.000000,WorkSpeedRate=1.000000,bIsMultiplay=True,bIsPvP=False,bCanPickupOtherGuildDeathPenaltyDrop=False,bEnableNonLoginPenalty=True,bEnableFastTravel=True,bIsStartLocationSelectByMap=True,bExistPlayerAfterLogout=False,bEnableDefenseOtherGuildPlayer=False,CoopPlayerMaxNum=${MAX_PLAYERS},ServerPlayerMaxNum=${MAX_PLAYERS},ServerName="${SERVER_NAME}",ServerDescription="${SERVER_DESC}",AdminPassword="${ADMIN_PASS}",ServerPassword="${SERVER_PASS}",PublicPort=${GAME_PORT},PublicIP="",RCONEnabled=${ENABLE_RCON},RCONPort=${RCON_PORT},Region="",bUseAuth=True,BanListURL="https://api.palworldgame.com/api/banlist.txt")
+      SETTINGS
+
+      # -----------------------------------------------------------------------
+      # 8. Fix ownership
+      # -----------------------------------------------------------------------
+      chown -R "${PALWORLD_USER}:${PALWORLD_USER}" "${PALWORLD_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 9. Systemd service for Palworld Dedicated Server
+      # -----------------------------------------------------------------------
+      echo "--- Creating systemd service ---"
+      cat > /etc/systemd/system/palworld.service <<SVCEOF
+      [Unit]
+      Description=Palworld Dedicated Server
+      After=network.target network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=${PALWORLD_USER}
+      Group=${PALWORLD_USER}
+      WorkingDirectory=${PALWORLD_DIR}
+      ExecStart=${PALWORLD_DIR}/PalServer.sh \
+        -port=${GAME_PORT} \
+        -queryport=${QUERY_PORT} \
+        -players=${MAX_PLAYERS} \
+        EpicApp=PalServer
+      ExecStop=/bin/kill -SIGINT \$MAINPID
+      Restart=on-failure
+      RestartSec=15
+      StandardOutput=journal
+      StandardError=journal
+      LimitNOFILE=100000
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCEOF
+
+      # -----------------------------------------------------------------------
+      # 10. Firewall — SSH + Palworld ports only
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp                   comment 'SSH'
+      ufw allow "${GAME_PORT}/udp"       comment 'Palworld game port'
+      ufw allow "${QUERY_PORT}/udp"      comment 'Steam query port'
+      ufw allow "${RCON_PORT}/tcp"       comment 'Palworld RCON'
+      ufw --force enable
+      echo "UFW status:"
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 11. Fail2ban — SSH brute-force protection
+      # -----------------------------------------------------------------------
+      echo "--- Configuring fail2ban ---"
+      cat > /etc/fail2ban/jail.d/palworld-defaults.conf <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable --now fail2ban || true
+
+      # -----------------------------------------------------------------------
+      # 12. Enable and start Palworld service
+      # -----------------------------------------------------------------------
+      echo "--- Enabling and starting palworld service ---"
+      systemctl daemon-reload
+      systemctl enable palworld.service
+      systemctl start palworld.service || true
+
+      # -----------------------------------------------------------------------
+      # 13. Write credentials / connection info
+      # -----------------------------------------------------------------------
+      echo "--- Writing credentials file ---"
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      cat > /root/palworld-credentials.txt <<CREDS
+      ======================================================
+        Palworld Dedicated Server — Connection Info
+      ======================================================
+      Host / IP      : ${SERVER_IP}
+      Game Port (UDP): ${GAME_PORT}
+      Query Port(UDP): ${QUERY_PORT}
+      RCON Port (TCP): ${RCON_PORT}
+      Server Name    : ${SERVER_NAME}
+      Admin Password : ${ADMIN_PASS}
+      Server Password: ${SERVER_PASS:-<none — public server>}
+      Max Players    : ${MAX_PLAYERS}
+
+      HOW TO CONNECT:
+        1. Open Palworld on Steam.
+        2. Go to Multiplayer -> Join Multiplayer Game (Dedicated).
+        3. Enter Server Address: ${SERVER_IP}:${GAME_PORT}
+        4. Enter the server password if set, then join.
+
+      RCON MANAGEMENT:
+        Use any RCON client to connect to ${SERVER_IP}:${RCON_PORT}
+        Password: ${ADMIN_PASS}
+
+      OPERATOR NOTES:
+        - Server installed in  : ${PALWORLD_DIR}
+        - Run as user          : ${PALWORLD_USER}
+        - Settings file        : ${PALWORLD_DIR}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+        - Save data            : ${PALWORLD_DIR}/Pal/Saved/SaveGames/
+
+      SERVICE MANAGEMENT:
+        systemctl status  palworld
+        systemctl restart palworld
+        journalctl -u palworld -f
+
+      Bootstrap log : /var/log/palworld-bootstrap.log
+      ======================================================
+      CREDS
+      chmod 600 /root/palworld-credentials.txt
+
+      echo "=== Palworld bootstrap complete at $(date -u) ==="
+      echo "=== Server reachable at ${SERVER_IP}:${GAME_PORT} (UDP) ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/palworld-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in the console log when cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ==========================================================
+  Palworld Dedicated Server is ready!
+  - Players connect via Palworld -> Join Multiplayer Game
+  - Game port:       8211/udp
+  - Query port:      27015/udp
+  - RCON port:       25575/tcp
+  - Service status:  systemctl status palworld
+  - Credentials:     cat /root/palworld-credentials.txt
+  - Bootstrap log:   /var/log/palworld-bootstrap.log
+  ==========================================================

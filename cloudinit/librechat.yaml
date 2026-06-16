@@ -1,0 +1,616 @@
+#cloud-config
+# =============================================================================
+# LibreChat — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Node.js + MongoDB + Redis + LibreChat + Nginx + Certbot (Let's Encrypt)
+#        NVIDIA driver + CUDA toolkit (AI/ML GPU plan requirement)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# REQUIRES: a KVM VPS plan with a dedicated NVIDIA GPU and ≥ 40 GB disk.
+#
+# LibreChat is an AI chat interface that proxies requests to external LLM APIs
+# (OpenAI, Anthropic, Gemini, Azure OpenAI, etc.). While LibreChat itself does
+# not perform local GPU inference, this image ships on an AI/ML GPU plan — the
+# NVIDIA driver + CUDA toolkit are pre-installed so operators can optionally
+# run local models (Ollama, llama.cpp) alongside LibreChat on the same host.
+#
+# EDIT the variables in write_files -> /root/.librechat-bootstrap.env before
+# launching, or pass them in via your provisioner.
+# =============================================================================
+
+hostname: librechat
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GB helps survive npm installs / MongoDB startup on tight-memory VMs
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Base packages
+# (NVIDIA driver + CUDA toolkit installed in bootstrap via CUDA keyring)
+# (Node.js installed in bootstrap via NodeSource setup script)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+
+packages:
+  # Core utilities
+  - curl
+  - wget
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - apt-transport-https
+  # Security
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  # Build tools (native Node addons + Python wheels)
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - libffi-dev
+  # Python (for CUDA / local-model tooling)
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  # GPU helpers
+  - pciutils
+  - ocl-icd-opencl-dev
+  # Web / TLS
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  # Monitoring / ops
+  - htop
+  - nvtop
+  - tmux
+  - jq
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # (a) Operator-editable environment variables
+  # --------------------------------------------------------------------------
+  - path: /root/.librechat-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # LibreChat bootstrap configuration — edit before first boot
+      # -----------------------------------------------------------------------
+
+      # Domain pointing at this server (leave CHANGE_ME to skip TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email for Let's Encrypt certificate notifications
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS setup (requires APP_DOMAIN DNS)
+      ENABLE_TLS=false
+
+      # Port LibreChat Node.js process listens on (Nginx proxies to this)
+      LIBRECHAT_PORT=3080
+
+      # LibreChat installation directory
+      LIBRECHAT_DIR=/opt/librechat
+
+      # Linux user that owns and runs the LibreChat service
+      LIBRECHAT_USER=librechat
+
+      # MongoDB connection string (local instance created by this script)
+      MONGO_DB_NAME=librechat
+      MONGO_URI=mongodb://127.0.0.1:27017/librechat
+
+      # Redis connection (local instance created by this script)
+      REDIS_URI=redis://127.0.0.1:6379
+
+      # Node.js major version to install via NodeSource
+      NODE_MAJOR=22
+
+      # JWT secrets and encryption keys (auto-generated if CHANGE_ME)
+      JWT_SECRET=CHANGE_ME
+      JWT_REFRESH_SECRET=CHANGE_ME
+      CREDS_KEY=CHANGE_ME
+      CREDS_IV=CHANGE_ME
+
+      # LibreChat admin account (created on first run)
+      LIBRECHAT_ADMIN_EMAIL=admin@example.com
+      LIBRECHAT_ADMIN_PASS=CHANGE_ME
+
+      # OpenAI API key — leave blank or CHANGE_ME to configure later in the UI
+      OPENAI_API_KEY=CHANGE_ME
+
+      # Anthropic Claude API key — leave blank or CHANGE_ME to configure later
+      ANTHROPIC_API_KEY=CHANGE_ME
+
+      # CUDA version tag — used only if you run local models alongside LibreChat.
+      # "cu128" = CUDA 12.8 (driver 570+).  Change to "cu121" for older hosts.
+      CUDA_TAG=cu128
+
+  # --------------------------------------------------------------------------
+  # (b) Bootstrap shell script
+  # --------------------------------------------------------------------------
+  - path: /root/librechat-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/librechat-bootstrap.log) 2>&1
+      source /root/.librechat-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator
+      # The '|| true' is required under set -e + pipefail (head -c closes
+      # the pipe before tr finishes, generating SIGPIPE).
+      # -----------------------------------------------------------------------
+      rand()    { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      rand_hex(){ LC_ALL=C tr -dc 'a-f0-9'    </dev/urandom 2>/dev/null | head -c 32 || true; }
+
+      log() { echo "[librechat-bootstrap] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      log "=== LibreChat bootstrap started ==="
+
+      # -----------------------------------------------------------------------
+      # Auto-generate secrets if still CHANGE_ME
+      # -----------------------------------------------------------------------
+      if [ "${JWT_SECRET}" = "CHANGE_ME" ]; then
+        JWT_SECRET="$(rand)$(rand)"
+        sed -i "s|^JWT_SECRET=CHANGE_ME|JWT_SECRET=${JWT_SECRET}|" /root/.librechat-bootstrap.env
+      fi
+      if [ "${JWT_REFRESH_SECRET}" = "CHANGE_ME" ]; then
+        JWT_REFRESH_SECRET="$(rand)$(rand)"
+        sed -i "s|^JWT_REFRESH_SECRET=CHANGE_ME|JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}|" /root/.librechat-bootstrap.env
+      fi
+      if [ "${CREDS_KEY}" = "CHANGE_ME" ]; then
+        CREDS_KEY="$(rand_hex)$(rand_hex)"
+        sed -i "s|^CREDS_KEY=CHANGE_ME|CREDS_KEY=${CREDS_KEY}|" /root/.librechat-bootstrap.env
+      fi
+      if [ "${CREDS_IV}" = "CHANGE_ME" ]; then
+        CREDS_IV="$(rand_hex | head -c 16 || true)"
+        sed -i "s|^CREDS_IV=CHANGE_ME|CREDS_IV=${CREDS_IV}|" /root/.librechat-bootstrap.env
+      fi
+      if [ "${LIBRECHAT_ADMIN_PASS}" = "CHANGE_ME" ]; then
+        LIBRECHAT_ADMIN_PASS="$(rand)"
+        sed -i "s|^LIBRECHAT_ADMIN_PASS=CHANGE_ME|LIBRECHAT_ADMIN_PASS=${LIBRECHAT_ADMIN_PASS}|" /root/.librechat-bootstrap.env
+      fi
+
+      # -----------------------------------------------------------------------
+      # Automatic security updates
+      # -----------------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+      systemctl enable --now unattended-upgrades
+
+      # -----------------------------------------------------------------------
+      # NVIDIA driver + CUDA toolkit
+      # Uses the ubuntu2404 / noble CUDA repo because the 26.04 line may not
+      # yet be published by NVIDIA at image build time.
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      log "Installing NVIDIA driver and CUDA toolkit..."
+
+      CUDA_KEYRING_DEB="cuda-keyring_1.1-1_all.deb"
+      CUDA_KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/${CUDA_KEYRING_DEB}"
+
+      if ! dpkg -l cuda-keyring &>/dev/null; then
+        wget -q -O "/tmp/${CUDA_KEYRING_DEB}" "${CUDA_KEYRING_URL}"
+        dpkg -i "/tmp/${CUDA_KEYRING_DEB}"
+        rm -f "/tmp/${CUDA_KEYRING_DEB}"
+        apt-get update -qq
+      fi
+
+      # nvidia-open = open-kernel-module driver (preferred for Ampere+ GPUs)
+      # cuda-toolkit-12-8 = compiler, libraries, headers
+      command -v nvidia-smi &>/dev/null || \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          nvidia-open \
+          cuda-toolkit-12-8
+
+      # Persist CUDA paths for all users / login shells
+      if [ ! -f /etc/profile.d/cuda.sh ]; then
+        cat > /etc/profile.d/cuda.sh <<'CUDAPROFILE'
+      export PATH="/usr/local/cuda/bin${PATH:+:${PATH}}"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+      CUDAPROFILE
+        chmod 644 /etc/profile.d/cuda.sh
+      fi
+      export PATH="/usr/local/cuda/bin${PATH:+:${PATH}}"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+      # -----------------------------------------------------------------------
+      # Node.js (NodeSource)
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      log "Installing Node.js ${NODE_MAJOR} via NodeSource..."
+      if ! command -v node &>/dev/null; then
+        curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+        DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+      fi
+      node --version
+      npm --version
+
+      # -----------------------------------------------------------------------
+      # MongoDB (official MongoDB 7 repo)
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      log "Installing MongoDB 7..."
+      if ! command -v mongod &>/dev/null; then
+        curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
+          | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+      https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse" \
+          > /etc/apt/sources.list.d/mongodb-org-7.0.list
+        # fallback: noble repo until 26.04 published
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          mongodb-org
+      fi
+      systemctl enable --now mongod
+      # Give MongoDB a moment to start
+      sleep 3
+
+      # -----------------------------------------------------------------------
+      # Redis
+      # -----------------------------------------------------------------------
+      log "Installing Redis..."
+      if ! command -v redis-server &>/dev/null; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends redis-server
+      fi
+      systemctl enable --now redis-server
+
+      # -----------------------------------------------------------------------
+      # Dedicated system user for LibreChat
+      # -----------------------------------------------------------------------
+      log "Creating system user '${LIBRECHAT_USER}'..."
+      id "${LIBRECHAT_USER}" &>/dev/null || \
+        useradd --system --shell /bin/bash \
+          --create-home --home-dir "${LIBRECHAT_DIR}" \
+          "${LIBRECHAT_USER}"
+
+      # -----------------------------------------------------------------------
+      # LibreChat — clone and build
+      # -----------------------------------------------------------------------
+      log "Cloning / updating LibreChat..."
+      if [ -d "${LIBRECHAT_DIR}/.git" ]; then
+        git -C "${LIBRECHAT_DIR}" pull --ff-only
+      else
+        git clone https://github.com/danny-avila/LibreChat.git "${LIBRECHAT_DIR}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # LibreChat .env configuration
+      # -----------------------------------------------------------------------
+      log "Writing LibreChat .env file..."
+      cat > "${LIBRECHAT_DIR}/.env" <<LCEENV
+      # LibreChat runtime environment — generated by bootstrap
+      HOST=0.0.0.0
+      PORT=${LIBRECHAT_PORT}
+
+      # MongoDB
+      MONGO_URI=${MONGO_URI}
+
+      # Redis
+      REDIS_URI=${REDIS_URI}
+
+      # JWT
+      JWT_SECRET=${JWT_SECRET}
+      JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+
+      # Credential encryption (must be exactly 64 hex chars / 32 hex chars)
+      CREDS_KEY=${CREDS_KEY}
+      CREDS_IV=${CREDS_IV}
+
+      # Allow new user registration (set to false after initial admin creation)
+      ALLOW_REGISTRATION=true
+      ALLOW_SOCIAL_LOGIN=false
+
+      # External LLM API keys (configure here or via the LibreChat UI)
+      OPENAI_API_KEY=${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Session / security
+      SESSION_EXPIRY=900000
+      REFRESH_TOKEN_EXPIRY=604800000
+
+      # App domain (used for CORS and cookie domain)
+      DOMAIN_CLIENT=http://${APP_DOMAIN:-localhost}
+      DOMAIN_SERVER=http://${APP_DOMAIN:-localhost}
+      LCEENV
+
+      chmod 600 "${LIBRECHAT_DIR}/.env"
+
+      # -----------------------------------------------------------------------
+      # npm install + build
+      # -----------------------------------------------------------------------
+      log "Running npm ci and building LibreChat..."
+      cd "${LIBRECHAT_DIR}"
+
+      # Install backend + frontend dependencies
+      npm ci --omit=dev 2>&1 | tail -20 || npm install --omit=dev 2>&1 | tail -20
+
+      # Build the React frontend
+      cd "${LIBRECHAT_DIR}/client"
+      npm ci 2>&1 | tail -20 || npm install 2>&1 | tail -20
+      npm run build
+
+      cd "${LIBRECHAT_DIR}"
+
+      # Create required directories
+      mkdir -p "${LIBRECHAT_DIR}/logs"
+      mkdir -p "${LIBRECHAT_DIR}/uploads"
+
+      # Fix ownership
+      chown -R "${LIBRECHAT_USER}:${LIBRECHAT_USER}" "${LIBRECHAT_DIR}"
+
+      # -----------------------------------------------------------------------
+      # Create initial admin user via LibreChat's built-in CLI (if available)
+      # -----------------------------------------------------------------------
+      log "Attempting to create admin user '${LIBRECHAT_ADMIN_EMAIL}'..."
+      if [ -f "${LIBRECHAT_DIR}/api/server/scripts/create-user.js" ]; then
+        MONGO_URI="${MONGO_URI}" \
+          node "${LIBRECHAT_DIR}/api/server/scripts/create-user.js" \
+            --email "${LIBRECHAT_ADMIN_EMAIL}" \
+            --password "${LIBRECHAT_ADMIN_PASS}" \
+            --name "Admin" \
+            --role "ADMIN" 2>/dev/null || \
+          log "WARN: admin user creation script not found or failed; create user via the web UI"
+      else
+        log "INFO: no create-user script found; register via the web UI (first registered user can be promoted to admin)"
+      fi
+
+      # -----------------------------------------------------------------------
+      # systemd service
+      # -----------------------------------------------------------------------
+      log "Installing systemd service..."
+      cat > /etc/systemd/system/librechat.service <<SYSD
+      [Unit]
+      Description=LibreChat AI Chat Interface
+      Documentation=https://www.librechat.ai/docs
+      After=network.target mongod.service redis-server.service
+      Requires=mongod.service redis-server.service
+
+      [Service]
+      Type=simple
+      User=${LIBRECHAT_USER}
+      Group=${LIBRECHAT_USER}
+      WorkingDirectory=${LIBRECHAT_DIR}
+      EnvironmentFile=${LIBRECHAT_DIR}/.env
+      ExecStart=/usr/bin/node ${LIBRECHAT_DIR}/api/server/index.js
+      Restart=on-failure
+      RestartSec=10
+      TimeoutStartSec=120
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      SYSD
+
+      systemctl daemon-reload
+      systemctl enable librechat
+      systemctl start librechat
+
+      # -----------------------------------------------------------------------
+      # Nginx reverse proxy
+      # -----------------------------------------------------------------------
+      log "Configuring Nginx reverse proxy..."
+      cat > /etc/nginx/sites-available/librechat <<NGXCONF
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${APP_DOMAIN:-_};
+
+          # Allow reasonably large file uploads (document attachments, images)
+          client_max_body_size 100M;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${LIBRECHAT_PORT};
+              proxy_http_version 1.1;
+              # WebSocket support (LibreChat uses SSE / WS for streaming responses)
+              proxy_set_header   Upgrade \$http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host \$host;
+              proxy_set_header   X-Real-IP \$remote_addr;
+              proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_read_timeout 600s;
+              proxy_send_timeout 600s;
+              proxy_buffering    off;
+          }
+      }
+      NGXCONF
+
+      ln -sf /etc/nginx/sites-available/librechat /etc/nginx/sites-enabled/librechat
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # -----------------------------------------------------------------------
+      # Certbot TLS (optional; never fails the boot if DNS not pointed yet)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN:-}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot --nginx --non-interactive --agree-tos \
+          --email "${LE_EMAIL}" \
+          --domains "${APP_DOMAIN}" \
+          --redirect \
+          || echo "WARN: certbot deferred — DNS not yet pointing here"
+      else
+        log "Skipping Certbot (ENABLE_TLS=${ENABLE_TLS} or APP_DOMAIN not configured)"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Firewall (UFW)
+      # -----------------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      # LibreChat backend only reachable via Nginx; direct port not exposed
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # fail2ban
+      # -----------------------------------------------------------------------
+      log "Configuring fail2ban..."
+      cat > /etc/fail2ban/jail.d/librechat.conf <<'F2BJAIL'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-http-auth]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+      [nginx-botsearch]
+      enabled  = true
+      port     = http,https
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      F2BJAIL
+
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # Write credentials file (mode 600 — visible to root only)
+      # -----------------------------------------------------------------------
+      log "Writing credentials file..."
+
+      PUBLIC_IP="$(curl -sf --max-time 5 https://ipv4.icanhazip.com \
+                   || curl -sf --max-time 5 https://api.ipify.org \
+                   || hostname -I | awk '{print $1}')"
+
+      PROTO="http"
+      WEB_HOST="${APP_DOMAIN:-${PUBLIC_IP}}"
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN:-}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ]; then
+        PROTO="https"
+      fi
+
+      cat > /root/librechat-credentials.txt <<CREDS
+      ============================================================
+      LibreChat — Access Credentials
+      Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      ============================================================
+
+      NOTE: This image ships on an AI/ML GPU plan.
+            The NVIDIA driver + CUDA toolkit are installed so operators
+            can run local models (Ollama, llama.cpp) alongside LibreChat.
+            Recommended minimum: 1x NVIDIA GPU, 8 GB VRAM, 40 GB disk.
+            LibreChat itself proxies to external LLM APIs (OpenAI, Anthropic,
+            Gemini, Azure OpenAI, etc.) and does not require GPU for its own
+            operation.
+
+      Public IP      : ${PUBLIC_IP}
+      App domain     : ${APP_DOMAIN:-Not configured}
+
+      Web UI (nginx) : ${PROTO}://${WEB_HOST}
+      Web UI (direct): http://${PUBLIC_IP}:${LIBRECHAT_PORT}
+
+      Admin email    : ${LIBRECHAT_ADMIN_EMAIL}
+      Admin password : ${LIBRECHAT_ADMIN_PASS}
+        (if admin creation script was not available, register the first
+         account via the web UI — it can be promoted to admin manually)
+
+      MongoDB URI    : ${MONGO_URI}
+      Redis URI      : ${REDIS_URI}
+
+      JWT secret     : ${JWT_SECRET}
+      Creds key      : ${CREDS_KEY}
+      Creds IV       : ${CREDS_IV}
+
+      OpenAI key     : ${OPENAI_API_KEY}
+      Anthropic key  : ${ANTHROPIC_API_KEY}
+        (set via web UI Settings → API Keys after login, or edit .env)
+
+      Install dir    : ${LIBRECHAT_DIR}
+      Runtime .env   : ${LIBRECHAT_DIR}/.env
+      Log file       : /var/log/librechat-bootstrap.log
+      Service        : systemctl status librechat
+
+      Next steps:
+        1. Point ${APP_DOMAIN:-<your-domain>} DNS A-record to ${PUBLIC_IP}
+        2. Set ENABLE_TLS=true + APP_DOMAIN + LE_EMAIL in
+           /root/.librechat-bootstrap.env, then run:
+             certbot --nginx -d <your-domain> --email <you@example.com>
+        3. Log in and add your LLM API keys via Settings -> API Keys
+           (or set OPENAI_API_KEY / ANTHROPIC_API_KEY in ${LIBRECHAT_DIR}/.env
+            and restart: systemctl restart librechat)
+        4. To run a local model alongside LibreChat, install Ollama:
+             curl -fsSL https://ollama.ai/install.sh | sh
+             ollama pull llama3
+           then add an Ollama endpoint in the LibreChat Endpoints settings.
+        5. If the NVIDIA driver needs a reboot to activate, run:
+             reboot
+           then verify with: nvidia-smi
+        6. Check service health: systemctl status librechat
+      ============================================================
+      CREDS
+      chmod 600 /root/librechat-credentials.txt
+
+      log "=== LibreChat bootstrap complete: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+      log "=== Credentials saved to /root/librechat-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/librechat-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  LibreChat one-click app bootstrap has finished.
+  Elapsed time: $UPTIME seconds since boot.
+
+  IMPORTANT: This image ships on an AI/ML GPU plan.
+    NVIDIA driver + CUDA 12.8 are installed for local-model use.
+    GPU requirement: 1x NVIDIA GPU, 8 GB VRAM minimum, 40 GB disk.
+    LibreChat itself connects to external LLM APIs (OpenAI, Anthropic,
+    Gemini, Azure OpenAI, etc.) — configure API keys after login.
+    If the NVIDIA driver needs activation, reboot and run: nvidia-smi
+
+  Access details and generated credentials:
+    cat /root/librechat-credentials.txt
+
+  Service management:
+    systemctl status librechat
+    journalctl -u librechat -f
+
+  Bootstrap log:
+    /var/log/librechat-bootstrap.log
+  ============================================================

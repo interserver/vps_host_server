@@ -1,0 +1,427 @@
+#cloud-config
+# =============================================================================
+# OpenLiteSpeed + Django "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: OpenLiteSpeed web server + Python 3 + Django + Gunicorn (LSAPI)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.openlitespeeddjango-bootstrap.env
+# block before launching, OR leave the defaults and the bootstrap will generate
+# random secrets where needed.
+# =============================================================================
+
+hostname: openlitespeeddjango
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep provisioner-injected SSH key + hostname working
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages — OpenLiteSpeed is installed from its repo in the bootstrap script
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  - python3-full
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - wget
+  - git
+  - htop
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - build-essential
+  - libssl-dev
+  - libffi-dev
+  - libpcre3
+  - libpcre3-dev
+  - certbot
+  - gettext
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+  # --- operator-editable variables ------------------------------------------
+  - path: /root/.openlitespeeddjango-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE before first boot -----
+      APP_DOMAIN="example.com"           # primary domain served by OLS (no scheme)
+      LE_EMAIL="admin@example.com"       # Let's Encrypt registration email
+      ENABLE_TLS="true"                  # set false to skip certbot (e.g. no DNS yet)
+
+      # Django application settings
+      APP_DIR="/var/www/django-app"      # where the Django application lives
+      APP_USER="www-data"                # system user that runs Gunicorn
+      DJANGO_PROJECT="myproject"         # Django project name (django-admin startproject)
+      PYTHON_BIN="python3"               # python binary to use
+
+      # OpenLiteSpeed WebAdmin console credentials
+      OLS_ADMIN_USER="admin"
+      OLS_ADMIN_PASS="CHANGE_ME"         # random password generated if left CHANGE_ME
+
+      # Django secrets — left CHANGE_ME means random values are generated at boot
+      DJANGO_SECRET_KEY="CHANGE_ME"
+      DJANGO_SUPERUSER_USER="admin"
+      DJANGO_SUPERUSER_EMAIL="admin@example.com"
+      DJANGO_SUPERUSER_PASS="CHANGE_ME"
+
+  # --- fail2ban jails -------------------------------------------------------
+  - path: /etc/fail2ban/jail.d/openlitespeeddjango.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+
+      [nginx-http-auth]
+      enabled = false
+
+  # --- unattended security upgrades ----------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script ------------------------------------------------
+  - path: /root/openlitespeeddjango-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openlitespeeddjango-bootstrap.log) 2>&1
+      source /root/.openlitespeeddjango-bootstrap.env
+
+      echo "=== OpenLiteSpeed + Django bootstrap started: $(date) ==="
+
+      # --- random secret generator (SIGPIPE-safe under set -e + pipefail) ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      rand_long() { LC_ALL=C tr -dc 'A-Za-z0-9!@#%^&*()-_=+[]{}|;:,.<>?' </dev/urandom 2>/dev/null | head -c 50 || true; }
+
+      [ "$OLS_ADMIN_PASS"           = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
+      [ "$DJANGO_SECRET_KEY"        = "CHANGE_ME" ] && DJANGO_SECRET_KEY="$(rand_long)"
+      [ "$DJANGO_SUPERUSER_PASS"    = "CHANGE_ME" ] && DJANGO_SUPERUSER_PASS="$(rand)"
+
+      # --- install OpenLiteSpeed from official repo -------------------------
+      # fallback: noble repo until 26.04 published
+      if ! command -v lshttpd >/dev/null 2>&1; then
+        wget -qO /tmp/ols-repo.sh https://repo.litespeed.sh
+        bash /tmp/ols-repo.sh
+        apt-get update -qq
+        apt-get install -y openlitespeed
+      else
+        echo "OpenLiteSpeed already installed: $(lshttpd -v 2>&1 | head -1)"
+      fi
+
+      OLS_ROOT="/usr/local/lsws"
+      OLS_CONF="${OLS_ROOT}/conf"
+      OLS_BIN="${OLS_ROOT}/bin"
+
+      # --- set OLS WebAdmin password ----------------------------------------
+      "${OLS_BIN}/lshttpd" -l 2>/dev/null || true
+      echo "${OLS_ADMIN_USER}:$(${OLS_ROOT}/admin/fcgi-bin/admin_php -r \
+        "echo password_hash('${OLS_ADMIN_PASS}', PASSWORD_BCRYPT);")" \
+        > "${OLS_ROOT}/admin/conf/htpasswd" 2>/dev/null || \
+        echo "WARN: OLS admin password set deferred — set manually via WebAdmin"
+
+      # --- install lsphp (Python LSAPI — OLS uses lsphp for PHP, but we use
+      #     Gunicorn via proxy for Django) -----------------------------------
+      # Nothing to install for Python proxy; OLS proxies to Gunicorn on localhost
+
+      # --- set up Python virtualenv + Django --------------------------------
+      mkdir -p "${APP_DIR}"
+      chown "${APP_USER}:${APP_USER}" "${APP_DIR}"
+
+      VENV_DIR="${APP_DIR}/venv"
+      if [ ! -d "${VENV_DIR}" ]; then
+        "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+      fi
+
+      # Install Django + Gunicorn in the venv
+      "${VENV_DIR}/bin/pip" install --upgrade pip --quiet
+      "${VENV_DIR}/bin/pip" install django gunicorn whitenoise --quiet
+
+      # --- create Django project if not present -----------------------------
+      if [ ! -f "${APP_DIR}/${DJANGO_PROJECT}/manage.py" ] && \
+         [ ! -f "${APP_DIR}/manage.py" ]; then
+        cd "${APP_DIR}"
+        "${VENV_DIR}/bin/django-admin" startproject "${DJANGO_PROJECT}" .
+        chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
+      fi
+
+      # --- write production settings overlay --------------------------------
+      SETTINGS_FILE="${APP_DIR}/${DJANGO_PROJECT}/settings_production.py"
+      cat > "${SETTINGS_FILE}" <<SETTINGS
+      import os
+      from .settings import *  # noqa: F401,F403
+
+      SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '${DJANGO_SECRET_KEY}')
+      DEBUG = False
+      ALLOWED_HOSTS = ['${APP_DOMAIN}', '127.0.0.1', 'localhost']
+
+      STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+      STATIC_URL = '/static/'
+
+      MIDDLEWARE = [
+          'whitenoise.middleware.WhiteNoiseMiddleware',
+      ] + MIDDLEWARE  # noqa: F405
+
+      WHITENOISE_MANIFEST_STRICT = False
+
+      DATABASES = {
+          'default': {
+              'ENGINE': 'django.db.backends.sqlite3',
+              'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+          }
+      }
+      SETTINGS
+      chown "${APP_USER}:${APP_USER}" "${SETTINGS_FILE}"
+
+      # --- write runtime env file for systemd --------------------------------
+      cat > /etc/openlitespeeddjango-app.env <<ENVFILE
+      DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      DJANGO_SETTINGS_MODULE=${DJANGO_PROJECT}.settings_production
+      PYTHONPATH=${APP_DIR}
+      ENVFILE
+      chmod 600 /etc/openlitespeeddjango-app.env
+
+      # --- apply migrations, collect static, create superuser ---------------
+      cd "${APP_DIR}"
+      DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+      DJANGO_SETTINGS_MODULE="${DJANGO_PROJECT}.settings_production" \
+        "${VENV_DIR}/bin/python" manage.py migrate --noinput
+
+      DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+      DJANGO_SETTINGS_MODULE="${DJANGO_PROJECT}.settings_production" \
+        "${VENV_DIR}/bin/python" manage.py collectstatic --noinput
+
+      DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+      DJANGO_SETTINGS_MODULE="${DJANGO_PROJECT}.settings_production" \
+      DJANGO_SUPERUSER_PASSWORD="${DJANGO_SUPERUSER_PASS}" \
+        "${VENV_DIR}/bin/python" manage.py createsuperuser \
+          --noinput \
+          --username "${DJANGO_SUPERUSER_USER}" \
+          --email    "${DJANGO_SUPERUSER_EMAIL}" 2>/dev/null || \
+        echo "WARN: superuser already exists or creation deferred"
+
+      chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
+
+      # --- write Gunicorn systemd service ------------------------------------
+      cat > /etc/systemd/system/gunicorn-django.service <<SVCUNIT
+      [Unit]
+      Description=Gunicorn for Django (OpenLiteSpeed reverse proxy)
+      After=network.target
+      Wants=network.target
+
+      [Service]
+      Type=notify
+      User=${APP_USER}
+      Group=${APP_USER}
+      WorkingDirectory=${APP_DIR}
+      EnvironmentFile=/etc/openlitespeeddjango-app.env
+      ExecStart=${VENV_DIR}/bin/gunicorn \\
+          --workers 3 \\
+          --bind 127.0.0.1:8000 \\
+          --timeout 120 \\
+          --access-logfile /var/log/gunicorn-access.log \\
+          --error-logfile  /var/log/gunicorn-error.log \\
+          ${DJANGO_PROJECT}.wsgi:application
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=gunicorn-django
+      NotifyAccess=main
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCUNIT
+
+      systemctl daemon-reload
+      systemctl enable --now gunicorn-django
+
+      # --- configure OpenLiteSpeed vhosts/listener ---------------------------
+      # Write a minimal httpd_config.conf addition via the conf include dir
+      mkdir -p "${OLS_CONF}/vhosts/${APP_DOMAIN}"
+      mkdir -p "${OLS_ROOT}/DEFAULT/html"
+
+      # Write the virtual host conf
+      cat > "${OLS_CONF}/vhosts/${APP_DOMAIN}/vhconf.conf" <<VHCONF
+      docRoot                   \$VH_ROOT/html/
+      vhDomain                  ${APP_DOMAIN}
+      adminEmails               ${LE_EMAIL}
+      enableGzip                1
+
+      context / {
+        type                    proxy
+        handler                 django_gunicorn
+        addDefaultCharset       off
+      }
+
+      rewrite  {
+        enable                  1
+        autoLoadHtaccess        1
+      }
+
+      accessLog \$VH_ROOT/logs/access.log {
+        useServer               0
+        logLevel                DEBUG
+        keepDays                14
+        compressArchive         1
+      }
+
+      errorLog  \$VH_ROOT/logs/error.log {
+        useServer               0
+        logLevel                DEBUG
+        keepDays                14
+      }
+      VHCONF
+
+      mkdir -p "${OLS_ROOT}/DEFAULT/logs"
+      chown -R lsadm:lsadm "${OLS_ROOT}/DEFAULT" 2>/dev/null || true
+
+      # Append proxy cluster + virtual host stanza to httpd_config if not present
+      HTTPD_CONF="${OLS_CONF}/httpd_config.conf"
+      if ! grep -q "django_gunicorn" "${HTTPD_CONF}" 2>/dev/null; then
+        cat >> "${HTTPD_CONF}" <<OLSCONF
+
+      extprocessor django_gunicorn {
+        type                    proxy
+        address                 127.0.0.1:8000
+        maxConns                35
+        pcKeepAliveTimeout      60
+        initTimeout             60
+        retryTimeout            0
+        respBuffer              0
+      }
+
+      virtualhost ${APP_DOMAIN} {
+        vhRoot                  \${SERVER_ROOT}/DEFAULT/
+        configFile              \${SERVER_ROOT}/conf/vhosts/${APP_DOMAIN}/vhconf.conf
+        allowSymbolLink         1
+        enableScript            1
+        restrained              0
+      }
+
+      listener HTTP {
+        address                 *:80
+        secure                  0
+        map                     ${APP_DOMAIN} ${APP_DOMAIN}
+      }
+      OLSCONF
+      fi
+
+      # Restart OpenLiteSpeed to pick up config
+      "${OLS_BIN}/lswsctrl" restart 2>/dev/null || \
+        systemctl restart lshttpd 2>/dev/null || \
+        echo "WARN: OLS restart deferred — start manually: ${OLS_BIN}/lswsctrl start"
+
+      # Enable lshttpd service (OLS package may use lshttpd or openlitespeed service name)
+      systemctl enable lshttpd 2>/dev/null || \
+        systemctl enable openlitespeed 2>/dev/null || true
+
+      # --- serve Django static files from OLS directly ----------------------
+      # Symlink collected static into the OLS docroot
+      ln -sfn "${APP_DIR}/staticfiles" "${OLS_ROOT}/DEFAULT/html/static" 2>/dev/null || true
+
+      # --- firewall ---------------------------------------------------------
+      ufw allow OpenSSH
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw allow 7080/tcp   # OLS WebAdmin console
+      ufw --force enable
+
+      # --- fail2ban ---------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt --------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        certbot certonly --standalone --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" -d "${APP_DOMAIN}" \
+          --pre-hook  "${OLS_BIN}/lswsctrl stop" \
+          --post-hook "${OLS_BIN}/lswsctrl start" || \
+          echo "WARN: certbot deferred (DNS not pointed yet?). Re-run: certbot certonly --standalone -d ${APP_DOMAIN}"
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        if [ -d "${CERT_DIR}" ]; then
+          # Add HTTPS listener to OLS if certs obtained
+          if ! grep -q "listener HTTPS" "${HTTPD_CONF}" 2>/dev/null; then
+            cat >> "${HTTPD_CONF}" <<HTTPSCONF
+
+      listener HTTPS {
+        address                 *:443
+        secure                  1
+        keyFile                 ${CERT_DIR}/privkey.pem
+        certFile                ${CERT_DIR}/fullchain.pem
+        map                     ${APP_DOMAIN} ${APP_DOMAIN}
+      }
+      HTTPSCONF
+          fi
+          "${OLS_BIN}/lswsctrl" restart 2>/dev/null || true
+        fi
+
+        # Certbot auto-renewal
+        systemctl enable --now certbot.timer 2>/dev/null || \
+          (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --pre-hook '${OLS_BIN}/lswsctrl stop' --post-hook '${OLS_BIN}/lswsctrl start'") | crontab - || true
+      fi
+
+      # --- write credentials summary ----------------------------------------
+      PROTO="http"
+      [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+      cat > /root/openlitespeeddjango-credentials.txt <<EOF
+      ===== OpenLiteSpeed + Django install complete: $(date) =====
+      App URL:                ${PROTO}://${APP_DOMAIN}/
+      Django Admin:           ${PROTO}://${APP_DOMAIN}/admin/
+      OLS WebAdmin console:   http://$(hostname -I | awk '{print $1}'):7080/
+      OLS WebAdmin user:      ${OLS_ADMIN_USER}
+      OLS WebAdmin pass:      ${OLS_ADMIN_PASS}
+      Django superuser:       ${DJANGO_SUPERUSER_USER}
+      Django superuser pass:  ${DJANGO_SUPERUSER_PASS}
+      Django secret key:      ${DJANGO_SECRET_KEY}
+      App directory:          ${APP_DIR}
+      Virtualenv:             ${APP_DIR}/venv
+      Gunicorn log:           journalctl -u gunicorn-django -f
+      Bootstrap log:          /var/log/openlitespeeddjango-bootstrap.log
+      OLS logs:               ${OLS_ROOT}/DEFAULT/logs/
+      EOF
+      chmod 600 /root/openlitespeeddjango-credentials.txt
+
+      echo "=== OpenLiteSpeed + Django bootstrap finished. Credentials in /root/openlitespeeddjango-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once everything above has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openlitespeeddjango-bootstrap.sh" ]
+
+final_message: "OpenLiteSpeed + Django bootstrap done after $UPTIME s. See /root/openlitespeeddjango-credentials.txt and /var/log/openlitespeeddjango-bootstrap.log"

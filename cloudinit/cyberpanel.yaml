@@ -1,0 +1,311 @@
+#cloud-config
+# =============================================================================
+# CyberPanel — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: CyberPanel (official installer, OpenLiteSpeed-based) + UFW firewall
+#        + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# NOTE: CyberPanel officially supports Ubuntu 22.04 / 24.04 and AlmaLinux.
+# fallback: ubuntu24.qcow2 — CyberPanel installer not yet 26.04-certified
+# The installer is run best-effort on 26.04; if it rejects this OS version,
+# redeploy with ubuntu24.qcow2 and this same user-data file.
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.cyberpanel-bootstrap.env before
+# launching (or inject via provisioner). Passwords are random per-boot when
+# left as CHANGE_ME.
+# =============================================================================
+
+hostname: cyberpanel
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default (cloud-init injects customer SSH key here)
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — minimal set; CyberPanel installer pulls its own deps
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - jq
+  - net-tools
+  - python3
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes during CyberPanel compilation
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.cyberpanel-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # CyberPanel bootstrap environment
+      # Edit these before first boot, or inject via provisioner.
+
+      # CyberPanel admin password
+      # Leave as CHANGE_ME to auto-generate a random value at runtime.
+      # The admin username is always 'admin'.
+      ADMIN_PASS=CHANGE_ME
+
+      # First name for the CyberPanel admin account
+      ADMIN_FIRSTNAME=Admin
+
+      # Last name for the CyberPanel admin account
+      ADMIN_LASTNAME=User
+
+      # Email for the CyberPanel admin account
+      ADMIN_EMAIL=CHANGE_ME
+
+      # Set to "1" to install Memcached, "0" to skip
+      INSTALL_MEMCACHED=0
+
+      # Set to "1" to install Redis, "0" to skip
+      INSTALL_REDIS=0
+
+      # Set to "1" to install Watchdog, "0" to skip
+      INSTALL_WATCHDOG=0
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/cyberpanel-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/cyberpanel-bootstrap.log) 2>&1
+      source /root/.cyberpanel-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== CyberPanel bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${ADMIN_PASS}"  == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+      [[ "${ADMIN_EMAIL}" == "CHANGE_ME" ]] && ADMIN_EMAIL="admin@localhost"
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — basic SSH + CyberPanel protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # CyberPanel ports:
+      #   22    — SSH
+      #   80    — HTTP (websites + ACME challenge)
+      #   443   — HTTPS (websites)
+      #   8090  — CyberPanel web UI (HTTP, self-redirects to HTTPS internally)
+      #   7080  — OpenLiteSpeed WebAdmin Console
+      #   21    — FTP (passive ports 40110-40210 handled by CyberPanel)
+      #   25    — SMTP
+      #   110   — POP3
+      #   143   — IMAP
+      #   587   — Submission (SMTP AUTH)
+      #   993   — IMAPS
+      #   995   — POP3S
+      #   53    — DNS (PowerDNS)
+      # NOTE: CyberPanel also manages its own firewall (CSF/iptables);
+      #       UFW rules here provide a baseline — CyberPanel may override
+      #       or supplement them at install time.
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 8090/tcp  comment 'CyberPanel UI'
+      ufw allow 7080/tcp  comment 'OLS WebAdmin'
+      ufw allow 21/tcp    comment 'FTP'
+      ufw allow 25/tcp    comment 'SMTP'
+      ufw allow 110/tcp   comment 'POP3'
+      ufw allow 143/tcp   comment 'IMAP'
+      ufw allow 587/tcp   comment 'SMTP Submission'
+      ufw allow 993/tcp   comment 'IMAPS'
+      ufw allow 995/tcp   comment 'POP3S'
+      ufw allow 53        comment 'DNS'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # CyberPanel official silent installer
+      # Ref: https://cyberpanel.net/docs/install-cyberpanel-v3/
+      # The installer script reads env vars for non-interactive use:
+      #   ADMIN_PASSWORD, MEMCACHED, REDIS, WatchDog, HideLeadingDot
+      # Passing "first" to the installer selects OpenLiteSpeed (free);
+      # "second" selects LiteSpeed Enterprise (requires license).
+      # ----------------------------------------------------------------
+      echo "=== Installing CyberPanel (OpenLiteSpeed edition) ==="
+      export DEBIAN_FRONTEND=noninteractive
+
+      # Download the official installer (pinned invocation via curl pipe)
+      # The installer self-detects Ubuntu version; best-effort on 26.04.
+      export ADMIN_PASSWORD="${ADMIN_PASS}"
+      export MEMCACHED="${INSTALL_MEMCACHED:-0}"
+      export REDIS="${INSTALL_REDIS:-0}"
+      export WatchDog="${INSTALL_WATCHDOG:-0}"
+      export HideLeadingDot="1"
+      export CYBERPANEL_OPTION="1"       # 1 = OpenLiteSpeed (community)
+      export SETUP_WORDPRESS="0"
+      export SETUP_MAGENTO="0"
+      export SETUP_PRESTASHOP="0"
+      export BUILD_PHP="0"
+
+      # Run the vendor's documented silent install one-liner
+      # (echo "first" pipes the edition choice for installers that prompt)
+      curl -sSL https://cyberpanel.net/install.sh \
+          -o /tmp/cyberpanel-install.sh
+      chmod +x /tmp/cyberpanel-install.sh
+
+      # Non-interactive: echo "first\nN\nN\nN\nN\nN\nN\nN" covers all prompts
+      # for: edition, memcached, redis, watchdog, Postfix, Rainloop, Setup WP,
+      # remote MySQL. ADMIN_PASSWORD env var sets the admin password.
+      printf 'first\nN\nN\nN\nN\nN\nN\nN\n' | bash /tmp/cyberpanel-install.sh \
+          || echo "WARN: CyberPanel installer exited non-zero — review /var/log/cyberpanel-bootstrap.log"
+
+      # ----------------------------------------------------------------
+      # Wait for CyberPanel service to be fully up (max 120 s)
+      # ----------------------------------------------------------------
+      echo "=== Waiting for CyberPanel to be ready on port 8090 ==="
+      TIMEOUT=120
+      ELAPSED=0
+      until curl -sk https://127.0.0.1:8090/ >/dev/null 2>&1 || \
+            curl -sk http://127.0.0.1:8090/  >/dev/null 2>&1 || \
+            [ $ELAPSED -ge $TIMEOUT ]; do
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+      done
+
+      if curl -sk https://127.0.0.1:8090/ >/dev/null 2>&1 || \
+         curl -sk http://127.0.0.1:8090/  >/dev/null 2>&1; then
+          echo "=== CyberPanel is responding on port 8090 ==="
+      else
+          echo "WARN: CyberPanel did not respond on port 8090 after ${TIMEOUT}s"
+          echo "WARN: It may still be starting up — check: systemctl status lscpd"
+      fi
+
+      # ----------------------------------------------------------------
+      # Determine server IP for the credentials file
+      # ----------------------------------------------------------------
+      SERVER_IP="$(curl -fsSL https://api4.my-ip.io/ip 2>/dev/null \
+                   || hostname -I | awk '{print $1}')"
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      cat > /root/cyberpanel-credentials.txt <<CREDS
+      ============================================================
+       CyberPanel — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       Panel URL      : https://${SERVER_IP}:8090
+       Admin user     : admin
+       Admin password : ${ADMIN_PASS}
+       Admin email    : ${ADMIN_EMAIL}
+
+       OLS WebAdmin   : https://${SERVER_IP}:7080
+       (OLS WebAdmin credentials are set separately by CyberPanel)
+
+       Firewall open ports:
+         22    SSH
+         80    HTTP (websites)
+         443   HTTPS (websites)
+         8090  CyberPanel UI
+         7080  OpenLiteSpeed WebAdmin
+         21    FTP
+         25    SMTP
+         110   POP3 / 143 IMAP / 587 Submission
+         993   IMAPS / 995 POP3S
+         53    DNS
+
+       Log file  : /var/log/cyberpanel-bootstrap.log
+
+       IMPORTANT: Change the admin password after first login.
+       NOTE: CyberPanel also manages CSF/iptables rules; check
+             'csf -l' or the CyberPanel Security > CSF panel.
+      ============================================================
+      CREDS
+      chmod 600 /root/cyberpanel-credentials.txt
+
+      echo ""
+      echo "=== CyberPanel bootstrap complete $(date -u) ==="
+      echo "=== Panel URL      : https://${SERVER_IP}:8090"
+      echo "=== Admin user     : admin"
+      echo "=== Admin password : ${ADMIN_PASS}"
+      echo "=== Full creds     : /root/cyberpanel-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/cyberpanel-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   CyberPanel bootstrap complete.
+   Panel URL   : https://YOUR_SERVER_IP:8090
+   Admin user  : admin
+   Credentials : /root/cyberpanel-credentials.txt
+   Log         : /var/log/cyberpanel-bootstrap.log
+  ============================================================

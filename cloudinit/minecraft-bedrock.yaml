@@ -1,0 +1,397 @@
+#cloud-config
+# =============================================================================
+# Minecraft Bedrock Edition — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Minecraft Bedrock Dedicated Server + systemd unit
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Game ports: 19132/udp + 19133/udp (IPv4 and IPv6 Bedrock)
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.minecraft-bedrock-bootstrap.env
+# before launching, or supply them via your provisioner.
+# =============================================================================
+
+hostname: minecraft-bedrock
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject SSH key + hostname later
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd runs)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-transport-https
+  - software-properties-common
+  - net-tools
+  - htop
+  - git
+  - unzip
+  - screen
+  - jq
+  - libcurl4
+  - libssl3
+  - openssl
+
+# ----------------------------------------------------------------------------
+# Swap (survive build-time memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --------------------------------------------------------------------------
+  # Operator-editable environment variables — fill in before first boot
+  # --------------------------------------------------------------------------
+  - path: /root/.minecraft-bedrock-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # -----------------------------------------------------------------------
+      # Minecraft Bedrock bootstrap environment — edit BEFORE launching instance
+      # -----------------------------------------------------------------------
+
+      # Name shown in the in-game server browser
+      SERVER_NAME="InterServer Minecraft Bedrock"
+
+      # MOTD shown below the server name
+      SERVER_MOTD="Powered by InterServer"
+
+      # Gamemode for new players: survival | creative | adventure
+      GAMEMODE="survival"
+
+      # Difficulty: peaceful | easy | normal | hard
+      DIFFICULTY="normal"
+
+      # Allow players without Xbox Live accounts (true = offline mode)
+      # Set false to require valid Xbox Live authentication
+      ONLINE_MODE="true"
+
+      # Maximum concurrent players (default 10)
+      MAX_PLAYERS="10"
+
+      # UDP port for Bedrock (IPv4)
+      BEDROCK_PORT="19132"
+
+      # UDP port for Bedrock (IPv6)
+      BEDROCK_PORT_V6="19133"
+
+      # Level/world name (subdirectory under worlds/)
+      LEVEL_NAME="Bedrock level"
+
+      # Level seed (leave empty for random)
+      LEVEL_SEED=""
+
+      # Level type: DEFAULT | FLAT | LEGACY
+      LEVEL_TYPE="DEFAULT"
+
+      # Allow cheats (operator commands)
+      ALLOW_CHEATS="false"
+
+      # Max view distance in chunks (4–96)
+      VIEW_DISTANCE="10"
+
+      # Player idle timeout in minutes (0 = never kick)
+      PLAYER_IDLE_TIMEOUT="30"
+
+      # Server install directory
+      BEDROCK_DIR="/opt/minecraft-bedrock"
+
+      # Service run-as user
+      BEDROCK_USER="minecraft"
+
+  # --------------------------------------------------------------------------
+  # Bootstrap script
+  # --------------------------------------------------------------------------
+  - path: /root/minecraft-bedrock-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/minecraft-bedrock-bootstrap.log) 2>&1
+      source /root/.minecraft-bedrock-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Minecraft Bedrock bootstrap started at $(date -u) ==="
+
+      # -----------------------------------------------------------------------
+      # 1. Automatic security updates
+      # -----------------------------------------------------------------------
+      echo "--- Configuring unattended-upgrades ---"
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      EOF
+      systemctl enable --now unattended-upgrades || true
+
+      # -----------------------------------------------------------------------
+      # 2. Create the minecraft system user + install directory
+      # -----------------------------------------------------------------------
+      echo "--- Creating minecraft system user ---"
+      id -u "${BEDROCK_USER}" &>/dev/null || \
+        useradd --system --shell /usr/sbin/nologin \
+                --home "${BEDROCK_DIR}" --create-home "${BEDROCK_USER}"
+
+      mkdir -p "${BEDROCK_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 3. Download Minecraft Bedrock Dedicated Server
+      # -----------------------------------------------------------------------
+      echo "--- Downloading Minecraft Bedrock Dedicated Server ---"
+
+      # Fetch the download page to get the current release URL
+      BDS_PAGE=$(curl -fsSL \
+        -H 'Accept-Language: en-US,en;q=0.9' \
+        -A 'Mozilla/5.0 (X11; Linux x86_64)' \
+        'https://www.minecraft.net/en-us/download/server/bedrock')
+
+      BDS_URL=$(echo "${BDS_PAGE}" | \
+        grep -oP 'https://[^"]+bedrock-server-[^"]+linux[^"]+\.zip' | \
+        head -1 || true)
+
+      if [ -z "${BDS_URL}" ]; then
+        echo "WARN: Could not auto-detect BDS download URL; trying fallback pattern."
+        BDS_URL=$(curl -fsSL 'https://bedrock.undnet.eu/latest' 2>/dev/null || true)
+      fi
+
+      if [ -z "${BDS_URL}" ]; then
+        echo "ERROR: Unable to determine Bedrock server download URL." >&2
+        echo "ERROR: Set BDS_URL manually and re-run this script." >&2
+        exit 1
+      fi
+
+      echo "Downloading: ${BDS_URL}"
+      TMPZIP="/tmp/bedrock-server.zip"
+      curl -fsSL -o "${TMPZIP}" "${BDS_URL}"
+
+      # -----------------------------------------------------------------------
+      # 4. Install / upgrade idempotently (preserve existing worlds + config)
+      # -----------------------------------------------------------------------
+      echo "--- Installing Bedrock server binaries ---"
+
+      # If upgrading, back up world data + configuration first
+      if [ -f "${BEDROCK_DIR}/bedrock_server" ]; then
+        echo "Existing install found — preserving worlds and configs."
+        BACKUP_DIRS="worlds permissions.json allowlist.json server.properties"
+        for item in ${BACKUP_DIRS}; do
+          [ -e "${BEDROCK_DIR}/${item}" ] && \
+            cp -r "${BEDROCK_DIR}/${item}" "/tmp/bds-backup-${item}" || true
+        done
+        UPGRADE=true
+      else
+        UPGRADE=false
+      fi
+
+      unzip -q -o "${TMPZIP}" -d "${BEDROCK_DIR}"
+      rm -f "${TMPZIP}"
+
+      # Restore preserved data after upgrade
+      if [ "${UPGRADE}" = "true" ]; then
+        for item in ${BACKUP_DIRS}; do
+          [ -e "/tmp/bds-backup-${item}" ] && \
+            cp -r "/tmp/bds-backup-${item}" "${BEDROCK_DIR}/${item}" || true
+          rm -rf "/tmp/bds-backup-${item}" || true
+        done
+      fi
+
+      chmod +x "${BEDROCK_DIR}/bedrock_server"
+
+      # -----------------------------------------------------------------------
+      # 5. Accept the EULA (required to run the server)
+      # -----------------------------------------------------------------------
+      echo "--- Accepting Minecraft EULA ---"
+      # Bedrock server does not use a separate eula.txt file — acceptance is
+      # implied by running the server; no explicit file needed.
+
+      # -----------------------------------------------------------------------
+      # 6. Write server.properties (only if not already customised)
+      # -----------------------------------------------------------------------
+      echo "--- Writing server.properties ---"
+      cat > "${BEDROCK_DIR}/server.properties" <<PROPS
+      server-name=${SERVER_NAME}
+      gamemode=${GAMEMODE}
+      difficulty=${DIFFICULTY}
+      allow-cheats=${ALLOW_CHEATS}
+      max-players=${MAX_PLAYERS}
+      online-mode=${ONLINE_MODE}
+      allow-list=false
+      server-port=${BEDROCK_PORT}
+      server-portv6=${BEDROCK_PORT_V6}
+      view-distance=${VIEW_DISTANCE}
+      tick-distance=4
+      player-idle-timeout=${PLAYER_IDLE_TIMEOUT}
+      max-threads=8
+      level-name=${LEVEL_NAME}
+      level-seed=${LEVEL_SEED}
+      level-type=${LEVEL_TYPE}
+      default-player-permission-level=member
+      texturepack-required=false
+      content-log-file-enabled=false
+      compression-threshold=1
+      server-authoritative-movement=server-auth
+      player-movement-score-threshold=20
+      player-movement-action-direction-threshold=0.85
+      player-movement-distance-threshold=0.3
+      player-movement-duration-threshold-in-ms=500
+      correct-player-movement=false
+      server-authoritative-block-breaking=false
+      PROPS
+
+      # -----------------------------------------------------------------------
+      # 7. Fix ownership
+      # -----------------------------------------------------------------------
+      chown -R "${BEDROCK_USER}:${BEDROCK_USER}" "${BEDROCK_DIR}"
+
+      # -----------------------------------------------------------------------
+      # 8. Systemd service for Minecraft Bedrock
+      # -----------------------------------------------------------------------
+      echo "--- Creating systemd service ---"
+      cat > /etc/systemd/system/minecraft-bedrock.service <<EOF
+      [Unit]
+      Description=Minecraft Bedrock Dedicated Server
+      After=network.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=${BEDROCK_USER}
+      Group=${BEDROCK_USER}
+      WorkingDirectory=${BEDROCK_DIR}
+      Environment=LD_LIBRARY_PATH=${BEDROCK_DIR}
+      ExecStart=${BEDROCK_DIR}/bedrock_server
+      Restart=on-failure
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+      # Allow the server to use more file descriptors
+      LimitNOFILE=65536
+      # Allow map loading in large worlds
+      LimitSTACK=65536
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      # -----------------------------------------------------------------------
+      # 9. Firewall — SSH + Bedrock UDP ports only
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp                        comment 'SSH'
+      ufw allow "${BEDROCK_PORT}/udp"         comment 'Minecraft Bedrock IPv4'
+      ufw allow "${BEDROCK_PORT_V6}/udp"      comment 'Minecraft Bedrock IPv6'
+      ufw --force enable
+      echo "UFW status:"
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 10. Fail2ban — SSH brute-force protection
+      # -----------------------------------------------------------------------
+      echo "--- Configuring fail2ban ---"
+      cat > /etc/fail2ban/jail.d/minecraft-bedrock-defaults.conf <<'EOF'
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      EOF
+      systemctl enable --now fail2ban || true
+
+      # -----------------------------------------------------------------------
+      # 11. Enable and start Minecraft Bedrock service
+      # -----------------------------------------------------------------------
+      echo "--- Enabling and starting minecraft-bedrock service ---"
+      systemctl daemon-reload
+      systemctl enable minecraft-bedrock.service
+      systemctl start minecraft-bedrock.service || true
+
+      # -----------------------------------------------------------------------
+      # 12. Write credentials / connection info
+      # -----------------------------------------------------------------------
+      echo "--- Writing credentials file ---"
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+      cat > /root/minecraft-bedrock-credentials.txt <<CREDS
+      ======================================================
+        Minecraft Bedrock Dedicated Server — Connection Info
+      ======================================================
+      Host / IP     : ${SERVER_IP}
+      UDP Port (v4) : ${BEDROCK_PORT}
+      UDP Port (v6) : ${BEDROCK_PORT_V6}
+      Server Name   : ${SERVER_NAME}
+      Gamemode      : ${GAMEMODE}
+      Difficulty    : ${DIFFICULTY}
+      Max Players   : ${MAX_PLAYERS}
+      Online Mode   : ${ONLINE_MODE}
+
+      HOW TO CONNECT:
+        1. Open Minecraft (Bedrock Edition) on any device.
+        2. Go to Play -> Servers -> Add Server.
+        3. Enter Server Address: ${SERVER_IP}
+           Enter Port:           ${BEDROCK_PORT}
+        4. Save and join!
+
+      OPERATOR NOTES:
+        - Server installed in : ${BEDROCK_DIR}
+        - Run as user         : ${BEDROCK_USER}
+        - Config file         : ${BEDROCK_DIR}/server.properties
+        - World data          : ${BEDROCK_DIR}/worlds/
+
+      SERVICE MANAGEMENT:
+        systemctl status  minecraft-bedrock
+        systemctl restart minecraft-bedrock
+        journalctl -u minecraft-bedrock -f
+
+      Bootstrap log : /var/log/minecraft-bedrock-bootstrap.log
+      ======================================================
+      CREDS
+      chmod 600 /root/minecraft-bedrock-credentials.txt
+
+      echo "=== Minecraft Bedrock bootstrap complete at $(date -u) ==="
+      echo "=== Server reachable at ${SERVER_IP}:${BEDROCK_PORT} (UDP) ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/minecraft-bedrock-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in the console log when cloud-init completes
+# ----------------------------------------------------------------------------
+final_message: |
+  ==========================================================
+  Minecraft Bedrock Dedicated Server is ready!
+  - Players connect via Minecraft (Bedrock) -> Add Server
+  - Game port:       19132/udp (IPv4)  19133/udp (IPv6)
+  - Service status:  systemctl status minecraft-bedrock
+  - Credentials:     cat /root/minecraft-bedrock-credentials.txt
+  - Bootstrap log:   /var/log/minecraft-bedrock-bootstrap.log
+  ==========================================================

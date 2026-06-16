@@ -1,0 +1,394 @@
+#cloud-config
+# =============================================================================
+# ClusterControl "one-click app" — Ubuntu 26.04 cloud-init user-data
+# Stack: ClusterControl (Severalnines) + MariaDB (local backend) + Apache +
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# ClusterControl manages remote database clusters (MySQL, PostgreSQL, MongoDB,
+# etc.) over SSH. The web UI listens on HTTPS port 443.
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.clustercontrol-bootstrap.env
+# before launch, or pass them via your provisioner.
+# =============================================================================
+
+hostname: clustercontrol
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (installed before runcmd)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - apt-transport-https
+  - lsb-release
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - rsync
+  - git
+  - htop
+  - net-tools
+  - socat
+  - mailutils
+  - openssh-server
+
+# ----------------------------------------------------------------------------
+# Swap — helps survive MariaDB + ClusterControl memory spikes during bootstrap
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files written to disk before runcmd fires
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment variables -------------------------------
+  - path: /root/.clustercontrol-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ===== EDIT THESE BEFORE FIRST BOOT (or pass via provisioner) =====
+
+      # ClusterControl web UI domain (used for Certbot TLS)
+      APP_DOMAIN="clustercontrol.example.com"
+
+      # Let's Encrypt registration email
+      LE_EMAIL="admin@example.com"
+
+      # Set to "false" to skip TLS (e.g. DNS not yet pointed at this IP)
+      ENABLE_TLS="true"
+
+      # ClusterControl admin UI credentials
+      # Leave CHANGE_ME — a random password will be generated at boot
+      CC_ADMIN_USER="admin"
+      CC_ADMIN_PASS="CHANGE_ME"
+      CC_ADMIN_EMAIL="admin@example.com"
+
+      # MariaDB root password for CC's internal database
+      # Leave CHANGE_ME — a random password will be generated at boot
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      # MariaDB database + user that ClusterControl uses internally
+      CC_DB_NAME="dcps"
+      CC_DB_USER="cmon"
+      CC_DB_PASS="CHANGE_ME"
+
+  # --- fail2ban configuration ------------------------------------------------
+  - path: /etc/fail2ban/jail.d/clustercontrol.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+      findtime = 10m
+
+      [apache-auth]
+      enabled  = true
+      maxretry = 5
+      bantime  = 1h
+
+      [apache-badbots]
+      enabled  = true
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- sysctl / ulimit tuning for database workloads -------------------------
+  - path: /etc/sysctl.d/90-clustercontrol.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # ClusterControl / database performance tuning
+      vm.swappiness = 10
+      net.core.somaxconn = 65535
+      net.ipv4.tcp_max_syn_backlog = 65535
+      fs.file-max = 1000000
+
+  - path: /etc/security/limits.d/90-clustercontrol.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      # Raise open-file limits for cmon daemon and MariaDB
+      cmon  soft  nofile  65536
+      cmon  hard  nofile  65536
+      mysql soft  nofile  65536
+      mysql hard  nofile  65536
+      root  soft  nofile  65536
+      root  hard  nofile  65536
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/clustercontrol-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/clustercontrol-bootstrap.log) 2>&1
+      source /root/.clustercontrol-bootstrap.env
+
+      echo "=== ClusterControl bootstrap started: $(date) ==="
+
+      # -----------------------------------------------------------------------
+      # Helper: SIGPIPE-safe random password generator
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Fill in any passwords still left as CHANGE_ME
+      [ "$CC_ADMIN_PASS"   = "CHANGE_ME" ] && CC_ADMIN_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+      [ "$CC_DB_PASS"      = "CHANGE_ME" ] && CC_DB_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # Apply kernel / ulimit tuning
+      # -----------------------------------------------------------------------
+      sysctl -p /etc/sysctl.d/90-clustercontrol.conf || true
+
+      # -----------------------------------------------------------------------
+      # Add Severalnines (ClusterControl) apt repo
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if [ ! -f /etc/apt/sources.list.d/severalnines-stable.list ]; then
+        # Import Severalnines GPG key
+        wget -qO- https://repo.severalnines.com/severalnines-repos.asc \
+          | gpg --dearmor -o /etc/apt/trusted.gpg.d/severalnines.gpg
+
+        # Use noble (24.04) repo — no 26.04 line published yet
+        cat > /etc/apt/sources.list.d/severalnines-stable.list <<'REPO'
+      # fallback: noble repo until 26.04 published
+      deb [signed-by=/etc/apt/trusted.gpg.d/severalnines.gpg] http://repo.severalnines.com/repos/ubuntu noble main
+      REPO
+
+        apt-get update -q
+      fi
+
+      # -----------------------------------------------------------------------
+      # Install MariaDB from official upstream repo (latest stable)
+      # fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if ! command -v mysqld >/dev/null 2>&1 && ! command -v mariadbd >/dev/null 2>&1; then
+        wget -qO- https://downloads.mariadb.com/MariaDB/mariadb_repo_setup \
+          | bash -s -- --mariadb-server-version="mariadb-11.4" --skip-key-import \
+                       --os-type=ubuntu --os-codename=noble
+        # Import MariaDB key separately (repo setup may have done it)
+        wget -qO- https://supplychain.mariadb.com/MariaDB-Server-GPG-KEY \
+          | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg 2>/dev/null || true
+        apt-get update -q
+        DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server mariadb-client
+      fi
+
+      # -----------------------------------------------------------------------
+      # Secure MariaDB + create ClusterControl internal database
+      # -----------------------------------------------------------------------
+      systemctl enable --now mariadb
+
+      # Set root password and harden
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${CC_DB_NAME}\`;
+      CREATE USER IF NOT EXISTS '${CC_DB_USER}'@'127.0.0.1' IDENTIFIED BY '${CC_DB_PASS}';
+      CREATE USER IF NOT EXISTS '${CC_DB_USER}'@'localhost' IDENTIFIED BY '${CC_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${CC_DB_NAME}\`.* TO '${CC_DB_USER}'@'127.0.0.1';
+      GRANT ALL PRIVILEGES ON \`${CC_DB_NAME}\`.* TO '${CC_DB_USER}'@'localhost';
+      GRANT SUPER, PROCESS, REPLICATION SLAVE ON *.* TO '${CC_DB_USER}'@'127.0.0.1';
+      GRANT SUPER, PROCESS, REPLICATION SLAVE ON *.* TO '${CC_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # Bind MariaDB to localhost only
+      if ! grep -q "^bind-address" /etc/mysql/mariadb.conf.d/50-server.cnf 2>/dev/null; then
+        sed -i '/^\[mysqld\]/a bind-address = 127.0.0.1' \
+          /etc/mysql/mariadb.conf.d/50-server.cnf 2>/dev/null \
+          || echo "bind-address = 127.0.0.1" >> /etc/mysql/my.cnf
+      else
+        sed -i 's/^bind-address.*/bind-address = 127.0.0.1/' \
+          /etc/mysql/mariadb.conf.d/50-server.cnf 2>/dev/null || true
+      fi
+
+      # Performance tuning for MariaDB (as CC backend, not a big workload)
+      cat > /etc/mysql/mariadb.conf.d/91-clustercontrol.cnf <<'MYCNF'
+      [mysqld]
+      innodb_buffer_pool_size        = 256M
+      innodb_log_file_size           = 64M
+      innodb_flush_log_at_trx_commit = 2
+      max_connections                = 200
+      table_open_cache               = 400
+      MYCNF
+
+      systemctl restart mariadb
+
+      # -----------------------------------------------------------------------
+      # Install ClusterControl via the official Severalnines installer
+      # -----------------------------------------------------------------------
+      # The installer expects CMON DB credentials in /etc/cmon.d/cmon.cnf or via env.
+      # We pre-stage the cmon config so the installer picks up our passwords.
+      mkdir -p /etc/cmon.d
+      cat > /etc/cmon.d/cmon.cnf <<CMONCNF
+      [cmon]
+      mysql_port=3306
+      mysql_hostname=127.0.0.1
+      mysql_password=${CC_DB_PASS}
+      hostname=$(hostname -f || hostname)
+      CMONCNF
+      chmod 640 /etc/cmon.d/cmon.cnf
+
+      # Install clustercontrol package (installs cmon + the web UI + Apache + PHP)
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        clustercontrol \
+        clustercontrol-controller \
+        clustercontrol-notifications \
+        clustercontrol-ssh \
+        clustercontrol-cloud 2>/dev/null || \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y clustercontrol
+
+      # -----------------------------------------------------------------------
+      # Post-install: run the ClusterControl setup script if present
+      # -----------------------------------------------------------------------
+      if [ -f /var/www/html/clustercontrol/app/tools/setup-cc.sh ]; then
+        bash /var/www/html/clustercontrol/app/tools/setup-cc.sh \
+          --mysql-root-password "${MYSQL_ROOT_PASS}" \
+          --cmon-db-password    "${CC_DB_PASS}"        \
+          --admin-password      "${CC_ADMIN_PASS}"     \
+          --admin-email         "${CC_ADMIN_EMAIL}"    || true
+      elif [ -f /var/www/html/clustercontrol/app/tools/setup.php ]; then
+        php /var/www/html/clustercontrol/app/tools/setup.php \
+          --cmon-db-password "${CC_DB_PASS}" \
+          --admin-password   "${CC_ADMIN_PASS}" \
+          --admin-email      "${CC_ADMIN_EMAIL}" || true
+      fi
+
+      # Ensure cmon service is running
+      systemctl enable --now cmon  2>/dev/null || true
+      systemctl enable --now cmon-ssh  2>/dev/null || true
+      systemctl enable --now cmon-cloud  2>/dev/null || true
+      systemctl enable --now cmon-events 2>/dev/null || true
+
+      # -----------------------------------------------------------------------
+      # Install Certbot and configure Apache TLS
+      # -----------------------------------------------------------------------
+      if ! command -v certbot >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-apache
+      fi
+
+      # Enable mod_ssl and mod_rewrite for Apache
+      a2enmod ssl rewrite headers 2>/dev/null || true
+      systemctl enable --now apache2 2>/dev/null || true
+
+      # -----------------------------------------------------------------------
+      # Firewall — SSH + HTTP (redirect to HTTPS) + HTTPS + cmon RPC
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw allow 80/tcp    comment 'HTTP — redirect to HTTPS'
+      ufw allow 443/tcp   comment 'ClusterControl HTTPS UI'
+      # CMON internal RPC (used by agents on managed nodes → CC controller)
+      ufw allow 9500/tcp  comment 'cmon RPC'
+      ufw allow 9501/tcp  comment 'cmon RPC TLS'
+      ufw allow 9502/tcp  comment 'cmon cloud gateway'
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # TLS via Let's Encrypt (non-fatal if DNS not pointed yet)
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ]; then
+        certbot --apache --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --redirect \
+          || echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot --apache -d ${APP_DOMAIN}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # Generate SSH keypair for ClusterControl to manage remote nodes
+      # -----------------------------------------------------------------------
+      if [ ! -f /root/.ssh/id_rsa_clustercontrol ]; then
+        ssh-keygen -t rsa -b 4096 -N "" \
+          -C "clustercontrol@$(hostname)" \
+          -f /root/.ssh/id_rsa_clustercontrol
+        echo ""
+        echo "=== ClusterControl SSH public key (add to managed DB nodes) ==="
+        cat /root/.ssh/id_rsa_clustercontrol.pub
+        echo ""
+      fi
+
+      # -----------------------------------------------------------------------
+      # Write credentials summary
+      # -----------------------------------------------------------------------
+      PROTO="https"
+      [ "${ENABLE_TLS}" != "true" ] && PROTO="http"
+
+      cat > /root/clustercontrol-credentials.txt <<CREDS
+      ===== ClusterControl Installation: $(date) =====
+
+      Web UI URL      : ${PROTO}://${APP_DOMAIN}/clustercontrol
+      Admin user      : ${CC_ADMIN_USER}
+      Admin password  : ${CC_ADMIN_PASS}
+      Admin email     : ${CC_ADMIN_EMAIL}
+
+      MariaDB root pw : ${MYSQL_ROOT_PASS}
+      CMON DB name    : ${CC_DB_NAME}
+      CMON DB user    : ${CC_DB_USER}
+      CMON DB password: ${CC_DB_PASS}
+
+      SSH key for managing remote nodes:
+        Private : /root/.ssh/id_rsa_clustercontrol
+        Public  : /root/.ssh/id_rsa_clustercontrol.pub
+
+      Bootstrap log   : /var/log/clustercontrol-bootstrap.log
+      CMON log        : /var/log/cmon.log  (or journalctl -u cmon)
+
+      Ports open      : 22 (SSH) 80 (HTTP->HTTPS) 443 (HTTPS UI)
+                        9500-9502 (cmon RPC / cloud)
+
+      NEXT STEPS:
+        1. Log into the web UI and complete the wizard
+        2. Add the public key above to ~/.ssh/authorized_keys on each
+           managed database node so ClusterControl can SSH in as root
+        3. Point ${APP_DOMAIN} at this server's IP (if not done yet)
+      CREDS
+      chmod 600 /root/clustercontrol-credentials.txt
+
+      echo "=== ClusterControl bootstrap finished: $(date) ==="
+      echo "=== Credentials saved to /root/clustercontrol-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files has been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/clustercontrol-bootstrap.sh" ]
+
+final_message: "ClusterControl bootstrap completed after $UPTIME s. Web UI: https://<your-domain>/clustercontrol — see /root/clustercontrol-credentials.txt"

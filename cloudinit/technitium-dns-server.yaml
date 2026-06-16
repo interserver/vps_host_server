@@ -1,0 +1,508 @@
+#cloud-config
+# =============================================================================
+# Technitium DNS Server — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Technitium DNS Server via official install script (dotnet8)
+#        UFW firewall + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.technitium-dns-server-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# Web UI (HTTP):  http://<IP>:5380
+# Web UI (HTTPS): https://<IP>:53443
+# DNS:            port 53 UDP+TCP (standard), 853 DoT, 443 DoH (optional)
+# =============================================================================
+
+hostname: technitium-dns
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during .NET runtime install on small instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; Technitium + dotnet8 installed from official sources
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - net-tools
+  - openssl
+  - sudo
+  - psmisc
+  - acl
+  - locales
+  - certbot
+  - iproute2
+  - jq
+  - libicu-dev
+  - libssl-dev
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.technitium-dns-server-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # Technitium DNS Server Bootstrap — edit BEFORE first boot
+      # or before re-running the bootstrap script.
+      # ============================================================
+
+      # Fully-qualified domain name for the Technitium web UI
+      # (must resolve to this server's public IP for TLS to work)
+      APP_DOMAIN=dns.example.com
+
+      # E-mail address for Let's Encrypt certificate registration
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve, cert issuance is deferred
+      # gracefully — you can re-run:
+      #   certbot certonly --standalone --pre-hook "systemctl stop dns" \
+      #     --post-hook "systemctl start dns" -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # Technitium admin password.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+      # Web UI HTTP port (default 5380)
+      DNS_HTTP_PORT=5380
+
+      # Web UI HTTPS port (default 53443)
+      DNS_HTTPS_PORT=53443
+
+      # Enable DNS-over-HTTPS on port 443 (true/false)
+      # Requires ENABLE_TLS=true and APP_DOMAIN to resolve
+      ENABLE_DOH=true
+
+      # Enable DNS-over-TLS on port 853 (true/false)
+      ENABLE_DOT=true
+
+  # ---------- bootstrap script ----------
+  - path: /root/technitium-dns-server-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/technitium-dns-server-bootstrap.log) 2>&1
+      source /root/.technitium-dns-server-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string
+      # The '|| true' is required — head closes the pipe before urandom
+      # is exhausted, which raises SIGPIPE; under set -e + pipefail this
+      # would abort the script without it.
+      # ------------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      echo "=== Technitium DNS Server Bootstrap started at $(date -u) ==="
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (stored in credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. System locale + environment
+      # ------------------------------------------------------------------
+      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+      fi
+      export LANG=en_US.UTF-8
+      export LC_ALL=en_US.UTF-8
+      export DEBIAN_FRONTEND=noninteractive
+
+      # ------------------------------------------------------------------
+      # 3. Configure automatic security updates (unattended-upgrades)
+      # ------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOEOF
+
+      # ------------------------------------------------------------------
+      # 4. Install .NET 8 runtime (required by Technitium DNS Server)
+      #    Microsoft ships packages keyed to Ubuntu codename;
+      #    fallback: noble repo until 26.04 published
+      # ------------------------------------------------------------------
+      echo "Installing .NET 8 runtime..."
+
+      mkdir -p /usr/share/keyrings
+      if [ ! -f /usr/share/keyrings/microsoft-dotnet.gpg ]; then
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+          | gpg --dearmor \
+          > /usr/share/keyrings/microsoft-dotnet.gpg
+      fi
+
+      # fallback: noble repo until 26.04 published
+      if [ ! -f /etc/apt/sources.list.d/microsoft-dotnet.list ]; then
+        cat > /etc/apt/sources.list.d/microsoft-dotnet.list <<'SRCEOF'
+      deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-dotnet.gpg] https://packages.microsoft.com/repos/microsoft-ubuntu-noble-prod noble main
+      SRCEOF
+        apt-get update -y
+      fi
+
+      command -v dotnet >/dev/null 2>&1 || apt-get install -y dotnet-runtime-8.0
+      DOTNET_VER="$(dotnet --version 2>/dev/null || echo 'unknown')"
+      echo ".NET runtime version: ${DOTNET_VER}"
+
+      # ------------------------------------------------------------------
+      # 5. Download and run the official Technitium DNS Server installer
+      #    Source: https://technitium.com/dns/
+      #    The install script detects architecture and systemd, installs
+      #    the service as 'dns.service' under /etc/dns/
+      # ------------------------------------------------------------------
+      echo "Installing Technitium DNS Server via official installer..."
+
+      TMP_INSTALLER="$(mktemp)"
+      curl -fsSL https://download.technitium.com/dns/install.sh -o "${TMP_INSTALLER}"
+      bash "${TMP_INSTALLER}"
+      rm -f "${TMP_INSTALLER}"
+      echo "Technitium DNS Server installed."
+
+      # ------------------------------------------------------------------
+      # 6. Wait for the service to start and the API to become available
+      # ------------------------------------------------------------------
+      echo "Waiting for Technitium DNS Server to start..."
+      for i in $(seq 1 30); do
+        if curl -sf --max-time 3 "http://127.0.0.1:${DNS_HTTP_PORT}/api/user/login?token=&user=admin&pass=admin" \
+             >/dev/null 2>&1; then
+          echo "Technitium web API is up (attempt ${i})."
+          break
+        fi
+        # Also check if process is running
+        if systemctl is-active --quiet dns 2>/dev/null; then
+          sleep 3
+        else
+          sleep 3
+        fi
+      done
+
+      # ------------------------------------------------------------------
+      # 7. Set admin password via Technitium REST API
+      #    API ref: https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md
+      #    First login with default credentials (admin/admin), then change.
+      # ------------------------------------------------------------------
+      echo "Configuring admin password..."
+
+      # Attempt login with default credentials to get a token
+      LOGIN_RESP="$(curl -sf --max-time 10 \
+        "http://127.0.0.1:${DNS_HTTP_PORT}/api/user/login?token=&user=admin&pass=admin" \
+        2>/dev/null || echo '{}')"
+
+      API_TOKEN="$(echo "${LOGIN_RESP}" | jq -r '.token // empty' 2>/dev/null || true)"
+
+      if [ -n "${API_TOKEN}" ]; then
+        # Change password
+        CHANGE_RESP="$(curl -sf --max-time 10 \
+          "http://127.0.0.1:${DNS_HTTP_PORT}/api/user/changePassword?token=${API_TOKEN}&pass=${ADMIN_PASS}" \
+          2>/dev/null || echo '{}')"
+        echo "Password change response: $(echo "${CHANGE_RESP}" | jq -r '.status // "unknown"' 2>/dev/null || true)"
+        echo "Admin password configured via API."
+      else
+        echo "WARN: Could not obtain API token — admin password not changed via API."
+        echo "      Log in to the web UI and change the password manually."
+        echo "      Default credentials: admin / admin"
+        # Fall back to default so credentials file is accurate
+        ADMIN_PASS="admin (default — CHANGE IMMEDIATELY)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 8. Configure Technitium DNS Server web UI ports
+      #    Edit /etc/dns/DnsServerSystemSettings.json if non-default ports
+      # ------------------------------------------------------------------
+      DNS_CONFIG=/etc/dns/DnsServerSystemSettings.json
+
+      if [ "${DNS_HTTP_PORT}" != "5380" ] || [ "${DNS_HTTPS_PORT}" != "53443" ]; then
+        echo "Updating DNS Server port configuration..."
+        if [ -f "${DNS_CONFIG}" ] && command -v jq >/dev/null 2>&1; then
+          TMP_CFG="$(mktemp)"
+          jq --argjson http "${DNS_HTTP_PORT}" --argjson https "${DNS_HTTPS_PORT}" \
+            '.webServiceHttpPort = $http | .webServiceHttpsPort = $https' \
+            "${DNS_CONFIG}" > "${TMP_CFG}"
+          mv "${TMP_CFG}" "${DNS_CONFIG}"
+          systemctl restart dns || true
+          echo "Port configuration updated and service restarted."
+        else
+          echo "WARN: ${DNS_CONFIG} not found or jq unavailable — ports not reconfigured."
+        fi
+      fi
+
+      # ------------------------------------------------------------------
+      # 9. Firewall — UFW
+      #    Technitium DNS Server ports:
+      #      22    TCP       SSH
+      #      53    UDP+TCP   DNS (standard)
+      #      5380  TCP       Web UI HTTP
+      #      53443 TCP       Web UI HTTPS
+      #      853   TCP       DNS-over-TLS (if enabled)
+      #      443   TCP       DNS-over-HTTPS (if enabled)
+      #      80    TCP       HTTP (ACME challenge during cert issuance)
+      # ------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 53/tcp
+      ufw allow 53/udp
+      ufw allow "${DNS_HTTP_PORT}/tcp"
+      ufw allow "${DNS_HTTPS_PORT}/tcp"
+
+      if [ "${ENABLE_DOT}" = "true" ]; then
+        ufw allow 853/tcp
+        echo "UFW: DNS-over-TLS port 853/tcp open."
+      fi
+
+      if [ "${ENABLE_DOH}" = "true" ]; then
+        ufw allow 443/tcp
+        ufw allow 80/tcp
+        echo "UFW: DNS-over-HTTPS port 443/tcp and 80/tcp open."
+      fi
+
+      ufw --force enable
+      echo "UFW rules applied."
+
+      # ------------------------------------------------------------------
+      # 10. fail2ban — basic SSH protection
+      # ------------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+      echo "fail2ban configured."
+
+      # ------------------------------------------------------------------
+      # 11. Optional TLS with Certbot
+      #     Technitium supports PFX certificates via the API.
+      #     We obtain a PEM cert via certbot, convert to PFX, and upload.
+      #     The dns service is stopped briefly for the ACME challenge.
+      # ------------------------------------------------------------------
+      CERT_DIR="(not yet issued)"
+      PFX_PATH="(not yet issued)"
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "dns.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+
+        # Stop Technitium briefly so certbot --standalone can bind port 80
+        systemctl stop dns || true
+
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        systemctl start dns || true
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+
+        if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
+          echo "Converting PEM certificate to PFX for Technitium..."
+
+          PFX_PASS="$(rand)"
+          PFX_PATH="/etc/dns/technitium-tls.pfx"
+
+          openssl pkcs12 -export \
+            -in "${CERT_DIR}/fullchain.pem" \
+            -inkey "${CERT_DIR}/privkey.pem" \
+            -out "${PFX_PATH}" \
+            -passout "pass:${PFX_PASS}" \
+            -name technitium-cert
+
+          chmod 640 "${PFX_PATH}"
+          chown root:dns "${PFX_PATH}" 2>/dev/null || chmod 600 "${PFX_PATH}"
+
+          # Re-obtain API token (service restarted)
+          sleep 5
+          LOGIN_RESP2="$(curl -sf --max-time 10 \
+            "http://127.0.0.1:${DNS_HTTP_PORT}/api/user/login?token=&user=admin&pass=${ADMIN_PASS}" \
+            2>/dev/null || echo '{}')"
+          API_TOKEN2="$(echo "${LOGIN_RESP2}" | jq -r '.token // empty' 2>/dev/null || true)"
+
+          if [ -n "${API_TOKEN2}" ]; then
+            echo "Uploading PFX certificate to Technitium..."
+            curl -sf --max-time 30 \
+              -F "pfxFile=@${PFX_PATH}" \
+              "http://127.0.0.1:${DNS_HTTP_PORT}/api/settings/set?token=${API_TOKEN2}&webServiceEnableTls=true&webServiceHttpsPort=${DNS_HTTPS_PORT}&webServiceCertificatePassword=${PFX_PASS}" \
+              >/dev/null 2>&1 \
+              && echo "TLS certificate configured in Technitium." \
+              || echo "WARN: Could not upload PFX via API — configure TLS manually in the web UI."
+          else
+            echo "WARN: Could not re-authenticate to configure TLS certificate."
+          fi
+
+          # Set up certbot renewal hook to re-convert and reload
+          mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+          cat > /etc/letsencrypt/renewal-hooks/deploy/technitium-dns.sh <<HOOKEOF
+      #!/usr/bin/env bash
+      set -euo pipefail
+      CERT_DIR=/etc/letsencrypt/live/${APP_DOMAIN}
+      PFX_PATH=/etc/dns/technitium-tls.pfx
+      PFX_PASS=${PFX_PASS}
+      openssl pkcs12 -export \
+        -in "\${CERT_DIR}/fullchain.pem" \
+        -inkey "\${CERT_DIR}/privkey.pem" \
+        -out "\${PFX_PATH}" \
+        -passout "pass:\${PFX_PASS}" \
+        -name technitium-cert
+      chmod 600 "\${PFX_PATH}"
+      systemctl restart dns || true
+      HOOKEOF
+          chmod 700 /etc/letsencrypt/renewal-hooks/deploy/technitium-dns.sh
+          echo "Certbot renewal hook installed."
+        else
+          echo "WARN: Certificate files not found after certbot run — TLS not configured."
+          PFX_PATH="(certbot deferred)"
+        fi
+      else
+        echo "TLS deferred: APP_DOMAIN is placeholder or ENABLE_TLS!=true"
+      fi
+
+      # ------------------------------------------------------------------
+      # 12. Enable and ensure Technitium DNS Server service is running
+      # ------------------------------------------------------------------
+      systemctl enable dns || true
+      systemctl start  dns || true
+      echo "Technitium DNS Server service enabled and started."
+
+      # ------------------------------------------------------------------
+      # 13. Determine server public IP for credentials file
+      # ------------------------------------------------------------------
+      PUBLIC_IP="$(curl -sf --max-time 5 https://api4.my-ip.io/v2/fast.json 2>/dev/null \
+        | jq -r '.ip // empty' 2>/dev/null \
+        || hostname -I 2>/dev/null | awk '{print $1}' \
+        || echo 'unknown')"
+
+      # ------------------------------------------------------------------
+      # 14. Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      if [ "${APP_DOMAIN}" = "dns.example.com" ] || [ -z "${APP_DOMAIN}" ]; then
+        WEB_HTTP="http://${PUBLIC_IP}:${DNS_HTTP_PORT}"
+        WEB_HTTPS="https://${PUBLIC_IP}:${DNS_HTTPS_PORT}"
+      else
+        WEB_HTTP="http://${APP_DOMAIN}:${DNS_HTTP_PORT}"
+        WEB_HTTPS="https://${APP_DOMAIN}:${DNS_HTTPS_PORT}"
+      fi
+
+      cat > /root/technitium-dns-server-credentials.txt <<CREDSEOF
+      ============================================================
+      Technitium DNS Server — Deployment Credentials
+      Generated: $(date -u)
+      ============================================================
+
+      Server Public IP       : ${PUBLIC_IP}
+
+      Web UI (HTTP)          : ${WEB_HTTP}
+      Web UI (HTTPS)         : ${WEB_HTTPS}
+        (Accept self-signed cert if no Certbot TLS configured yet)
+
+      Admin Username         : admin
+      Admin Password         : ${ADMIN_PASS}
+
+      DNS Server (standard)  : ${PUBLIC_IP}:53  (UDP + TCP)
+      DNS-over-TLS (DoT)     : ${PUBLIC_IP}:853  (if ENABLE_DOT=true)
+      DNS-over-HTTPS (DoH)   : https://${APP_DOMAIN}/dns-query  (if ENABLE_DOH=true)
+
+      TLS Certificate (PFX)  : ${PFX_PATH}
+      Let's Encrypt cert dir : ${CERT_DIR}
+      Let's Encrypt e-mail   : ${LE_EMAIL}
+
+      Firewall (UFW) open ports:
+        22       TCP      SSH
+        53       UDP+TCP  DNS (standard)
+        ${DNS_HTTP_PORT}      TCP      Web UI HTTP
+        ${DNS_HTTPS_PORT}     TCP      Web UI HTTPS
+        853      TCP      DNS-over-TLS (if ENABLE_DOT=true)
+        443      TCP      DNS-over-HTTPS (if ENABLE_DOH=true)
+
+      Next steps:
+        1. Point ${APP_DOMAIN} to ${PUBLIC_IP} (DNS A record).
+        2. Open the Web UI: ${WEB_HTTP}
+        3. Log in with admin / <password above>.
+        4. Configure forwarders, blocklists, and DNS zones.
+        5. Set DNS server on clients to: ${PUBLIC_IP}
+        6. If TLS was deferred, re-run:
+             certbot certonly --standalone \
+               --pre-hook "systemctl stop dns" \
+               --post-hook "systemctl start dns" \
+               -d ${APP_DOMAIN} --email ${LE_EMAIL}
+           then upload the PFX via the web UI:
+             Settings -> Web Service -> TLS Certificate
+
+      Configuration directory : /etc/dns/
+      Service name            : dns.service
+      Log file                : /var/log/technitium-dns-server-bootstrap.log
+      Technitium logs         : /etc/dns/logs/
+      API documentation       : https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/technitium-dns-server-credentials.txt
+
+      echo "=== Technitium DNS Server Bootstrap completed at $(date -u) ==="
+      echo "=== Credentials saved to /root/technitium-dns-server-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/technitium-dns-server-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  Technitium DNS Server bootstrap complete.
+  - Credentials  : /root/technitium-dns-server-credentials.txt
+  - Log          : /var/log/technitium-dns-server-bootstrap.log
+  - Web UI (HTTP): http://<YOUR-IP>:5380
+  - Web UI (HTTPS): https://<YOUR-IP>:53443
+  - Admin user   : admin  (password in credentials file)
+  - DNS port     : 53 UDP+TCP (standard), 853 DoT, 443 DoH
+  - Set your client DNS server to this server's public IP.
+  ============================================================

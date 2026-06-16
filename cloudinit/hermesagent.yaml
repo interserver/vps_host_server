@@ -1,0 +1,314 @@
+#cloud-config
+# =============================================================================
+# Hermes Agent "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: NousResearch Hermes Agent (Docker) + nginx reverse proxy
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# Ports: 8642 (OpenAI-compatible API gateway)
+#        9119 (web dashboard)
+#        80 / 443 (nginx reverse-proxy for the dashboard)
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.hermesagent-bootstrap.env
+# block before launching. Passwords/keys are randomised on first boot if the
+# defaults are left unchanged.
+# =============================================================================
+
+hostname: hermesagent
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve cloud-provisioner injection of customer SSH key / hostname
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - git
+  - htop
+  - jq
+  - wget
+  - apache2-utils
+
+# ----------------------------------------------------------------------------
+# Swap — survives build-time memory spikes
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk for the bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable environment variables --------------------------------
+  - path: /root/.hermesagent-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      APP_DOMAIN="example.com"          # hostname / primary domain (no scheme)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (DNS not pointed yet)
+      ADMIN_PASS="CHANGE_ME"            # Hermes dashboard basic-auth password
+      API_KEY="CHANGE_ME"              # Hermes API server bearer key (min 8 chars)
+
+      # --- optional LLM provider API keys (populate at least one) -------------
+      # OPENAI_API_KEY=""
+      # ANTHROPIC_API_KEY=""
+      # OPENROUTER_API_KEY=""
+
+  # --- fail2ban jail ----------------------------------------------------------
+  - path: /etc/fail2ban/jail.d/hermesagent.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- nginx vhost (domain placeholder; bootstrap rewrites server_name) -------
+  - path: /etc/nginx/sites-available/hermesagent.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name APP_DOMAIN_PLACEHOLDER;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          # --- Dashboard (port 9119) ------------------------------------------
+          location / {
+              proxy_pass         http://127.0.0.1:9119;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade $http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host $host;
+              proxy_set_header   X-Real-IP $remote_addr;
+              proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+          }
+
+          # --- OpenAI-compatible API gateway (port 8642) ---------------------
+          location /api/ {
+              proxy_pass         http://127.0.0.1:8642/;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade $http_upgrade;
+              proxy_set_header   Connection "upgrade";
+              proxy_set_header   Host $host;
+              proxy_set_header   X-Real-IP $remote_addr;
+              proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+          }
+
+          location /.well-known/acme-challenge/ { root /var/www/html; }
+      }
+
+  # --- Docker Compose for Hermes Agent ----------------------------------------
+  - path: /opt/hermesagent/docker-compose.yml
+    permissions: '0644'
+    owner: root:root
+    content: |
+      services:
+        hermes:
+          image: nousresearch/hermes-agent:latest
+          container_name: hermes
+          restart: unless-stopped
+          command: gateway run
+          ports:
+            - "127.0.0.1:8642:8642"
+            - "127.0.0.1:9119:9119"
+          volumes:
+            - hermes-data:/opt/data
+          environment:
+            - HERMES_DASHBOARD=1
+            - HERMES_DASHBOARD_HOST=0.0.0.0
+            - HERMES_DASHBOARD_PORT=9119
+            - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
+            - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${ADMIN_PASS}
+            - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${DASHBOARD_SECRET}
+            - API_SERVER_ENABLED=true
+            - API_SERVER_HOST=0.0.0.0
+            - API_SERVER_PORT=8642
+            - API_SERVER_KEY=${API_KEY}
+            - API_SERVER_CORS_ORIGINS=*
+          shm_size: '1g'
+          deploy:
+            resources:
+              limits:
+                memory: 4G
+                cpus: "2.0"
+
+      volumes:
+        hermes-data:
+          driver: local
+          driver_opts:
+            type: none
+            o: bind
+            device: /opt/hermesagent/data
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/hermesagent-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/hermesagent-bootstrap.log) 2>&1
+      source /root/.hermesagent-bootstrap.env
+
+      echo "=== Hermes Agent bootstrap started: $(date) ==="
+
+      # --- random secret helper (SIGPIPE-safe under set -e + pipefail) -------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      [ "$ADMIN_PASS"       = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+      [ "$API_KEY"          = "CHANGE_ME" ] && API_KEY="$(rand)"
+      DASHBOARD_SECRET="$(rand)"
+
+      export ADMIN_PASS API_KEY DASHBOARD_SECRET
+
+      # --- install Docker CE via official distro-agnostic script -------------
+      if ! command -v docker >/dev/null 2>&1; then
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        sh /tmp/get-docker.sh
+        rm -f /tmp/get-docker.sh
+      fi
+
+      systemctl enable --now docker
+
+      # --- install Docker Compose v2 plugin if missing -----------------------
+      if ! docker compose version >/dev/null 2>&1; then
+        COMPOSE_VER="$(curl -fsSL https://api.github.com/repos/docker/compose/releases/latest \
+          | jq -r '.tag_name' 2>/dev/null || echo 'v2.27.1')"
+        COMPOSE_URL="https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-$(uname -m)"
+        mkdir -p /usr/local/lib/docker/cli-plugins
+        curl -fsSL "$COMPOSE_URL" -o /usr/local/lib/docker/cli-plugins/docker-compose
+        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+      fi
+
+      echo "Docker  : $(docker --version)"
+      echo "Compose : $(docker compose version)"
+
+      # --- create Hermes data directory with correct ownership ----------------
+      mkdir -p /opt/hermesagent/data
+      # Hermes container runs as UID 10000 inside the container
+      chown -R 10000:10000 /opt/hermesagent/data || true
+
+      # --- pull and start Hermes Agent ----------------------------------------
+      cd /opt/hermesagent
+      docker compose pull
+      docker compose up -d
+
+      echo "Hermes Agent container started."
+
+      # --- nginx: replace domain placeholder and enable vhost -----------------
+      sed -i "s|APP_DOMAIN_PLACEHOLDER|${APP_DOMAIN}|g" \
+        /etc/nginx/sites-available/hermesagent.conf
+      ln -sf /etc/nginx/sites-available/hermesagent.conf \
+             /etc/nginx/sites-enabled/hermesagent.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+      # --- firewall: SSH + HTTP + HTTPS only (gateway+dashboard are localhost) -
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban -----------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt (non-fatal if DNS not pointed yet) -----------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        certbot --nginx --non-interactive --agree-tos \
+          -m "$LE_EMAIL" -d "$APP_DOMAIN" --redirect \
+          || echo "WARN: certbot deferred — re-run once DNS points here: certbot --nginx -d ${APP_DOMAIN}"
+      fi
+
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      # --- wait briefly for container to be reachable -------------------------
+      for i in 1 2 3 4 5; do
+        docker exec hermes hermes doctor >/dev/null 2>&1 && break || true
+        sleep 5
+      done
+
+      # --- write credentials summary (chmod 600) ------------------------------
+      cat > /root/hermesagent-credentials.txt <<CREDS
+      ===== Hermes Agent bootstrap complete: $(date) =====
+
+      Dashboard URL  : ${PROTO}://${APP_DOMAIN}/
+      Dashboard user : admin
+      Dashboard pass : ${ADMIN_PASS}
+
+      API gateway URL: ${PROTO}://${APP_DOMAIN}/api/
+        (also available locally at http://127.0.0.1:8642/ from this server)
+      API bearer key : ${API_KEY}
+
+      Data directory : /opt/hermesagent/data/
+      Compose file   : /opt/hermesagent/docker-compose.yml
+      Bootstrap log  : /var/log/hermesagent-bootstrap.log
+
+      Add your LLM provider API key via the dashboard, or by running:
+        docker exec -it hermes hermes model
+
+      Useful commands:
+        docker compose -f /opt/hermesagent/docker-compose.yml logs -f
+        docker compose -f /opt/hermesagent/docker-compose.yml pull && \\
+          docker compose -f /opt/hermesagent/docker-compose.yml up -d
+        docker exec -it hermes hermes doctor
+      CREDS
+      chmod 600 /root/hermesagent-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials: /root/hermesagent-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap exactly once
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/hermesagent-bootstrap.sh" ]
+
+final_message: "Hermes Agent bootstrap done after $UPTIME s. See /root/hermesagent-credentials.txt and /var/log/hermesagent-bootstrap.log"

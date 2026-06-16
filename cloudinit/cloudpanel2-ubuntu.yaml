@@ -1,0 +1,259 @@
+#cloud-config
+# =============================================================================
+# CloudPanel 2 — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: CloudPanel 2 (official installer) + MariaDB + Nginx + PHP-FPM
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.cloudpanel2-bootstrap.env before
+# launching (or inject via provisioner). Passwords are random per-boot when
+# left as CHANGE_ME.
+# =============================================================================
+
+hostname: cloudpanel2
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default (cloud-init injects customer SSH key here)
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — minimal set; CloudPanel installer pulls its own deps
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - python3-certbot
+  - certbot
+  - jq
+  - net-tools
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.cloudpanel2-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # CloudPanel 2 bootstrap environment
+      # Edit these before first boot, or inject via provisioner.
+
+      # Fully-qualified domain name used for the panel (and optional TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Email used for Let's Encrypt registration
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS after install
+      # (requires DNS already pointed to this server)
+      ENABLE_TLS=true
+
+      # CloudPanel admin credentials
+      # Leave as CHANGE_ME to auto-generate random values at runtime
+      ADMIN_USER=admin
+      ADMIN_PASS=CHANGE_ME
+      ADMIN_EMAIL=CHANGE_ME
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/cloudpanel2-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/cloudpanel2-bootstrap.log) 2>&1
+      source /root/.cloudpanel2-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== CloudPanel 2 bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${ADMIN_PASS}"  == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+      [[ "${ADMIN_EMAIL}" == "CHANGE_ME" ]] && ADMIN_EMAIL="admin@${APP_DOMAIN:-localhost}"
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — basic SSH protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # CloudPanel ports:
+      #   8443  — panel HTTPS
+      #   80    — HTTP (redirect + ACME challenge)
+      #   443   — HTTPS (hosted sites)
+      #   22    — SSH
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 8443/tcp  comment 'CloudPanel UI'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # CloudPanel 2 official installer
+      # Installer ref: https://www.cloudpanel.io/docs/v2/getting-started/other/
+      # Ubuntu 24.04 (noble) line used — no 26.04 release line yet.
+      # The installer is OS-version-aware internally; passing --no-launch
+      # is not supported — use non-interactive env variables below.
+      # ----------------------------------------------------------------
+      echo "=== Installing CloudPanel 2 ==="
+      export DEBIAN_FRONTEND=noninteractive
+      curl -sSL https://installer.cloudpanel.io/ce/v2/install.sh \
+          -o /tmp/cloudpanel-install.sh
+      chmod +x /tmp/cloudpanel-install.sh
+
+      # Run the official installer non-interactively
+      bash /tmp/cloudpanel-install.sh
+
+      # ----------------------------------------------------------------
+      # Wait for CloudPanel service to be fully up (max 120 s)
+      # ----------------------------------------------------------------
+      echo "=== Waiting for CloudPanel to be ready ==="
+      TIMEOUT=120
+      ELAPSED=0
+      until clpctl --version >/dev/null 2>&1 || [ $ELAPSED -ge $TIMEOUT ]; do
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+      done
+
+      if ! command -v clpctl >/dev/null 2>&1; then
+          echo "WARN: clpctl not found after ${TIMEOUT}s — installer may have failed"
+      else
+          # ---- Create CloudPanel admin user --------------------------------
+          clpctl user:reset:password \
+              --userName="${ADMIN_USER}" \
+              --password="${ADMIN_PASS}" 2>/dev/null || \
+          clpctl user:add \
+              --userName="${ADMIN_USER}" \
+              --email="${ADMIN_EMAIL}" \
+              --password="${ADMIN_PASS}" \
+              --role="Admin" 2>/dev/null || \
+          echo "WARN: could not configure admin user via clpctl — set manually"
+      fi
+
+      # ----------------------------------------------------------------
+      # Optional: Certbot TLS for the panel domain
+      # Skipped (non-fatal) when DNS is not yet pointing here.
+      # ----------------------------------------------------------------
+      if [[ "${ENABLE_TLS}" == "true" && "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+          certbot certonly --standalone \
+              --non-interactive \
+              --agree-tos \
+              --email "${LE_EMAIL}" \
+              -d "${APP_DOMAIN}" \
+              --pre-hook  "ufw allow 80/tcp || true" \
+              --post-hook "ufw deny  80/tcp || true" \
+              || echo "WARN: certbot deferred — DNS may not point here yet"
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      PANEL_HOST="${APP_DOMAIN:-$(curl -fsSL https://api4.my-ip.io/ip 2>/dev/null || hostname -I | awk '{print $1}')}"
+
+      cat > /root/cloudpanel2-credentials.txt <<CREDS
+      ============================================================
+       CloudPanel 2 — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       Panel URL   : https://${PANEL_HOST}:8443
+       Admin user  : ${ADMIN_USER}
+       Admin email : ${ADMIN_EMAIL}
+       Admin pass  : ${ADMIN_PASS}
+
+       Firewall open ports : 22 (SSH) | 80 (HTTP) | 443 (HTTPS) | 8443 (panel)
+       Log file    : /var/log/cloudpanel2-bootstrap.log
+
+       IMPORTANT: Change the admin password after first login.
+      ============================================================
+      CREDS
+      chmod 600 /root/cloudpanel2-credentials.txt
+
+      echo ""
+      echo "=== CloudPanel 2 bootstrap complete $(date -u) ==="
+      echo "=== Panel URL  : https://${PANEL_HOST}:8443"
+      echo "=== Admin user : ${ADMIN_USER}"
+      echo "=== Admin pass : ${ADMIN_PASS}"
+      echo "=== Full creds : /root/cloudpanel2-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/cloudpanel2-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   CloudPanel 2 bootstrap complete.
+   Panel URL   : https://YOUR_IP_OR_DOMAIN:8443
+   Credentials : /root/cloudpanel2-credentials.txt
+   Log         : /var/log/cloudpanel2-bootstrap.log
+  ============================================================

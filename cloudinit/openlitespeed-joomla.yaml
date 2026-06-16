@@ -1,0 +1,555 @@
+#cloud-config
+# =============================================================================
+# OpenLiteSpeed + Joomla "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: OpenLiteSpeed + lsphp83 + MariaDB + Joomla CLI + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in `write_files` -> /root/.openlitespeed-joomla-bootstrap.env
+# before launching, OR inject them via your provisioner. Passwords are randomised
+# per-boot when left as the defaults (CHANGE_ME).
+# =============================================================================
+
+hostname: openlitespeed-joomla
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — preserve default (provisioner injects customer SSH key + hostname)
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages — base utilities only; OLS + lsphp are installed from third-party
+# repo inside the bootstrap script because the apt sources must be added first.
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - mariadb-server
+  - mariadb-client
+  - certbot
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - wget
+  - unzip
+  - git
+  - htop
+  - gnupg
+  - ca-certificates
+  - lsb-release
+  - python3-certbot
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive MariaDB + OLS memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config + secrets dropped to disk before the bootstrap script runs
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable bootstrap variables ---------------------------------
+  - path: /root/.openlitespeed-joomla-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE -----
+      APP_DOMAIN="example.com"          # primary domain (no scheme)
+      APP_DOMAIN_WWW="www.example.com"  # www alias (set empty to skip)
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration email
+      ENABLE_TLS="true"                 # set false to skip certbot (e.g. DNS not pointed yet)
+
+      JOOMLA_SITE_NAME="My Joomla Site"
+      JOOMLA_ADMIN_USER="admin"
+      JOOMLA_ADMIN_EMAIL="admin@example.com"
+
+      # DB creds — randomised on first boot if left as CHANGE_ME
+      JOOMLA_DB_NAME="joomla"
+      JOOMLA_DB_USER="joomla_user"
+      JOOMLA_DB_PASS="CHANGE_ME"
+      JOOMLA_ADMIN_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      # OLS WebAdmin UI password — randomised on first boot if left as CHANGE_ME
+      OLS_ADMIN_PASS="CHANGE_ME"
+      # OLS WebAdmin port (default 7080)
+      OLS_ADMIN_PORT="7080"
+
+      JOOMLA_PATH="/var/www/joomla"
+      # Joomla release series to install (latest stable 5.x via GitHub)
+      JOOMLA_VERSION="5"
+
+  # --- fail2ban configuration ------------------------------------------------
+  - path: /etc/fail2ban/jail.d/openlitespeed-joomla.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime  = 1h
+
+      [apache-auth]
+      enabled = false
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- OLS virtual host config template (tokens replaced by bootstrap) --------
+  - path: /tmp/ols-joomla-vhost.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      docRoot                   JOOMLA_PATH_PLACEHOLDER/
+      vhDomain                  VHOST_DOMAIN_PLACEHOLDER
+      vhAliases                 VHOST_ALIASES_PLACEHOLDER
+      adminEmails               OLS_ADMIN_EMAIL_PLACEHOLDER
+      enableGzip                1
+      enableBr                  1
+
+      errorlog $VH_ROOT/logs/error.log {
+        useServer               0
+        logLevel                WARN
+        rollingSize             4M
+      }
+
+      accesslog $VH_ROOT/logs/access.log {
+        useServer               0
+        rollingSize             4M
+      }
+
+      index  {
+        useServer               0
+        indexFiles              index.php, index.html
+        autoIndex               0
+      }
+
+      errorpage 404 {
+        url                     /index.php
+      }
+
+      context / {
+        location                JOOMLA_PATH_PLACEHOLDER/
+        allowBrowse             0
+        rewrite  {
+          enable                1
+          autoLoadHtaccess      1
+        }
+        addDefaultCharset       off
+      }
+
+      context /administrator/ {
+        location                JOOMLA_PATH_PLACEHOLDER/administrator/
+        allowBrowse             0
+        rewrite  {
+          enable                1
+          autoLoadHtaccess      1
+        }
+      }
+
+      rewrite  {
+        enable                  1
+        autoLoadHtaccess        1
+        rules                   <<<END_RULES
+      RewriteEngine On
+      RewriteCond %{HTTPS} !=on
+      RewriteCond %{HTTP_HOST} !^www\. [NC]
+      RewriteRule ^ - [L]
+      RewriteRule ^(.*)$ /index.php [L,QSA]
+      END_RULES
+      }
+
+      scripthandler  {
+        add lsapi:joomla-php  php
+      }
+
+      extprocessor joomla-php {
+        type                    lsapi
+        address                 uds://tmp/lshttpd/joomla-php.sock
+        maxConns                35
+        env                     PHP_LSAPI_MAX_REQUESTS=500
+        initTimeout             60
+        retryTimeout            0
+        persistConn             1
+        respBuffer              0
+        autoStart               1
+        path                    LSPHP_BIN_PLACEHOLDER
+        backlog                 100
+        instances               1
+        extUser                 www-data
+        extGroup                www-data
+        memSoftLimit            2047M
+        memHardLimit            2047M
+        procSoftLimit           400
+        procHardLimit           500
+      }
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/openlitespeed-joomla-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/openlitespeed-joomla-bootstrap.log) 2>&1
+      source /root/.openlitespeed-joomla-bootstrap.env
+
+      echo "=== OpenLiteSpeed + Joomla bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret generator ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- randomise any CHANGE_ME passwords ---
+      [ "$JOOMLA_DB_PASS"   = "CHANGE_ME" ] && JOOMLA_DB_PASS="$(rand)"
+      [ "$JOOMLA_ADMIN_PASS" = "CHANGE_ME" ] && JOOMLA_ADMIN_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS"  = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+      [ "$OLS_ADMIN_PASS"   = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
+
+      # --------------------------------------------------------------------------
+      # 1. Install OpenLiteSpeed + lsphp83 from LiteSpeed official repo
+      #    The repo uses Ubuntu codename; Ubuntu 26.04 may not have a repo line yet.
+      #    We detect codename and fall back to 'noble' (24.04) if unrecognised.
+      # --------------------------------------------------------------------------
+      DISTRO_CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
+      # fallback: noble repo until 26.04 published
+      OLS_REPO_CODENAME="${DISTRO_CODENAME:-noble}"
+      KNOWN_CODENAMES="noble jammy focal bionic"
+      if ! echo "$KNOWN_CODENAMES" | grep -qw "$OLS_REPO_CODENAME"; then
+        echo "WARN: Codename '${OLS_REPO_CODENAME}' not known to LiteSpeed repo — using 'noble' as fallback"
+        OLS_REPO_CODENAME="noble"
+      fi
+
+      if [ ! -f /etc/apt/sources.list.d/lst_debian_repo.list ]; then
+        curl -fsSL http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+          -o /etc/apt/trusted.gpg.d/lst_debian_repo.gpg
+        curl -fsSL http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+          -o /etc/apt/trusted.gpg.d/lst_repo.gpg
+        echo "deb http://rpms.litespeedtech.com/debian/ ${OLS_REPO_CODENAME} main" \
+          > /etc/apt/sources.list.d/lst_debian_repo.list
+        apt-get update -qq
+      fi
+
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+        openlitespeed \
+        lsphp83 \
+        lsphp83-common \
+        lsphp83-mysql \
+        lsphp83-curl \
+        lsphp83-intl \
+        lsphp83-ldap \
+        lsphp83-opcache \
+        lsphp83-tidy \
+        lsphp83-imagick \
+        lsphp83-imap
+
+      # Locate the lsphp binary
+      LSPHP_BIN="$(command -v /usr/local/lsws/lsphp83/bin/lsphp 2>/dev/null || \
+                   find /usr/local/lsws -name 'lsphp' 2>/dev/null | head -n1 || \
+                   echo '/usr/local/lsws/lsphp83/bin/lsphp')"
+      echo "lsphp binary: ${LSPHP_BIN}"
+
+      # --------------------------------------------------------------------------
+      # 2. Tune lsphp83 php.ini
+      # --------------------------------------------------------------------------
+      LSPHP_INI_DIR="$(find /usr/local/lsws/lsphp83 -name 'php.ini' 2>/dev/null | head -n1 | xargs dirname 2>/dev/null || true)"
+      LSPHP_INI="${LSPHP_INI_DIR}/php.ini"
+      if [ -f "$LSPHP_INI" ]; then
+        sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 64M/'  "$LSPHP_INI"
+        sed -ri 's/^;?post_max_size.*/post_max_size = 64M/'               "$LSPHP_INI"
+        sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'                "$LSPHP_INI"
+        sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'     "$LSPHP_INI"
+        sed -ri 's/^;?max_input_vars.*/max_input_vars = 3000/'            "$LSPHP_INI"
+        sed -ri 's/^;?opcache\.enable$/opcache.enable=1/'                  "$LSPHP_INI"
+        sed -ri 's/^;?opcache\.memory_consumption.*/opcache.memory_consumption=128/' "$LSPHP_INI"
+        echo "date.timezone = UTC" >> "$LSPHP_INI"
+      fi
+
+      # --------------------------------------------------------------------------
+      # 3. Secure MariaDB + create Joomla DB
+      # --------------------------------------------------------------------------
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${JOOMLA_DB_NAME}\`
+        DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${JOOMLA_DB_USER}'@'localhost'
+        IDENTIFIED BY '${JOOMLA_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${JOOMLA_DB_NAME}\`.* TO '${JOOMLA_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --------------------------------------------------------------------------
+      # 4. Download and install Joomla
+      # --------------------------------------------------------------------------
+      JOOMLA_TMP="/tmp/joomla-install"
+      mkdir -p "$JOOMLA_TMP" "$JOOMLA_PATH"
+
+      if [ ! -f "${JOOMLA_PATH}/administrator/index.php" ]; then
+        # Fetch the latest Joomla release download URL from GitHub API
+        JOOMLA_ZIP_URL="$(curl -fsSL \
+          'https://api.github.com/repos/joomla/joomla-cms/releases/latest' \
+          | grep '"browser_download_url"' \
+          | grep -i 'Joomla_[0-9].*-Stable-Full_Package\.zip' \
+          | head -n1 \
+          | sed 's/.*"browser_download_url": "\(.*\)".*/\1/' || true)"
+
+        # Hard fallback to a known stable Joomla 5 release
+        if [ -z "$JOOMLA_ZIP_URL" ]; then
+          JOOMLA_ZIP_URL="https://github.com/joomla/joomla-cms/releases/download/5.3.1/Joomla_5.3.1-Stable-Full_Package.zip"
+        fi
+
+        echo "Downloading Joomla from: ${JOOMLA_ZIP_URL}"
+        wget -q -O "${JOOMLA_TMP}/joomla.zip" "$JOOMLA_ZIP_URL"
+        unzip -q "${JOOMLA_TMP}/joomla.zip" -d "$JOOMLA_PATH"
+        rm -rf "$JOOMLA_TMP"
+      fi
+
+      # --- initial permissions ---
+      chown -R www-data:www-data "$JOOMLA_PATH"
+      find "$JOOMLA_PATH" -type d -exec chmod 755 {} \;
+      find "$JOOMLA_PATH" -type f -exec chmod 644 {} \;
+
+      # --------------------------------------------------------------------------
+      # 5. Run Joomla CLI installer
+      # --------------------------------------------------------------------------
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      JOOMLA_CLI=""
+      [ -f "${JOOMLA_PATH}/installation/joomla.php" ] && JOOMLA_CLI="${JOOMLA_PATH}/installation/joomla.php"
+      [ -z "$JOOMLA_CLI" ] && [ -f "${JOOMLA_PATH}/cli/joomla.php" ] && JOOMLA_CLI="${JOOMLA_PATH}/cli/joomla.php"
+
+      if [ -n "$JOOMLA_CLI" ]; then
+        sudo -u www-data "$LSPHP_BIN" "$JOOMLA_CLI" site:install \
+          --no-interaction \
+          --site-name="${JOOMLA_SITE_NAME}" \
+          --admin-user="${JOOMLA_ADMIN_USER}" \
+          --admin-password="${JOOMLA_ADMIN_PASS}" \
+          --admin-email="${JOOMLA_ADMIN_EMAIL}" \
+          --db-type=mysqli \
+          --db-host=localhost \
+          --db-user="${JOOMLA_DB_USER}" \
+          --db-pass="${JOOMLA_DB_PASS}" \
+          --db-name="${JOOMLA_DB_NAME}" \
+          --db-prefix=jos_ \
+          2>/dev/null || true
+      else
+        # Fallback: write configuration.php directly
+        JOOMLA_SECRET="$(rand)"
+        cat > "${JOOMLA_PATH}/configuration.php" <<PHPCONF
+      <?php
+      class JConfig {
+        public \$sitename         = '${JOOMLA_SITE_NAME}';
+        public \$debug            = false;
+        public \$dbtype           = 'mysqli';
+        public \$host             = 'localhost';
+        public \$user             = '${JOOMLA_DB_USER}';
+        public \$password         = '${JOOMLA_DB_PASS}';
+        public \$db               = '${JOOMLA_DB_NAME}';
+        public \$dbprefix         = 'jos_';
+        public \$dbencryption     = 0;
+        public \$force_ssl        = 0;
+        public \$live_site        = '';
+        public \$secret           = '${JOOMLA_SECRET}';
+        public \$tmp_path         = '${JOOMLA_PATH}/tmp';
+        public \$log_path         = '${JOOMLA_PATH}/logs';
+        public \$mailfrom         = '${JOOMLA_ADMIN_EMAIL}';
+        public \$fromname         = '${JOOMLA_SITE_NAME}';
+        public \$mailer           = 'mail';
+        public \$offset           = 'UTC';
+        public \$sef              = '1';
+        public \$sef_rewrite      = '1';
+        public \$caching          = 0;
+        public \$cache_handler    = 'file';
+        public \$cachetime        = 15;
+      }
+      PHPCONF
+        chmod 640 "${JOOMLA_PATH}/configuration.php"
+        echo "WARN: Joomla CLI not found — configuration.php written; complete setup via browser"
+      fi
+
+      # --- remove installation directory (security) ---
+      rm -rf "${JOOMLA_PATH}/installation" 2>/dev/null || true
+
+      # --- re-fix permissions after install ---
+      chown -R www-data:www-data "$JOOMLA_PATH"
+      chmod 640 "${JOOMLA_PATH}/configuration.php" 2>/dev/null || true
+
+      # --- create .htaccess for Joomla SEF URLs ---
+      if [ ! -f "${JOOMLA_PATH}/.htaccess" ] && [ -f "${JOOMLA_PATH}/htaccess.txt" ]; then
+        cp "${JOOMLA_PATH}/htaccess.txt" "${JOOMLA_PATH}/.htaccess"
+        chown www-data:www-data "${JOOMLA_PATH}/.htaccess"
+      fi
+
+      # --------------------------------------------------------------------------
+      # 6. Configure OpenLiteSpeed virtual host
+      # --------------------------------------------------------------------------
+      OLS_VHROOT="/usr/local/lsws/conf/vhosts/joomla"
+      mkdir -p "${OLS_VHROOT}/logs" "${OLS_VHROOT}/conf"
+      chown -R lsadm:lsadm "${OLS_VHROOT}" 2>/dev/null || true
+
+      VHOST_DOMAIN="${APP_DOMAIN}"
+      VHOST_ALIASES=""
+      if [ -n "${APP_DOMAIN_WWW:-}" ]; then
+        VHOST_ALIASES="${APP_DOMAIN_WWW}"
+      fi
+
+      # Substitute tokens in the pre-written vhost config template
+      sed \
+        -e "s|JOOMLA_PATH_PLACEHOLDER|${JOOMLA_PATH}|g" \
+        -e "s|VHOST_DOMAIN_PLACEHOLDER|${VHOST_DOMAIN}|g" \
+        -e "s|VHOST_ALIASES_PLACEHOLDER|${VHOST_ALIASES}|g" \
+        -e "s|OLS_ADMIN_EMAIL_PLACEHOLDER|${JOOMLA_ADMIN_EMAIL}|g" \
+        -e "s|LSPHP_BIN_PLACEHOLDER|${LSPHP_BIN}|g" \
+        /tmp/ols-joomla-vhost.conf > "${OLS_VHROOT}/conf/vhconf.conf"
+      chown lsadm:lsadm "${OLS_VHROOT}/conf/vhconf.conf" 2>/dev/null || true
+
+      # Register the virtual host in OLS httpd_config.conf
+      OLS_CONF="/usr/local/lsws/conf/httpd_config.conf"
+      if ! grep -q "joomla" "$OLS_CONF" 2>/dev/null; then
+        cat >> "$OLS_CONF" <<OLS_VHOST_REG
+
+      virtualHost joomla {
+        vhRoot                  ${OLS_VHROOT}
+        configFile              ${OLS_VHROOT}/conf/vhconf.conf
+        allowSymbolLink         1
+        enableScript            1
+        restrained              1
+        setUIDMode              2
+      }
+      OLS_VHOST_REG
+      fi
+
+      # Add listener mapping: map port-80 listener to joomla vhost
+      # Listener "Default" maps to port 80 in default OLS install
+      if ! grep -q "vhName.*joomla" "$OLS_CONF" 2>/dev/null; then
+        # Insert after "map * *" line in Default listener block
+        sed -i '/map\s*\*\s*\*/a\  map                     joomla '"${APP_DOMAIN}"' '"${APP_DOMAIN_WWW:-}"'' "$OLS_CONF" || true
+      fi
+
+      # --------------------------------------------------------------------------
+      # 7. Set OLS WebAdmin password
+      # --------------------------------------------------------------------------
+      if [ -f /usr/local/lsws/admin/misc/admpass.sh ]; then
+        /usr/local/lsws/admin/misc/admpass.sh admin "$OLS_ADMIN_PASS" 2>/dev/null || true
+      elif [ -f /usr/local/lsws/admin/conf/htpasswd ]; then
+        OLS_PASS_HASH="$(openssl passwd -apr1 "$OLS_ADMIN_PASS" 2>/dev/null || true)"
+        echo "admin:${OLS_PASS_HASH}" > /usr/local/lsws/admin/conf/htpasswd
+        chmod 600 /usr/local/lsws/admin/conf/htpasswd
+      fi
+
+      # --------------------------------------------------------------------------
+      # 8. Enable + restart OLS
+      # --------------------------------------------------------------------------
+      systemctl enable --now lsws || true
+      systemctl restart lsws || true
+
+      # --------------------------------------------------------------------------
+      # 9. Firewall
+      # --------------------------------------------------------------------------
+      ufw allow OpenSSH
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      # OLS WebAdmin UI
+      ufw allow "${OLS_ADMIN_PORT}/tcp"
+      ufw --force enable
+
+      # --------------------------------------------------------------------------
+      # 10. fail2ban
+      # --------------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # --------------------------------------------------------------------------
+      # 11. TLS via Let's Encrypt (using standalone plugin — OLS has no certbot plugin)
+      # --------------------------------------------------------------------------
+      if [ "$ENABLE_TLS" = "true" ]; then
+        # Stop OLS temporarily to free port 80 for standalone validation
+        systemctl stop lsws || true
+        CERTBOT_DOMAINS="-d ${APP_DOMAIN}"
+        [ -n "${APP_DOMAIN_WWW:-}" ] && CERTBOT_DOMAINS="${CERTBOT_DOMAINS} -d ${APP_DOMAIN_WWW}"
+        certbot certonly --standalone --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" ${CERTBOT_DOMAINS} \
+          || echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot certonly --standalone"
+        systemctl start lsws || true
+
+        # If cert was obtained, configure HTTPS listener in OLS
+        CERT_PATH="/etc/letsencrypt/live/${APP_DOMAIN}"
+        if [ -d "$CERT_PATH" ]; then
+          # Add HTTPS listener if not present
+          if ! grep -q '"SSL"' "$OLS_CONF" 2>/dev/null && ! grep -q 'SSL' "$OLS_CONF" 2>/dev/null; then
+            cat >> "$OLS_CONF" <<OLS_SSL_LISTENER
+
+      listener SSL {
+        address                 *:443
+        secure                  1
+        keyFile                 ${CERT_PATH}/privkey.pem
+        certFile                ${CERT_PATH}/fullchain.pem
+        map                     joomla ${APP_DOMAIN} ${APP_DOMAIN_WWW:-}
+      }
+      OLS_SSL_LISTENER
+          fi
+          systemctl restart lsws || true
+
+          # Add Certbot renewal hook to restart OLS
+          mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+          cat > /etc/letsencrypt/renewal-hooks/deploy/restart-lsws.sh <<HOOK
+      #!/usr/bin/env bash
+      systemctl restart lsws
+      HOOK
+          chmod +x /etc/letsencrypt/renewal-hooks/deploy/restart-lsws.sh
+        fi
+      fi
+
+      # --------------------------------------------------------------------------
+      # 12. Write credentials summary
+      # --------------------------------------------------------------------------
+      cat > /root/openlitespeed-joomla-credentials.txt <<CREDS
+      ===== OpenLiteSpeed + Joomla install complete: $(date) =====
+      URL:                       ${PROTO}://${APP_DOMAIN}
+      Admin URL:                 ${PROTO}://${APP_DOMAIN}/administrator/
+      Admin username:            ${JOOMLA_ADMIN_USER}
+      Admin password:            ${JOOMLA_ADMIN_PASS}
+      Admin email:               ${JOOMLA_ADMIN_EMAIL}
+
+      DB name:                   ${JOOMLA_DB_NAME}
+      DB user:                   ${JOOMLA_DB_USER}
+      DB password:               ${JOOMLA_DB_PASS}
+      MySQL root password:       ${MYSQL_ROOT_PASS}
+
+      OLS WebAdmin URL:          http://SERVER_IP:${OLS_ADMIN_PORT}
+      OLS WebAdmin username:     admin
+      OLS WebAdmin password:     ${OLS_ADMIN_PASS}
+
+      Joomla path:               ${JOOMLA_PATH}
+      Bootstrap log:             /var/log/openlitespeed-joomla-bootstrap.log
+      CREDS
+      chmod 600 /root/openlitespeed-joomla-credentials.txt
+
+      echo "=== Bootstrap finished: $(date). Credentials: /root/openlitespeed-joomla-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/openlitespeed-joomla-bootstrap.sh" ]
+
+final_message: "OpenLiteSpeed + Joomla bootstrap done after $UPTIME s. See /root/openlitespeed-joomla-credentials.txt and /var/log/openlitespeed-joomla-bootstrap.log"

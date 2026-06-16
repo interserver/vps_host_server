@@ -1,0 +1,401 @@
+#cloud-config
+# =============================================================================
+# Yeastar P-Series Phone System — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Yeastar P-Series PBX from official vendor Debian package (BYOL)
+#        UFW firewall + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.yeastar-p-series-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# A license key is NOT included — activate via the Yeastar web wizard after boot.
+# Yeastar P-Series is a commercial/licensed product (Bring Your Own License).
+# =============================================================================
+
+hostname: yeastar-pbx
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during Yeastar P-Series startup on small instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; Yeastar itself is installed from its vendor package
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - net-tools
+  - openssl
+  - sudo
+  - psmisc
+  - acl
+  - locales
+  - tzdata
+  - ntp
+  - certbot
+  - jq
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.yeastar-p-series-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # Yeastar P-Series Bootstrap — edit BEFORE first boot or before re-running
+      # ============================================================
+
+      # Fully-qualified domain name for the Yeastar P-Series web interface
+      # (must resolve to this server's public IP for TLS to work)
+      APP_DOMAIN=pbx.example.com
+
+      # E-mail address for Let's Encrypt certificate registration
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve, cert issuance is deferred
+      # gracefully — you can re-run: certbot certonly --standalone -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # Admin password for the Yeastar P-Series initial setup wizard.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+  # ---------- bootstrap script ----------
+  - path: /root/yeastar-p-series-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/yeastar-p-series-bootstrap.log) 2>&1
+      source /root/.yeastar-p-series-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string
+      # The '|| true' is required — head closes the pipe before urandom
+      # is exhausted, which raises SIGPIPE; under set -e + pipefail this
+      # would abort the script without it.
+      # ------------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      echo "=== Yeastar P-Series Bootstrap started at $(date -u) ==="
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (stored in credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. System locale (Yeastar installer requires en_US.UTF-8)
+      # ------------------------------------------------------------------
+      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+      fi
+      export LANG=en_US.UTF-8
+      export LC_ALL=en_US.UTF-8
+
+      # ------------------------------------------------------------------
+      # 3. Configure automatic security updates (unattended-upgrades)
+      # ------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOEOF
+
+      # ------------------------------------------------------------------
+      # 4. Firewall — UFW
+      #    Yeastar P-Series ports:
+      #      8088  TCP     Web management interface (HTTP)
+      #      8089  TCP     Web management interface (HTTPS)
+      #      5060  TCP/UDP SIP signalling (UDP and TCP)
+      #      5061  TCP     SIP TLS (encrypted SIP)
+      #      10000-12000 UDP  RTP media streams
+      #      4569  UDP     IAX2 (optional, inter-server)
+      #      3306  TCP     MySQL (local only, not opened externally)
+      # ------------------------------------------------------------------
+      echo "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP (ACME challenge / redirect)'
+      ufw allow 443/tcp   comment 'HTTPS TLS management'
+      ufw allow 8088/tcp  comment 'Yeastar P-Series web management HTTP'
+      ufw allow 8089/tcp  comment 'Yeastar P-Series web management HTTPS'
+      ufw allow 5060/tcp  comment 'SIP TCP signalling'
+      ufw allow 5060/udp  comment 'SIP UDP signalling'
+      ufw allow 5061/tcp  comment 'SIP TLS signalling'
+      ufw allow 4569/udp  comment 'IAX2 (optional inter-server)'
+      ufw allow 10000:12000/udp comment 'RTP media streams'
+
+      ufw --force enable
+      echo "UFW configured and enabled"
+
+      # ------------------------------------------------------------------
+      # 5. Configure fail2ban
+      # ------------------------------------------------------------------
+      echo "Configuring fail2ban..."
+      cat > /etc/fail2ban/jail.d/sshd.local <<'F2BEOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      F2BEOF
+
+      # Yeastar web interface protection
+      cat > /etc/fail2ban/jail.d/yeastar.local <<'F2BYEOF'
+      [yeastar-web]
+      enabled  = true
+      port     = 8088,8089,443
+      filter   = apache-auth
+      logpath  = /var/log/yeastar/*.log
+      maxretry = 5
+      bantime  = 3600
+      F2BYEOF
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban || true
+      echo "fail2ban configured"
+
+      # ------------------------------------------------------------------
+      # 6. Install Yeastar P-Series Phone System
+      #
+      #    Yeastar P-Series distributes as a self-contained Debian package
+      #    (.deb) hosted on their official download portal. The installer
+      #    bundles its own web server (nginx), database (MySQL), and PBX
+      #    engine — no separate component installation required.
+      #
+      #    Official download page:
+      #      https://www.yeastar.com/p-series-pbx-system/download/
+      #
+      #    The package is named: p-series-pbx-<version>-linux-amd64.deb
+      #    Check for the latest stable version at:
+      #      https://www.yeastar.com/p-series-pbx-system/download/
+      #
+      # fallback: noble repo until 26.04 published
+      #    (Yeastar does not yet publish a 26.04/oracular-specific package;
+      #     their Ubuntu 22.04/24.04 .deb is used here — it bundles its own
+      #     runtime and does not depend on Ubuntu release-specific packages.)
+      # ------------------------------------------------------------------
+      echo "Installing Yeastar P-Series Phone System..."
+
+      YEASTAR_INSTALL_DIR="/opt/ys_pbx"
+      YEASTAR_DATA_DIR="/data/ys_pbx"
+      YEASTAR_DOWNLOAD_URL="https://dl.yeastar.com/package/ys-pbx-firmware/ys-pbx-installer.sh"
+
+      # Ensure required dependencies for Yeastar installer
+      apt-get update -y
+      apt-get install -y \
+        net-tools \
+        ntp \
+        ntpdate \
+        iproute2 \
+        procps \
+        coreutils \
+        util-linux
+
+      mkdir -p "${YEASTAR_INSTALL_DIR}"
+      mkdir -p "${YEASTAR_DATA_DIR}"
+
+      # Download and run the official Yeastar P-Series installer script
+      # The installer sets up P-Series as a containerized/embedded system
+      echo "Downloading Yeastar P-Series installer..."
+      if curl -fsSL "${YEASTAR_DOWNLOAD_URL}" -o /tmp/ys-pbx-installer.sh 2>/dev/null; then
+        echo "Running Yeastar P-Series installer..."
+        chmod +x /tmp/ys-pbx-installer.sh
+        # Run installer in non-interactive mode
+        bash /tmp/ys-pbx-installer.sh --quiet || {
+          echo "WARN: Yeastar installer script failed or unavailable."
+          echo "WARN: Please download and install manually from:"
+          echo "WARN: https://www.yeastar.com/p-series-pbx-system/download/"
+        }
+      else
+        echo "WARN: Could not download Yeastar installer from ${YEASTAR_DOWNLOAD_URL}"
+        echo "WARN: Manual installation required."
+        echo "WARN: 1. Download the P-Series installer from:"
+        echo "WARN:    https://www.yeastar.com/p-series-pbx-system/download/"
+        echo "WARN: 2. Transfer the .deb or installer package to this server."
+        echo "WARN: 3. Run: sudo dpkg -i p-series-pbx-*.deb"
+        echo "WARN:    or: sudo bash ys-pbx-installer.sh"
+        echo "WARN: 4. Complete the setup wizard at:"
+        echo "WARN:    http://$(hostname -I | awk '{print $1}'):8088"
+      fi
+
+      # ------------------------------------------------------------------
+      # 7. Enable and start Yeastar P-Series service (if installed)
+      # ------------------------------------------------------------------
+      if systemctl list-unit-files 2>/dev/null | grep -q 'ys_pbx\|yeastar\|p-series'; then
+        SERVICE_NAME=$(systemctl list-unit-files 2>/dev/null | grep -E 'ys_pbx|yeastar|p-series' | awk '{print $1}' | head -1)
+        echo "Enabling Yeastar P-Series service: ${SERVICE_NAME}"
+        systemctl enable "${SERVICE_NAME}" || true
+        systemctl start "${SERVICE_NAME}" || true
+      else
+        echo "INFO: Yeastar P-Series systemd service not yet registered."
+        echo "INFO: Service will be available after manual package installation."
+      fi
+
+      # ------------------------------------------------------------------
+      # 8. TLS — Certbot (deferred gracefully if DNS not yet pointed)
+      # ------------------------------------------------------------------
+      if ! command -v certbot >/dev/null 2>&1; then
+        apt-get install -y certbot
+      fi
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "pbx.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+
+        # Stop Yeastar temporarily to free port 80 for ACME challenge
+        if systemctl list-unit-files 2>/dev/null | grep -q 'ys_pbx\|yeastar\|p-series'; then
+          SERVICE_NAME=$(systemctl list-unit-files 2>/dev/null | grep -E 'ys_pbx|yeastar|p-series' | awk '{print $1}' | head -1)
+          systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+        fi
+
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --pre-hook  "ufw allow 80/tcp || true" \
+          --post-hook "ufw delete allow 80/tcp || true" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        # Restart Yeastar after cert attempt
+        if systemctl list-unit-files 2>/dev/null | grep -q 'ys_pbx\|yeastar\|p-series'; then
+          SERVICE_NAME=$(systemctl list-unit-files 2>/dev/null | grep -E 'ys_pbx|yeastar|p-series' | awk '{print $1}' | head -1)
+          systemctl start "${SERVICE_NAME}" 2>/dev/null || true
+        fi
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        echo "Certificate path (if issued): ${CERT_DIR}"
+      else
+        echo "TLS deferred: APP_DOMAIN is placeholder or ENABLE_TLS!=true"
+        CERT_DIR="(not yet issued)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 9. Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      MGMT_PROTO="http"
+      MGMT_PORT="8088"
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN}" != "pbx.example.com" ]; then
+        MGMT_PROTO="https"
+        MGMT_PORT="8089"
+      fi
+
+      cat > /root/yeastar-p-series-credentials.txt <<CREDSEOF
+      ============================================================
+      Yeastar P-Series Phone System — Deployment Credentials
+      Generated: $(date -u)
+      ============================================================
+
+      Management Console URL : ${MGMT_PROTO}://${APP_DOMAIN}:${MGMT_PORT}
+      Fallback URL (IP-based): http://$(hostname -I | awk '{print $1}'):8088
+
+      Admin Username         : admin
+      Admin Password         : ${ADMIN_PASS}
+      (Set this password during the first-boot web wizard)
+
+      IMPORTANT: Yeastar P-Series is a BYOL (Bring Your Own License) product.
+      A valid Yeastar license is required to use all features.
+      Obtain a license at: https://www.yeastar.com/pricing/
+
+      TLS Certificate path   : ${CERT_DIR}
+      Let's Encrypt e-mail   : ${LE_EMAIL}
+
+      Firewall (UFW) open ports:
+        22         TCP        SSH
+        80         TCP        HTTP (ACME challenge)
+        443        TCP        HTTPS TLS
+        8088       TCP        Yeastar P-Series Web Management (HTTP)
+        8089       TCP        Yeastar P-Series Web Management (HTTPS)
+        5060       TCP/UDP    SIP signalling
+        5061       TCP        SIP TLS
+        4569       UDP        IAX2 (optional inter-server)
+        10000-12000 UDP       RTP media streams
+
+      Activation / Setup steps:
+        1. Point ${APP_DOMAIN} to this server's public IP.
+        2. Open the Management Console at:
+             http://$(hostname -I | awk '{print $1}'):8088
+        3. Complete the Yeastar P-Series Setup Wizard.
+        4. Use username 'admin' with the password above when prompted.
+        5. Enter your Yeastar license key in:
+             PBX Settings -> License Management
+        6. Configure your SIP trunks, extensions, and dial plans.
+
+      If the installer was not available at boot time:
+        1. Download the P-Series installer from:
+             https://www.yeastar.com/p-series-pbx-system/download/
+        2. Transfer it to this server and run:
+             sudo bash ys-pbx-installer.sh
+        3. Then access the web UI at http://$(hostname -I | awk '{print $1}'):8088
+
+      TLS Certificate (if issued):
+        Path: ${CERT_DIR}
+        Configure in Yeastar under:
+          PBX Settings -> Security -> TLS Certificates
+
+      Log file: /var/log/yeastar-p-series-bootstrap.log
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/yeastar-p-series-credentials.txt
+
+      echo "=== Yeastar P-Series Bootstrap completed at $(date -u) ==="
+      echo "=== Credentials saved to /root/yeastar-p-series-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/yeastar-p-series-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  Yeastar P-Series Phone System bootstrap complete.
+  - Credentials: /root/yeastar-p-series-credentials.txt
+  - Log:         /var/log/yeastar-p-series-bootstrap.log
+  - Open the web interface and complete the Setup Wizard.
+  - A valid Yeastar P-Series license key is required to activate.
+  - Download: https://www.yeastar.com/p-series-pbx-system/download/
+  - Licensing: https://www.yeastar.com/pricing/
+  ============================================================

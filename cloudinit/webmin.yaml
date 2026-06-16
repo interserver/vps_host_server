@@ -1,0 +1,320 @@
+#cloud-config
+# =============================================================================
+# Webmin — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Webmin (official installer) + UFW firewall + fail2ban + swap
+#        + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the operator variables in /root/.webmin-bootstrap.env before launching
+# (or inject via provisioner). Passwords are random per-boot when left as
+# CHANGE_ME.
+# =============================================================================
+
+hostname: webmin
+manage_etc_hosts: true
+timezone: UTC
+
+# ---------------------------------------------------------------------------
+# Users — preserve default (cloud-init injects customer SSH key here)
+# ---------------------------------------------------------------------------
+users:
+  - default
+
+# ---------------------------------------------------------------------------
+# Packages — minimal set; Webmin installer pulls its own deps
+# ---------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - certbot
+  - python3-certbot
+  - perl
+  - libnet-ssleay-perl
+  - openssl
+  - libauthen-pam-perl
+  - libpam-runtime
+  - libio-pty-perl
+  - shared-mime-info
+  - jq
+  - net-tools
+
+# ---------------------------------------------------------------------------
+# Swap — survive build-time memory spikes
+# ---------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ---------------------------------------------------------------------------
+# Write files
+# ---------------------------------------------------------------------------
+write_files:
+
+  # ---- Operator-editable environment variables ----------------------------
+  - path: /root/.webmin-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # Webmin bootstrap environment
+      # Edit these before first boot, or inject via provisioner.
+
+      # Fully-qualified domain name for the Webmin panel (and optional TLS)
+      # Example: webmin.example.com
+      APP_DOMAIN=CHANGE_ME
+
+      # Email used for Let's Encrypt registration
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS after install
+      # (requires DNS already pointed to this server)
+      ENABLE_TLS=true
+
+      # Webmin admin password
+      # Leave as CHANGE_ME to auto-generate a random value at runtime
+      # The admin username is always "root" (Webmin uses system accounts)
+      ADMIN_PASS=CHANGE_ME
+
+  # ---- Bootstrap script ---------------------------------------------------
+  - path: /root/webmin-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/webmin-bootstrap.log) 2>&1
+      source /root/.webmin-bootstrap.env
+
+      # ----------------------------------------------------------------
+      # Helper: SIGPIPE-safe random string (required under set -e + pipefail)
+      # ----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Webmin bootstrap starting $(date -u) ==="
+
+      # ----------------------------------------------------------------
+      # Resolve secrets — generate if placeholder left in place
+      # ----------------------------------------------------------------
+      [[ "${ADMIN_PASS}" == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+
+      # ----------------------------------------------------------------
+      # Unattended-upgrades — security updates only
+      # ----------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOUPGRADE'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOUPGRADE
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUCONF
+
+      systemctl enable --now unattended-upgrades
+
+      # ----------------------------------------------------------------
+      # fail2ban — basic SSH + Webmin protection
+      # ----------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2B'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port    = ssh
+
+      [webmin-auth]
+      enabled  = true
+      port     = 10000
+      filter   = webmin-auth
+      logpath  = /var/log/auth.log
+      maxretry = 5
+      F2B
+      systemctl enable --now fail2ban
+
+      # ----------------------------------------------------------------
+      # UFW firewall
+      # Webmin ports:
+      #   10000 — Webmin HTTPS panel
+      #   22    — SSH
+      # ----------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 10000/tcp comment 'Webmin panel'
+      ufw --force enable
+
+      # ----------------------------------------------------------------
+      # Webmin official installer
+      # Ref: https://webmin.com/download/
+      # Uses the official setup script which adds the Webmin apt repo
+      # and installs the latest stable release non-interactively.
+      # The repo ships packages for all modern Debian/Ubuntu releases.
+      # ----------------------------------------------------------------
+      echo "=== Installing Webmin ==="
+      export DEBIAN_FRONTEND=noninteractive
+
+      # Download and run the official Webmin setup script
+      curl -sSL https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh \
+          -o /tmp/webmin-setup-repos.sh
+      chmod +x /tmp/webmin-setup-repos.sh
+      # The setup-repos script adds the Webmin apt repo and GPG key
+      bash /tmp/webmin-setup-repos.sh --force
+
+      apt-get update -qq
+      apt-get install -y webmin
+
+      # ----------------------------------------------------------------
+      # Configure Webmin
+      # ----------------------------------------------------------------
+      WEBMIN_CONF=/etc/webmin/miniserv.conf
+
+      # Ensure SSL is enabled (Webmin uses a self-signed cert by default)
+      if [ -f "${WEBMIN_CONF}" ]; then
+          # Enable SSL if not already on
+          grep -q '^ssl=' "${WEBMIN_CONF}" \
+              && sed -i 's/^ssl=.*/ssl=1/' "${WEBMIN_CONF}" \
+              || echo 'ssl=1' >> "${WEBMIN_CONF}"
+      fi
+
+      # ----------------------------------------------------------------
+      # Set root password (Webmin uses PAM / system account root)
+      # We set root's password so it can be used to log in to Webmin.
+      # ----------------------------------------------------------------
+      echo "root:${ADMIN_PASS}" | chpasswd
+      echo "=== Root (Webmin admin) password set ==="
+
+      # ----------------------------------------------------------------
+      # Restart Webmin to apply config
+      # ----------------------------------------------------------------
+      systemctl enable webmin
+      systemctl restart webmin
+
+      # Wait for Webmin to be ready (max 60 s)
+      echo "=== Waiting for Webmin to be ready ==="
+      TIMEOUT=60
+      ELAPSED=0
+      until curl -sk https://127.0.0.1:10000/ >/dev/null 2>&1 || [ $ELAPSED -ge $TIMEOUT ]; do
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+      done
+
+      if ! curl -sk https://127.0.0.1:10000/ >/dev/null 2>&1; then
+          echo "WARN: Webmin did not respond on port 10000 after ${TIMEOUT}s — check service status"
+      else
+          echo "=== Webmin is responding on port 10000 ==="
+      fi
+
+      # ----------------------------------------------------------------
+      # Optional: Certbot TLS for the Webmin panel domain
+      # Webmin supports Let's Encrypt natively; we run certbot standalone
+      # and then point Webmin at the obtained certificate.
+      # Skipped (non-fatal) when DNS is not yet pointing here.
+      # ----------------------------------------------------------------
+      if [[ "${ENABLE_TLS}" == "true" && "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          echo "=== Requesting TLS certificate for ${APP_DOMAIN} ==="
+
+          # Temporarily allow port 80 for ACME challenge
+          ufw allow 80/tcp comment 'ACME challenge (temp)' || true
+
+          # Stop Webmin briefly if it is using port 80 (it does not by default)
+          certbot certonly --standalone \
+              --non-interactive \
+              --agree-tos \
+              --email "${LE_EMAIL}" \
+              -d "${APP_DOMAIN}" \
+              || echo "WARN: certbot deferred — DNS may not point here yet"
+
+          # Close port 80 again (not needed by Webmin in SSL-only mode)
+          ufw delete allow 80/tcp || true
+
+          CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+          if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
+              # Point Webmin at the Let's Encrypt certificate
+              if [ -f "${WEBMIN_CONF}" ]; then
+                  grep -q '^keyfile=' "${WEBMIN_CONF}" \
+                      && sed -i "s|^keyfile=.*|keyfile=${CERT_DIR}/privkey.pem|" "${WEBMIN_CONF}" \
+                      || echo "keyfile=${CERT_DIR}/privkey.pem" >> "${WEBMIN_CONF}"
+                  grep -q '^certfile=' "${WEBMIN_CONF}" \
+                      && sed -i "s|^certfile=.*|certfile=${CERT_DIR}/fullchain.pem|" "${WEBMIN_CONF}" \
+                      || echo "certfile=${CERT_DIR}/fullchain.pem" >> "${WEBMIN_CONF}"
+              fi
+              systemctl restart webmin
+              echo "=== Webmin now using Let's Encrypt certificate for ${APP_DOMAIN} ==="
+          fi
+      fi
+
+      # ----------------------------------------------------------------
+      # Determine access URL
+      # ----------------------------------------------------------------
+      if [[ "${APP_DOMAIN}" != "CHANGE_ME" ]]; then
+          PANEL_HOST="${APP_DOMAIN}"
+      else
+          PANEL_HOST="$(curl -fsSL https://api4.my-ip.io/ip 2>/dev/null || hostname -I | awk '{print $1}')"
+      fi
+
+      # ----------------------------------------------------------------
+      # Write credentials file (readable only by root)
+      # ----------------------------------------------------------------
+      cat > /root/webmin-credentials.txt <<CREDS
+      ============================================================
+       Webmin — Server Credentials
+       Generated: $(date -u)
+      ============================================================
+
+       Panel URL      : https://${PANEL_HOST}:10000
+       Admin username : root
+       Admin password : ${ADMIN_PASS}
+
+       Firewall open ports : 22 (SSH) | 10000 (Webmin panel)
+       Log file            : /var/log/webmin-bootstrap.log
+       Webmin config       : /etc/webmin/miniserv.conf
+
+       NOTE: Webmin uses the system root account for authentication.
+             Change the root password after first login via:
+               passwd root
+             or via the Webmin UI under System > Change Password.
+      ============================================================
+      CREDS
+      chmod 600 /root/webmin-credentials.txt
+
+      echo ""
+      echo "=== Webmin bootstrap complete $(date -u) ==="
+      echo "=== Panel URL      : https://${PANEL_HOST}:10000"
+      echo "=== Admin username : root"
+      echo "=== Admin password : ${ADMIN_PASS}"
+      echo "=== Full creds     : /root/webmin-credentials.txt"
+
+# ---------------------------------------------------------------------------
+# Run the bootstrap script exactly once at first boot
+# ---------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/webmin-bootstrap.sh" ]
+
+# ---------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ---------------------------------------------------------------------------
+final_message: |
+  ============================================================
+   Webmin bootstrap complete.
+   Panel URL   : https://YOUR_IP_OR_DOMAIN:10000
+   Credentials : /root/webmin-credentials.txt
+   Log         : /var/log/webmin-bootstrap.log
+  ============================================================

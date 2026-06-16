@@ -1,0 +1,358 @@
+#cloud-config
+# =============================================================================
+# MediaWiki "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Nginx + PHP-FPM + MariaDB + Composer + Certbot (Let's Encrypt)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in the `write_files` -> /root/.mediawiki-bootstrap.env
+# block (domain, email, passwords) before launching, OR pass them via your
+# provisioner. Passwords are randomised per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: mediawiki
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — let provisioner inject customer SSH key + hostname via 'default'
+# ----------------------------------------------------------------------------
+users:
+  - default
+  - name: deploy
+    groups: [sudo, www-data]
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+# ----------------------------------------------------------------------------
+# Packages
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - mariadb-server
+  - mariadb-client
+  - php-fpm
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-mbstring
+  - php-xml
+  - php-intl
+  - php-apcu
+  - php-json
+  - php-zip
+  - php-bcmath
+  - php-imagick
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - unzip
+  - git
+  - htop
+  - imagemagick
+
+# ----------------------------------------------------------------------------
+# Swap (helps small instances survive MariaDB + PHP memory spikes)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files written before runcmd
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable variables -------------------------------------------
+  - path: /root/.mediawiki-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT -----
+      APP_DOMAIN="example.com"          # primary domain served (no scheme)
+      APP_DOMAIN_WWW="www.example.com"  # www alias — set empty string to skip
+      LE_EMAIL="admin@example.com"      # Let's Encrypt registration e-mail
+      ENABLE_TLS="true"                 # set false to skip certbot (no DNS yet)
+
+      MW_SITENAME="My MediaWiki"        # wiki display name
+      MW_ADMIN_USER="WikiAdmin"         # initial wiki sysop account
+      MW_ADMIN_PASS="CHANGE_ME"         # wiki sysop password (randomised if CHANGE_ME)
+      MW_ADMIN_EMAIL="admin@example.com"
+
+      # Database — passwords randomised per-boot when left as CHANGE_ME
+      MW_DB_NAME="mediawiki"
+      MW_DB_USER="mw_user"
+      MW_DB_PASS="CHANGE_ME"
+      MYSQL_ROOT_PASS="CHANGE_ME"
+
+      MW_VERSION="1.43.0"               # MediaWiki release tarball version
+      MW_PATH="/var/www/mediawiki"      # docroot
+
+  # --- Nginx vhost (placeholders replaced at runtime) ------------------------
+  - path: /etc/nginx/sites-available/mediawiki.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name SERVER_NAMES_PLACEHOLDER;
+
+          root /var/www/mediawiki;
+          index index.php;
+
+          client_max_body_size 100M;
+
+          # Security headers
+          add_header X-Frame-Options "SAMEORIGIN" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1; mode=block" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+          # MediaWiki short-URL rewrite
+          location / {
+              try_files $uri $uri/ @mediawiki;
+          }
+
+          location @mediawiki {
+              rewrite ^/wiki/(?P<title>.*)$ /index.php?title=$title&$args last;
+          }
+
+          location ~ \.php$ {
+              include snippets/fastcgi-php.conf;
+              fastcgi_pass unix:PHP_FPM_SOCK_PLACEHOLDER;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              fastcgi_read_timeout 120;
+          }
+
+          # Protect sensitive files
+          location ~ /\.(ht|git) { deny all; }
+          location ~* ^/(maintenance|includes|languages|resources|serialized|tests) {
+              deny all;
+          }
+          location = /favicon.ico { log_not_found off; access_log off; }
+          location = /robots.txt  { log_not_found off; access_log off; allow all; }
+          location ~* \.(css|js|woff2?|ttf|svg|gif|jpe?g|png|webp|ico)$ {
+              expires max;
+              log_not_found off;
+              access_log off;
+          }
+      }
+
+  # --- fail2ban jail (sshd + nginx) ------------------------------------------
+  - path: /etc/fail2ban/jail.d/mediawiki.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+
+      [nginx-http-auth]
+      enabled = true
+
+      [nginx-botsearch]
+      enabled = true
+
+  # --- unattended security upgrades ------------------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/mediawiki-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/mediawiki-bootstrap.log) 2>&1
+      source /root/.mediawiki-bootstrap.env
+
+      echo "=== MediaWiki bootstrap started: $(date) ==="
+
+      # --- SIGPIPE-safe random secret generator ---
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # --- fill in random passwords where left as CHANGE_ME ---
+      [ "$MW_DB_PASS"      = "CHANGE_ME" ] && MW_DB_PASS="$(rand)"
+      [ "$MW_ADMIN_PASS"   = "CHANGE_ME" ] && MW_ADMIN_PASS="$(rand)"
+      [ "$MYSQL_ROOT_PASS" = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
+
+      # --- detect PHP-FPM socket ---
+      PHP_FPM_SOCK="$(find /run/php -name 'php*-fpm.sock' 2>/dev/null | head -n1 || true)"
+      echo "PHP-FPM socket: $PHP_FPM_SOCK"
+
+      # --- tune PHP for MediaWiki ---
+      PHP_INI="$(php --ini 2>/dev/null | awk '/Loaded Configuration/{print $NF}' || true)"
+      if [ -f "$PHP_INI" ]; then
+        sed -ri 's/^;?upload_max_filesize.*/upload_max_filesize = 100M/' "$PHP_INI"
+        sed -ri 's/^;?post_max_size.*/post_max_size = 100M/'             "$PHP_INI"
+        sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'               "$PHP_INI"
+        sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'    "$PHP_INI"
+      fi
+      systemctl restart "php*-fpm" 2>/dev/null || systemctl restart php-fpm || true
+
+      # --- install Composer (system-wide) ---
+      if ! command -v composer >/dev/null 2>&1; then
+        echo "Installing Composer..."
+        EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
+        php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+        ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+        if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+          echo "ERROR: Composer installer checksum mismatch" >&2
+          rm -f composer-setup.php
+          exit 1
+        fi
+        php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+        rm -f composer-setup.php
+      fi
+
+      # --- secure MariaDB + create DB ---
+      systemctl enable --now mariadb
+      mysql --protocol=socket -uroot <<SQL
+      ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+      DELETE FROM mysql.user WHERE User='';
+      DROP DATABASE IF EXISTS test;
+      DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+      CREATE DATABASE IF NOT EXISTS \`${MW_DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '${MW_DB_USER}'@'localhost' IDENTIFIED BY '${MW_DB_PASS}';
+      GRANT ALL PRIVILEGES ON \`${MW_DB_NAME}\`.* TO '${MW_DB_USER}'@'localhost';
+      FLUSH PRIVILEGES;
+      SQL
+
+      # --- download + extract MediaWiki ---
+      MW_TARBALL="mediawiki-${MW_VERSION}.tar.gz"
+      MW_DOWNLOAD_URL="https://releases.wikimedia.org/mediawiki/$(echo "${MW_VERSION}" | cut -d. -f1,2)/${MW_TARBALL}"
+      mkdir -p "${MW_PATH}"
+      if [ ! -f "${MW_PATH}/index.php" ]; then
+        echo "Downloading MediaWiki ${MW_VERSION}..."
+        curl -fsSL "${MW_DOWNLOAD_URL}" -o "/tmp/${MW_TARBALL}"
+        tar -xzf "/tmp/${MW_TARBALL}" --strip-components=1 -C "${MW_PATH}"
+        rm -f "/tmp/${MW_TARBALL}"
+      fi
+
+      # --- install PHP dependencies via Composer ---
+      cd "${MW_PATH}"
+      sudo -u www-data composer install --no-dev --optimize-autoloader 2>/dev/null || \
+        composer install --no-dev --optimize-autoloader
+
+      # --- run MediaWiki CLI installer ---
+      SECRET_KEY="$(rand)$(rand)$(rand)"
+      UPGRADE_KEY="$(rand)"
+      PROTO="http"; [ "$ENABLE_TLS" = "true" ] && PROTO="https"
+
+      php "${MW_PATH}/maintenance/install.php" \
+        --dbtype=mysql \
+        --dbserver=localhost \
+        --dbname="${MW_DB_NAME}" \
+        --dbuser="${MW_DB_USER}" \
+        --dbpass="${MW_DB_PASS}" \
+        --server="${PROTO}://${APP_DOMAIN}" \
+        --scriptpath="" \
+        --lang=en \
+        --pass="${MW_ADMIN_PASS}" \
+        "${MW_SITENAME}" \
+        "${MW_ADMIN_USER}"
+
+      # --- append performance + short-URL settings to LocalSettings.php ---
+      cat >> "${MW_PATH}/LocalSettings.php" <<'LSEOF'
+
+      # Short URLs
+      $wgArticlePath = '/wiki/$1';
+      $wgUsePathInfo = true;
+
+      # APCu object cache
+      $wgMainCacheType = CACHE_ACCEL;
+      $wgParserCacheType = CACHE_ACCEL;
+      $wgMessageCacheType = CACHE_ACCEL;
+
+      # Upload handling
+      $wgEnableUploads = true;
+      $wgUseImageMagick = true;
+      $wgImageMagickConvertCommand = '/usr/bin/convert';
+
+      # Email (from address)
+      $wgPasswordSender = 'mediawiki@localhost';
+
+      # Security
+      $wgSecretKey = 'MW_SECRET_KEY_PLACEHOLDER';
+      $wgUpgradeKey = 'MW_UPGRADE_KEY_PLACEHOLDER';
+      LSEOF
+
+      # Replace secret/upgrade key placeholders with generated values
+      sed -i "s|MW_SECRET_KEY_PLACEHOLDER|${SECRET_KEY}|" "${MW_PATH}/LocalSettings.php"
+      sed -i "s|MW_UPGRADE_KEY_PLACEHOLDER|${UPGRADE_KEY}|" "${MW_PATH}/LocalSettings.php"
+
+      # --- set ownership / permissions ---
+      chown -R www-data:www-data "${MW_PATH}"
+      find "${MW_PATH}" -type d -exec chmod 755 {} \;
+      find "${MW_PATH}" -type f -exec chmod 644 {} \;
+      chmod 640 "${MW_PATH}/LocalSettings.php"
+      chmod 700 "${MW_PATH}/maintenance"
+      mkdir -p "${MW_PATH}/images" && chown www-data:www-data "${MW_PATH}/images"
+
+      # --- configure Nginx vhost ---
+      SERVER_NAMES="${APP_DOMAIN}"
+      [ -n "${APP_DOMAIN_WWW:-}" ] && SERVER_NAMES="${APP_DOMAIN} ${APP_DOMAIN_WWW}"
+      sed -i "s|SERVER_NAMES_PLACEHOLDER|${SERVER_NAMES}|"   /etc/nginx/sites-available/mediawiki.conf
+      sed -i "s|PHP_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|"  /etc/nginx/sites-available/mediawiki.conf
+      ln -sf /etc/nginx/sites-available/mediawiki.conf /etc/nginx/sites-enabled/mediawiki.conf
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t && systemctl reload nginx
+
+      # --- firewall ---
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+      # --- fail2ban ---
+      systemctl enable --now fail2ban
+
+      # --- TLS via Let's Encrypt (non-fatal if DNS not pointed yet) ---
+      if [ "${ENABLE_TLS}" = "true" ]; then
+        CERTBOT_DOMAINS="-d ${APP_DOMAIN}"
+        [ -n "${APP_DOMAIN_WWW:-}" ] && CERTBOT_DOMAINS="${CERTBOT_DOMAINS} -d ${APP_DOMAIN_WWW}"
+        certbot --nginx --non-interactive --agree-tos \
+          -m "${LE_EMAIL}" ${CERTBOT_DOMAINS} --redirect || \
+          echo "WARN: certbot deferred — DNS not yet pointed. Re-run: certbot --nginx"
+      fi
+
+      # --- write credentials file ---
+      cat > /root/mediawiki-credentials.txt <<CREDS
+      ===== MediaWiki install complete: $(date) =====
+      URL:                ${PROTO}://${APP_DOMAIN}/wiki/Main_Page
+      Admin panel:        ${PROTO}://${APP_DOMAIN}/index.php?title=Special:UserLogin
+      Wiki admin user:    ${MW_ADMIN_USER}
+      Wiki admin pass:    ${MW_ADMIN_PASS}
+      Wiki admin email:   ${MW_ADMIN_EMAIL}
+
+      DB name:            ${MW_DB_NAME}
+      DB user:            ${MW_DB_USER}
+      DB pass:            ${MW_DB_PASS}
+      MySQL root pass:    ${MYSQL_ROOT_PASS}
+
+      MediaWiki path:     ${MW_PATH}
+      Bootstrap log:      /var/log/mediawiki-bootstrap.log
+      CREDS
+      chmod 600 /root/mediawiki-credentials.txt
+
+      echo "=== Bootstrap finished. Credentials in /root/mediawiki-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once all files are written
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/mediawiki-bootstrap.sh" ]
+
+final_message: "MediaWiki bootstrap done after $UPTIME s. See /root/mediawiki-credentials.txt and /var/log/mediawiki-bootstrap.log"

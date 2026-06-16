@@ -1,0 +1,341 @@
+#cloud-config
+# =============================================================================
+# N99panel — Debian 13 'trixie' cloud-init user-data
+# Stack: N99panel (official installer) + Nginx + PHP-FPM + MySQL
+#        UFW firewall + fail2ban + swap + unattended-upgrades + Certbot TLS
+# -----------------------------------------------------------------------------
+# N99panel is a containerised hosting control panel that supports WordPress,
+# WooCommerce, PHP, Laravel, NodeJS, and Python on Debian 12/13.
+#
+# BEFORE FIRST BOOT — edit /root/.n99panel-bootstrap.env:
+#   N99PANEL_LICENSE  — your N99panel licence key (required; purchase at
+#                       https://ca.n99panel.com/register)
+#   APP_DOMAIN        — FQDN for Certbot TLS (leave CHANGE_ME to skip TLS)
+#   LE_EMAIL          — Let's Encrypt contact e-mail
+#   ADMIN_PASS        — auto-generated if left as CHANGE_ME
+#
+# Post-boot credentials are written to /root/n99panel-credentials.txt (0600).
+# The installer also writes its own credential summary to /root/n99p-admin.txt.
+# =============================================================================
+
+hostname: n99panel
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep [default] so the provisioner can inject the customer SSH key.
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — minimal bootstrap set; N99panel installer pulls its own deps.
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg2
+  - ca-certificates
+  - apt-transport-https
+  - lsb-release
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - apt-listchanges
+  - certbot
+  - sudo
+  - net-tools
+
+# ----------------------------------------------------------------------------
+# Swap — 2 GiB to survive installer memory spikes.
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Write operator env + bootstrap script.
+# ----------------------------------------------------------------------------
+write_files:
+  # Operator-editable variables
+  - path: /root/.n99panel-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # N99panel bootstrap configuration
+      # Edit these before first boot or re-run /root/n99panel-bootstrap.sh
+
+      # N99panel licence key — REQUIRED.
+      # Purchase at: https://ca.n99panel.com/register
+      N99PANEL_LICENSE=CHANGE_ME
+
+      # Domain / hostname for Certbot TLS (e.g. panel.example.com).
+      # Leave as CHANGE_ME to skip TLS issuance on first boot.
+      APP_DOMAIN=CHANGE_ME
+
+      # Let's Encrypt contact e-mail (required for Certbot).
+      LE_EMAIL=CHANGE_ME
+
+      # Set to "true" to attempt Certbot TLS issuance on first boot.
+      # Boot will NOT fail if DNS is not yet pointed.
+      ENABLE_TLS=true
+
+      # N99panel admin password — auto-generated when left as CHANGE_ME.
+      ADMIN_PASS=CHANGE_ME
+
+  # Bootstrap script
+  - path: /root/n99panel-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/n99panel-bootstrap.log) 2>&1
+      source /root/.n99panel-bootstrap.env
+
+      # -----------------------------------------------------------------
+      # Helpers
+      # -----------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*"; }
+
+      log "=== N99panel bootstrap starting ==="
+
+      # -----------------------------------------------------------------
+      # Resolve auto-generated secrets
+      # -----------------------------------------------------------------
+      if [ "${ADMIN_PASS:-CHANGE_ME}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        log "Generated ADMIN_PASS"
+      fi
+
+      # -----------------------------------------------------------------
+      # System hardening: fail2ban
+      # -----------------------------------------------------------------
+      log "Configuring fail2ban..."
+      command -v fail2ban-server >/dev/null 2>&1 || apt-get install -y fail2ban
+
+      mkdir -p /etc/fail2ban/jail.d
+      cat > /etc/fail2ban/jail.d/n99panel.conf << 'JAILEOF'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      JAILEOF
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+      log "fail2ban configured."
+
+      # -----------------------------------------------------------------
+      # Automatic security updates
+      # N99panel's installer disables unattended-upgrades; we re-enable
+      # them after the installer finishes (see below).
+      # -----------------------------------------------------------------
+      log "Configuring unattended-upgrades..."
+      mkdir -p /etc/apt/apt.conf.d
+
+      cat > /etc/apt/apt.conf.d/20auto-upgrades << 'AUEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUEOF
+
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'UUEOF'
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}";
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      UUEOF
+
+      log "unattended-upgrades configured."
+
+      # -----------------------------------------------------------------
+      # UFW firewall — open SSH + common web ports + N99panel control port.
+      # Open ports BEFORE the installer runs so it can reach its CDN.
+      # N99panel uses HTTPS for the control panel; port details are printed
+      # in /root/n99p-admin.txt after install. We open 80, 443, and 8443
+      # (common panel port) plus SSH. Adjust after reading n99p-admin.txt.
+      # -----------------------------------------------------------------
+      log "Configuring UFW firewall..."
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp    comment 'SSH'
+      ufw allow 80/tcp    comment 'HTTP'
+      ufw allow 443/tcp   comment 'HTTPS'
+      ufw allow 8443/tcp  comment 'N99panel admin (HTTPS)'
+      ufw allow 21/tcp    comment 'FTP control'
+      ufw allow 40000:50000/tcp comment 'Passive FTP + NodeJS app ports'
+      ufw --force enable
+      log "UFW configured."
+
+      # -----------------------------------------------------------------
+      # N99panel official installer
+      # Ref: https://docs.n99panel.com/doku.php?id=n99panel-installation
+      #
+      # The installer downloads from https://dl.n99panel.com/ and places
+      # its runtime under /var/rt-n99p/.  Completion is signalled by the
+      # file /var/rt-n99p/installation_completed.
+      #
+      # The installer may prompt for a licence key.  We pass it via the
+      # N99PANEL_LICENSE environment variable and/or stdin so the install
+      # proceeds non-interactively when a valid key is configured.
+      # -----------------------------------------------------------------
+      log "Downloading N99panel installer..."
+      command -v curl >/dev/null 2>&1 || apt-get install -y curl
+
+      curl -sSfL \
+        https://dl.n99panel.com/downloads/n99panel-install.sh \
+        -o /tmp/n99panel-install.sh
+      chmod +x /tmp/n99panel-install.sh
+
+      log "Running N99panel installer (this may take 5–30 minutes)..."
+
+      INSTALL_EXIT=0
+      if [ "${N99PANEL_LICENSE:-CHANGE_ME}" != "CHANGE_ME" ]; then
+        # Pass the licence key non-interactively via stdin and env.
+        export N99PANEL_LICENSE
+        echo "${N99PANEL_LICENSE}" | DEBIAN_FRONTEND=noninteractive \
+          bash /tmp/n99panel-install.sh || INSTALL_EXIT=$?
+      else
+        log "WARN: N99PANEL_LICENSE is not set — installer may pause for input."
+        log "      Set N99PANEL_LICENSE in /root/.n99panel-bootstrap.env and re-run."
+        DEBIAN_FRONTEND=noninteractive bash /tmp/n99panel-install.sh || INSTALL_EXIT=$?
+      fi
+
+      rm -f /tmp/n99panel-install.sh
+
+      if [ "$INSTALL_EXIT" -ne 0 ]; then
+        log "WARN: N99panel installer exited with code ${INSTALL_EXIT}."
+        log "      Check /var/log/n99panel-bootstrap.log and vendor logs."
+      fi
+
+      # -----------------------------------------------------------------
+      # Wait for N99panel installation to complete (up to 30 min).
+      # -----------------------------------------------------------------
+      log "Waiting for N99panel installation to complete..."
+      WAIT=0
+      until [ -f /var/rt-n99p/installation_completed ] || [ "$WAIT" -ge 360 ]; do
+        sleep 5
+        WAIT=$((WAIT + 1))
+      done
+
+      if [ -f /var/rt-n99p/installation_completed ]; then
+        log "N99panel installation_completed flag found."
+      else
+        log "WARN: installation_completed not found after ${WAIT} checks."
+        log "      N99panel may still be installing in the background."
+      fi
+
+      # -----------------------------------------------------------------
+      # Re-enable unattended-upgrades (installer disables them).
+      # -----------------------------------------------------------------
+      log "Re-enabling unattended-upgrades services (disabled by installer)..."
+      for svc in unattended-upgrades apt-daily.timer apt-daily.service \
+                  apt-daily-upgrade.timer apt-daily-upgrade.service; do
+        systemctl enable  "$svc" 2>/dev/null || true
+        systemctl start   "$svc" 2>/dev/null || true
+      done
+      log "unattended-upgrades re-enabled."
+
+      # -----------------------------------------------------------------
+      # Discover panel URL from vendor credentials file.
+      # -----------------------------------------------------------------
+      VENDOR_CREDS=/root/n99p-admin.txt
+      PANEL_URL="UNKNOWN"
+      if [ -f "$VENDOR_CREDS" ]; then
+        # Try to extract a URL from the vendor file (https:// line).
+        PANEL_URL="$(grep -oP 'https?://\S+' "$VENDOR_CREDS" | head -1 || true)"
+        [ -z "$PANEL_URL" ] && PANEL_URL="UNKNOWN"
+      fi
+
+      # Fall back to IP-based URL if vendor file not yet present.
+      if [ "$PANEL_URL" = "UNKNOWN" ]; then
+        SERVER_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1 || hostname -I | awk '{print $1}')"
+        PANEL_URL="https://${SERVER_IP}:8443"
+      fi
+
+      # -----------------------------------------------------------------
+      # Certbot TLS (deferred gracefully if DNS not ready).
+      # Only attempted if APP_DOMAIN and LE_EMAIL are both set.
+      # -----------------------------------------------------------------
+      if [ "${ENABLE_TLS:-true}" = "true" ] && \
+         [ "${APP_DOMAIN:-CHANGE_ME}" != "CHANGE_ME" ] && \
+         [ "${LE_EMAIL:-CHANGE_ME}" != "CHANGE_ME" ]; then
+        log "Attempting Certbot TLS for ${APP_DOMAIN}..."
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --http-01-port 80 \
+          || echo "WARN: certbot deferred — DNS not yet pointed or port 80 unavailable."
+        log "Certbot step done (check above for WARN if DNS not ready)."
+      else
+        log "Skipping Certbot: ENABLE_TLS=${ENABLE_TLS:-true}, APP_DOMAIN=${APP_DOMAIN:-CHANGE_ME}."
+      fi
+
+      # -----------------------------------------------------------------
+      # Write consolidated credentials file.
+      # -----------------------------------------------------------------
+      log "Writing credentials file..."
+      {
+        echo "================================================="
+        echo " N99panel — Credentials  ($(date -u '+%Y-%m-%d %H:%M UTC'))"
+        echo "================================================="
+        echo ""
+        echo "Panel URL      : ${PANEL_URL}"
+        echo "Admin password : ${ADMIN_PASS}"
+        echo ""
+        echo "N99panel vendor credentials (/root/n99p-admin.txt):"
+        if [ -f /root/n99p-admin.txt ]; then
+          cat /root/n99p-admin.txt
+        else
+          echo "  (not yet available — check after install completes)"
+        fi
+        echo ""
+        echo "Bootstrap log  : /var/log/n99panel-bootstrap.log"
+        echo "Vendor install : /var/rt-n99p/"
+        echo "================================================="
+      } > /root/n99panel-credentials.txt
+      chmod 600 /root/n99panel-credentials.txt
+      log "Credentials written to /root/n99panel-credentials.txt"
+
+      # -----------------------------------------------------------------
+      # Persist generated secrets back to the env file for idempotency.
+      # -----------------------------------------------------------------
+      sed -i "s|^ADMIN_PASS=.*|ADMIN_PASS=${ADMIN_PASS}|" /root/.n99panel-bootstrap.env
+
+      log "=== N99panel bootstrap complete ==="
+      log "Panel URL : ${PANEL_URL}"
+      log "Creds     : /root/n99panel-credentials.txt"
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap script once at first boot.
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/n99panel-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output.
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  N99panel bootstrap complete after $UPTIME seconds.
+  Panel URL   : see /root/n99panel-credentials.txt
+  Vendor creds: /root/n99p-admin.txt  (written by installer)
+  Log         : /var/log/n99panel-bootstrap.log
+  ============================================================

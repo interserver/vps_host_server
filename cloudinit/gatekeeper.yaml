@@ -1,0 +1,321 @@
+#cloud-config
+# =============================================================================
+# BotGuard GateKeeper — Ubuntu 26.04 cloud-init user-data
+# Stack: BotGuard GateKeeper (Nginx-based reverse-proxy WAF + bot detection)
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# BEFORE LAUNCHING:
+#   1. Edit /root/.gatekeeper-bootstrap.env (APP_DOMAIN, LE_EMAIL, BG_API_KEY)
+#      — or pass them via your provisioner.
+#   2. Point your domain's DNS A record at this server's IP.
+#   3. Obtain your BotGuard API key at https://botguard.net/en/account/credentials
+#
+# AFTER BOOT:
+#   Admin UI: http://<SERVER_IP>  (then https://<APP_DOMAIN> once DNS resolves)
+#   Credentials: username=botguard, password=<BG_API_KEY>
+#   Log: /var/log/gatekeeper-bootstrap.log
+# =============================================================================
+
+hostname: gatekeeper
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so provisioner can inject the customer SSH key later
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — prereqs only; gatekeeper itself is installed via the vendor repo
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - gpg
+  - ca-certificates
+  - lsb-release
+  - apt-utils
+  - apt-transport-https
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - htop
+  - net-tools
+  - ipset
+  - iptables-persistent
+
+# ----------------------------------------------------------------------------
+# Swap — survive memory spikes during install / runtime
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.gatekeeper-bootstrap.env
+    permissions: '0600'
+    content: |
+      # BotGuard GateKeeper — operator-editable variables
+      # Edit BEFORE first boot (or re-run /root/gatekeeper-bootstrap.sh after edits)
+
+      # Your domain that points to this server (used for Certbot TLS)
+      APP_DOMAIN=CHANGE_ME
+
+      # Let's Encrypt registration email
+      LE_EMAIL=CHANGE_ME
+
+      # Enable automatic TLS certificate provisioning via Let's Encrypt
+      # Set to false if DNS is not yet pointed at this server
+      ENABLE_TLS=true
+
+      # BotGuard API key — obtain from https://botguard.net/en/account/credentials
+      # This is also the GateKeeper web UI password (username: botguard)
+      BG_API_KEY=CHANGE_ME
+
+  # ---------- bootstrap script ----------
+  - path: /root/gatekeeper-bootstrap.sh
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/gatekeeper-bootstrap.log) 2>&1
+      source /root/.gatekeeper-bootstrap.env
+
+      # -----------------------------------------------------------------------
+      # SIGPIPE-safe random secret generator
+      # -----------------------------------------------------------------------
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== BotGuard GateKeeper bootstrap starting at $(date) ==="
+
+      # -----------------------------------------------------------------------
+      # 1. Fill in CHANGE_ME defaults with generated values where appropriate
+      # -----------------------------------------------------------------------
+      if [ "${BG_API_KEY}" = "CHANGE_ME" ]; then
+        echo "WARN: BG_API_KEY is not set. GateKeeper will require the API key"
+        echo "      to be entered in the web UI manually after first login."
+        echo "      Obtain your key at: https://botguard.net/en/account/credentials"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. System prerequisites
+      # -----------------------------------------------------------------------
+      echo "--- Installing prerequisites ---"
+      apt-get update -qq
+      apt-get install -y --no-install-recommends \
+        sudo curl gpg ca-certificates lsb-release apt-utils apt-transport-https \
+        ipset iptables-persistent 2>&1
+
+      # -----------------------------------------------------------------------
+      # 3. Add BotGuard apt repository
+      # -----------------------------------------------------------------------
+      echo "--- Adding BotGuard apt repository ---"
+
+      KEYRING=/usr/share/keyrings/botguard.gpg
+      REPO_LIST=/etc/apt/sources.list.d/botguard-gatekeeper.list
+
+      if [ ! -f "${KEYRING}" ]; then
+        curl -fsSL https://repo.botguard.net/botguard.gpg | gpg --dearmor > "${KEYRING}"
+      fi
+
+      # Use lsb_release -cs so the codename is detected automatically.
+      # If Ubuntu 26.04 has no published repo line yet, fall back to 'noble'.
+      CODENAME="$(lsb_release -cs 2>/dev/null || echo noble)"
+      REPO_URL="https://repo.botguard.net/debian"
+
+      # Test that the codename-specific repo exists; fall back to noble if not.
+      if ! curl -fsSL --head "${REPO_URL}/dists/${CODENAME}/" >/dev/null 2>&1; then
+        echo "WARN: No BotGuard repo line for '${CODENAME}'; falling back to 'noble'."
+        # fallback: noble repo until 26.04 published
+        CODENAME="noble"
+      fi
+
+      echo "deb [signed-by=${KEYRING}] ${REPO_URL} ${CODENAME} gatekeeper" \
+        | tee "${REPO_LIST}" > /dev/null
+
+      apt-get update -qq
+
+      # -----------------------------------------------------------------------
+      # 4. Install BotGuard GateKeeper
+      # -----------------------------------------------------------------------
+      echo "--- Installing botguard-gatekeeper ---"
+      apt-get install -y botguard-gatekeeper
+
+      # -----------------------------------------------------------------------
+      # 5. Firewall (UFW)
+      #    GateKeeper proxies HTTP/HTTPS; its management UI is the same :80/:443
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+
+      # SSH
+      ufw allow 22/tcp comment 'SSH'
+
+      # HTTP — GateKeeper WAF proxy + initial web UI access
+      ufw allow 80/tcp comment 'GateKeeper HTTP'
+
+      # HTTPS — GateKeeper WAF proxy + TLS management UI
+      ufw allow 443/tcp comment 'GateKeeper HTTPS'
+
+      ufw --force enable
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 6. fail2ban — protect SSH
+      # -----------------------------------------------------------------------
+      echo "--- Configuring fail2ban ---"
+      cat > /etc/fail2ban/jail.d/sshd-override.conf << 'FAIL2BAN'
+      [sshd]
+      enabled  = true
+      port     = ssh
+      filter   = sshd
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+      FAIL2BAN
+
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      # -----------------------------------------------------------------------
+      # 7. Automatic security updates
+      # -----------------------------------------------------------------------
+      echo "--- Enabling unattended security upgrades ---"
+      cat > /etc/apt/apt.conf.d/50unattended-upgrades-gatekeeper << 'APT_CONF'
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::Remove-Unused-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      APT_CONF
+
+      cat > /etc/apt/apt.conf.d/20auto-upgrades-gatekeeper << 'AUTO_CONF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      AUTO_CONF
+
+      systemctl enable unattended-upgrades
+      systemctl restart unattended-upgrades
+
+      # -----------------------------------------------------------------------
+      # 8. Optional: request Certbot TLS certificate
+      #    Skipped gracefully if DNS is not pointed yet.
+      # -----------------------------------------------------------------------
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "CHANGE_ME" ] && \
+         [ "${LE_EMAIL}" != "CHANGE_ME" ]; then
+
+        echo "--- Requesting Let's Encrypt certificate for ${APP_DOMAIN} ---"
+        # Install certbot if not bundled with gatekeeper
+        command -v certbot >/dev/null 2>&1 || \
+          apt-get install -y certbot python3-certbot-nginx 2>&1
+
+        # GateKeeper's Nginx manages its own vhosts; use standalone mode so
+        # certbot does not conflict. Nginx must be stopped briefly.
+        systemctl stop botguard-gatekeeper 2>/dev/null || \
+          systemctl stop nginx 2>/dev/null || true
+
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --deploy-hook "systemctl restart botguard-gatekeeper 2>/dev/null || systemctl restart nginx 2>/dev/null || true" \
+          || echo "WARN: certbot deferred — DNS not yet resolved or rate-limited"
+
+        systemctl start botguard-gatekeeper 2>/dev/null || \
+          systemctl start nginx 2>/dev/null || true
+      else
+        echo "INFO: TLS provisioning skipped (ENABLE_TLS=${ENABLE_TLS}, domain=${APP_DOMAIN})"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 9. Wait for GateKeeper service to be active
+      # -----------------------------------------------------------------------
+      echo "--- Ensuring GateKeeper service is running ---"
+      # The package may register as 'botguard-gatekeeper' or 'gatekeeper'
+      for SVC in botguard-gatekeeper gatekeeper nginx; do
+        if systemctl list-unit-files "${SVC}.service" 2>/dev/null | grep -q "${SVC}"; then
+          systemctl enable "${SVC}" || true
+          systemctl restart "${SVC}" || true
+          echo "INFO: Service '${SVC}' enabled and started."
+          break
+        fi
+      done
+
+      # -----------------------------------------------------------------------
+      # 10. Write credentials / access summary
+      # -----------------------------------------------------------------------
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+
+      cat > /root/gatekeeper-credentials.txt << CREDS
+      ============================================================
+      BotGuard GateKeeper — Deployment Summary
+      Generated: $(date)
+      ============================================================
+
+      Web Admin UI (HTTP — use until TLS is provisioned):
+        URL: http://${SERVER_IP}
+
+      Web Admin UI (HTTPS — after DNS resolves and TLS is provisioned):
+        URL: https://${APP_DOMAIN}
+
+      Admin Login:
+        Username : botguard
+        Password : <your BotGuard API key — set BG_API_KEY in .env>
+
+      BotGuard API Key:
+        ${BG_API_KEY}
+
+      Domain configured : ${APP_DOMAIN}
+      TLS (Let's Encrypt): ${ENABLE_TLS}
+      Let's Encrypt email: ${LE_EMAIL}
+
+      Bootstrap log : /var/log/gatekeeper-bootstrap.log
+      Env file      : /root/.gatekeeper-bootstrap.env
+
+      Obtain / manage your API key:
+        https://botguard.net/en/account/credentials
+
+      Firewall rules (UFW):
+        22/tcp   — SSH
+        80/tcp   — GateKeeper HTTP proxy / initial admin UI
+        443/tcp  — GateKeeper HTTPS proxy / TLS admin UI
+
+      ============================================================
+      CREDS
+      chmod 600 /root/gatekeeper-credentials.txt
+
+      echo "=== BotGuard GateKeeper bootstrap COMPLETE at $(date) ==="
+      echo "=== Access the admin UI at: http://${SERVER_IP} ==="
+      echo "=== Credentials summary: /root/gatekeeper-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/gatekeeper-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init log
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  BotGuard GateKeeper bootstrap complete.
+  Access the admin UI at: http://<SERVER_IP>/
+  Admin username: botguard  |  Password: your BotGuard API key
+  Full credentials: /root/gatekeeper-credentials.txt
+  Log: /var/log/gatekeeper-bootstrap.log
+  ============================================================

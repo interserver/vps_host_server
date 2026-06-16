@@ -1,0 +1,381 @@
+#cloud-config
+# =============================================================================
+# Haltdos WAF Community Edition — Ubuntu 26.04 LTS cloud-init user-data
+# Stack: Haltdos hd-community-waf + hd-community-controller
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# BEFORE LAUNCHING:
+#   1. Edit /root/.haltdos-waf-bootstrap.env (APP_DOMAIN, LE_EMAIL, ADMIN_PASS)
+#      or pass them via your provisioner.
+#   2. Point your domain DNS A record at this server's IP.
+#
+# AFTER BOOT:
+#   Admin UI  : https://<SERVER_IP>:9000  (self-signed cert — accept browser warning)
+#   First use : Complete license registration + email OTP in the browser UI.
+#   Log       : /var/log/haltdos-waf-bootstrap.log
+#   Creds     : /root/haltdos-waf-credentials.txt
+#
+# Ports exposed:
+#   22/tcp   — SSH
+#   80/tcp   — Haltdos WAF HTTP proxy (client traffic)
+#   443/tcp  — Haltdos WAF HTTPS proxy (client traffic)
+#   9000/tcp — Haltdos management console (HTTPS, self-signed cert)
+# =============================================================================
+
+hostname: haltdos-waf
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages — base prerequisites only; Haltdos installs via its own vendor repo
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - ca-certificates
+  - apt-transport-https
+  - lsb-release
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - certbot
+  - net-tools
+  - htop
+  - jq
+
+# ----------------------------------------------------------------------------
+# Swap — survive memory spikes during install / WAF runtime
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Files written to disk before runcmd executes
+# ----------------------------------------------------------------------------
+write_files:
+
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.haltdos-waf-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # Haltdos WAF Community Edition — operator-editable variables
+      # Edit BEFORE first boot (or re-run /root/haltdos-waf-bootstrap.sh after edits)
+
+      # Your public FQDN pointing at this server.
+      # Used for Certbot TLS on the WAF proxy domain.
+      # The management console always uses its own self-signed cert on port 9000.
+      APP_DOMAIN=CHANGE_ME
+
+      # Let's Encrypt registration email (used only if ENABLE_TLS=true)
+      LE_EMAIL=CHANGE_ME
+
+      # Set true to request a Let's Encrypt cert for APP_DOMAIN.
+      # Non-fatal if DNS is not yet pointed at this server.
+      ENABLE_TLS=true
+
+      # Initial admin password used during the first Haltdos license registration.
+      # Left CHANGE_ME -> a random 24-char password is generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+  # ---------- fail2ban jail for SSH ----------
+  - path: /etc/fail2ban/jail.d/haltdos-sshd.conf
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      port     = ssh
+      filter   = sshd
+      maxretry = 5
+      bantime  = 3600
+      findtime = 600
+
+  # ---------- unattended-upgrades security-only config ----------
+  - path: /etc/apt/apt.conf.d/50unattended-upgrades-haltdos
+    permissions: '0644'
+    owner: root:root
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::Remove-Unused-Packages "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+
+  # ---------- enable daily unattended-upgrade runs ----------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades-haltdos
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # ---------- bootstrap script ----------
+  - path: /root/haltdos-waf-bootstrap.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/haltdos-waf-bootstrap.log) 2>&1
+      source /root/.haltdos-waf-bootstrap.env
+
+      # SIGPIPE-safe random secret generator (required under set -e + pipefail)
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      echo "=== Haltdos WAF Community Edition bootstrap starting at $(date) ==="
+
+      # -----------------------------------------------------------------------
+      # 1. Fill CHANGE_ME defaults
+      # -----------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "INFO: Generated random ADMIN_PASS — saved to /root/haltdos-waf-credentials.txt"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 2. System prerequisites (idempotent)
+      # -----------------------------------------------------------------------
+      echo "--- Refreshing package lists and installing prerequisites ---"
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -y --no-install-recommends \
+        curl wget gnupg gnupg2 ca-certificates \
+        apt-transport-https lsb-release software-properties-common \
+        ufw fail2ban unattended-upgrades certbot net-tools htop jq
+
+      # -----------------------------------------------------------------------
+      # 3. Add Haltdos apt repository
+      #    Repo  : https://repo.haltdos.com/apt/
+      #    Pkgs  : hd-community-waf, hd-community-controller
+      #    Services after install: controller, offloader
+      #
+      #    The vendor setup.sh at binary.haltdos.com writes the sources list
+      #    automatically. We replicate that logic here for auditability.
+      # -----------------------------------------------------------------------
+      echo "--- Adding Haltdos apt repository ---"
+
+      KEYRING=/usr/share/keyrings/haltdos.gpg
+      REPO_LIST=/etc/apt/sources.list.d/haltdos.list
+      REPO_BASE="https://repo.haltdos.com/apt/"
+
+      # Detect release codename; fall back to noble if 26.04 line not yet published
+      # fallback: noble repo until 26.04 published
+      CODENAME="$(lsb_release -cs 2>/dev/null || echo noble)"
+      if ! curl -fsSL --head "${REPO_BASE}dists/${CODENAME}/" >/dev/null 2>&1; then
+        echo "WARN: No Haltdos repo line for '${CODENAME}'; falling back to 'noble'."
+        CODENAME="noble"
+      fi
+
+      # Fetch and dearmor the Haltdos signing key
+      if [ ! -f "${KEYRING}" ]; then
+        curl -fsSL "${REPO_BASE}gpg.key" 2>/dev/null \
+          | gpg --dearmor > "${KEYRING}" || \
+        curl -fsSL "https://binary.haltdos.com/community/waf/gpg.key" 2>/dev/null \
+          | gpg --dearmor > "${KEYRING}" || \
+        {
+          echo "WARN: Could not fetch Haltdos GPG key; adding repo without signed-by."
+          rm -f "${KEYRING}"
+        }
+      fi
+
+      if [ -f "${KEYRING}" ]; then
+        printf 'deb [signed-by=%s] %s %s main\n' \
+          "${KEYRING}" "${REPO_BASE}" "${CODENAME}" \
+          | tee "${REPO_LIST}" > /dev/null
+      else
+        printf 'deb [trusted=yes] %s %s main\n' \
+          "${REPO_BASE}" "${CODENAME}" \
+          | tee "${REPO_LIST}" > /dev/null
+      fi
+
+      apt-get update -qq
+
+      # -----------------------------------------------------------------------
+      # 4. Install Haltdos WAF packages
+      #    Primary path: apt install from repo above.
+      #    Fallback    : vendor setup.sh (handles codename resolution itself).
+      # -----------------------------------------------------------------------
+      echo "--- Installing Haltdos WAF Community Edition ---"
+      if apt-cache show hd-community-waf >/dev/null 2>&1; then
+        apt-get install -y hd-community-waf hd-community-controller
+      else
+        echo "INFO: hd-community-waf not found in apt cache; falling back to vendor setup.sh"
+        rm -f "${REPO_LIST}"
+        curl -fsSL -o /tmp/haltdos-setup.sh \
+          "https://binary.haltdos.com/community/waf/setup.sh"
+        chmod +x /tmp/haltdos-setup.sh
+        bash /tmp/haltdos-setup.sh
+      fi
+
+      # -----------------------------------------------------------------------
+      # 5. Enable and start Haltdos services
+      # -----------------------------------------------------------------------
+      echo "--- Ensuring Haltdos services are enabled and running ---"
+      systemctl daemon-reload
+
+      for SVC in controller offloader hd-community-controller hd-community-waf; do
+        if systemctl list-unit-files "${SVC}.service" 2>/dev/null | grep -q "${SVC}"; then
+          systemctl enable "${SVC}" 2>/dev/null || true
+          systemctl start  "${SVC}" 2>/dev/null || true
+          echo "INFO: Service '${SVC}' enabled and started."
+        fi
+      done
+
+      # -----------------------------------------------------------------------
+      # 6. Firewall (UFW)
+      #    22/tcp   — SSH
+      #    80/tcp   — Haltdos WAF HTTP listener (client traffic)
+      #    443/tcp  — Haltdos WAF HTTPS listener (client traffic)
+      #    9000/tcp — Haltdos management console
+      # -----------------------------------------------------------------------
+      echo "--- Configuring UFW firewall ---"
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+
+      ufw allow 22/tcp   comment 'SSH'
+      ufw allow 80/tcp   comment 'Haltdos WAF HTTP'
+      ufw allow 443/tcp  comment 'Haltdos WAF HTTPS'
+      ufw allow 9000/tcp comment 'Haltdos management console'
+
+      ufw --force enable
+      ufw status verbose
+
+      # -----------------------------------------------------------------------
+      # 7. fail2ban + unattended-upgrades
+      #    Config files already written by write_files above.
+      # -----------------------------------------------------------------------
+      echo "--- Enabling fail2ban and unattended-upgrades ---"
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+
+      systemctl enable unattended-upgrades
+      systemctl restart unattended-upgrades
+
+      # -----------------------------------------------------------------------
+      # 8. Optional Certbot TLS for the public WAF proxy domain
+      #    The management console on :9000 keeps its own self-signed cert.
+      #    Non-fatal if DNS is not yet pointed at this server.
+      # -----------------------------------------------------------------------
+      CERT_PATH="(not provisioned)"
+      KEY_PATH="(not provisioned)"
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "CHANGE_ME" ] && \
+         [ "${LE_EMAIL}" != "CHANGE_ME" ]; then
+
+        echo "--- Requesting Let's Encrypt certificate for ${APP_DOMAIN} ---"
+        # Standalone mode: certbot briefly binds port 80.
+        # Pause WAF HTTP listener so port 80 is free.
+        systemctl stop hd-community-waf 2>/dev/null || \
+          systemctl stop controller      2>/dev/null || true
+
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not yet resolved or rate-limited"
+
+        systemctl start hd-community-waf 2>/dev/null || \
+          systemctl start controller     2>/dev/null || true
+
+        if [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ]; then
+          CERT_PATH="/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem"
+          KEY_PATH="/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem"
+          echo "INFO: Certificate issued. Import paths into Haltdos WAF console -> SSL settings."
+        fi
+      else
+        echo "INFO: TLS provisioning skipped (ENABLE_TLS=${ENABLE_TLS}, domain=${APP_DOMAIN})"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 9. Write credentials / access summary
+      # -----------------------------------------------------------------------
+      SERVER_IP="$(hostname -I | awk '{print $1}')"
+
+      cat > /root/haltdos-waf-credentials.txt << CREDS
+      ============================================================
+      Haltdos WAF Community Edition -- Deployment Summary
+      Generated: $(date)
+      ============================================================
+
+      Management Console (HTTPS with self-signed cert):
+        URL      : https://${SERVER_IP}:9000
+        Note     : Your browser will warn about the self-signed cert -- accept it.
+        First use: Complete the license registration + email OTP in the browser.
+                   Use ADMIN_PASS below as your initial password during signup.
+
+      Admin Password (used during license registration):
+        ADMIN_PASS: ${ADMIN_PASS}
+
+      Public WAF Proxy Domain:
+        APP_DOMAIN : ${APP_DOMAIN}
+        HTTP proxy : http://${APP_DOMAIN}
+        HTTPS proxy: https://${APP_DOMAIN}
+
+      TLS Certificate (Let's Encrypt):
+        Cert : ${CERT_PATH}
+        Key  : ${KEY_PATH}
+        Note : Import these paths into Haltdos WAF console -> SSL settings.
+               Auto-renew runs via the certbot systemd timer.
+
+      Firewall rules (UFW):
+        22/tcp   -- SSH
+        80/tcp   -- Haltdos WAF HTTP proxy (client traffic)
+        443/tcp  -- Haltdos WAF HTTPS proxy (client traffic)
+        9000/tcp -- Haltdos management console
+
+      Service management:
+        systemctl status  controller offloader
+        systemctl restart controller offloader
+        journalctl -u controller -f
+        journalctl -u offloader  -f
+
+      Bootstrap log : /var/log/haltdos-waf-bootstrap.log
+      Env file      : /root/.haltdos-waf-bootstrap.env
+
+      Haltdos Docs  : https://docs.haltdos.com/community/
+      Support email : support@haltdos.com
+      ============================================================
+      CREDS
+      chmod 600 /root/haltdos-waf-credentials.txt
+
+      echo "=== Haltdos WAF CE bootstrap COMPLETE at $(date) ==="
+      echo "=== Management console : https://${SERVER_IP}:9000 ==="
+      echo "=== Credentials summary: /root/haltdos-waf-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once at first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/haltdos-waf-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init log
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  Haltdos WAF Community Edition bootstrap complete.
+  Management console : https://<SERVER_IP>:9000  (self-signed cert)
+  First use          : Complete license registration + email OTP in browser.
+  Full credentials   : /root/haltdos-waf-credentials.txt
+  Log                : /var/log/haltdos-waf-bootstrap.log
+  ============================================================

@@ -1,0 +1,433 @@
+#cloud-config
+# =============================================================================
+# SigNoz "one-click app" — Ubuntu 26.04 cloud-init user-data
+# Stack: SigNoz OSS (Docker Compose, official install script)
+#        SigNoz UI on port 3301 (HTTP); optional Nginx reverse-proxy + TLS
+#        UFW firewall + fail2ban + swap + unattended-upgrades
+# -----------------------------------------------------------------------------
+# SigNoz components:
+#   - Frontend/UI          : port 3301
+#   - OpenTelemetry (OTLP) : ports 4317 (gRPC), 4318 (HTTP)
+#   - ClickHouse           : internal only
+#   - Query-service        : internal only
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.signoz-bootstrap.env
+# before launching, OR pass them via your provisioner.
+# ADMIN_PASS is generated randomly per-boot if left as CHANGE_ME.
+# =============================================================================
+
+hostname: signoz
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer's SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Packages (Docker, Nginx, Certbot, hardening; SigNoz itself runs in Docker)
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - apt-transport-https
+  - gnupg
+  - ca-certificates
+  - curl
+  - wget
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - htop
+  - jq
+  - git
+  - python3
+  - software-properties-common
+  - lsb-release
+
+# ----------------------------------------------------------------------------
+# Swap (ClickHouse is memory-hungry during initial index build)
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Config files and bootstrap script
+# ----------------------------------------------------------------------------
+write_files:
+
+  # --- operator-editable env block -------------------------------------------
+  - path: /root/.signoz-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ----- EDIT THESE BEFORE FIRST BOOT (leave passwords as CHANGE_ME for random) -----
+
+      # SigNoz admin email and password for the initial account
+      ADMIN_EMAIL="admin@example.com"
+      ADMIN_PASS="CHANGE_ME"
+
+      # Optional: domain name for Nginx reverse-proxy + TLS
+      # Leave empty to access SigNoz directly on port 3301
+      APP_DOMAIN=""
+
+      # Let's Encrypt email (used only when APP_DOMAIN is set)
+      LE_EMAIL="admin@example.com"
+
+      # Enable TLS via Certbot (only takes effect when APP_DOMAIN is also set)
+      ENABLE_TLS="true"
+
+      # SigNoz UI port (default 3301; opened in UFW automatically)
+      SIGNOZ_PORT="3301"
+
+      # OpenTelemetry OTLP ports to expose (set to "true" to open in UFW)
+      EXPOSE_OTLP="false"
+      OTLP_GRPC_PORT="4317"
+      OTLP_HTTP_PORT="4318"
+
+      # SigNoz install directory
+      SIGNOZ_DIR="/opt/signoz"
+
+      # Docker Compose version of SigNoz to install ("latest" or a tag like "0.45.0")
+      SIGNOZ_VERSION="latest"
+
+  # --- fail2ban — protect SSH and Nginx --------------------------------------
+  - path: /etc/fail2ban/jail.d/signoz.local
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [sshd]
+      enabled  = true
+      maxretry = 4
+      bantime  = 3600
+
+      [nginx-http-auth]
+      enabled  = true
+      maxretry = 5
+      bantime  = 3600
+
+  # --- unattended-upgrades security config -----------------------------------
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    owner: root:root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  # --- systemd service to keep SigNoz Docker Compose running ----------------
+  - path: /etc/systemd/system/signoz.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=SigNoz Observability Platform (Docker Compose)
+      Documentation=https://signoz.io/docs/
+      After=docker.service network-online.target
+      Requires=docker.service
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/signoz/deploy
+      ExecStart=/usr/bin/docker compose -f docker/clickhouse-setup/docker-compose.yaml up -d --remove-orphans
+      ExecStop=/usr/bin/docker compose -f docker/clickhouse-setup/docker-compose.yaml down
+      ExecReload=/usr/bin/docker compose -f docker/clickhouse-setup/docker-compose.yaml pull
+      StandardOutput=journal
+      StandardError=journal
+      TimeoutStartSec=300
+      TimeoutStopSec=120
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --- main bootstrap script -------------------------------------------------
+  - path: /root/signoz-bootstrap.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/signoz-bootstrap.log) 2>&1
+      source /root/.signoz-bootstrap.env
+
+      echo "=== SigNoz bootstrap started: $(date) ==="
+
+      # SIGPIPE-safe random password generator
+      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Generate password if left as CHANGE_ME
+      [ "${ADMIN_PASS}" = "CHANGE_ME" ] && ADMIN_PASS="$(rand)"
+
+      # -----------------------------------------------------------------------
+      # 1. Install Docker Engine (official Docker apt repo)
+      #    fallback: noble repo until 26.04 published
+      # -----------------------------------------------------------------------
+      if ! command -v docker &>/dev/null; then
+        echo "Installing Docker Engine..."
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+          | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+
+        # fallback: noble repo until 26.04 published
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+          https://download.docker.com/linux/ubuntu noble stable" \
+          > /etc/apt/sources.list.d/docker.list
+
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          docker-ce docker-ce-cli containerd.io \
+          docker-buildx-plugin docker-compose-plugin
+      else
+        echo "Docker already installed: $(docker --version)"
+      fi
+
+      systemctl enable --now docker
+
+      # -----------------------------------------------------------------------
+      # 2. Clone / update SigNoz repo into SIGNOZ_DIR
+      # -----------------------------------------------------------------------
+      mkdir -p "${SIGNOZ_DIR}"
+
+      if [ ! -d "${SIGNOZ_DIR}/.git" ]; then
+        echo "Cloning SigNoz repository..."
+        if [ "${SIGNOZ_VERSION}" = "latest" ]; then
+          git clone --depth=1 https://github.com/SigNoz/signoz.git "${SIGNOZ_DIR}"
+        else
+          git clone --depth=1 --branch "v${SIGNOZ_VERSION}" \
+            https://github.com/SigNoz/signoz.git "${SIGNOZ_DIR}"
+        fi
+      else
+        echo "SigNoz repo already present at ${SIGNOZ_DIR}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 3. Configure SigNoz — patch the Compose file to expose the UI port
+      #    on all interfaces (default in the repo already uses 3301:3301)
+      # -----------------------------------------------------------------------
+      COMPOSE_FILE="${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml"
+
+      # Confirm the compose file is present
+      if [ ! -f "${COMPOSE_FILE}" ]; then
+        echo "ERROR: Compose file not found at ${COMPOSE_FILE}"
+        echo "       Repository layout may have changed; inspect ${SIGNOZ_DIR}/deploy/"
+        ls "${SIGNOZ_DIR}/deploy/" || true
+        exit 1
+      fi
+
+      # If the operator chose a non-default UI port, patch it
+      if [ "${SIGNOZ_PORT}" != "3301" ]; then
+        sed -i "s|3301:3301|${SIGNOZ_PORT}:3301|g" "${COMPOSE_FILE}"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 4. Pull images and start SigNoz via Docker Compose
+      # -----------------------------------------------------------------------
+      echo "Pulling SigNoz Docker images (this may take several minutes)..."
+      docker compose -f "${COMPOSE_FILE}" pull --quiet
+
+      echo "Starting SigNoz..."
+      docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans
+
+      # -----------------------------------------------------------------------
+      # 5. Enable systemd service for auto-restart on reboot
+      # -----------------------------------------------------------------------
+      # Update the WorkingDirectory in the unit to match the resolved path
+      sed -i "s|WorkingDirectory=/opt/signoz/deploy|WorkingDirectory=${SIGNOZ_DIR}/deploy|" \
+        /etc/systemd/system/signoz.service
+      COMPOSE_REL="docker/clickhouse-setup/docker-compose.yaml"
+      sed -i "s|docker/clickhouse-setup/docker-compose.yaml|${COMPOSE_REL}|g" \
+        /etc/systemd/system/signoz.service
+      systemctl daemon-reload
+      systemctl enable signoz
+
+      # -----------------------------------------------------------------------
+      # 6. Wait for SigNoz UI to become reachable (up to 5 minutes)
+      # -----------------------------------------------------------------------
+      echo "Waiting for SigNoz UI on port ${SIGNOZ_PORT}..."
+      SIGNOZ_READY=0
+      for i in $(seq 1 30); do
+        if curl -s --max-time 5 "http://127.0.0.1:${SIGNOZ_PORT}" \
+             -o /dev/null -w "%{http_code}" 2>/dev/null | grep -qE "^(200|301|302|401|403)"; then
+          SIGNOZ_READY=1
+          break
+        fi
+        echo "  attempt ${i}/30 (waiting 10 s)..."
+        sleep 10
+      done
+
+      if [ "${SIGNOZ_READY}" -eq 0 ]; then
+        echo "WARN: SigNoz UI not responding after 5 min — check: docker compose logs"
+        echo "      The service may still be starting; ClickHouse takes time on first boot."
+      else
+        echo "SigNoz UI is reachable."
+      fi
+
+      # -----------------------------------------------------------------------
+      # 7. Create the initial admin account via SigNoz REST API
+      # -----------------------------------------------------------------------
+      echo "Registering SigNoz admin account..."
+      INVITE_RESP=""
+      # SigNoz ≥0.38 exposes /api/v1/register for initial admin setup
+      REGISTER_PAYLOAD=$(cat <<JSON
+      {
+        "name": "Admin",
+        "orgName": "InterServer",
+        "email": "${ADMIN_EMAIL}",
+        "password": "${ADMIN_PASS}"
+      }
+      JSON
+      )
+      REGISTER_RESP=$(curl -s --max-time 15 \
+        -X POST "http://127.0.0.1:${SIGNOZ_PORT}/api/v1/register" \
+        -H "Content-Type: application/json" \
+        -d "${REGISTER_PAYLOAD}" 2>/dev/null || true)
+
+      if echo "${REGISTER_RESP}" | grep -qi '"id"'; then
+        echo "Admin account created successfully."
+      else
+        echo "WARN: Admin registration response: ${REGISTER_RESP}"
+        echo "      You may need to complete setup at http://<SERVER_IP>:${SIGNOZ_PORT}/signup"
+      fi
+
+      # -----------------------------------------------------------------------
+      # 8. Firewall — UFW
+      # -----------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow OpenSSH
+      ufw allow "${SIGNOZ_PORT}/tcp"
+
+      if [ -n "${APP_DOMAIN}" ]; then
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+      fi
+
+      # OpenTelemetry ports (optional — only open if EXPOSE_OTLP=true)
+      if [ "${EXPOSE_OTLP}" = "true" ]; then
+        ufw allow "${OTLP_GRPC_PORT}/tcp"
+        ufw allow "${OTLP_HTTP_PORT}/tcp"
+      fi
+
+      ufw --force enable
+
+      # -----------------------------------------------------------------------
+      # 9. Nginx reverse-proxy (only when APP_DOMAIN is set)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        cat > /etc/nginx/sites-available/signoz <<NGINXCONF
+      server {
+          listen 80;
+          server_name ${APP_DOMAIN};
+
+          # Certbot will inject a TLS server block below this one
+
+          # Increase timeouts for long-running query responses
+          proxy_read_timeout    120s;
+          proxy_connect_timeout 30s;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${SIGNOZ_PORT};
+              proxy_set_header   Host              \$host;
+              proxy_set_header   X-Real-IP         \$remote_addr;
+              proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade           \$http_upgrade;
+              proxy_set_header   Connection        "upgrade";
+          }
+      }
+      NGINXCONF
+
+        ln -sf /etc/nginx/sites-available/signoz /etc/nginx/sites-enabled/signoz
+        rm -f /etc/nginx/sites-enabled/default
+        nginx -t && systemctl enable --now nginx && systemctl reload nginx
+
+        # 9a. TLS via Certbot
+        if [ "${ENABLE_TLS}" = "true" ]; then
+          certbot --nginx \
+            --non-interactive \
+            --agree-tos \
+            --email "${LE_EMAIL}" \
+            --redirect \
+            -d "${APP_DOMAIN}" \
+          || echo "WARN: certbot deferred — DNS not pointed yet; re-run after DNS propagates"
+        fi
+      else
+        # No domain configured — disable Nginx; SigNoz reachable directly on its port
+        systemctl disable --now nginx 2>/dev/null || true
+      fi
+
+      # -----------------------------------------------------------------------
+      # 10. fail2ban
+      # -----------------------------------------------------------------------
+      systemctl enable --now fail2ban
+
+      # -----------------------------------------------------------------------
+      # 11. Write credentials file (chmod 600)
+      # -----------------------------------------------------------------------
+      if [ -n "${APP_DOMAIN}" ]; then
+        PROTO="http"
+        [ "${ENABLE_TLS}" = "true" ] && PROTO="https"
+        ACCESS_URL="${PROTO}://${APP_DOMAIN}/"
+      else
+        ACCESS_URL="http://<SERVER_IP>:${SIGNOZ_PORT}/"
+      fi
+
+      SIGNOZ_VERSION_INSTALLED=$(git -C "${SIGNOZ_DIR}" describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+
+      cat > /root/signoz-credentials.txt <<CREDS
+      ===== SigNoz bootstrap complete: $(date) =====
+
+      URL           : ${ACCESS_URL}
+      Direct UI     : http://<SERVER_IP>:${SIGNOZ_PORT}/   (always available)
+
+      Admin account
+        Email       : ${ADMIN_EMAIL}
+        Password    : ${ADMIN_PASS}
+
+      If the admin account was not auto-created, visit:
+        http://<SERVER_IP>:${SIGNOZ_PORT}/signup
+
+      OpenTelemetry OTLP endpoints (from your instrumented services):
+        gRPC        : <SERVER_IP>:${OTLP_GRPC_PORT}   (EXPOSE_OTLP=${EXPOSE_OTLP})
+        HTTP        : <SERVER_IP>:${OTLP_HTTP_PORT}  (EXPOSE_OTLP=${EXPOSE_OTLP})
+
+      SigNoz version installed : ${SIGNOZ_VERSION_INSTALLED}
+      Install directory        : ${SIGNOZ_DIR}
+      Docker Compose file      : ${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml
+      Bootstrap log            : /var/log/signoz-bootstrap.log
+
+      Service management:
+        systemctl status  signoz
+        systemctl restart signoz
+        docker compose -f ${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml ps
+        docker compose -f ${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml logs -f
+
+      Upgrade:
+        cd ${SIGNOZ_DIR} && git pull
+        docker compose -f deploy/docker/clickhouse-setup/docker-compose.yaml pull
+        systemctl restart signoz
+      CREDS
+      chmod 600 /root/signoz-credentials.txt
+
+      echo "=== SigNoz bootstrap finished. Credentials in /root/signoz-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run the bootstrap once write_files have been laid down
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/signoz-bootstrap.sh" ]
+
+final_message: "SigNoz bootstrap done after $UPTIME s. See /root/signoz-credentials.txt and /var/log/signoz-bootstrap.log"

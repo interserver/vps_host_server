@@ -1,0 +1,313 @@
+#cloud-config
+# =============================================================================
+# 3CX Phone System — Debian 12 (Bookworm) cloud-init user-data
+# Stack: 3CX PBX from official vendor repo (BYOL — Bring Your Own License)
+#        UFW firewall + fail2ban + unattended-upgrades
+# -----------------------------------------------------------------------------
+# EDIT the variables in write_files -> /root/.3cx-bootstrap.env
+# before launching, OR pass them in via your provisioner.
+# A license key is NOT included — activate via the 3CX web wizard after boot.
+# =============================================================================
+
+hostname: 3cx-pbx
+manage_etc_hosts: true
+timezone: UTC
+
+# ----------------------------------------------------------------------------
+# Users — keep 'default' so the provisioner can inject the customer SSH key
+# ----------------------------------------------------------------------------
+users:
+  - default
+
+# ----------------------------------------------------------------------------
+# Swap — prevents OOM during 3CX startup on small instances
+# ----------------------------------------------------------------------------
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2G
+
+# ----------------------------------------------------------------------------
+# Packages — base tools; 3CX itself is installed from its vendor repo
+# ----------------------------------------------------------------------------
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - gnupg
+  - gnupg2
+  - apt-transport-https
+  - ca-certificates
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - net-tools
+  - openssl
+  - sudo
+  - psmisc
+  - acl
+  - locales
+
+# ----------------------------------------------------------------------------
+# Files
+# ----------------------------------------------------------------------------
+write_files:
+  # ---------- operator-editable environment variables ----------
+  - path: /root/.3cx-bootstrap.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      # ============================================================
+      # 3CX Bootstrap — edit BEFORE first boot or before re-running
+      # ============================================================
+
+      # Fully-qualified domain name for the 3CX management console
+      # (must resolve to this server's public IP for TLS to work)
+      APP_DOMAIN=pbx.example.com
+
+      # E-mail address for Let's Encrypt certificate registration
+      LE_EMAIL=admin@example.com
+
+      # Set to "true" to attempt Certbot TLS on first boot.
+      # If APP_DOMAIN does not yet resolve, cert issuance is deferred
+      # gracefully — you can re-run: certbot --nginx -d "$APP_DOMAIN"
+      ENABLE_TLS=true
+
+      # Admin password for the 3CX initial setup wizard.
+      # Leave as CHANGE_ME to have a random password generated at boot.
+      ADMIN_PASS=CHANGE_ME
+
+  # ---------- bootstrap script ----------
+  - path: /root/3cx-bootstrap.sh
+    permissions: '0750'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/3cx-bootstrap.log) 2>&1
+      source /root/.3cx-bootstrap.env
+
+      # ------------------------------------------------------------------
+      # Helper: generate a random 24-char alphanumeric string
+      # The '|| true' is required — head closes the pipe before urandom
+      # is exhausted, which raises SIGPIPE; under set -e + pipefail this
+      # would abort the script without it.
+      # ------------------------------------------------------------------
+      rand() {
+        LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true
+      }
+
+      echo "=== 3CX Bootstrap started at $(date -u) ==="
+
+      # ------------------------------------------------------------------
+      # 1. Generate secrets when operator left placeholders
+      # ------------------------------------------------------------------
+      if [ "${ADMIN_PASS}" = "CHANGE_ME" ]; then
+        ADMIN_PASS="$(rand)"
+        echo "Generated ADMIN_PASS (stored in credentials file)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 2. System locale (3CX installer requires en_US.UTF-8)
+      # ------------------------------------------------------------------
+      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
+        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+      fi
+      export LANG=en_US.UTF-8
+      export LC_ALL=en_US.UTF-8
+
+      # ------------------------------------------------------------------
+      # 3. Configure automatic security updates (unattended-upgrades)
+      # ------------------------------------------------------------------
+      cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUTOEOF'
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+      AUTOEOF
+
+      # ------------------------------------------------------------------
+      # 4. Firewall — UFW
+      #    3CX ports:
+      #      5060  TCP/UDP  SIP signalling
+      #      5061  TCP      SIP TLS
+      #      9000-10999 UDP  RTP media streams
+      #      5090  TCP/UDP  Tunnel (3CX tunnel protocol)
+      #      443   TCP      HTTPS management + WebRTC
+      #      80    TCP      HTTP (ACME challenge / redirect)
+      # ------------------------------------------------------------------
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow ssh
+      ufw allow 80/tcp
+      ufw allow 443/tcp
+      ufw allow 5060/tcp
+      ufw allow 5060/udp
+      ufw allow 5061/tcp
+      ufw allow 5090/tcp
+      ufw allow 5090/udp
+      ufw allow 9000:10999/udp
+      ufw --force enable
+      echo "UFW rules applied."
+
+      # ------------------------------------------------------------------
+      # 5. fail2ban — basic SSH protection
+      # ------------------------------------------------------------------
+      cat > /etc/fail2ban/jail.local <<'F2BEOF'
+      [DEFAULT]
+      bantime  = 3600
+      findtime = 600
+      maxretry = 5
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      F2BEOF
+      systemctl enable fail2ban
+      systemctl restart fail2ban
+      echo "fail2ban configured."
+
+      # ------------------------------------------------------------------
+      # 6. Add 3CX official Debian repository and install 3CX
+      #    Source: https://www.3cx.com/blog/voip-howto/debian-pbx/
+      # ------------------------------------------------------------------
+      echo "Adding 3CX repository..."
+
+      # Fetch and store the 3CX GPG key
+      mkdir -p /usr/share/keyrings
+      if [ ! -f /usr/share/keyrings/3cx-archive-keyring.gpg ]; then
+        wget -qO- "https://repo.3cx.com/key.gpg" \
+          | gpg --dearmor \
+          > /usr/share/keyrings/3cx-archive-keyring.gpg
+      fi
+
+      # Add the repo (pinned to Debian Bookworm arm)
+      cat > /etc/apt/sources.list.d/3cx.list <<'SRCEOF'
+      deb [signed-by=/usr/share/keyrings/3cx-archive-keyring.gpg] https://repo.3cx.com/3cx bookworm main
+      SRCEOF
+
+      # Suppress interactive prompts during package install
+      export DEBIAN_FRONTEND=noninteractive
+
+      apt-get update -y
+
+      # Pre-seed debconf so the 3CX installer runs non-interactively.
+      # The installer will still require a license key to be entered
+      # through the web wizard on first login — this just avoids tty prompts.
+      echo "3cx/accepted-eula boolean true"       | debconf-set-selections
+      echo "3cx/install-nginx boolean true"        | debconf-set-selections
+
+      echo "Installing 3CX package (this may take several minutes)..."
+      apt-get install -y 3cxpbx
+
+      echo "3CX package installed."
+
+      # ------------------------------------------------------------------
+      # 7. Optional TLS with Certbot (nginx plugin)
+      #    3CX bundles its own nginx; certbot --nginx targets that config.
+      #    We install certbot standalone and only issue a cert; 3CX manages
+      #    its own nginx vhost — place cert paths in the 3CX wizard later.
+      # ------------------------------------------------------------------
+      if ! command -v certbot >/dev/null 2>&1; then
+        apt-get install -y certbot
+      fi
+
+      if [ "${ENABLE_TLS}" = "true" ] && \
+         [ "${APP_DOMAIN}" != "pbx.example.com" ] && \
+         [ -n "${APP_DOMAIN}" ]; then
+
+        echo "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
+        certbot certonly \
+          --standalone \
+          --non-interactive \
+          --agree-tos \
+          --email "${LE_EMAIL}" \
+          -d "${APP_DOMAIN}" \
+          --pre-hook  "ufw allow 80/tcp || true" \
+          --post-hook "ufw delete allow 80/tcp || true" \
+          || echo "WARN: certbot deferred — DNS not yet pointed to this server."
+
+        CERT_DIR="/etc/letsencrypt/live/${APP_DOMAIN}"
+        echo "Certificate path (if issued): ${CERT_DIR}"
+      else
+        echo "TLS deferred: APP_DOMAIN is placeholder or ENABLE_TLS!=true"
+        CERT_DIR="(not yet issued)"
+      fi
+
+      # ------------------------------------------------------------------
+      # 8. Write credentials file (chmod 600)
+      # ------------------------------------------------------------------
+      MGMT_PROTO="http"
+      MGMT_PORT="5015"
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN}" != "pbx.example.com" ]; then
+        MGMT_PROTO="https"
+        MGMT_PORT="443"
+      fi
+
+      cat > /root/3cx-credentials.txt <<CREDSEOF
+      ============================================================
+      3CX Phone System — Deployment Credentials
+      Generated: $(date -u)
+      ============================================================
+
+      Management Console URL : ${MGMT_PROTO}://${APP_DOMAIN}:${MGMT_PORT}
+      Fallback URL (IP-based): http://$(hostname -I | awk '{print $1}'):5015
+
+      Admin Web Wizard Pass  : ${ADMIN_PASS}
+
+      NOTE: 3CX requires a valid license key to complete setup.
+      Open the Management Console URL above, complete the Setup Wizard,
+      and enter your license key when prompted.
+      Obtain a free STARTUP license or purchase at: https://www.3cx.com/
+
+      TLS Certificate path   : ${CERT_DIR}
+      Let's Encrypt e-mail   : ${LE_EMAIL}
+
+      Firewall (UFW) open ports:
+        22    TCP        SSH
+        80    TCP        HTTP (ACME / redirect)
+        443   TCP        HTTPS management + WebRTC
+        5060  TCP/UDP    SIP signalling
+        5061  TCP        SIP TLS
+        5090  TCP/UDP    3CX Tunnel
+        9000-10999 UDP   RTP media
+
+      Activation steps:
+        1. Point ${APP_DOMAIN} to this server's public IP.
+        2. Open the Management Console URL.
+        3. Complete the 3CX Setup Wizard.
+        4. Enter your license key when prompted.
+        5. If TLS was deferred, run:
+             certbot certonly --standalone -d ${APP_DOMAIN} --email ${LE_EMAIL}
+           then configure the certificate paths in the 3CX console under
+           Settings -> Network -> SSL certificate.
+
+      Log file: /var/log/3cx-bootstrap.log
+      ============================================================
+      CREDSEOF
+      chmod 600 /root/3cx-credentials.txt
+
+      echo "=== 3CX Bootstrap completed at $(date -u) ==="
+      echo "=== Credentials saved to /root/3cx-credentials.txt ==="
+
+# ----------------------------------------------------------------------------
+# Run bootstrap once on first boot
+# ----------------------------------------------------------------------------
+runcmd:
+  - [ bash, -lc, "/root/3cx-bootstrap.sh" ]
+
+# ----------------------------------------------------------------------------
+# Final message shown in cloud-init output
+# ----------------------------------------------------------------------------
+final_message: |
+  ============================================================
+  3CX Phone System bootstrap complete.
+  - Credentials: /root/3cx-credentials.txt
+  - Log:         /var/log/3cx-bootstrap.log
+  - Open the Management Console and complete the Setup Wizard.
+  - A valid 3CX license key is required to activate the system.
+  ============================================================
