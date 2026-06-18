@@ -33,7 +33,6 @@
       "base_image": "",
       "services": [
         "antmedia",
-        "ant-media-server",
         "nginx"
       ],
       "ports": [

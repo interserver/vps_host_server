@@ -85,6 +85,14 @@ write_files:
       #!/usr/bin/env bash
       set -euo pipefail
       exec > >(tee -a /var/log/fastpanel-bootstrap.log) 2>&1
+      # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
+      #     makes postfix@-.service fail every boot); guarded no-op otherwise ---
+      if command -v dpkg >/dev/null 2>&1 && dpkg -s postfix >/dev/null 2>&1 && [ ! -f /etc/postfix/postfix-files ]; then
+        echo "Repairing corrupted postfix (restoring /etc/postfix/postfix-files)..."
+        DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y postfix || true
+        systemctl reset-failed 'postfix@-.service' 2>/dev/null || true
+        systemctl restart 'postfix@-.service' 2>/dev/null || systemctl restart postfix 2>/dev/null || true
+      fi
       source /root/.fastpanel-bootstrap.env
 
       # ----------------------------------------------------------------
