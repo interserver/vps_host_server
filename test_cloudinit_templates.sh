@@ -239,7 +239,28 @@ for slug in "${TEMPLATES[@]}"; do
     done
     if [ "$ssh_up" != "1" ]; then
       err "[$slug] guest never became SSH-reachable within ${BOOT_TIMEOUT}s"
-      reason="ssh not reachable within ${BOOT_TIMEOUT}s"
+      # Host-side diagnostics: we cannot log in, so probe from the hypervisor to
+      # distinguish not-booted / no-network / sshd-down / auth-rejected.
+      pingable="no"; port22="closed/filtered"
+      ping -c2 -W2 "$TEST_IP" >/dev/null 2>&1 && pingable="yes"
+      (timeout 5 bash -c "exec 3<>/dev/tcp/$TEST_IP/22" 2>/dev/null) && port22="OPEN"
+      {
+        echo "===== SSH-timeout host-side diagnostics ====="
+        echo "## virsh dominfo $TEST_VZID";        virsh dominfo "$TEST_VZID" 2>&1
+        echo "## virsh domifaddr (lease)";         virsh domifaddr "$TEST_VZID" 2>&1
+        echo "## virsh domifaddr (arp)";           virsh domifaddr "$TEST_VZID" --source arp 2>&1
+        echo "## ping $TEST_IP -> $pingable";       ping -c2 -W2 "$TEST_IP" 2>&1
+        echo "## tcp/22 -> $port22"
+      } >> "$tlog" 2>&1
+      # one-line interpretation
+      if [ "$port22" = "OPEN" ]; then
+        reason="ssh port 22 OPEN but login failed in ${BOOT_TIMEOUT}s — likely root key/password not injected (auth), not network"
+      elif [ "$pingable" = "yes" ]; then
+        reason="guest pingable but port 22 closed in ${BOOT_TIMEOUT}s — sshd not running (boot/cloud-init/base-image issue)"
+      else
+        reason="guest not pingable in ${BOOT_TIMEOUT}s — no network / did not boot (base-image or network-config issue)"
+      fi
+      warn "[$slug] $reason  (diagnostics in $(basename "$tlog"))"
       ERRORS=$((ERRORS+1)); status="error"
     else
       log "[$slug] SSH up; waiting for cloud-init to reach a terminal state (timeout ${CLOUDINIT_TIMEOUT}s)"
