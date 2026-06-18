@@ -1,11 +1,11 @@
 {
-  "_comment": "Per-template test expectations for test_cloudinit_templates.sh. base_image empty => defaults.base_image. services=systemctl is-active, ports=ss -ltn listening check, files=test -e, http=[{port,path,expect_code|expect_text}], commands=[{cmd,expect_code}]. Values auto-derived from the yaml (best-effort) \u2014 tune as needed.",
+  "_comment": "Per-template test expectations for test_cloudinit_templates.sh. base_image empty => defaults.base_image. services=systemctl is-active, ports=ss -ltn listening check, files=test -e, http=[{port,path,expect_code|expect_text}], commands=[{cmd,expect_code}]. base_image is pulled from the vps_templates DB (template_file). services/ports auto-derived from the yaml (best-effort) \u2014 tune as needed.",
   "defaults": {
-    "base_image": "ubuntu24.qcow2"
+    "base_image": "ubuntu26.qcow2"
   },
   "templates": {
     "3cx-phone-system": {
-      "base_image": "",
+      "base_image": "debian12.qcow2",
       "services": [],
       "ports": [
         443,
@@ -18,7 +18,7 @@
       ]
     },
     "adminbolt": {
-      "base_image": "",
+      "base_image": "ubuntu24.qcow2",
       "services": [
         "bolt"
       ],
@@ -180,7 +180,7 @@
       ]
     },
     "cloudpanel2-debian": {
-      "base_image": "",
+      "base_image": "debian13.qcow2",
       "services": [],
       "ports": [],
       "http": [],
@@ -476,10 +476,18 @@
         3000
       ],
       "http": [
-        { "port": 3000, "path": "/login", "expect_code": 200, "expect_text": "Grafana" }
+        {
+          "port": 3000,
+          "path": "/login",
+          "expect_code": 200,
+          "expect_text": "Grafana"
+        }
       ],
       "commands": [
-        { "cmd": "test -s /root/grafana-credentials.txt", "expect_code": 0 }
+        {
+          "cmd": "test -s /root/grafana-credentials.txt",
+          "expect_code": 0
+        }
       ],
       "files": [
         "/root/grafana-credentials.txt"
@@ -550,7 +558,7 @@
       ]
     },
     "icewarp": {
-      "base_image": "",
+      "base_image": "almalinux9.qcow2",
       "services": [
         "icewarp"
       ],
@@ -661,7 +669,7 @@
       ]
     },
     "keitaro": {
-      "base_image": "",
+      "base_image": "almalinux9.qcow2",
       "services": [],
       "ports": [],
       "http": [],
@@ -887,7 +895,7 @@
       ]
     },
     "n99panel": {
-      "base_image": "",
+      "base_image": "ubuntu24.qcow2",
       "services": [],
       "ports": [],
       "http": [],
@@ -1036,7 +1044,7 @@
       ]
     },
     "openclaw": {
-      "base_image": "",
+      "base_image": "ubuntu24.qcow2",
       "services": [
         "openclaw-gateway"
       ],
@@ -1354,7 +1362,7 @@
       ]
     },
     "swpanel": {
-      "base_image": "",
+      "base_image": "ubuntu24.qcow2",
       "services": [],
       "ports": [],
       "http": [],
@@ -1529,7 +1537,7 @@
       ]
     },
     "wordpress": {
-      "base_image": "",
+      "base_image": "ubuntu24.qcow2",
       "services": [
         "php-fpm",
         "mariadb",

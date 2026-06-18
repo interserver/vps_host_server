@@ -257,11 +257,27 @@ for slug in "${TEMPLATES[@]}"; do
         remote_json="{}"
       else
         echo "$remote_json" > "$RUN_DIR/$slug.checks.json"
+        # ---- print EXACTLY what passed/failed and why, right after the test ----
+        printf '%s' "$remote_json" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+sl=sys.argv[1]
+G=chr(27)+"[1;32m"; R=chr(27)+"[1;31m"; Y=chr(27)+"[1;33m"; D=chr(27)+"[0;90m"; N=chr(27)+"[0m"
+print("  "+D+"cloud-init: "+str(d.get("cloud_init_status"))+"  errors: "+str(d.get("cloud_init_errors"))+N)
+checks=d.get("checks",[])
+fails=[c for c in checks if not c.get("ok") and not c.get("advisory")]
+advs =[c for c in checks if not c.get("ok") and c.get("advisory")]
+oks  =[c for c in checks if c.get("ok")]
+for c in oks:   print("  "+G+"PASS"+N+" "+c["name"]+"  "+D+c.get("detail","")[:90]+N)
+for c in advs:  print("  "+Y+"WARN"+N+" "+c["name"]+"  "+c.get("detail","")[:140]+"  "+D+"(advisory)"+N)
+for c in fails: print("  "+R+"FAIL"+N+" "+c["name"]+"  ::  "+c.get("detail","")[:180])
+print("  ----> "+sl+": "+str(len(oks))+" passed, "+str(len(fails))+" failed, "+str(len(advs))+" advisory")
+' "$slug"
         if printf '%s' "$remote_json" | python3 -c 'import json,sys;d=json.load(sys.stdin);sys.exit(0 if d.get("overall_pass") else 1)' 2>/dev/null; then
           status="pass"; PASS=$((PASS+1)); log "[$slug] PASS"
         else
           status="fail"; FAIL=$((FAIL+1)); warn "[$slug] FAIL (see $slug.checks.json)"
-          reason="$(printf '%s' "$remote_json" | python3 -c 'import json,sys;d=json.load(sys.stdin);print("; ".join(c["name"]+":"+c.get("detail","") for c in d.get("checks",[]) if not c.get("ok")))' 2>/dev/null)"
+          reason="$(printf '%s' "$remote_json" | python3 -c 'import json,sys;d=json.load(sys.stdin);print("; ".join(c["name"]+":"+c.get("detail","") for c in d.get("checks",[]) if not c.get("ok") and not c.get("advisory")))' 2>/dev/null)"
         fi
       fi
     fi

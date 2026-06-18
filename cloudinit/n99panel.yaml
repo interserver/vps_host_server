@@ -1,11 +1,11 @@
 #cloud-config
 # =============================================================================
-# N99panel — Debian 13 'trixie' cloud-init user-data
+# N99panel — Ubuntu 24.04 LTS cloud-init user-data
 # Stack: N99panel (official installer) + Nginx + PHP-FPM + MySQL
 #        UFW firewall + fail2ban + swap + unattended-upgrades + Certbot TLS
 # -----------------------------------------------------------------------------
 # N99panel is a containerised hosting control panel that supports WordPress,
-# WooCommerce, PHP, Laravel, NodeJS, and Python on Debian 12/13.
+# WooCommerce, PHP, Laravel, NodeJS, and Python on Ubuntu/Debian.
 #
 # BEFORE FIRST BOOT — edit /root/.n99panel-bootstrap.env:
 #   N99PANEL_LICENSE  — your N99panel licence key (required; purchase at

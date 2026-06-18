@@ -1,6 +1,6 @@
 #cloud-config
 # =============================================================================
-# SWPanel — Debian 12 'bookworm' cloud-init user-data
+# SWPanel — Ubuntu 24.04 LTS cloud-init user-data
 # Stack: SWPanel Self-Hosted (official installer) + UFW firewall + fail2ban
 #        + swap + unattended-upgrades
 # -----------------------------------------------------------------------------
