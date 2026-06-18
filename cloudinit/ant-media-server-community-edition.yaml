@@ -189,16 +189,16 @@ write_files:
       echo "Downloading: $AMS_ZIP_URL"
       curl -fSL -o /tmp/ams-install/ant-media-server.zip "$AMS_ZIP_URL"
 
-      # The official AMS installer script handles extraction + systemd setup
-      # Download it separately (bundled in the zip as install.sh)
-      unzip -q /tmp/ams-install/ant-media-server.zip -d /tmp/ams-install/ams_extracted
-      INSTALL_SH="$(find /tmp/ams-install/ams_extracted -name 'install.sh' | head -1)"
-      if [ -z "$INSTALL_SH" ]; then
-        echo "install.sh not found in zip — aborting"
-        exit 1
-      fi
-      chmod +x "$INSTALL_SH"
-      bash "$INSTALL_SH" -i /tmp/ams-install/ant-media-server.zip
+      # Install via Ant Media's official installer script. The CE zip is the
+      # server payload only — it does NOT contain install.sh. The installer is
+      # fetched separately and takes the zip via -i (same method the EE template
+      # uses). Ref: https://github.com/ant-media/Scripts
+      echo "--- Installing Ant Media Server CE via official installer ---"
+      curl -fsSL \
+        "https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh" \
+        -o /tmp/ams-install/install_ant-media-server.sh
+      chmod +x /tmp/ams-install/install_ant-media-server.sh
+      bash /tmp/ams-install/install_ant-media-server.sh -i /tmp/ams-install/ant-media-server.zip
 
       # --- enable + start AMS service ----------------------------------------
       echo "--- Enabling ant-media-server service ---"
