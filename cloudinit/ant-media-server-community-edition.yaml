@@ -166,26 +166,28 @@ write_files:
       mkdir -p /tmp/ams-install
       cd /tmp/ams-install
 
+      # Resolve the release metadata from the GitHub API, then read the asset
+      # download URL straight out of it. The CE asset is named with the bare
+      # version (e.g. ant-media-server-community-3.0.3.zip) while the tag is
+      # 'ams-v3.0.3' — guessing the URL from the tag 404s, so parse it instead.
       if [ "$AMS_VERSION" = "latest" ]; then
-        # Resolve latest release tag from GitHub releases API
-        AMS_TAG="$(curl -fsSL \
-          'https://api.github.com/repos/ant-media/Ant-Media-Server/releases/latest' \
-          | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
-        echo "Latest AMS tag: $AMS_TAG"
+        AMS_API='https://api.github.com/repos/ant-media/Ant-Media-Server/releases/latest'
       else
-        AMS_TAG="$AMS_VERSION"
+        AMS_API="https://api.github.com/repos/ant-media/Ant-Media-Server/releases/tags/${AMS_VERSION}"
       fi
-
-      # Build the download URL — community edition zip is released as
-      # ant-media-server-community-<version>.zip on GitHub releases
-      AMS_ZIP_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-community-${AMS_TAG}.zip"
+      AMS_JSON="$(curl -fsSL "$AMS_API")"
+      AMS_TAG="$(printf '%s' "$AMS_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+      echo "AMS release tag: $AMS_TAG"
+      AMS_ZIP_URL="$(printf '%s' "$AMS_JSON" \
+        | grep -o '"browser_download_url": *"[^"]*ant-media-server-community-[^"]*\.zip"' \
+        | head -1 | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')"
+      if [ -z "$AMS_ZIP_URL" ]; then
+        # Fallback: derive the bare version by stripping the 'ams-v' / 'v' prefix.
+        AMS_VER="${AMS_TAG#ams-v}"; AMS_VER="${AMS_VER#v}"
+        AMS_ZIP_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-community-${AMS_VER}.zip"
+      fi
       echo "Downloading: $AMS_ZIP_URL"
-      curl -fsSL -o /tmp/ams-install/ant-media-server.zip "$AMS_ZIP_URL" || {
-        echo "WARN: failed to fetch $AMS_ZIP_URL — trying without 'v' prefix"
-        TAG_STRIPPED="${AMS_TAG#v}"
-        AMS_ZIP_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-community-${TAG_STRIPPED}.zip"
-        curl -fsSL -o /tmp/ams-install/ant-media-server.zip "$AMS_ZIP_URL"
-      }
+      curl -fSL -o /tmp/ams-install/ant-media-server.zip "$AMS_ZIP_URL"
 
       # The official AMS installer script handles extraction + systemd setup
       # Download it separately (bundled in the zip as install.sh)
