@@ -17,10 +17,9 @@ timezone: UTC
 # ----------------------------------------------------------------------------
 users:
   - default
-  - name: antmedia
-    groups: [sudo]
-    shell: /bin/bash
-    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+  # NOTE: do NOT pre-create the 'antmedia' user here — Ant Media's official
+  # installer runs `useradd antmedia` itself and aborts ("user already exists")
+  # if it is created ahead of time. Let the installer own that system user.
 
 # ----------------------------------------------------------------------------
 # Packages (installed before runcmd runs)
