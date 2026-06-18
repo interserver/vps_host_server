@@ -1,0 +1,1561 @@
+{
+  "_comment": "Per-template test expectations for test_cloudinit_templates.sh. base_image empty => defaults.base_image. services=systemctl is-active, ports=ss -ltn listening check, files=test -e, http=[{port,path,expect_code|expect_text}], commands=[{cmd,expect_code}]. Values auto-derived from the yaml (best-effort) \u2014 tune as needed.",
+  "defaults": {
+    "base_image": "ubuntu24.qcow2"
+  },
+  "templates": {
+    "3cx-phone-system": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        443,
+        5015
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/3cx-credentials.txt"
+      ]
+    },
+    "adminbolt": {
+      "base_image": "",
+      "services": [
+        "bolt"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/adminbolt-credentials.txt"
+      ]
+    },
+    "ant-media-server-community-edition": {
+      "base_image": "",
+      "services": [
+        "antmedia",
+        "ant-media-server",
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/ant-media-credentials.txt"
+      ]
+    },
+    "ant-media-server-enterprise-edition": {
+      "base_image": "",
+      "services": [
+        "antmedia"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/ant-media-credentials.txt"
+      ]
+    },
+    "aspnet": {
+      "base_image": "",
+      "services": [
+        "aspnet",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        5000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/aspnet-credentials.txt"
+      ]
+    },
+    "azuracast": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        80,
+        443,
+        2022
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/azuracast-credentials.txt"
+      ]
+    },
+    "bitnami-via-vultr-magento": {
+      "base_image": "",
+      "services": [
+        "opensearch",
+        "mariadb",
+        "redis-server",
+        "php8.2-fpm"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/magento-credentials.txt"
+      ]
+    },
+    "bitnami-via-vultr-minio": {
+      "base_image": "",
+      "services": [
+        "minio",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        9000,
+        9001
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/minio-credentials.txt"
+      ]
+    },
+    "bitnami-via-vultr-prestashop": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/prestashop-credentials.txt"
+      ]
+    },
+    "browserbox": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        8080
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/browserbox-credentials.txt"
+      ]
+    },
+    "bun": {
+      "base_image": "",
+      "services": [
+        "nginx",
+        "bun-app"
+      ],
+      "ports": [
+        80,
+        3000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/bun-credentials.txt"
+      ]
+    },
+    "clever-vpn-server": {
+      "base_image": "",
+      "services": [
+        "clever-vpn-cluster",
+        "wg-quick@"
+      ],
+      "ports": [
+        51820
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/clever-vpn-credentials.txt"
+      ]
+    },
+    "cloudpanel2-debian": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/cloudpanel-credentials.txt"
+      ]
+    },
+    "cloudpanel2-ubuntu": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/cloudpanel2-credentials.txt"
+      ]
+    },
+    "cloudron": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/cloudron-credentials.txt"
+      ]
+    },
+    "clustercontrol": {
+      "base_image": "",
+      "services": [
+        "mariadb",
+        "cmon",
+        "cmon-ssh",
+        "cmon-cloud",
+        "cmon-events",
+        "apache2"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/clustercontrol-credentials.txt"
+      ]
+    },
+    "comfyui": {
+      "base_image": "",
+      "services": [
+        "comfyui"
+      ],
+      "ports": [
+        80,
+        127,
+        8188
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/comfyui-credentials.txt"
+      ]
+    },
+    "coolify": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/coolify-credentials.txt"
+      ]
+    },
+    "cyberpanel": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/cyberpanel-credentials.txt"
+      ]
+    },
+    "docker": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/docker-credentials.txt"
+      ]
+    },
+    "dradis": {
+      "base_image": "",
+      "services": [
+        "dradis",
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/dradis-credentials.txt"
+      ]
+    },
+    "drupal": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/drupal-credentials.txt"
+      ]
+    },
+    "easypanel": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/easypanel-credentials.txt"
+      ]
+    },
+    "elasticsearch": {
+      "base_image": "",
+      "services": [
+        "elasticsearch"
+      ],
+      "ports": [
+        9200,
+        9300
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/elasticsearch-credentials.txt"
+      ]
+    },
+    "fastpanel": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/fastpanel-credentials.txt"
+      ]
+    },
+    "fauxpilot-large": {
+      "base_image": "",
+      "services": [
+        "fauxpilot",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        5000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/fauxpilot-credentials.txt"
+      ]
+    },
+    "fauxpilot-medium": {
+      "base_image": "",
+      "services": [
+        "fauxpilot"
+      ],
+      "ports": [
+        80,
+        5000,
+        8000,
+        8001,
+        8002
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/fauxpilot-credentials.txt"
+      ]
+    },
+    "fauxpilot-small": {
+      "base_image": "",
+      "services": [
+        "fauxpilot"
+      ],
+      "ports": [
+        80,
+        5000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/fauxpilot-credentials.txt"
+      ]
+    },
+    "fauxpilot-xsmall": {
+      "base_image": "",
+      "services": [
+        "fauxpilot"
+      ],
+      "ports": [
+        80,
+        5000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/fauxpilot-credentials.txt"
+      ]
+    },
+    "filecloud": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        27017
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/filecloud-credentials.txt"
+      ]
+    },
+    "flarum": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/flarum-credentials.txt"
+      ]
+    },
+    "forgejo": {
+      "base_image": "",
+      "services": [
+        "forgejo",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        2222,
+        3000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/forgejo-credentials.txt"
+      ]
+    },
+    "gatekeeper": {
+      "base_image": "",
+      "services": [
+        "botguard-gatekeeper",
+        "nginx"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/gatekeeper-credentials.txt"
+      ]
+    },
+    "grafana": {
+      "base_image": "",
+      "services": [
+        "grafana-server",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        3000
+      ],
+      "http": [
+        { "port": 3000, "path": "/login", "expect_code": 200, "expect_text": "Grafana" }
+      ],
+      "commands": [
+        { "cmd": "test -s /root/grafana-credentials.txt", "expect_code": 0 }
+      ],
+      "files": [
+        "/root/grafana-credentials.txt"
+      ]
+    },
+    "haltdos-waf-community": {
+      "base_image": "",
+      "services": [
+        "hd-community-waf",
+        "controller"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/haltdos-waf-credentials.txt"
+      ]
+    },
+    "haltdos-waf-pro": {
+      "base_image": "",
+      "services": [
+        "haltdos-waf"
+      ],
+      "ports": [
+        80,
+        443,
+        9000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/haltdos-waf-pro-credentials.txt"
+      ]
+    },
+    "heavyai-immerse": {
+      "base_image": "",
+      "services": [
+        "heavydb",
+        "heavyai-immerse",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        6273,
+        6274,
+        6278
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/heavyai-credentials.txt"
+      ]
+    },
+    "hermesagent": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        8642,
+        9119
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/hermesagent-credentials.txt"
+      ]
+    },
+    "icewarp": {
+      "base_image": "",
+      "services": [
+        "icewarp"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/icewarp-credentials.txt"
+      ]
+    },
+    "immich": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/immich-credentials.txt"
+      ]
+    },
+    "invokeai": {
+      "base_image": "",
+      "services": [
+        "invokeai",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        9090
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/invokeai-credentials.txt"
+      ]
+    },
+    "ispmanager": {
+      "base_image": "",
+      "services": [
+        "ispmgr"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/ispmanager-credentials.txt"
+      ]
+    },
+    "jamulus": {
+      "base_image": "",
+      "services": [
+        "jackd-dummy",
+        "jamulus-server"
+      ],
+      "ports": [
+        22124
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/jamulus-credentials.txt"
+      ]
+    },
+    "jitsi": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        10000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/jitsi-credentials.txt"
+      ]
+    },
+    "joomla": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/joomla-credentials.txt"
+      ]
+    },
+    "k3s": {
+      "base_image": "",
+      "services": [
+        "k3s"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/k3s-credentials.txt"
+      ]
+    },
+    "keitaro": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/keitaro-credentials.txt"
+      ]
+    },
+    "lamp": {
+      "base_image": "",
+      "services": [
+        "mariadb"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/lamp-credentials.txt"
+      ]
+    },
+    "laravel": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb",
+        "redis-server"
+      ],
+      "ports": [
+        80,
+        1025,
+        3306,
+        6379
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/laravel-credentials.txt"
+      ]
+    },
+    "lemp": {
+      "base_image": "",
+      "services": [
+        "nginx",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/lemp-credentials.txt"
+      ]
+    },
+    "librechat": {
+      "base_image": "",
+      "services": [
+        "mongod",
+        "redis-server",
+        "librechat",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        3080
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/librechat-credentials.txt"
+      ]
+    },
+    "mediawiki": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/mediawiki-credentials.txt"
+      ]
+    },
+    "microweber": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80,
+        3306
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/microweber-credentials.txt"
+      ]
+    },
+    "minecraft-bedrock": {
+      "base_image": "",
+      "services": [
+        "minecraft-bedrock"
+      ],
+      "ports": [
+        19132
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/minecraft-bedrock-credentials.txt"
+      ]
+    },
+    "minecraft-forge": {
+      "base_image": "",
+      "services": [
+        "minecraft-forge"
+      ],
+      "ports": [
+        25565,
+        25575
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/minecraft-forge-credentials.txt"
+      ]
+    },
+    "minecraft-paperspigot": {
+      "base_image": "",
+      "services": [
+        "minecraft"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/minecraft-credentials.txt"
+      ]
+    },
+    "minecraft-vanilla": {
+      "base_image": "",
+      "services": [
+        "minecraft-server"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/minecraft-credentials.txt"
+      ]
+    },
+    "miniconda": {
+      "base_image": "",
+      "services": [
+        "jupyterlab",
+        "snap.certbot.renew.timer"
+      ],
+      "ports": [
+        8888
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/miniconda-credentials.txt"
+      ]
+    },
+    "mldev": {
+      "base_image": "",
+      "services": [
+        "mldev-jupyter",
+        "mldev-mlflow",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        5000,
+        8888
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/mldev-credentials.txt"
+      ]
+    },
+    "mongodb": {
+      "base_image": "",
+      "services": [
+        "disable-thp",
+        "mongod"
+      ],
+      "ports": [
+        27017
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/mongodb-credentials.txt"
+      ]
+    },
+    "moosefs": {
+      "base_image": "",
+      "services": [
+        "moosefs-master",
+        "moosefs-chunkserver",
+        "moosefs-metalogger",
+        "moosefs-cgiserv"
+      ],
+      "ports": [
+        9419,
+        9421,
+        9422,
+        9425
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/moosefs-credentials.txt"
+      ]
+    },
+    "n99panel": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/n99panel-credentials.txt"
+      ]
+    },
+    "netbird-server": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        443,
+        3478,
+        8080,
+        8081
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/netbird-credentials.txt"
+      ]
+    },
+    "nextcloud": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        11000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/nextcloud-credentials.txt"
+      ]
+    },
+    "nirvashare": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/nirvashare-credentials.txt"
+      ]
+    },
+    "nodejs": {
+      "base_image": "",
+      "services": [
+        "nginx",
+        "nodejs-app"
+      ],
+      "ports": [
+        80,
+        3000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/nodejs-credentials.txt"
+      ]
+    },
+    "octelium": {
+      "base_image": "",
+      "services": [
+        "k3s"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/octelium-credentials.txt"
+      ]
+    },
+    "odoo": {
+      "base_image": "",
+      "services": [
+        "odoo",
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/odoo-credentials.txt"
+      ]
+    },
+    "onlyoffice-docs": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        5432,
+        6379
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/onlyoffice-credentials.txt"
+      ]
+    },
+    "onlyoffice-docspace": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        3306,
+        5672,
+        6379,
+        9200
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/docspace-credentials.txt"
+      ]
+    },
+    "onlyoffice-workspace": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        6379
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/onlyoffice-credentials.txt"
+      ]
+    },
+    "openclaw": {
+      "base_image": "",
+      "services": [
+        "openclaw-gateway"
+      ],
+      "ports": [
+        18789
+      ],
+      "http": [],
+      "commands": []
+    },
+    "openlitespeed-drupal": {
+      "base_image": "",
+      "services": [
+        "mariadb",
+        "lsws"
+      ],
+      "ports": [
+        7080
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openlitespeed-drupal-credentials.txt"
+      ]
+    },
+    "openlitespeed-joomla": {
+      "base_image": "",
+      "services": [
+        "mariadb",
+        "lsws"
+      ],
+      "ports": [
+        7080
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openlitespeed-joomla-credentials.txt"
+      ]
+    },
+    "openlitespeeddjango": {
+      "base_image": "",
+      "services": [
+        "gunicorn-django",
+        "lshttpd",
+        "openlitespeed"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openlitespeeddjango-credentials.txt"
+      ]
+    },
+    "openlitespeednodejs": {
+      "base_image": "",
+      "services": [
+        "nodejsapp",
+        "lshttpd"
+      ],
+      "ports": [
+        3000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openlitespeednodejs-credentials.txt"
+      ]
+    },
+    "openlitespeedrails": {
+      "base_image": "",
+      "services": [
+        "postgresql",
+        "puma-rails"
+      ],
+      "ports": [
+        80,
+        443,
+        7080
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openlitespeedrails-credentials.txt"
+      ]
+    },
+    "openlitespeedwordpress": {
+      "base_image": "",
+      "services": [
+        "mariadb",
+        "lsws",
+        "openlitespeed"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openlitespeedwordpress-credentials.txt"
+      ]
+    },
+    "openvpn-access-server": {
+      "base_image": "",
+      "services": [
+        "openvpnas"
+      ],
+      "ports": [
+        443,
+        943,
+        1194
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/openvpn-access-server-credentials.txt"
+      ]
+    },
+    "owncast": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        80,
+        1935,
+        8080
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/owncast-credentials.txt"
+      ]
+    },
+    "palworld": {
+      "base_image": "",
+      "services": [
+        "palworld"
+      ],
+      "ports": [
+        8211,
+        25575,
+        27015
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/palworld-credentials.txt"
+      ]
+    },
+    "passwordlab": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/passwordlab-credentials.txt"
+      ]
+    },
+    "prestashop": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/prestashop-credentials.txt"
+      ]
+    },
+    "pritunl": {
+      "base_image": "",
+      "services": [
+        "mongod",
+        "pritunl"
+      ],
+      "ports": [
+        1194
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/pritunl-credentials.txt"
+      ]
+    },
+    "prometheus": {
+      "base_image": "",
+      "services": [
+        "prometheus",
+        "node_exporter",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        9090
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/prometheus-credentials.txt"
+      ]
+    },
+    "seatable": {
+      "base_image": "",
+      "services": [
+        "mariadb",
+        "memcached",
+        "seatable",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        8000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/seatable-credentials.txt"
+      ]
+    },
+    "serverwand": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        22
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/serverwand-credentials.txt"
+      ]
+    },
+    "signoz": {
+      "base_image": "",
+      "services": [
+        "signoz",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        3301,
+        4317,
+        4318
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/signoz-credentials.txt"
+      ]
+    },
+    "statusnook": {
+      "base_image": "",
+      "services": [
+        "statusnook"
+      ],
+      "ports": [
+        8000
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/statusnook-credentials.txt"
+      ]
+    },
+    "steam": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        26900,
+        27015,
+        27020
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/steam-credentials.txt"
+      ]
+    },
+    "strapi": {
+      "base_image": "",
+      "services": [
+        "postgresql",
+        "nginx",
+        "strapi"
+      ],
+      "ports": [
+        80,
+        1337,
+        5432
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/strapi-credentials.txt"
+      ]
+    },
+    "supabase": {
+      "base_image": "",
+      "services": [
+        "nginx"
+      ],
+      "ports": [
+        80,
+        8000,
+        8443
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/supabase-credentials.txt"
+      ]
+    },
+    "swpanel": {
+      "base_image": "",
+      "services": [],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/swpanel-credentials.txt"
+      ]
+    },
+    "technitium-dns-server": {
+      "base_image": "",
+      "services": [
+        "dns"
+      ],
+      "ports": [
+        5380,
+        53443
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/technitium-dns-server-credentials.txt"
+      ]
+    },
+    "ubuntu-desktop-gnome": {
+      "base_image": "",
+      "services": [
+        "gdm3",
+        "gdm",
+        "xrdp",
+        "vncserver@"
+      ],
+      "ports": [
+        3389
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/ubuntu-desktop-gnome-credentials.txt"
+      ]
+    },
+    "ubuntu-desktop-kde": {
+      "base_image": "",
+      "services": [
+        "xrdp",
+        "vncserver@1",
+        "sddm"
+      ],
+      "ports": [
+        3389,
+        5901
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/kde-credentials.txt"
+      ]
+    },
+    "ubuntu-desktop-xfce": {
+      "base_image": "",
+      "services": [
+        "xrdp",
+        "vncserver@"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/ubuntu-desktop-xfce-credentials.txt"
+      ]
+    },
+    "uptime-kuma": {
+      "base_image": "",
+      "services": [
+        "uptime-kuma",
+        "nginx"
+      ],
+      "ports": [
+        80,
+        3001
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/uptime-kuma-credentials.txt"
+      ]
+    },
+    "utunnel-vpn": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        1194,
+        51820,
+        60656,
+        60657
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/utunnel-vpn-credentials.txt"
+      ]
+    },
+    "vdev": {
+      "base_image": "",
+      "services": [
+        "vdev-code-server",
+        "nginx"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/vdev-credentials.txt"
+      ]
+    },
+    "video2x": {
+      "base_image": "",
+      "services": [
+        "video2x"
+      ],
+      "ports": [
+        80,
+        8765
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/video2x-credentials.txt"
+      ]
+    },
+    "webmin": {
+      "base_image": "",
+      "services": [
+        "webmin"
+      ],
+      "ports": [],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/webmin-credentials.txt"
+      ]
+    },
+    "wireguard": {
+      "base_image": "",
+      "services": [
+        "wg-quick@"
+      ],
+      "ports": [
+        51820
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/wireguard-credentials.txt"
+      ]
+    },
+    "woocommerce": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb",
+        "redis-server"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/woocommerce-credentials.txt"
+      ]
+    },
+    "wordpress": {
+      "base_image": "",
+      "services": [
+        "php-fpm",
+        "mariadb",
+        "redis-server"
+      ],
+      "ports": [
+        80
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/wp-credentials.txt"
+      ]
+    },
+    "yeastar-p-series-phone-system": {
+      "base_image": "",
+      "services": [],
+      "ports": [
+        8088,
+        8089
+      ],
+      "http": [],
+      "commands": [],
+      "files": [
+        "/root/yeastar-p-series-credentials.txt"
+      ]
+    }
+  }
+}
