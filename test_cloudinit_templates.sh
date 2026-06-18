@@ -242,10 +242,43 @@ for slug in "${TEMPLATES[@]}"; do
       reason="ssh not reachable within ${BOOT_TIMEOUT}s"
       ERRORS=$((ERRORS+1)); status="error"
     else
-      log "[$slug] SSH up; waiting for cloud-init to finish (timeout ${CLOUDINIT_TIMEOUT}s)"
-      # 5. wait for cloud-init
-      ssh_run "timeout ${CLOUDINIT_TIMEOUT} cloud-init status --wait" >>"$tlog" 2>&1 || \
-        warn "[$slug] cloud-init status --wait returned non-zero (will still run checks)"
+      log "[$slug] SSH up; waiting for cloud-init to reach a terminal state (timeout ${CLOUDINIT_TIMEOUT}s)"
+      # 5. wait for cloud-init — poll for a TERMINAL status instead of trusting
+      #    `status --wait`, which returns instantly (non-zero) when cloud-init is
+      #    absent/disabled/not-run and would make us check a half-booted guest.
+      ci_state=""
+      if ! ssh_run 'command -v cloud-init >/dev/null 2>&1'; then
+        warn "[$slug] cloud-init is NOT installed in the guest base image — the NoCloud seed cannot run"
+        ci_state="absent"
+      else
+        ci_empty=0; ci_deadline=$(( $(date +%s) + CLOUDINIT_TIMEOUT ))
+        while [ "$(date +%s)" -lt "$ci_deadline" ]; do
+          ci_state="$(ssh_run "cloud-init status 2>/dev/null | sed -n 's/^[[:space:]]*status:[[:space:]]*//p' | head -1" 2>/dev/null | tr -d '\r\n')"
+          case "$ci_state" in
+            done|error|degraded) break ;;
+            disabled)            warn "[$slug] cloud-init reports 'disabled'"; break ;;
+            running)             ci_empty=0 ;;                       # still working, keep waiting
+            *)  ci_empty=$((ci_empty+1))                             # unknown/empty/not-run
+                [ "$ci_empty" -ge 12 ] && { warn "[$slug] cloud-init stuck in '${ci_state:-unknown}' for ~3m"; break; } ;;
+          esac
+          sleep 15
+        done
+      fi
+      log "[$slug] cloud-init state: ${ci_state:-unknown}"
+      # On any non-'done' outcome, capture diagnostics so the root cause is in
+      # the log rather than inferred from cascading check failures.
+      if [ "$ci_state" != "done" ]; then
+        {
+          echo "===== cloud-init diagnostics (state=${ci_state:-unknown}) ====="
+          ssh_run 'echo "## cloud-init --version"; cloud-init --version 2>&1;
+                   echo; echo "## cloud-init status --long"; cloud-init status --long 2>&1;
+                   echo; echo "## failed units"; systemctl --failed --no-legend 2>&1;
+                   echo; echo "## /var/lib/cloud"; ls -la /var/lib/cloud /var/lib/cloud/instance 2>&1;
+                   echo; echo "## tail cloud-init.log"; tail -n 40 /var/log/cloud-init.log 2>&1;
+                   echo; echo "## tail cloud-init-output.log"; tail -n 40 /var/log/cloud-init-output.log 2>&1' 2>&1
+        } >> "$tlog"
+        warn "[$slug] cloud-init did not reach 'done' (state=${ci_state:-unknown}); diagnostics in $(basename "$tlog")"
+      fi
 
       # 6. push + run the remote checker
       scp_to "$REMOTE_CHECK" "/tmp/cloudinit_remote_check.sh" >/dev/null 2>&1
@@ -260,8 +293,14 @@ for slug in "${TEMPLATES[@]}"; do
         # ---- print EXACTLY what passed/failed and why, right after the test ----
         printf '%s' "$remote_json" | python3 -c '
 import json,sys
-d=json.load(sys.stdin)
 sl=sys.argv[1]
+raw=sys.stdin.read()
+try:
+    d=json.loads(raw)
+except Exception as e:
+    print("  (could not parse remote JSON: %s)" % e)
+    print("  raw: "+raw[:500])
+    sys.exit(0)
 G=chr(27)+"[1;32m"; R=chr(27)+"[1;31m"; Y=chr(27)+"[1;33m"; D=chr(27)+"[0;90m"; N=chr(27)+"[0m"
 print("  "+D+"cloud-init: "+str(d.get("cloud_init_status"))+"  errors: "+str(d.get("cloud_init_errors"))+N)
 checks=d.get("checks",[])

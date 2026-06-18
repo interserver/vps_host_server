@@ -44,7 +44,10 @@ checks_json=""
 overall=true
 add_check() { # name ok detail [advisory]
   local name="$1" ok="$2" detail="$3" advisory="${4:-0}"
-  detail=$(printf '%s' "$detail" | tr '\n' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g')
+  # Replace ALL control chars (newline, tab, CR, ANSI ESC, etc. = 0x00-0x1F)
+  # with spaces, THEN escape backslash and double-quote. A raw control char
+  # left in a JSON string is invalid and crashes the orchestrator's parser.
+  detail=$(printf '%s' "$detail" | tr '\000-\037' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g')
   local adv=false; [ "$advisory" = "1" ] && adv=true
   [ "$ok" = "false" ] && [ "$advisory" != "1" ] && overall=false
   checks_json="${checks_json}{\"name\":\"${name}\",\"ok\":${ok},\"advisory\":${adv},\"detail\":\"${detail}\"},"
