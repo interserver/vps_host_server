@@ -1,7 +1,7 @@
 {
   "_comment": "Per-template test expectations for test_cloudinit_templates.sh. base_image empty => defaults.base_image. services=systemctl is-active, ports=ss -ltn listening check, files=test -e, http=[{port,path,expect_code|expect_text}], commands=[{cmd,expect_code}]. base_image is pulled from the vps_templates DB (template_file). services/ports auto-derived from the yaml (best-effort) \u2014 tune as needed.",
   "defaults": {
-    "base_image": "ubuntu26.qcow2"
+    "base_image": "ubuntu24.qcow2"
   },
   "templates": {
     "3cx-phone-system": {
