@@ -18,7 +18,7 @@
       ]
     },
     "adminbolt": {
-      "base_image": "ubuntu24.qcow2",
+      "base_image": "almalinux9.qcow2",
       "services": [
         "bolt"
       ],
