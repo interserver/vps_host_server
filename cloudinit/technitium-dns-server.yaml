@@ -41,6 +41,7 @@ packages:
   - apt-transport-https
   - ca-certificates
   - lsb-release
+  - software-properties-common
   - ufw
   - fail2ban
   - unattended-upgrades
@@ -167,28 +168,26 @@ write_files:
       AUTOEOF
 
       # ------------------------------------------------------------------
-      # 4. Install .NET 8 runtime (required by Technitium DNS Server)
-      #    Microsoft ships packages keyed to Ubuntu codename;
-      #    fallback: noble repo until 26.04 published
+      # 4. Install ASP.NET Core 8 runtime (required by Technitium DNS Server)
+      #    IMPORTANT: As of Ubuntu 24.04 (noble), Microsoft NO LONGER publishes
+      #    .NET to packages.microsoft.com — .NET ships in the Ubuntu archive.
+      #    The old packages.microsoft.com 'noble' repo does NOT exist and was the
+      #    root cause of "Failed to install ASP.NET Core Runtime".
+      #    Technitium needs the ASP.NET Core runtime (aspnetcore-runtime-8.0),
+      #    which is in Ubuntu's universe component — no Microsoft repo required.
+      #    NOTE: the official Technitium install.sh (step 5) also installs/verifies
+      #    the correct .NET runtime itself, so this pre-install is best-effort.
       # ------------------------------------------------------------------
-      echo "Installing .NET 8 runtime..."
+      echo "Installing ASP.NET Core 8 runtime from the Ubuntu archive..."
 
-      mkdir -p /usr/share/keyrings
-      if [ ! -f /usr/share/keyrings/microsoft-dotnet.gpg ]; then
-        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-          | gpg --dearmor \
-          > /usr/share/keyrings/microsoft-dotnet.gpg
+      add-apt-repository -y universe || true
+      apt-get update -y
+
+      if ! command -v dotnet >/dev/null 2>&1; then
+        apt-get install -y aspnetcore-runtime-8.0 \
+          || apt-get install -y dotnet-runtime-8.0 \
+          || echo "WARN: pre-install of ASP.NET Core runtime failed; relying on Technitium install.sh"
       fi
-
-      # fallback: noble repo until 26.04 published
-      if [ ! -f /etc/apt/sources.list.d/microsoft-dotnet.list ]; then
-        cat > /etc/apt/sources.list.d/microsoft-dotnet.list <<'SRCEOF'
-      deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-dotnet.gpg] https://packages.microsoft.com/repos/microsoft-ubuntu-noble-prod noble main
-      SRCEOF
-        apt-get update -y
-      fi
-
-      command -v dotnet >/dev/null 2>&1 || apt-get install -y dotnet-runtime-8.0
       DOTNET_VER="$(dotnet --version 2>/dev/null || echo 'unknown')"
       echo ".NET runtime version: ${DOTNET_VER}"
 
@@ -504,6 +503,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once on first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/technitium-dns-server-bootstrap.sh" ]
 

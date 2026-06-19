@@ -155,14 +155,30 @@ write_files:
 
       # ------------------------------------------------------------------
       # 2. System locale
+      # Generate en_US.UTF-8 robustly. The base image may ship without the
+      # 'locales' package or without /etc/locale.gen, so do NOT sed a file
+      # that may be missing (that aborts under set -e). Install locales,
+      # enable the entry if /etc/locale.gen exists, then locale-gen; fall
+      # back to C.UTF-8 if en_US.UTF-8 still isn't available.
       # ------------------------------------------------------------------
-      if ! locale -a 2>/dev/null | grep -q 'en_US.utf8'; then
-        sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
-        locale-gen en_US.UTF-8
-      fi
-      export LANG=en_US.UTF-8
-      export LC_ALL=en_US.UTF-8
       export DEBIAN_FRONTEND=noninteractive
+      if ! locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)'; then
+        command -v locale-gen >/dev/null 2>&1 || apt-get install -y locales || true
+        if [ -f /etc/locale.gen ]; then
+          sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen || true
+        fi
+        locale-gen en_US.UTF-8 || true
+      fi
+      if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)'; then
+        update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 || true
+        export LANG=en_US.UTF-8
+        export LC_ALL=en_US.UTF-8
+      else
+        echo "WARN: en_US.UTF-8 unavailable — falling back to C.UTF-8"
+        update-locale LANG=C.UTF-8 || true
+        export LANG=C.UTF-8
+        export LC_ALL=C.UTF-8
+      fi
 
       # ------------------------------------------------------------------
       # 3. Configure automatic security updates (unattended-upgrades)
@@ -381,6 +397,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # runcmd — run the bootstrap script exactly once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/utunnel-vpn-bootstrap.sh" ]
 

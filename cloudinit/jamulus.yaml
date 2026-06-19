@@ -203,19 +203,28 @@ write_files:
       # 4. Build Jamulus server flags from env vars
       # -----------------------------------------------------------------------
       echo "--- Building Jamulus server flags ---"
+      # NOTE: modern Jamulus renamed --directoryserver to --directoryaddress and
+      # REMOVED the "disabled" sentinel — passing an unknown/removed option makes
+      # the binary exit non-zero, which crash-loops the service. To run a private
+      # (unlisted) server you simply OMIT the directory option entirely. Genre is
+      # no longer a standalone flag; it is carried in --serverinfo, so we drop it.
+      # Resolve the Jamulus binary — packaging has shipped it as 'Jamulus',
+      # 'jamulus', and (headless builds) 'jamulus-headless'. Pick whatever exists.
+      JAMULUS_BIN=""
+      for _cand in /usr/bin/jamulus-headless /usr/bin/Jamulus /usr/bin/jamulus; do
+        if [ -x "$_cand" ]; then JAMULUS_BIN="$_cand"; break; fi
+      done
+      [ -z "$JAMULUS_BIN" ] && JAMULUS_BIN="$(command -v jamulus 2>/dev/null || command -v Jamulus 2>/dev/null || echo /usr/bin/jamulus)"
+      echo "Using Jamulus binary: ${JAMULUS_BIN}"
       JAMULUS_OPTS="--server --nogui"
       JAMULUS_OPTS="${JAMULUS_OPTS} --servername \"${SERVER_NAME}\""
       JAMULUS_OPTS="${JAMULUS_OPTS} --numchannels ${MAX_CHANNELS}"
       JAMULUS_OPTS="${JAMULUS_OPTS} --port ${JAMULUS_PORT}"
 
-      if [ -n "${SERVER_GENRE:-}" ]; then
-        JAMULUS_OPTS="${JAMULUS_OPTS} --genre ${SERVER_GENRE}"
-      fi
-
       if [ "${REGISTER_PUBLIC:-false}" = "true" ]; then
-        JAMULUS_OPTS="${JAMULUS_OPTS} --directoryserver ${DIRECTORY_SERVER}"
-      else
-        JAMULUS_OPTS="${JAMULUS_OPTS} --directoryserver disabled"
+        # Public listing: register with the Jamulus directory (default address
+        # provided in the env). Omit entirely for a private server.
+        JAMULUS_OPTS="${JAMULUS_OPTS} --directoryaddress ${DIRECTORY_SERVER}"
       fi
 
       if [ -n "${RECORDING_DIR:-}" ]; then
@@ -236,7 +245,10 @@ write_files:
       [Unit]
       Description=Jamulus Real-Time Collaborative Music Server
       After=jackd-dummy.service network.target
-      Requires=jackd-dummy.service
+      # Headless Jamulus server does its own mixing and does NOT require JACK,
+      # so jackd is a soft dependency (Wants) — a JACK failure must not take
+      # the music server down.
+      Wants=jackd-dummy.service
 
       [Service]
       Type=simple
@@ -244,7 +256,7 @@ write_files:
       Group=audio
       Environment=HOME=/var/lib/jamulus
       Environment=JACK_NO_AUDIO_RESERVATION=1
-      ExecStart=/usr/bin/jamulus ${JAMULUS_OPTS}
+      ExecStart=${JAMULUS_BIN} ${JAMULUS_OPTS}
       Restart=on-failure
       RestartSec=10
       StandardOutput=journal
@@ -329,6 +341,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once on first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/jamulus-bootstrap.sh" ]
 

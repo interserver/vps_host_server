@@ -126,15 +126,30 @@ write_files:
       # Set master metadata directory permissions
       chown -R mfs:mfs /var/lib/mfs 2>/dev/null || true
 
-      # Generate initial metadata if not exists
+      # Generate initial metadata if not exists. The package ships an empty
+      # seed file (metadata.mfs.empty); copy it so the master has valid metadata
+      # to start from. Must be owned by mfs or the master refuses to start.
       if [ ! -f /var/lib/mfs/metadata.mfs ] && [ ! -f /var/lib/mfs/metadata.mfs.back ]; then
         echo "[moosefs-bootstrap] Initialising MooseFS metadata..."
-        mfsmaster -a 2>/dev/null || true
+        if [ -f /var/lib/mfs/metadata.mfs.empty ]; then
+          cp -a /var/lib/mfs/metadata.mfs.empty /var/lib/mfs/metadata.mfs
+        else
+          # Older packages: let the master auto-create the metadata file.
+          mfsmaster -a 2>/dev/null || true
+        fi
+        chown -R mfs:mfs /var/lib/mfs 2>/dev/null || true
       fi
 
       # Set admin password via mfspasswd tool or config
       # MooseFS uses .mfsmaster.cfg or mfspassword files
       echo "[moosefs-bootstrap] Setting MooseFS master admin credentials..."
+      # NOTE: use the STANDARD MooseFS master listen ports. The chunkserver
+      # connects to the master's MATOCS port, which defaults to 9420 — pointing
+      # it elsewhere (or colliding with the chunkserver's own serving port) makes
+      # moosefs-chunkserver.service fail to register and exit.
+      #   9419 = MATOML (master <-> metalogger)
+      #   9420 = MATOCS (master <-> chunkserver)
+      #   9421 = MATOCL (master <-> client)
       cat > /etc/mfs/mfsmaster.cfg <<MFSCFG
       # MooseFS Master configuration
       WORKING_USER = mfs
@@ -143,10 +158,11 @@ write_files:
       LOCK_MEMORY = 0
       # Bind to all interfaces (clients need to reach the master)
       MATOML_LISTEN_HOST = 0.0.0.0
+      MATOCS_LISTEN_HOST = 0.0.0.0
       MATOCL_LISTEN_HOST = 0.0.0.0
       MATOML_LISTEN_PORT = 9419
+      MATOCS_LISTEN_PORT = 9420
       MATOCL_LISTEN_PORT = 9421
-      MATOCS_LISTEN_PORT = 9422
       # Admin password (used by mfscli/CGI)
       ADMIN_PASSWD = ${ADMIN_PASS}
       MFSCFG
@@ -162,11 +178,14 @@ write_files:
       echo "${CHUNKSERVER_DATA_DIR}" > /etc/mfs/mfshdd.cfg
       chown mfs:mfs /etc/mfs/mfshdd.cfg
 
+      # MASTER_PORT must be the master's MATOCS port (9420). CSSERV_LISTEN_PORT
+      # is the chunkserver's OWN data-serving port (9422) and must NOT collide
+      # with MASTER_PORT.
       cat > /etc/mfs/mfschunkserver.cfg <<CSCFG
       WORKING_USER = mfs
       WORKING_GROUP = mfs
       MASTER_HOST = 127.0.0.1
-      MASTER_PORT = 9422
+      MASTER_PORT = 9420
       HDD_CONF_FILENAME = /etc/mfs/mfshdd.cfg
       CSSERV_LISTEN_HOST = 0.0.0.0
       CSSERV_LISTEN_PORT = 9422
@@ -204,24 +223,25 @@ write_files:
       echo "[moosefs-bootstrap] Enabling and starting MooseFS services..."
       systemctl daemon-reload
 
-      # Start master first (metadata must be ready)
+      # Start master first (metadata must be ready). Guard each start so a slow
+      # or failed unit does not abort the whole bootstrap under set -e.
       systemctl enable moosefs-master
-      systemctl start moosefs-master
+      systemctl start moosefs-master || echo "WARN: moosefs-master start returned non-zero — see journalctl -u moosefs-master"
       sleep 3
 
       # Start chunk server
       systemctl enable moosefs-chunkserver
-      systemctl start moosefs-chunkserver
+      systemctl start moosefs-chunkserver || echo "WARN: moosefs-chunkserver start returned non-zero — see journalctl -u moosefs-chunkserver"
 
       # Start metalogger if enabled
       if [ "$ENABLE_METALOGGER" = "true" ]; then
         systemctl enable moosefs-metalogger
-        systemctl start moosefs-metalogger
+        systemctl start moosefs-metalogger || echo "WARN: moosefs-metalogger start returned non-zero"
       fi
 
       # Start CGI server (listen on localhost only)
       systemctl enable moosefs-cgiserv
-      systemctl start moosefs-cgiserv
+      systemctl start moosefs-cgiserv || echo "WARN: moosefs-cgiserv start returned non-zero"
 
       # ── Configure automatic security updates ──────────────────────────────
       echo "[moosefs-bootstrap] Configuring unattended-upgrades..."
@@ -335,6 +355,12 @@ write_files:
 
       echo "[moosefs-bootstrap] Done at $(date)"
       echo "[moosefs-bootstrap] Credentials written to /root/moosefs-credentials.txt"
+
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/moosefs-bootstrap.sh" ]

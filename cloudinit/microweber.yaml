@@ -44,7 +44,6 @@ packages:
   - php-json
   - php-opcache
   - php-dom
-  - php-tokenizer
   - php-fileinfo
   - php-pdo
   - php-sqlite3
@@ -230,10 +229,23 @@ write_files:
         sed -ri 's/^;?opcache\.enable\b.*/opcache.enable=1/'              "$FPM_INI"
         sed -ri 's/^;?opcache\.memory_consumption.*/opcache.memory_consumption=128/' "$FPM_INI"
       fi
-      systemctl restart "php${PHP_VER}-fpm" 2>/dev/null \
-        || systemctl restart php-fpm 2>/dev/null \
-        || true
+      # --- enable + (re)start PHP-FPM (Ubuntu 24.04 = php8.3-fpm; no 'php-fpm' alias) ---
+      FPM_SVC="php${PHP_VER}-fpm"
+      systemctl list-unit-files "${FPM_SVC}.service" >/dev/null 2>&1 \
+        || FPM_SVC="$(systemctl list-unit-files --no-legend 'php*-fpm.service' 2>/dev/null | awk '{print $1}' | head -n1)"
+      [ -n "$FPM_SVC" ] && systemctl enable --now "$FPM_SVC" 2>/dev/null || true
+      [ -n "$FPM_SVC" ] && systemctl restart "$FPM_SVC" 2>/dev/null || true
 
+      # --- composer env: www-data's HOME (/var/www) is NOT writable, which makes
+      #     composer fail with "Cannot create cache directory /var/www/.cache/composer".
+      #     Provide an explicit writable COMPOSER_HOME/cache + allow superuser. git
+      #     and unzip are already installed via packages: (needed for clone/extract). ---
+      export COMPOSER_ALLOW_SUPERUSER=1
+      export COMPOSER_HOME=/tmp/composer
+      mkdir -p /tmp/composer/cache
+      chown -R www-data:www-data /tmp/composer
+      command -v git >/dev/null 2>&1   || DEBIAN_FRONTEND=noninteractive apt-get install -y git
+      command -v unzip >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y unzip
       # --- ensure Composer is available (system package may be older; get latest) ---
       if ! command -v composer >/dev/null 2>&1; then
         curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -260,14 +272,17 @@ write_files:
       mkdir -p "${MW_PATH}"
       chown -R www-data:www-data "${MW_PATH}"
 
+      # Run composer as www-data but pass the writable cache/home through (sudo
+      # strips env by default, so set it explicitly via `env`).
+      MW_COMPOSER="sudo -u www-data env HOME=/tmp/composer COMPOSER_HOME=/tmp/composer COMPOSER_ALLOW_SUPERUSER=1 composer"
       if [ ! -f "${MW_PATH}/artisan" ]; then
         echo "Installing Microweber via Composer..."
-        sudo -u www-data composer create-project microweber/microweber "${MW_PATH}" \
+        $MW_COMPOSER create-project microweber/microweber "${MW_PATH}" \
           --no-interaction --prefer-dist --no-dev 2>&1 \
           || {
             echo "WARN: Composer install failed, retrying once..."
             rm -rf "${MW_PATH:?}/"*
-            sudo -u www-data composer create-project microweber/microweber "${MW_PATH}" \
+            $MW_COMPOSER create-project microweber/microweber "${MW_PATH}" \
               --no-interaction --prefer-dist --no-dev 2>&1
           }
       fi
@@ -356,7 +371,8 @@ write_files:
       sed -i "s|PHP_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|g"  /etc/nginx/sites-available/microweber.conf
       ln -sf /etc/nginx/sites-available/microweber.conf /etc/nginx/sites-enabled/microweber.conf
       rm -f /etc/nginx/sites-enabled/default
-      nginx -t && systemctl reload nginx
+      systemctl enable nginx 2>/dev/null || true
+      nginx -t && { systemctl reload nginx 2>/dev/null || systemctl restart nginx; }
 
       # --- firewall ---
       ufw allow OpenSSH
@@ -406,6 +422,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/microweber-bootstrap.sh" ]
 

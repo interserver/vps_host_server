@@ -58,8 +58,11 @@ write_files:
       # Elasticsearch built-in superuser password (elastic user)
       ELASTIC_PASS="CHANGE_ME"
 
-      # Optional: heap size in MB (leave empty to use Elasticsearch auto-sizing; 50% of RAM)
-      # ES_HEAP_MB=""
+      # Heap size in MB. A modest fixed heap is safer than auto-sizing on small
+      # VMs (auto-sizing can request more RAM than is available and the service
+      # then fails to start). 512 MB suits a 1-2 GB single-node box. Raise on
+      # larger instances. Leave empty to fall back to Elasticsearch auto-sizing.
+      ES_HEAP_MB="512"
 
       # Cluster / node naming
       ES_CLUSTER_NAME="my-cluster"
@@ -204,18 +207,20 @@ write_files:
       # -----------------------------------------------------------------------
       JVM_OPTIONS_D="/etc/elasticsearch/jvm.options.d"
       mkdir -p "${JVM_OPTIONS_D}"
-      if [ -n "${ES_HEAP_MB:-}" ] && [ "${ES_HEAP_MB:-}" != "" ]; then
-        cat > "${JVM_OPTIONS_D}/heap.options" <<HEAPOPTS
-      -Xms${ES_HEAP_MB}m
-      -Xmx${ES_HEAP_MB}m
-      HEAPOPTS
+      if [ -n "${ES_HEAP_MB:-}" ]; then
+        # Write WITHOUT leading whitespace — JVM option lines must start at
+        # column 0 or Elasticsearch rejects them and the service fails to start.
+        printf -- '-Xms%sm\n-Xmx%sm\n' "${ES_HEAP_MB}" "${ES_HEAP_MB}" \
+          > "${JVM_OPTIONS_D}/heap.options"
       fi
 
       # -----------------------------------------------------------------------
       # 6. Enable and start Elasticsearch
       # -----------------------------------------------------------------------
       systemctl enable elasticsearch
-      systemctl start  elasticsearch
+      # Do not let a slow/failed first start abort the whole bootstrap (set -e);
+      # we poll for readiness below and report a warning if it never comes up.
+      systemctl start elasticsearch || echo "WARN: elasticsearch start returned non-zero — see journalctl -u elasticsearch"
 
       # Wait up to 90 seconds for Elasticsearch to become healthy
       echo "Waiting for Elasticsearch to start..."
@@ -313,6 +318,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/elasticsearch-bootstrap.sh" ]
 

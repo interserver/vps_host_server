@@ -208,6 +208,18 @@ write_files:
       CONDAEOF
       fi
 
+      # ── Accept Anaconda channel Terms of Service (non-interactive) ────────────────
+      # Conda 24.11+ refuses to use the default Anaconda channels until their ToS
+      # is accepted, otherwise any install/create aborts with:
+      #   CondaToSNonInteractiveError: Terms of Service have not been accepted
+      # Accept the default channels explicitly AND enable auto-accept so future
+      # channels (e.g. added by 'conda update') don't re-trigger the prompt.
+      echo "=== Accepting Anaconda channel Terms of Service ==="
+      "${CONDA_BIN}" config --set plugins.auto_accept_tos yes 2>/dev/null || true
+      "${CONDA_BIN}" tos accept --override-channels \
+        --channel https://repo.anaconda.com/pkgs/main \
+        --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
+
       # ── Update conda base ─────────────────────────────────────────────────────────
       echo "=== Updating conda base ==="
       "${CONDA_BIN}" update -n base -c defaults conda -y
@@ -371,6 +383,12 @@ write_files:
       chmod 600 "${CRED_FILE}"
       echo "=== Credentials written to ${CRED_FILE} ==="
       echo "=== Miniconda Bootstrap COMPLETE at $(date) ==="
+
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/miniconda-bootstrap.sh" ]

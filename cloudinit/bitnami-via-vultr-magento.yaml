@@ -424,14 +424,21 @@ write_files:
       mkdir -p "$MAGENTO_PATH"
       chown -R www-data:www-data "$MAGENTO_PATH"
 
+      # www-data's HOME (/var/www) is not writable, so composer can't create its
+      # cache/global config there ("Cannot create cache directory ..."). Give it an
+      # explicit writable COMPOSER_HOME/HOME (sudo strips env by default).
+      mkdir -p /tmp/composer
+      chown -R www-data:www-data /tmp/composer
+      MAGE_COMPOSER="sudo -u www-data env HOME=/tmp/composer COMPOSER_HOME=/tmp/composer COMPOSER_ALLOW_SUPERUSER=1 composer"
+
       # Configure composer auth for Adobe Marketplace
       if [ "$MAGENTO_PUBLIC_KEY" != "CHANGE_ME" ] && [ "$MAGENTO_PRIVATE_KEY" != "CHANGE_ME" ]; then
-        sudo -u www-data composer config -g \
+        $MAGE_COMPOSER config -g \
           http-basic.repo.magento.com "$MAGENTO_PUBLIC_KEY" "$MAGENTO_PRIVATE_KEY"
       fi
 
       # Accept Adobe developer terms (non-interactive)
-      sudo -u www-data composer config -g repos.magento composer https://repo.magento.com/
+      $MAGE_COMPOSER config -g repos.magento composer https://repo.magento.com/
 
       PKG="magento/project-community-edition"
       [ "$MAGENTO_EDITION" = "enterprise" ] && PKG="magento/project-enterprise-edition"
@@ -443,7 +450,7 @@ write_files:
       fi
 
       if [ ! -f "${MAGENTO_PATH}/composer.json" ]; then
-        sudo -u www-data composer create-project \
+        $MAGE_COMPOSER create-project \
           --repository-url=https://repo.magento.com/ \
           "$VER_CONSTRAINT" "$MAGENTO_PATH" --no-interaction
       fi
@@ -518,7 +525,8 @@ write_files:
 
       ln -sf /etc/nginx/sites-available/magento.conf /etc/nginx/sites-enabled/magento.conf
       rm -f /etc/nginx/sites-enabled/default
-      nginx -t && systemctl reload nginx
+      systemctl enable nginx 2>/dev/null || true
+      nginx -t && { systemctl reload nginx 2>/dev/null || systemctl restart nginx; }
 
       # -----------------------------------------------------------------------
       # 11. Firewall (UFW)
@@ -582,6 +590,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run once
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/magento-bootstrap.sh" ]
 

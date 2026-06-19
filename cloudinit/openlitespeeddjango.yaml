@@ -140,18 +140,59 @@ write_files:
       echo "=== OpenLiteSpeed + Django bootstrap started: $(date) ==="
 
       # --- random secret generator (SIGPIPE-safe under set -e + pipefail) ---
-      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
-      rand_long() { LC_ALL=C tr -dc 'A-Za-z0-9!@#%^&*()-_=+[]{}|;:,.<>?' </dev/urandom 2>/dev/null | head -c 50 || true; }
+      # Trims with dd (not head) so SIGPIPE can never truncate the value to
+      # empty/short (an empty OLS admin pass makes admpass reject it).
+      rand() {
+        local out=""
+        out="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | dd bs=1 count=24 2>/dev/null)"
+        if [ "${#out}" -lt 20 ]; then
+          out="$(openssl rand -hex 16 2>/dev/null || true)"
+        fi
+        if [ "${#out}" -lt 20 ]; then
+          out="Aa1$(date +%s%N)$$"
+        fi
+        printf '%s' "${out:0:24}"
+      }
+      rand_long() {
+        local out=""
+        out="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | dd bs=1 count=50 2>/dev/null)"
+        if [ "${#out}" -lt 40 ]; then
+          out="$(openssl rand -hex 32 2>/dev/null || true)"
+        fi
+        if [ "${#out}" -lt 40 ]; then
+          out="Aa1$(date +%s%N)$$$(date +%s%N)"
+        fi
+        printf '%s' "${out:0:50}"
+      }
 
       [ "$OLS_ADMIN_PASS"           = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
       [ "$DJANGO_SECRET_KEY"        = "CHANGE_ME" ] && DJANGO_SECRET_KEY="$(rand_long)"
       [ "$DJANGO_SUPERUSER_PASS"    = "CHANGE_ME" ] && DJANGO_SUPERUSER_PASS="$(rand)"
 
-      # --- install OpenLiteSpeed from official repo -------------------------
+      # --- install OpenLiteSpeed from the official LiteSpeed apt repo --------
+      #     The repo lives at rpms.litespeedtech.com keyed by Ubuntu codename;
+      #     the helper writes /etc/apt/sources.list.d/lst_debian_repo.list.
+      #     Never point a deb line at repo.litespeed.sh — that host serves the
+      #     install SCRIPT, not a package index (apt: "Clearsigned file isn't
+      #     valid, got 'NOSPLIT'"). Ubuntu 26.04 may lag; fall back to noble.
+      DISTRO_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")"
       # fallback: noble repo until 26.04 published
+      OLS_REPO_CODENAME="${DISTRO_CODENAME:-noble}"
+      KNOWN_CODENAMES="noble jammy focal bionic"
+      if ! echo "$KNOWN_CODENAMES" | grep -qw "$OLS_REPO_CODENAME"; then
+        echo "WARN: Codename '${OLS_REPO_CODENAME}' not known to LiteSpeed repo — using 'noble'"
+        OLS_REPO_CODENAME="noble"
+      fi
+
       if ! command -v lshttpd >/dev/null 2>&1; then
-        wget -qO /tmp/ols-repo.sh https://repo.litespeed.sh
-        bash /tmp/ols-repo.sh
+        if [ ! -f /etc/apt/sources.list.d/lst_debian_repo.list ]; then
+          curl -fsSL http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+            -o /etc/apt/trusted.gpg.d/lst_debian_repo.gpg
+          curl -fsSL http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+            -o /etc/apt/trusted.gpg.d/lst_repo.gpg
+          echo "deb http://rpms.litespeedtech.com/debian/ ${OLS_REPO_CODENAME} main" \
+            > /etc/apt/sources.list.d/lst_debian_repo.list
+        fi
         apt-get update -qq
         apt-get install -y openlitespeed
       else
@@ -252,6 +293,18 @@ write_files:
       chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
       # --- write Gunicorn systemd service ------------------------------------
+      # Use Type=simple (NOT Type=notify): the notify protocol regularly leaves
+      # the unit stuck in "activating (auto-restart) result=exit-code" when the
+      # sd_notify handshake doesn't complete, which is exactly the failure seen.
+      # simple is robust for a long-running gunicorn master.
+      #
+      # Log to a dir OWNED BY the app user — gunicorn cannot open root-owned
+      # /var/log/*.log as www-data, and that open() failure also kills the unit.
+      mkdir -p /var/log/gunicorn-django
+      chown -R "${APP_USER}:${APP_USER}" /var/log/gunicorn-django
+
+      # Confirm the wsgi module path actually resolves before wiring the unit.
+      WSGI_MODULE="${DJANGO_PROJECT}.wsgi:application"
       cat > /etc/systemd/system/gunicorn-django.service <<SVCUNIT
       [Unit]
       Description=Gunicorn for Django (OpenLiteSpeed reverse proxy)
@@ -259,31 +312,33 @@ write_files:
       Wants=network.target
 
       [Service]
-      Type=notify
+      Type=simple
       User=${APP_USER}
       Group=${APP_USER}
       WorkingDirectory=${APP_DIR}
       EnvironmentFile=/etc/openlitespeeddjango-app.env
       ExecStart=${VENV_DIR}/bin/gunicorn \\
           --workers 3 \\
+          --chdir ${APP_DIR} \\
           --bind 127.0.0.1:8000 \\
           --timeout 120 \\
-          --access-logfile /var/log/gunicorn-access.log \\
-          --error-logfile  /var/log/gunicorn-error.log \\
-          ${DJANGO_PROJECT}.wsgi:application
+          --access-logfile /var/log/gunicorn-django/access.log \\
+          --error-logfile  /var/log/gunicorn-django/error.log \\
+          ${WSGI_MODULE}
       Restart=on-failure
       RestartSec=5
       StandardOutput=journal
       StandardError=journal
       SyslogIdentifier=gunicorn-django
-      NotifyAccess=main
 
       [Install]
       WantedBy=multi-user.target
       SVCUNIT
 
       systemctl daemon-reload
-      systemctl enable --now gunicorn-django
+      systemctl enable --now gunicorn-django || \
+        { echo "WARN: gunicorn-django failed to start; recent log:"; \
+          journalctl -u gunicorn-django --no-pager -n 30 || true; }
 
       # --- configure OpenLiteSpeed vhosts/listener ---------------------------
       # Write a minimal httpd_config.conf addition via the conf include dir
@@ -425,7 +480,7 @@ write_files:
       Django secret key:      ${DJANGO_SECRET_KEY}
       App directory:          ${APP_DIR}
       Virtualenv:             ${APP_DIR}/venv
-      Gunicorn log:           journalctl -u gunicorn-django -f
+      Gunicorn log:           journalctl -u gunicorn-django -f  (also /var/log/gunicorn-django/)
       Bootstrap log:          /var/log/openlitespeeddjango-bootstrap.log
       OLS logs:               ${OLS_ROOT}/DEFAULT/logs/
       EOF
@@ -436,6 +491,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/openlitespeeddjango-bootstrap.sh" ]
 

@@ -145,8 +145,22 @@ write_files:
 
       # -----------------------------------------------------------------------
       # 0. Random-secret helper — SIGPIPE-safe under set -e + pipefail
+      #    Trims with dd (not head) so SIGPIPE can never truncate the value to
+      #    empty/short. An empty/short OLS_ADMIN_PASS is what made admpass.sh
+      #    abort the boot with "Sorry, password must be at least 6 charactors!".
+      #    Always returns >= 20 alphanumeric chars; never empty.
       # -----------------------------------------------------------------------
-      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      rand() {
+        local out=""
+        out="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | dd bs=1 count=24 2>/dev/null)"
+        if [ "${#out}" -lt 20 ]; then
+          out="$(openssl rand -hex 16 2>/dev/null || true)"
+        fi
+        if [ "${#out}" -lt 20 ]; then
+          out="Aa1$(date +%s%N)$$"
+        fi
+        printf '%s' "${out:0:24}"
+      }
 
       if [ "${DB_PASS}" = "CHANGE_ME" ]; then
         DB_PASS="$(rand)"
@@ -164,21 +178,30 @@ write_files:
       fi
 
       # -----------------------------------------------------------------------
-      # 1. OpenLiteSpeed — install via official repo
-      #    Ubuntu 26.04 ('plucky') may not have a published OLS repo yet;
-      #    fall back to noble (24.04) which is compatible.
+      # 1. OpenLiteSpeed — install via the official LiteSpeed apt repo
+      #    The repo lives at rpms.litespeedtech.com keyed by Ubuntu codename and
+      #    the helper writes /etc/apt/sources.list.d/lst_debian_repo.list. Never
+      #    point a deb line at repo.litespeed.sh — that host serves the install
+      #    SCRIPT, not a package index (apt fails: "Clearsigned file isn't
+      #    valid, got 'NOSPLIT'"). Ubuntu 26.04 may lag; fall back to noble.
       # -----------------------------------------------------------------------
-      UBUNTU_CODENAME="$(lsb_release -cs)"
+      DISTRO_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")"
+      # fallback: noble repo until 26.04 published
+      OLS_REPO_CODENAME="${DISTRO_CODENAME:-noble}"
+      KNOWN_CODENAMES="noble jammy focal bionic"
+      if ! echo "$KNOWN_CODENAMES" | grep -qw "$OLS_REPO_CODENAME"; then
+        echo "WARN: Codename '${OLS_REPO_CODENAME}' not known to LiteSpeed repo — using 'noble'"
+        OLS_REPO_CODENAME="noble"
+      fi
 
       if ! command -v lsws &>/dev/null && [ ! -f /usr/local/lsws/bin/lswsctrl ]; then
-        # Add OpenLiteSpeed GPG key and repository
-        wget -q -O /tmp/ols.key https://repo.litespeed.sh
-        if bash /tmp/ols.key 2>/dev/null; then
-          echo "OLS repo script applied for ${UBUNTU_CODENAME}"
-        else
-          # fallback: noble repo until 26.04 published
-          echo "WARN: OLS repo script failed for ${UBUNTU_CODENAME}, applying noble fallback"
-          curl -fsSL https://repo.litespeed.sh | DISTRO_CODENAME=noble bash || true
+        if [ ! -f /etc/apt/sources.list.d/lst_debian_repo.list ]; then
+          curl -fsSL http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+            -o /etc/apt/trusted.gpg.d/lst_debian_repo.gpg
+          curl -fsSL http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+            -o /etc/apt/trusted.gpg.d/lst_repo.gpg
+          echo "deb http://rpms.litespeedtech.com/debian/ ${OLS_REPO_CODENAME} main" \
+            > /etc/apt/sources.list.d/lst_debian_repo.list
         fi
         apt-get update -qq
         apt-get install -y openlitespeed || true
@@ -620,6 +643,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # runcmd — run the bootstrap once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/openlitespeedrails-bootstrap.sh" ]
 

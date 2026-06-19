@@ -218,16 +218,20 @@ write_files:
 
       log "Running N99panel installer (this may take 5–30 minutes)..."
 
+      export DEBIAN_FRONTEND=noninteractive
       INSTALL_EXIT=0
       if [ "${N99PANEL_LICENSE:-CHANGE_ME}" != "CHANGE_ME" ]; then
         # Pass the licence key non-interactively via stdin and env.
         export N99PANEL_LICENSE
-        echo "${N99PANEL_LICENSE}" | DEBIAN_FRONTEND=noninteractive \
-          bash /tmp/n99panel-install.sh || INSTALL_EXIT=$?
+        echo "${N99PANEL_LICENSE}" | bash /tmp/n99panel-install.sh </dev/stdin || INSTALL_EXIT=$?
       else
-        log "WARN: N99PANEL_LICENSE is not set — installer may pause for input."
-        log "      Set N99PANEL_LICENSE in /root/.n99panel-bootstrap.env and re-run."
-        DEBIAN_FRONTEND=noninteractive bash /tmp/n99panel-install.sh || INSTALL_EXIT=$?
+        log "WARN: N99PANEL_LICENSE is not set — running installer non-interactively."
+        log "      Set N99PANEL_LICENSE in /root/.n99panel-bootstrap.env and re-run to finish licensing."
+        # CRITICAL: redirect stdin from /dev/null so the installer can NEVER
+        # block waiting for a licence key on the console (that left cloud-init
+        # stuck in 'running'). Any prompt gets EOF and the installer continues
+        # or exits — either way the bootstrap proceeds to 'done'.
+        bash /tmp/n99panel-install.sh </dev/null || INSTALL_EXIT=$?
       fi
 
       rm -f /tmp/n99panel-install.sh
@@ -238,11 +242,15 @@ write_files:
       fi
 
       # -----------------------------------------------------------------
-      # Wait for N99panel installation to complete (up to 30 min).
+      # Wait (bounded, non-fatal) for the completion flag. The installer may
+      # legitimately keep working in the background — or never finish without a
+      # licence — so we poll for a SHORT window and then move on regardless.
+      # cloud-init must reach 'done'; we never block here indefinitely.
       # -----------------------------------------------------------------
-      log "Waiting for N99panel installation to complete..."
+      log "Waiting (up to ~8 min) for N99panel installation_completed flag..."
       WAIT=0
-      until [ -f /var/rt-n99p/installation_completed ] || [ "$WAIT" -ge 360 ]; do
+      MAX_WAIT=96   # 96 x 5s = 8 minutes
+      until [ -f /var/rt-n99p/installation_completed ] || [ "$WAIT" -ge "$MAX_WAIT" ]; do
         sleep 5
         WAIT=$((WAIT + 1))
       done
@@ -250,8 +258,9 @@ write_files:
       if [ -f /var/rt-n99p/installation_completed ]; then
         log "N99panel installation_completed flag found."
       else
-        log "WARN: installation_completed not found after ${WAIT} checks."
-        log "      N99panel may still be installing in the background."
+        log "INFO: installation_completed not present after ${WAIT} checks — continuing."
+        log "      N99panel may still be installing in the background, or is waiting"
+        log "      for a licence. Set N99PANEL_LICENSE and re-run /root/n99panel-bootstrap.sh."
       fi
 
       # -----------------------------------------------------------------
@@ -341,6 +350,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap script once at first boot.
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/n99panel-bootstrap.sh" ]
 

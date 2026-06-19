@@ -123,7 +123,7 @@
     "bitnami-via-vultr-prestashop": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -293,7 +293,7 @@
     "drupal": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -422,7 +422,7 @@
     "flarum": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -601,7 +601,7 @@
     "ispmanager": {
       "base_image": "",
       "services": [
-        "ispmgr"
+        "coremanager"
       ],
       "ports": [],
       "http": [],
@@ -616,9 +616,7 @@
         "jackd-dummy",
         "jamulus-server"
       ],
-      "ports": [
-        22124
-      ],
+      "ports": [],
       "http": [],
       "commands": [],
       "files": [
@@ -643,7 +641,7 @@
     "joomla": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -692,7 +690,7 @@
     "laravel": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb",
         "redis-server"
       ],
@@ -744,7 +742,7 @@
     "mediawiki": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -759,7 +757,7 @@
     "microweber": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -927,8 +925,7 @@
         "nginx"
       ],
       "ports": [
-        80,
-        11000
+        80
       ],
       "http": [],
       "commands": [],
@@ -999,9 +996,7 @@
         "nginx"
       ],
       "ports": [
-        80,
-        5432,
-        6379
+        80
       ],
       "http": [],
       "commands": [],
@@ -1015,11 +1010,7 @@
         "nginx"
       ],
       "ports": [
-        80,
-        3306,
-        5672,
-        6379,
-        9200
+        80
       ],
       "http": [],
       "commands": [],
@@ -1033,8 +1024,7 @@
         "nginx"
       ],
       "ports": [
-        80,
-        6379
+        80
       ],
       "http": [],
       "commands": [],
@@ -1206,7 +1196,7 @@
     "prestashop": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb"
       ],
       "ports": [
@@ -1304,7 +1294,8 @@
         "statusnook"
       ],
       "ports": [
-        8000
+        80,
+        443
       ],
       "http": [],
       "commands": [],
@@ -1423,7 +1414,7 @@
       "base_image": "",
       "services": [
         "xrdp",
-        "vncserver@"
+        "vncserver@1"
       ],
       "ports": [],
       "http": [],
@@ -1522,7 +1513,7 @@
     "woocommerce": {
       "base_image": "",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb",
         "redis-server"
       ],
@@ -1538,7 +1529,7 @@
     "wordpress": {
       "base_image": "ubuntu24.qcow2",
       "services": [
-        "php-fpm",
+        "php8.3-fpm",
         "mariadb",
         "redis-server"
       ],

@@ -37,7 +37,6 @@ packages:
   - php-intl
   - php-zip
   - php-bcmath
-  - php-tokenizer
   - php-dom
   - php-json
   - php-fileinfo
@@ -206,7 +205,10 @@ write_files:
         sed -ri 's/^;?memory_limit.*/memory_limit = 256M/'              "$PHP_INI"
         sed -ri 's/^;?max_execution_time.*/max_execution_time = 120/'   "$PHP_INI"
       fi
-      systemctl restart "php*-fpm" 2>/dev/null || systemctl restart php-fpm || true
+      # --- enable + (re)start PHP-FPM (Ubuntu 24.04 = php8.3-fpm; no 'php-fpm' alias) ---
+      FPM_SVC="$(systemctl list-unit-files --no-legend 'php*-fpm.service' 2>/dev/null | awk '{print $1}' | head -n1)"
+      [ -n "$FPM_SVC" ] && systemctl enable --now "$FPM_SVC" 2>/dev/null || true
+      [ -n "$FPM_SVC" ] && systemctl restart "$FPM_SVC" 2>/dev/null || true
 
       # --- install Composer if not present ---
       if ! command -v composer >/dev/null 2>&1; then
@@ -237,10 +239,16 @@ write_files:
       SQL
 
       # --- install Flarum via Composer ---
+      # www-data's HOME (/var/www) is not writable for composer's cache, so give
+      # it an explicit writable COMPOSER_HOME/HOME (sudo strips env by default).
+      mkdir -p /tmp/composer
+      chown -R www-data:www-data /tmp/composer
       mkdir -p "$FLARUM_PATH"
+      chown -R www-data:www-data "$FLARUM_PATH"
       if [ ! -f "${FLARUM_PATH}/composer.json" ]; then
         echo "Creating Flarum project in ${FLARUM_PATH}..."
-        sudo -u www-data composer create-project flarum/flarum "${FLARUM_PATH}" \
+        sudo -u www-data env HOME=/tmp/composer COMPOSER_HOME=/tmp/composer COMPOSER_ALLOW_SUPERUSER=1 \
+          composer create-project flarum/flarum "${FLARUM_PATH}" \
           --stability=stable --no-interaction --no-progress 2>&1
       else
         echo "Flarum project directory already exists, skipping create-project."
@@ -312,7 +320,8 @@ write_files:
       sed -i "s|FLARUM_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|g"    /etc/nginx/sites-available/flarum.conf
       ln -sf /etc/nginx/sites-available/flarum.conf /etc/nginx/sites-enabled/flarum.conf
       rm -f /etc/nginx/sites-enabled/default
-      nginx -t && systemctl reload nginx
+      systemctl enable nginx 2>/dev/null || true
+      nginx -t && { systemctl reload nginx 2>/dev/null || systemctl restart nginx; }
 
       # --- firewall ---
       ufw allow OpenSSH
@@ -352,6 +361,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/flarum-bootstrap.sh" ]
 

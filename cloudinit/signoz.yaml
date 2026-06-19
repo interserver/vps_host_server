@@ -2,11 +2,11 @@
 # =============================================================================
 # SigNoz "one-click app" — Ubuntu 26.04 cloud-init user-data
 # Stack: SigNoz OSS (Docker Compose, official install script)
-#        SigNoz UI on port 3301 (HTTP); optional Nginx reverse-proxy + TLS
+#        SigNoz UI on port 8080 (HTTP); optional Nginx reverse-proxy + TLS
 #        UFW firewall + fail2ban + swap + unattended-upgrades
 # -----------------------------------------------------------------------------
 # SigNoz components:
-#   - Frontend/UI          : port 3301
+#   - Frontend/UI          : port 8080
 #   - OpenTelemetry (OTLP) : ports 4317 (gRPC), 4318 (HTTP)
 #   - ClickHouse           : internal only
 #   - Query-service        : internal only
@@ -75,7 +75,7 @@ write_files:
       ADMIN_PASS="CHANGE_ME"
 
       # Optional: domain name for Nginx reverse-proxy + TLS
-      # Leave empty to access SigNoz directly on port 3301
+      # Leave empty to access SigNoz directly on port 8080
       APP_DOMAIN=""
 
       # Let's Encrypt email (used only when APP_DOMAIN is set)
@@ -84,8 +84,9 @@ write_files:
       # Enable TLS via Certbot (only takes effect when APP_DOMAIN is also set)
       ENABLE_TLS="true"
 
-      # SigNoz UI port (default 3301; opened in UFW automatically)
-      SIGNOZ_PORT="3301"
+      # SigNoz UI port (default 8080; opened in UFW automatically)
+      # NOTE: SigNoz moved the default UI port from 3301 to 8080.
+      SIGNOZ_PORT="8080"
 
       # OpenTelemetry OTLP ports to expose (set to "true" to open in UFW)
       EXPOSE_OTLP="false"
@@ -95,7 +96,9 @@ write_files:
       # SigNoz install directory
       SIGNOZ_DIR="/opt/signoz"
 
-      # Docker Compose version of SigNoz to install ("latest" or a tag like "0.45.0")
+      # Git ref of SigNoz to install ("latest" tracks the main branch, or pin a
+      # release tag such as "v0.90.0"). The self-host compose lives in the repo
+      # at deploy/docker/docker-compose.yaml on main.
       SIGNOZ_VERSION="latest"
 
   # --- fail2ban — protect SSH and Nginx --------------------------------------
@@ -138,9 +141,9 @@ write_files:
       Type=oneshot
       RemainAfterExit=yes
       WorkingDirectory=/opt/signoz/deploy
-      ExecStart=/usr/bin/docker compose -f docker/clickhouse-setup/docker-compose.yaml up -d --remove-orphans
-      ExecStop=/usr/bin/docker compose -f docker/clickhouse-setup/docker-compose.yaml down
-      ExecReload=/usr/bin/docker compose -f docker/clickhouse-setup/docker-compose.yaml pull
+      ExecStart=/usr/bin/docker compose -f docker/docker-compose.yaml up -d --remove-orphans
+      ExecStop=/usr/bin/docker compose -f docker/docker-compose.yaml down
+      ExecReload=/usr/bin/docker compose -f docker/docker-compose.yaml pull
       StandardOutput=journal
       StandardError=journal
       TimeoutStartSec=300
@@ -217,9 +220,12 @@ write_files:
       if [ ! -d "${SIGNOZ_DIR}/.git" ]; then
         echo "Cloning SigNoz repository..."
         if [ "${SIGNOZ_VERSION}" = "latest" ]; then
-          git clone --depth=1 https://github.com/SigNoz/signoz.git "${SIGNOZ_DIR}"
+          # self-host compose lives on the main branch
+          git clone --depth=1 --branch main \
+            https://github.com/SigNoz/signoz.git "${SIGNOZ_DIR}"
         else
-          git clone --depth=1 --branch "v${SIGNOZ_VERSION}" \
+          # accept either "v0.90.0" or "0.90.0" — pass exactly as given
+          git clone --depth=1 --branch "${SIGNOZ_VERSION}" \
             https://github.com/SigNoz/signoz.git "${SIGNOZ_DIR}"
         fi
       else
@@ -228,21 +234,34 @@ write_files:
 
       # -----------------------------------------------------------------------
       # 3. Configure SigNoz — patch the Compose file to expose the UI port
-      #    on all interfaces (default in the repo already uses 3301:3301)
+      #    on all interfaces (default in the repo already uses 8080:8080)
       # -----------------------------------------------------------------------
-      COMPOSE_FILE="${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml"
+      # SigNoz moved its self-host compose from deploy/docker/clickhouse-setup/
+      # up to deploy/docker/. Probe both layouts so this works across versions.
+      COMPOSE_REL=""
+      for _rel in \
+        "deploy/docker/docker-compose.yaml" \
+        "deploy/docker/clickhouse-setup/docker-compose.yaml"; do
+        if [ -f "${SIGNOZ_DIR}/${_rel}" ]; then
+          COMPOSE_REL="${_rel}"
+          break
+        fi
+      done
 
-      # Confirm the compose file is present
-      if [ ! -f "${COMPOSE_FILE}" ]; then
-        echo "ERROR: Compose file not found at ${COMPOSE_FILE}"
-        echo "       Repository layout may have changed; inspect ${SIGNOZ_DIR}/deploy/"
-        ls "${SIGNOZ_DIR}/deploy/" || true
+      if [ -z "${COMPOSE_REL}" ]; then
+        echo "ERROR: SigNoz compose file not found in known locations under ${SIGNOZ_DIR}/deploy/"
+        echo "       Repository layout may have changed; inspect the tree below:"
+        find "${SIGNOZ_DIR}/deploy" -maxdepth 3 -name 'docker-compose*.yaml' 2>/dev/null || true
         exit 1
       fi
 
-      # If the operator chose a non-default UI port, patch it
-      if [ "${SIGNOZ_PORT}" != "3301" ]; then
-        sed -i "s|3301:3301|${SIGNOZ_PORT}:3301|g" "${COMPOSE_FILE}"
+      COMPOSE_FILE="${SIGNOZ_DIR}/${COMPOSE_REL}"
+      echo "Using SigNoz compose file: ${COMPOSE_FILE}"
+
+      # SigNoz's default UI port is 8080. If the operator chose another port,
+      # remap the host side of whichever published mapping exists (8080 or 3301).
+      if [ "${SIGNOZ_PORT}" != "8080" ] && [ "${SIGNOZ_PORT}" != "3301" ]; then
+        sed -i "s|8080:8080|${SIGNOZ_PORT}:8080|g; s|3301:3301|${SIGNOZ_PORT}:3301|g" "${COMPOSE_FILE}"
       fi
 
       # -----------------------------------------------------------------------
@@ -260,8 +279,10 @@ write_files:
       # Update the WorkingDirectory in the unit to match the resolved path
       sed -i "s|WorkingDirectory=/opt/signoz/deploy|WorkingDirectory=${SIGNOZ_DIR}/deploy|" \
         /etc/systemd/system/signoz.service
-      COMPOSE_REL="docker/clickhouse-setup/docker-compose.yaml"
-      sed -i "s|docker/clickhouse-setup/docker-compose.yaml|${COMPOSE_REL}|g" \
+      # Rewrite the unit's compose path (relative to deploy/) to the resolved one.
+      # COMPOSE_REL is "deploy/docker/...": strip the leading "deploy/".
+      UNIT_COMPOSE_REL="${COMPOSE_REL#deploy/}"
+      sed -i "s|docker/docker-compose.yaml|${UNIT_COMPOSE_REL}|g" \
         /etc/systemd/system/signoz.service
       systemctl daemon-reload
       systemctl enable signoz
@@ -421,18 +442,18 @@ write_files:
 
       SigNoz version installed : ${SIGNOZ_VERSION_INSTALLED}
       Install directory        : ${SIGNOZ_DIR}
-      Docker Compose file      : ${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml
+      Docker Compose file      : ${COMPOSE_FILE}
       Bootstrap log            : /var/log/signoz-bootstrap.log
 
       Service management:
         systemctl status  signoz
         systemctl restart signoz
-        docker compose -f ${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml ps
-        docker compose -f ${SIGNOZ_DIR}/deploy/docker/clickhouse-setup/docker-compose.yaml logs -f
+        docker compose -f ${COMPOSE_FILE} ps
+        docker compose -f ${COMPOSE_FILE} logs -f
 
       Upgrade:
         cd ${SIGNOZ_DIR} && git pull
-        docker compose -f deploy/docker/clickhouse-setup/docker-compose.yaml pull
+        docker compose -f ${COMPOSE_REL} pull
         systemctl restart signoz
       CREDS
       chmod 600 /root/signoz-credentials.txt
@@ -442,6 +463,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/signoz-bootstrap.sh" ]
 

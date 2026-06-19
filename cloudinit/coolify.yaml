@@ -167,7 +167,16 @@ write_files:
       if command -v coolify > /dev/null 2>&1; then
         log "Coolify binary already present — skipping install."
       else
-        curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+        # Download the installer to a file first, then execute it explicitly
+        # with bash. Piping "curl | bash" is fragile here: the installer's own
+        # interactive prompts/`read` calls consume bytes from the *same* stdin
+        # pipe that is feeding the script, desyncing it so that later body lines
+        # (e.g. the literal "Done.") get run as commands —
+        # "bash: line NNN: Done.: command not found". Running from a real file
+        # with stdin detached (</dev/null) avoids the desync entirely.
+        curl -fsSL https://cdn.coollabs.io/coolify/install.sh -o /tmp/coolify-install.sh
+        bash /tmp/coolify-install.sh </dev/null
+        rm -f /tmp/coolify-install.sh
         log "Coolify installer completed."
       fi
 
@@ -270,6 +279,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap script exactly once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/coolify-bootstrap.sh" ]
 

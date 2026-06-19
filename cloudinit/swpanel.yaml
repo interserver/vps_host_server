@@ -180,14 +180,26 @@ write_files:
       command -v curl >/dev/null 2>&1 || apt-get install -y curl
       command -v wget >/dev/null 2>&1 || apt-get install -y wget
 
-      wget -qO /tmp/swpanel-install.sh https://deployment.swpanel.com/install.sh
-      chmod +x /tmp/swpanel-install.sh
+      export DEBIAN_FRONTEND=noninteractive
+      # Tolerant download — a failed fetch must not abort the bootstrap.
+      if ! curl -fsSL --max-time 60 https://deployment.swpanel.com/install.sh -o /tmp/swpanel-install.sh \
+           || [ ! -s /tmp/swpanel-install.sh ]; then
+        wget -qO /tmp/swpanel-install.sh https://deployment.swpanel.com/install.sh || true
+      fi
+      chmod +x /tmp/swpanel-install.sh 2>/dev/null || true
 
       log "Running SWPanel installer (non-interactive)..."
-      # REMOTE_DISCLAIMER_ACCEPTED=1 skips the interactive prompt.
-      # The installer launches a systemd first-boot service and returns;
-      # actual panel setup continues in the background.
-      REMOTE_DISCLAIMER_ACCEPTED=1 bash /tmp/swpanel-install.sh
+      # REMOTE_DISCLAIMER_ACCEPTED=1 skips the interactive disclaimer prompt.
+      # The installer launches a systemd first-boot service and returns; actual
+      # panel setup continues in the background. Wrap in '|| true' so a non-zero
+      # exit (e.g. OS-version warning) does not abort cloud-init before it
+      # reaches 'done'.
+      if [ -s /tmp/swpanel-install.sh ]; then
+        REMOTE_DISCLAIMER_ACCEPTED=1 bash /tmp/swpanel-install.sh || \
+          log "WARN: SWPanel installer returned non-zero — it may still be initialising in the background"
+      else
+        log "WARN: could not download SWPanel installer — check network; finish install manually"
+      fi
       rm -f /tmp/swpanel-install.sh
 
       log "SWPanel installer launched — background service is running."
@@ -304,6 +316,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap script once at first boot.
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/swpanel-bootstrap.sh" ]
 

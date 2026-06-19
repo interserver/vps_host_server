@@ -168,8 +168,13 @@ write_files:
       #!/bin/sh
       unset DBUS_SESSION_BUS_ADDRESS
       unset XDG_RUNTIME_DIR
+      export XDG_SESSION_TYPE=x11
       export GNOME_SHELL_SESSION_MODE=ubuntu
-      exec /usr/bin/gnome-session
+      export XDG_CURRENT_DESKTOP=GNOME
+      [ -r /etc/X11/Xresources ] && xrdb /etc/X11/Xresources
+      # GNOME Shell requires a session bus; without dbus-run-session the session
+      # exits immediately and the forking VNC unit times out / errors.
+      exec dbus-run-session -- /usr/bin/gnome-session
       XEOF
       chmod 0755 "${VNC_DIR}/xstartup"
       chown -R "${DESKTOP_USER}:${DESKTOP_USER}" "${VNC_DIR}"
@@ -276,11 +281,15 @@ write_files:
         sed -i "s/^port=.*/port=${RDP_PORT}/" /etc/xrdp/xrdp.ini
       fi
 
-      systemctl enable --now xrdp
+      systemctl enable --now xrdp || echo "WARN: xrdp failed to start — check journalctl -u xrdp"
       echo "xrdp enabled on port ${RDP_PORT}."
 
       # --- configure TigerVNC for the desktop user ----------------------------
-      /root/setup-vnc.sh
+      # setup-vnc.sh runs under its own 'set -e'; never let it abort the whole
+      # bootstrap (which would make cloud-init report 'error').
+      DESKTOP_USER="${DESKTOP_USER}" DESKTOP_PASS="${DESKTOP_PASS}" bash /root/setup-vnc.sh \
+        || echo "WARN: setup-vnc.sh returned non-zero — VNC password/xstartup may need manual setup"
+      systemctl daemon-reload
       # Enable per-display service (display :1 → username maps to desktopuser)
       # The unit uses the username as the instance; symlink to a predictable name
       systemctl enable "vncserver@${DESKTOP_USER}" || true
@@ -337,6 +346,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/ubuntu-desktop-gnome-bootstrap.sh" ]
 

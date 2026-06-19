@@ -1,6 +1,6 @@
 #cloud-config
 # =============================================================================
-# ClusterControl "one-click app" — Ubuntu 26.04 cloud-init user-data
+# ClusterControl "one-click app" — Ubuntu 24.04 LTS (noble) cloud-init user-data
 # Stack: ClusterControl (Severalnines) + MariaDB (local backend) + Apache +
 #        UFW firewall + fail2ban + swap + unattended-upgrades
 # -----------------------------------------------------------------------------
@@ -184,22 +184,10 @@ write_files:
       sysctl -p /etc/sysctl.d/90-clustercontrol.conf || true
 
       # -----------------------------------------------------------------------
-      # Add Severalnines (ClusterControl) apt repo
-      # fallback: noble repo until 26.04 published
+      # ClusterControl is installed below via the official install-cc script
+      # (the old repo.severalnines.com apt repo is retired — it 404s).
+      # See "Install ClusterControl" step further down.
       # -----------------------------------------------------------------------
-      if [ ! -f /etc/apt/sources.list.d/severalnines-stable.list ]; then
-        # Import Severalnines GPG key
-        wget -qO- https://repo.severalnines.com/severalnines-repos.asc \
-          | gpg --dearmor -o /etc/apt/trusted.gpg.d/severalnines.gpg
-
-        # Use noble (24.04) repo — no 26.04 line published yet
-        cat > /etc/apt/sources.list.d/severalnines-stable.list <<'REPO'
-      # fallback: noble repo until 26.04 published
-      deb [signed-by=/etc/apt/trusted.gpg.d/severalnines.gpg] http://repo.severalnines.com/repos/ubuntu noble main
-      REPO
-
-        apt-get update -q
-      fi
 
       # -----------------------------------------------------------------------
       # Install MariaDB from official upstream repo (latest stable)
@@ -260,28 +248,33 @@ write_files:
       systemctl restart mariadb
 
       # -----------------------------------------------------------------------
-      # Install ClusterControl via the official Severalnines installer
+      # Install ClusterControl via the official Severalnines install-cc script
+      # https://severalnines.com/downloads/cmon/install-cc  (verified reachable)
+      # This is the current, supported method — it adds the correct apt repos
+      # for the running distro, installs cmon + controller + web UI + deps, and
+      # wires up the CMON database. We feed it our pre-generated passwords via
+      # the documented environment variables so the install is non-interactive.
       # -----------------------------------------------------------------------
-      # The installer expects CMON DB credentials in /etc/cmon.d/cmon.cnf or via env.
-      # We pre-stage the cmon config so the installer picks up our passwords.
-      mkdir -p /etc/cmon.d
-      cat > /etc/cmon.d/cmon.cnf <<CMONCNF
-      [cmon]
-      mysql_port=3306
-      mysql_hostname=127.0.0.1
-      mysql_password=${CC_DB_PASS}
-      hostname=$(hostname -f || hostname)
-      CMONCNF
-      chmod 640 /etc/cmon.d/cmon.cnf
+      export S9S_CMON_PASSWORD="${CC_DB_PASS}"
+      export S9S_ROOT_PASSWORD="${MYSQL_ROOT_PASS}"
+      export S9S_DB_PORT=3306
+      # Skip the installer's own MariaDB/Percona provisioning since we already
+      # installed and secured MariaDB above (HOST=127.0.0.1 reuses it).
+      export HOST=127.0.0.1
+      export INSTALL_VENDOR=mariadb
 
-      # Install clustercontrol package (installs cmon + the web UI + Apache + PHP)
-      DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        clustercontrol \
-        clustercontrol-controller \
-        clustercontrol-notifications \
-        clustercontrol-ssh \
-        clustercontrol-cloud 2>/dev/null || \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y clustercontrol
+      CC_INSTALLER=/root/install-cc
+      if wget -q -O "${CC_INSTALLER}" https://severalnines.com/downloads/cmon/install-cc; then
+        chmod +x "${CC_INSTALLER}"
+        # -n = non-interactive; installer is idempotent enough for re-runs.
+        S9S_CMON_PASSWORD="${CC_DB_PASS}" \
+        S9S_ROOT_PASSWORD="${MYSQL_ROOT_PASS}" \
+        HOST=127.0.0.1 \
+          bash "${CC_INSTALLER}" || \
+          echo "WARN: install-cc returned non-zero — review /var/log/clustercontrol-bootstrap.log"
+      else
+        echo "ERROR: could not download install-cc from severalnines.com — check network/DNS." >&2
+      fi
 
       # -----------------------------------------------------------------------
       # Post-install: run the ClusterControl setup script if present
@@ -403,6 +396,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/clustercontrol-bootstrap.sh" ]
 

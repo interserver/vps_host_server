@@ -40,6 +40,7 @@ packages:
   - curl
   - gnupg
   - lsb-release
+  - software-properties-common
   - git
   - htop
   - wget
@@ -121,37 +122,39 @@ write_files:
       fi
 
       # -----------------------------------------------------------------------
-      # 1. Microsoft .NET apt repository
-      #    Ubuntu 26.04 ('plucky') may not have a published release line yet;
-      #    fall back to 24.04 noble packages which are compatible.
+      # 1. Install the .NET SDK from Ubuntu's own feeds (noble / 24.04)
+      #    IMPORTANT: As of Ubuntu 24.04, Microsoft NO LONGER publishes .NET to
+      #    packages.microsoft.com — .NET ships in the Ubuntu archive instead.
+      #    Mixing the Microsoft feed with the Ubuntu/backports packages breaks
+      #    installs (the old packages-microsoft-prod.deb path was the root cause
+      #    of "E: Unable to locate package dotnet-sdk-9.0").
+      #      - .NET 8 SDK/runtime: in the default Ubuntu archive (universe)
+      #      - .NET 9 SDK/runtime: in the 'ppa:dotnet/backports' Ubuntu feed
+      #    Do NOT add any packages.microsoft.com repo here.
       # -----------------------------------------------------------------------
-      UBUNTU_CODENAME="$(lsb_release -cs)"
-      MSFT_CODENAME="${UBUNTU_CODENAME}"
+      export DEBIAN_FRONTEND=noninteractive
+      add-apt-repository -y universe || true
 
-      # fallback: noble repo until 26.04 published
-      MSFT_FEED_URL="https://packages.microsoft.com/config/ubuntu"
-      if ! curl -fsSL "${MSFT_FEED_URL}/${UBUNTU_CODENAME}/packages-microsoft-prod.deb" \
-           -o /tmp/packages-microsoft-prod.deb 2>/dev/null; then
-        echo "WARN: No Microsoft repo for ${UBUNTU_CODENAME}, falling back to noble"
-        MSFT_CODENAME="24.04"
-        curl -fsSL "${MSFT_FEED_URL}/24.04/packages-microsoft-prod.deb" \
-          -o /tmp/packages-microsoft-prod.deb
-      fi
-
-      if ! dpkg -l packages-microsoft-prod &>/dev/null; then
-        dpkg -i /tmp/packages-microsoft-prod.deb
-      fi
-      rm -f /tmp/packages-microsoft-prod.deb
-
-      apt-get update -qq
-
-      # -----------------------------------------------------------------------
-      # 2. Install .NET SDK (includes runtime)
-      # -----------------------------------------------------------------------
       DOTNET_PKG="dotnet-sdk-${DOTNET_VERSION}"
+
+      install_dotnet() {
+        apt-get install -y "${DOTNET_PKG}"
+      }
+
       if ! command -v dotnet &>/dev/null; then
-        apt-get install -y "${DOTNET_PKG}" || \
-          apt-get install -y dotnet-sdk-9.0   # explicit fallback
+        apt-get update -qq
+        if ! install_dotnet; then
+          # dotnet-sdk-9.0 is not in the base archive — add the backports PPA,
+          # which provides .NET 9 (and newer) for noble.
+          echo "INFO: ${DOTNET_PKG} not found in base archive; adding ppa:dotnet/backports"
+          add-apt-repository -y ppa:dotnet/backports
+          apt-get update -qq
+          if ! install_dotnet; then
+            echo "WARN: ${DOTNET_PKG} unavailable; falling back to dotnet-sdk-8.0 (in Ubuntu archive)"
+            DOTNET_PKG="dotnet-sdk-8.0"
+            apt-get install -y "${DOTNET_PKG}"
+          fi
+        fi
       fi
       dotnet --version
 
@@ -329,6 +332,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # runcmd — run the bootstrap once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/aspnet-bootstrap.sh" ]
 

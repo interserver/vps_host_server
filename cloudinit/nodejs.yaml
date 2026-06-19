@@ -193,8 +193,15 @@ write_files:
       # --- install Node.js LTS via NodeSource --------------------------------
       # fallback: noble repo until 26.04 published
       if ! command -v node >/dev/null 2>&1; then
-        curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
-        apt-get install -y nodejs
+        # NOTE: do NOT pipe the NodeSource script to `bash -`. Run from stdin,
+        # its internal `configure_repo` -> apt/gpg steps consume the remaining
+        # script bytes off stdin, truncating the source mid-token (observed:
+        # `nfigure_repo: command not found`, exit 127). Download to a file and
+        # execute with stdin detached so nothing can eat the script source.
+        curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" -o /tmp/nodesource_setup.sh
+        bash /tmp/nodesource_setup.sh </dev/null
+        rm -f /tmp/nodesource_setup.sh
+        apt-get install -y nodejs </dev/null
       else
         echo "node already installed: $(node --version)"
       fi
@@ -313,6 +320,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/nodejs-bootstrap.sh" ]
 

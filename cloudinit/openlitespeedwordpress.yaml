@@ -143,7 +143,21 @@ write_files:
       echo "=== OpenLiteSpeed WordPress bootstrap started: $(date) ==="
 
       # --- SIGPIPE-safe random secret generator ---
-      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      # Reads a fixed block from urandom and trims with a pure-bash substring so
+      # no SIGPIPE can truncate the result to an empty/short string (which makes
+      # the OLS admpass installer reject it: "password must be at least 6 ...").
+      # Always returns >= 20 alphanumeric chars; never empty.
+      rand() {
+        local out=""
+        out="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | dd bs=1 count=24 2>/dev/null)"
+        if [ "${#out}" -lt 20 ]; then
+          out="$(openssl rand -hex 16 2>/dev/null || true)"
+        fi
+        if [ "${#out}" -lt 20 ]; then
+          out="Aa1$(date +%s%N)$$"
+        fi
+        printf '%s' "${out:0:24}"
+      }
 
       # --- randomise any CHANGE_ME passwords ---
       [ "$WP_DB_PASS"      = "CHANGE_ME" ] && WP_DB_PASS="$(rand)"
@@ -152,46 +166,52 @@ write_files:
       [ "$OLS_ADMIN_PASS"  = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
 
       # -----------------------------------------------------------------------
-      # 1. Add OpenLiteSpeed repository
-      #    fallback: noble repo until 26.04 published
+      # 1. Add the official LiteSpeed apt repository
+      #    The repo is served from rpms.litespeedtech.com keyed by the Ubuntu
+      #    codename. The repo.litespeed.sh helper script writes
+      #    /etc/apt/sources.list.d/lst_debian_repo.list. NOTE: never point a
+      #    deb line at repo.litespeed.sh itself — that host serves the install
+      #    SCRIPT, not a package index, and apt fails with a bogus
+      #    "Clearsigned file isn't valid, got 'NOSPLIT'" InRelease error.
+      #    Ubuntu 26.04 may not have a published repo line yet; fall back to
+      #    noble (24.04), which is package-compatible.
       # -----------------------------------------------------------------------
-      if [ ! -f /etc/apt/sources.list.d/openlitespeed.list ]; then
-        wget -qO /tmp/openlitespeed.pub https://repo.litespeed.sh
-        # The official install script sets up the repo automatically
-        bash /tmp/openlitespeed.pub || true
+      DISTRO_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")"
+      # fallback: noble repo until 26.04 published
+      OLS_REPO_CODENAME="${DISTRO_CODENAME:-noble}"
+      KNOWN_CODENAMES="noble jammy focal bionic"
+      if ! echo "$KNOWN_CODENAMES" | grep -qw "$OLS_REPO_CODENAME"; then
+        echo "WARN: Codename '${OLS_REPO_CODENAME}' not known to LiteSpeed repo — using 'noble'"
+        OLS_REPO_CODENAME="noble"
+      fi
 
-        # If the above script did not create a sources file, add manually
-        if [ ! -f /etc/apt/sources.list.d/openlitespeed.list ] && \
-           [ ! -f /etc/apt/sources.list.d/litespeed.list ]; then
-          wget -qO /usr/share/keyrings/openlitespeed.asc \
-            https://repo.litespeed.sh/openlitespeed.asc 2>/dev/null || \
-          curl -fsSL https://openlitespeed.org/public/OpenLiteSpeedKey.asc \
-            -o /usr/share/keyrings/openlitespeed.asc
-          # fallback: noble repo until 26.04 published
-          echo "deb [signed-by=/usr/share/keyrings/openlitespeed.asc] https://repo.litespeed.sh noble main" \
-            > /etc/apt/sources.list.d/openlitespeed.list
-        fi
+      if [ ! -f /etc/apt/sources.list.d/lst_debian_repo.list ]; then
+        curl -fsSL http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+          -o /etc/apt/trusted.gpg.d/lst_debian_repo.gpg
+        curl -fsSL http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+          -o /etc/apt/trusted.gpg.d/lst_repo.gpg
+        echo "deb http://rpms.litespeedtech.com/debian/ ${OLS_REPO_CODENAME} main" \
+          > /etc/apt/sources.list.d/lst_debian_repo.list
         apt-get update -qq
       fi
 
       # -----------------------------------------------------------------------
       # 2. Install OpenLiteSpeed + LSPHP
       # -----------------------------------------------------------------------
+      # NOTE: on the LiteSpeed noble repo, gd/zip/mbstring/xml/bcmath are
+      # COMPILED INTO the base lsphpXX/-common package — there are no separate
+      # lsphpXX-gd/-zip/-mbstring/-xml/-bcmath packages (unlike RPM distros).
+      # Installing only the packages that actually exist for noble.
       command -v lshttpd >/dev/null 2>&1 || apt-get install -y openlitespeed
-      command -v /usr/local/lsws/lsphp84/bin/php >/dev/null 2>&1 || \
+      command -v "/usr/local/lsws/${LSPHP_VER}/bin/php" >/dev/null 2>&1 || \
         apt-get install -y \
           "${LSPHP_VER}" \
           "${LSPHP_VER}-common" \
           "${LSPHP_VER}-mysql" \
           "${LSPHP_VER}-opcache" \
           "${LSPHP_VER}-curl" \
-          "${LSPHP_VER}-gd" \
-          "${LSPHP_VER}-mbstring" \
-          "${LSPHP_VER}-xml" \
-          "${LSPHP_VER}-zip" \
           "${LSPHP_VER}-intl" \
-          "${LSPHP_VER}-imagick" \
-          "${LSPHP_VER}-bcmath" || true
+          "${LSPHP_VER}-imagick" || true
 
       # Derive the PHP binary path from LSPHP_VER (e.g. lsphp84 -> 8.4)
       LSPHP_NUM="${LSPHP_VER#lsphp}"                         # e.g. 84
@@ -563,6 +583,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/openlitespeedwordpress-bootstrap.sh" ]
 

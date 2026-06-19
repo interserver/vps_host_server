@@ -42,7 +42,6 @@ packages:
   - php-zip
   - php-bcmath
   - php-opcache
-  - php-tokenizer
   - php-dom
   - php-fileinfo
   - php-redis
@@ -242,10 +241,17 @@ write_files:
         sed -ri 's/^;?opcache.memory_consumption.*/opcache.memory_consumption=128/' "$FPM_INI"
         sed -ri 's/^;?opcache.validate_timestamps.*/opcache.validate_timestamps=0/' "$FPM_INI"
       fi
-      systemctl restart "php${PHP_VER}-fpm" 2>/dev/null \
-        || systemctl restart php-fpm 2>/dev/null \
-        || true
+      # --- enable + (re)start PHP-FPM (Ubuntu 24.04 = php8.3-fpm; no 'php-fpm' alias) ---
+      FPM_SVC="php${PHP_VER}-fpm"
+      systemctl list-unit-files "${FPM_SVC}.service" >/dev/null 2>&1 \
+        || FPM_SVC="$(systemctl list-unit-files --no-legend 'php*-fpm.service' 2>/dev/null | awk '{print $1}' | head -n1)"
+      [ -n "$FPM_SVC" ] && systemctl enable --now "$FPM_SVC" 2>/dev/null || true
+      [ -n "$FPM_SVC" ] && systemctl restart "$FPM_SVC" 2>/dev/null || true
 
+      # --- composer env (running as root; needs allow-superuser + writable cache) ---
+      export COMPOSER_ALLOW_SUPERUSER=1
+      export COMPOSER_HOME=/root/.composer
+      mkdir -p "$COMPOSER_HOME"
       # --- ensure Composer 2 is available globally ---
       if ! command -v composer >/dev/null 2>&1; then
         curl -fsSL https://getcomposer.org/installer \
@@ -345,7 +351,8 @@ write_files:
       sed -i "s|PHP_FPM_SOCK_PLACEHOLDER|${PHP_FPM_SOCK}|g"  /etc/nginx/sites-available/laravel.conf
       ln -sf /etc/nginx/sites-available/laravel.conf /etc/nginx/sites-enabled/laravel.conf
       rm -f /etc/nginx/sites-enabled/default
-      nginx -t && systemctl reload nginx
+      systemctl enable nginx 2>/dev/null || true
+      nginx -t && { systemctl reload nginx 2>/dev/null || systemctl restart nginx; }
 
       # --- firewall ---
       ufw allow OpenSSH
@@ -391,6 +398,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/laravel-bootstrap.sh" ]
 

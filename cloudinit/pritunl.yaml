@@ -1,6 +1,6 @@
 #cloud-config
 # =============================================================================
-# Pritunl VPN Server — Ubuntu 26.04 LTS cloud-init user-data
+# Pritunl VPN Server — Ubuntu 24.04 LTS (noble) cloud-init user-data
 # Stack: Pritunl Community + MongoDB (from vendor apt repos)
 #        UFW firewall + fail2ban + unattended-upgrades
 # -----------------------------------------------------------------------------
@@ -200,33 +200,32 @@ write_files:
         || echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.conf
 
       # ------------------------------------------------------------------
-      # 5. Add MongoDB 7.0 apt repository
+      # 5. Add MongoDB 8.0 apt repository
       #    Pritunl requires MongoDB as its backend datastore.
-      #    MongoDB does not yet publish a 26.04 release line;
-      #    # fallback: noble repo until 26.04 published
+      #    NOTE: MongoDB never published a 7.0 line for Ubuntu noble (24.04) —
+      #    that path 404s. The current Pritunl docs use MongoDB 8.0 on noble.
       # ------------------------------------------------------------------
-      echo "Adding MongoDB 7.0 repository..."
+      echo "Adding MongoDB 8.0 repository..."
       mkdir -p /usr/share/keyrings
-      if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
-        curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
-          | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+      if [ ! -f /usr/share/keyrings/mongodb-server-8.0.gpg ]; then
+        curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc \
+          | gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
       fi
-      # fallback: noble repo until 26.04 published
-      cat > /etc/apt/sources.list.d/mongodb-org-7.0.list <<'MONGOEOF'
-      deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse
+      # Remove any stale 7.0 list a previous run may have written
+      rm -f /etc/apt/sources.list.d/mongodb-org-7.0.list
+      cat > /etc/apt/sources.list.d/mongodb-org-8.0.list <<'MONGOEOF'
+      deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse
       MONGOEOF
 
       # ------------------------------------------------------------------
-      # 6. Add Pritunl apt repository
-      #    Official repo; no 26.04 line yet.
-      #    # fallback: noble repo until 26.04 published
+      # 6. Add Pritunl apt repository (current official repo for Ubuntu noble)
+      #    https://repo.pritunl.com/stable/apt  suite=noble  (verified reachable)
       # ------------------------------------------------------------------
       echo "Adding Pritunl repository..."
       if [ ! -f /usr/share/keyrings/pritunl-archive-keyring.gpg ]; then
         curl -fsSL https://raw.githubusercontent.com/pritunl/pgp/master/pritunl_repo_pub.asc \
           | gpg --dearmor -o /usr/share/keyrings/pritunl-archive-keyring.gpg
       fi
-      # fallback: noble repo until 26.04 published
       cat > /etc/apt/sources.list.d/pritunl.list <<'PRITUNLEOF'
       deb [ signed-by=/usr/share/keyrings/pritunl-archive-keyring.gpg ] https://repo.pritunl.com/stable/apt noble main
       PRITUNLEOF
@@ -434,6 +433,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/pritunl-bootstrap.sh" ]
 

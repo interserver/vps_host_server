@@ -143,7 +143,21 @@ write_files:
       echo "=== OpenLiteSpeed + Drupal bootstrap started: $(date) ==="
 
       # --- SIGPIPE-safe random secret generator ---
-      rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+      # Reads a fixed block from urandom and trims with dd (no SIGPIPE), so the
+      # result can never be truncated to empty/short — an empty password makes
+      # the OLS admpass installer reject it with "password must be at least 6 ...".
+      # Always returns >= 20 alphanumeric chars; never empty.
+      rand() {
+        local out=""
+        out="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | dd bs=1 count=24 2>/dev/null)"
+        if [ "${#out}" -lt 20 ]; then
+          out="$(openssl rand -hex 16 2>/dev/null || true)"
+        fi
+        if [ "${#out}" -lt 20 ]; then
+          out="Aa1$(date +%s%N)$$"
+        fi
+        printf '%s' "${out:0:24}"
+      }
 
       # --- randomise any CHANGE_ME passwords ---
       [ "$DRUPAL_DB_PASS"      = "CHANGE_ME" ] && DRUPAL_DB_PASS="$(rand)"
@@ -153,22 +167,39 @@ write_files:
 
       # =========================================================================
       # 1. Install OpenLiteSpeed + LSPHP from the official LiteSpeed apt repo
+      #    The repo lives at rpms.litespeedtech.com keyed by Ubuntu codename and
+      #    the helper writes /etc/apt/sources.list.d/lst_debian_repo.list. Never
+      #    point a deb line at repo.litespeed.sh — that host serves the install
+      #    SCRIPT, not a package index (apt: "Clearsigned file isn't valid,
+      #    got 'NOSPLIT'"). Ubuntu 26.04 may lag; fall back to noble (24.04).
       # =========================================================================
+      DISTRO_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")"
       # fallback: noble repo until 26.04 published
-      if [ ! -f /etc/apt/sources.list.d/litespeed.list ]; then
-        wget -qO /tmp/lst_repo.sh https://repo.litespeed.sh
-        bash /tmp/lst_repo.sh
-        # The official script adds the repo for the running Ubuntu release; if
-        # no 26.04 (plucky/future codename) packages exist yet, pin to noble.
-        CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME}}")"
-        if ! apt-cache show openlitespeed >/dev/null 2>&1; then
-          # fallback: noble repo until 26.04 published
-          sed -i "s/${CODENAME}/noble/g" /etc/apt/sources.list.d/litespeed.list
-        fi
+      OLS_REPO_CODENAME="${DISTRO_CODENAME:-noble}"
+      KNOWN_CODENAMES="noble jammy focal bionic"
+      if ! echo "$KNOWN_CODENAMES" | grep -qw "$OLS_REPO_CODENAME"; then
+        echo "WARN: Codename '${OLS_REPO_CODENAME}' not known to LiteSpeed repo — using 'noble'"
+        OLS_REPO_CODENAME="noble"
+      fi
+
+      if [ ! -f /etc/apt/sources.list.d/lst_debian_repo.list ]; then
+        curl -fsSL http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+          -o /etc/apt/trusted.gpg.d/lst_debian_repo.gpg
+        curl -fsSL http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+          -o /etc/apt/trusted.gpg.d/lst_repo.gpg
+        echo "deb http://rpms.litespeedtech.com/debian/ ${OLS_REPO_CODENAME} main" \
+          > /etc/apt/sources.list.d/lst_debian_repo.list
         apt-get update -qq
       fi
 
-      # Install OLS + LSPHP (idempotent)
+      # Install OLS + LSPHP (idempotent).
+      # NOTE: on the LiteSpeed noble repo, gd/zip/mbstring/xml/bcmath/json are
+      # COMPILED INTO the base lsphpXX/-common package — there are NO separate
+      # lsphpXX-gd/-zip/-mbstring/-xml/-bcmath/-json packages for noble (those
+      # only exist on RPM distros), which is why the old list failed with
+      # "Unable to locate package lsphp83-zip" etc. Only the packages that
+      # actually exist are listed below; Drupal's gd/zip/mbstring/bcmath needs
+      # are satisfied by the base build.
       LSPHP_PKG="lsphp${LSPHP_VER}"
       apt-get install -y \
         openlitespeed \
@@ -176,14 +207,9 @@ write_files:
         "${LSPHP_PKG}-common" \
         "${LSPHP_PKG}-mysql" \
         "${LSPHP_PKG}-curl" \
-        "${LSPHP_PKG}-json" \
         "${LSPHP_PKG}-opcache" \
-        "${LSPHP_PKG}-xml" \
         "${LSPHP_PKG}-intl" \
-        "${LSPHP_PKG}-mbstring" \
-        "${LSPHP_PKG}-zip" \
-        "${LSPHP_PKG}-gd" \
-        "${LSPHP_PKG}-bcmath"
+        "${LSPHP_PKG}-imagick"
 
       # Convenience symlink so 'php' works in PATH for Drush / Composer
       LSPHP_BIN="/usr/local/lsws/lsphp${LSPHP_VER}/bin/php"
@@ -523,6 +549,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/openlitespeed-drupal-bootstrap.sh" ]
 

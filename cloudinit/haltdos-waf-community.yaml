@@ -1,6 +1,6 @@
 #cloud-config
 # =============================================================================
-# Haltdos WAF Community Edition — Ubuntu 26.04 LTS cloud-init user-data
+# Haltdos WAF Community Edition — Ubuntu 24.04 LTS (noble) cloud-init user-data
 # Stack: Haltdos hd-community-waf + hd-community-controller
 #        UFW firewall + fail2ban + swap + unattended-upgrades
 # -----------------------------------------------------------------------------
@@ -175,67 +175,55 @@ write_files:
         ufw fail2ban unattended-upgrades certbot net-tools htop jq
 
       # -----------------------------------------------------------------------
-      # 3. Add Haltdos apt repository
-      #    Repo  : https://repo.haltdos.com/apt/
-      #    Pkgs  : hd-community-waf, hd-community-controller
-      #    Services after install: controller, offloader
+      # 3-4. Install Haltdos WAF Community Edition
+      #    The ONLY supported install method is the vendor setup.sh:
+      #      https://binary.haltdos.com/community/waf/setup.sh  (verified reachable)
+      #    The old repo.haltdos.com apt repo has no 'noble' (and no '26.04')
+      #    suite — it 404s, and its GPG key fetch fails — so we no longer add
+      #    that apt repo at all. setup.sh resolves the distro itself, wires up
+      #    its own internal repos, and installs the controller + offloader.
       #
-      #    The vendor setup.sh at binary.haltdos.com writes the sources list
-      #    automatically. We replicate that logic here for auditability.
+      #    NOTE: Haltdos officially supports Ubuntu 18/20/22 + Debian 11.
+      #    On newer releases setup.sh still runs; if it aborts on a codename
+      #    check we retry pretending to be 'jammy' (22.04) so the install can
+      #    proceed on this noble (24.04) base image.
       # -----------------------------------------------------------------------
-      echo "--- Adding Haltdos apt repository ---"
+      echo "--- Installing Haltdos WAF Community Edition (vendor setup.sh) ---"
 
-      KEYRING=/usr/share/keyrings/haltdos.gpg
-      REPO_LIST=/etc/apt/sources.list.d/haltdos.list
-      REPO_BASE="https://repo.haltdos.com/apt/"
-
-      # Detect release codename; fall back to noble if 26.04 line not yet published
-      # fallback: noble repo until 26.04 published
-      CODENAME="$(lsb_release -cs 2>/dev/null || echo noble)"
-      if ! curl -fsSL --head "${REPO_BASE}dists/${CODENAME}/" >/dev/null 2>&1; then
-        echo "WARN: No Haltdos repo line for '${CODENAME}'; falling back to 'noble'."
-        CODENAME="noble"
-      fi
-
-      # Fetch and dearmor the Haltdos signing key
-      if [ ! -f "${KEYRING}" ]; then
-        curl -fsSL "${REPO_BASE}gpg.key" 2>/dev/null \
-          | gpg --dearmor > "${KEYRING}" || \
-        curl -fsSL "https://binary.haltdos.com/community/waf/gpg.key" 2>/dev/null \
-          | gpg --dearmor > "${KEYRING}" || \
-        {
-          echo "WARN: Could not fetch Haltdos GPG key; adding repo without signed-by."
-          rm -f "${KEYRING}"
-        }
-      fi
-
-      if [ -f "${KEYRING}" ]; then
-        printf 'deb [signed-by=%s] %s %s main\n' \
-          "${KEYRING}" "${REPO_BASE}" "${CODENAME}" \
-          | tee "${REPO_LIST}" > /dev/null
+      HALTDOS_SETUP=/tmp/haltdos-setup.sh
+      if ! curl -fsSL -k -o "${HALTDOS_SETUP}" \
+            "https://binary.haltdos.com/community/waf/setup.sh"; then
+        echo "ERROR: could not download Haltdos setup.sh — check network/DNS." >&2
       else
-        printf 'deb [trusted=yes] %s %s main\n' \
-          "${REPO_BASE}" "${CODENAME}" \
-          | tee "${REPO_LIST}" > /dev/null
-      fi
-
-      apt-get update -qq
-
-      # -----------------------------------------------------------------------
-      # 4. Install Haltdos WAF packages
-      #    Primary path: apt install from repo above.
-      #    Fallback    : vendor setup.sh (handles codename resolution itself).
-      # -----------------------------------------------------------------------
-      echo "--- Installing Haltdos WAF Community Edition ---"
-      if apt-cache show hd-community-waf >/dev/null 2>&1; then
-        apt-get install -y hd-community-waf hd-community-controller
-      else
-        echo "INFO: hd-community-waf not found in apt cache; falling back to vendor setup.sh"
-        rm -f "${REPO_LIST}"
-        curl -fsSL -o /tmp/haltdos-setup.sh \
-          "https://binary.haltdos.com/community/waf/setup.sh"
-        chmod +x /tmp/haltdos-setup.sh
-        bash /tmp/haltdos-setup.sh
+        chmod +x "${HALTDOS_SETUP}"
+        # First attempt: run as-is (setup.sh auto-detects the distro).
+        if ! bash "${HALTDOS_SETUP}"; then
+          echo "WARN: setup.sh failed on native codename; retrying as jammy (22.04)."
+          # Some vendor scripts read /etc/os-release; provide a jammy override
+          # without permanently modifying the system file.
+          _osr=/tmp/haltdos-os-release
+          {
+            echo 'ID=ubuntu'
+            echo 'VERSION_ID="22.04"'
+            echo 'VERSION_CODENAME=jammy'
+            echo 'UBUNTU_CODENAME=jammy'
+            echo 'PRETTY_NAME="Ubuntu 22.04 LTS"'
+          } > "${_osr}"
+          # lsb_release shim returning jammy, prepended to PATH for the retry.
+          mkdir -p /tmp/haltdos-shim
+          cat > /tmp/haltdos-shim/lsb_release <<'SHIM'
+      #!/bin/sh
+      case "$1" in
+        -cs|-sc) echo jammy ;;
+        -rs|-sr) echo 22.04 ;;
+        -is|-si) echo Ubuntu ;;
+        *) /usr/bin/lsb_release "$@" ;;
+      esac
+      SHIM
+          chmod +x /tmp/haltdos-shim/lsb_release
+          PATH="/tmp/haltdos-shim:${PATH}" bash "${HALTDOS_SETUP}" \
+            || echo "WARN: Haltdos setup.sh still failed — review /var/log/haltdos-waf-bootstrap.log"
+        fi
       fi
 
       # -----------------------------------------------------------------------
@@ -244,11 +232,15 @@ write_files:
       echo "--- Ensuring Haltdos services are enabled and running ---"
       systemctl daemon-reload
 
-      for SVC in controller offloader hd-community-controller hd-community-waf; do
-        if systemctl list-unit-files "${SVC}.service" 2>/dev/null | grep -q "${SVC}"; then
+      for SVC in controller offloader hd-community-controller hd-community-waf hd-community-offloader; do
+        if systemctl list-unit-files "${SVC}.service" 2>/dev/null | grep -q "${SVC}\.service"; then
           systemctl enable "${SVC}" 2>/dev/null || true
-          systemctl start  "${SVC}" 2>/dev/null || true
-          echo "INFO: Service '${SVC}' enabled and started."
+          systemctl restart "${SVC}" 2>/dev/null || systemctl start "${SVC}" 2>/dev/null || true
+          if systemctl is-active --quiet "${SVC}"; then
+            echo "INFO: Service '${SVC}' is active."
+          else
+            echo "WARN: Service '${SVC}' is NOT active — check: journalctl -u ${SVC}"
+          fi
         fi
       done
 
@@ -380,6 +372,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/haltdos-waf-bootstrap.sh" ]
 

@@ -15,7 +15,10 @@ packages:
   - apt-listchanges
   - jq
   - screen
-  - openjdk-21-jre-headless
+  # Forge 1.20.1 (47.x) targets Java 17 and crash-loops under Java 21, so we
+  # install the JRE 17 the default MC_VERSION needs. (Newer MC versions need 21;
+  # operators changing MC_VERSION should install/point at the matching JRE.)
+  - openjdk-17-jre-headless
 
 swap:
   filename: /swapfile
@@ -85,11 +88,18 @@ write_files:
         RCON_PASS="$(rand)"
       fi
 
-      # --- Ensure Java 21 is present ---
-      if ! command -v java >/dev/null 2>&1; then
-        apt-get install -y openjdk-21-jre-headless
+      # --- Ensure Java 17 is present (Forge 1.20.1 requires Java 17; it
+      #     crash-loops on Java 21). Resolve the exact java binary so the unit
+      #     never accidentally picks up a different default-java. ---
+      if ! dpkg -s openjdk-17-jre-headless >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-17-jre-headless
       fi
-      java -version
+      JAVA_BIN="$(ls -1 /usr/lib/jvm/java-17-openjdk-*/bin/java 2>/dev/null | head -1 || true)"
+      if [ -z "${JAVA_BIN}" ] || [ ! -x "${JAVA_BIN}" ]; then
+        JAVA_BIN="$(command -v java)"
+      fi
+      echo "Using Java binary: ${JAVA_BIN}"
+      "${JAVA_BIN}" -version
 
       # --- Create minecraft system user ---
       if ! id minecraft >/dev/null 2>&1; then
@@ -115,7 +125,18 @@ write_files:
       # --- Run Forge installer ---
       if [ ! -f "libraries/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/unix_args.txt" ]; then
         echo "Running Forge installer (server mode)..."
-        java -jar "${FORGE_INSTALLER}" --installServer 2>&1 | tail -20
+        "${JAVA_BIN}" -jar "${FORGE_INSTALLER}" --installServer 2>&1 | tail -20
+      fi
+
+      # Forge 1.20.1 refuses to start without user_jvm_args.txt; the installer
+      # normally writes it, but create a sane default if it is missing so the
+      # service does not crash-loop on a "could not find user_jvm_args.txt".
+      if [ ! -f user_jvm_args.txt ]; then
+        cat > user_jvm_args.txt <<UJVM
+      # Xmx/Xms set here; managed by minecraft-forge-bootstrap.sh
+      -Xms512M
+      -Xmx${MEMORY_MB}M
+      UJVM
       fi
 
       # --- Accept EULA ---
@@ -138,23 +159,26 @@ write_files:
       spawn-protection=16
       PROPS
 
-      # --- Write JVM args file (if Forge provides unix_args.txt use it, otherwise use defaults) ---
+      # --- Verify Forge produced its unix_args.txt (the launch contract) ---
       UNIX_ARGS="libraries/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/unix_args.txt"
-      if [ -f "${UNIX_ARGS}" ]; then
-        JAVA_ARGS="@${UNIX_ARGS}"
-      else
-        JAVA_ARGS="-Xms512M -Xmx${MEMORY_MB}M -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -jar forge-${MC_VERSION}-${FORGE_VERSION}.jar"
+      if [ ! -f "${UNIX_ARGS}" ]; then
+        echo "ERROR: Forge did not produce ${UNIX_ARGS}; installer likely failed. Check MC_VERSION/FORGE_VERSION." >&2
+        exit 1
       fi
 
       # --- Write launch wrapper script ---
+      # JAVA_BIN, MC_VERSION and FORGE_VERSION are expanded NOW (at write time)
+      # so the unit always launches with the Java 17 the Forge build needs and
+      # the correct args file path. The Forge unix_args.txt already carries the
+      # full module/classpath; user_jvm_args.txt carries the heap settings.
       cat > /opt/minecraft/forge-server/start.sh <<STARTSH
       #!/usr/bin/env bash
       set -euo pipefail
-      source /root/.minecraft-forge-bootstrap.env
       cd /opt/minecraft/forge-server
-      exec java -Xms512M -Xmx\${MEMORY_MB}M -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
-        @libraries/net/minecraftforge/forge/\${MC_VERSION}-\${FORGE_VERSION}/unix_args.txt \
-        nogui 2>&1
+      exec "${JAVA_BIN}" \
+        @user_jvm_args.txt \
+        @libraries/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/unix_args.txt \
+        nogui
       STARTSH
       chmod +x /opt/minecraft/forge-server/start.sh
 
@@ -173,8 +197,14 @@ write_files:
       User=minecraft
       WorkingDirectory=/opt/minecraft/forge-server
       ExecStart=/bin/bash /opt/minecraft/forge-server/start.sh
+      # No TTY under systemd: hold stdin open so the server console does not hit
+      # EOF and shut down right after world generation.
+      StandardInput=null
       Restart=on-failure
       RestartSec=10
+      # 143 = clean SIGTERM shutdown (systemctl stop); treat as success so a
+      # normal stop is not flagged as a failure.
+      SuccessExitStatus=143
       StandardOutput=journal
       StandardError=journal
       # Give the JVM time to shut down cleanly
@@ -246,6 +276,12 @@ write_files:
 
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Minecraft Forge bootstrap complete."
       echo "Credentials written to /root/minecraft-forge-credentials.txt"
+
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/minecraft-forge-bootstrap.sh" ]

@@ -98,6 +98,15 @@ write_files:
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
+      # cloud-init's runcmd executes without a populated environment: $HOME and
+      # $XDG_CONFIG_HOME are often unset. The octelium install.sh and the
+      # octops/octeliumctl CLIs abort with "neither $XDG_CONFIG_HOME nor $HOME
+      # are defined" when they try to resolve their config dir. Export them up
+      # front so every command below (and the installer) has a home to write to.
+      export HOME="${HOME:-/root}"
+      export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/root/.config}"
+      export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/root/.cache}"
+      mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
       exec > >(tee -a /var/log/octelium-bootstrap.log) 2>&1
       # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
       #     makes postfix@-.service fail every boot); guarded no-op otherwise.
@@ -198,16 +207,22 @@ write_files:
       # -----------------------------------------------------------------------
       if ! command -v helm >/dev/null 2>&1; then
         echo "Installing Helm..."
-        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 -o /tmp/get-helm-3
+        bash /tmp/get-helm-3 </dev/null
+        rm -f /tmp/get-helm-3
       fi
-      echo "Helm version: $(helm version --short)"
+      echo "Helm version: $(helm version --short 2>/dev/null || true)"
 
       # -----------------------------------------------------------------------
       # 7. INSTALL Octelium CLI tools (octelium, octeliumctl, octops)
       # -----------------------------------------------------------------------
       if ! command -v octops >/dev/null 2>&1; then
         echo "Installing Octelium CLI tools..."
-        curl -fsSL https://octelium.com/install.sh | bash
+        # Installer needs $HOME (exported at top of script). Download then run
+        # from a file with stdin detached so it cannot block under cloud-init.
+        curl -fsSL https://octelium.com/install.sh -o /tmp/octelium-install.sh
+        HOME="$HOME" bash /tmp/octelium-install.sh </dev/null
+        rm -f /tmp/octelium-install.sh
         # Ensure PATH includes common install locations
         export PATH="/usr/local/bin:/root/.local/bin:${PATH}"
       fi
@@ -411,6 +426,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap script once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/octelium-bootstrap.sh" ]
 

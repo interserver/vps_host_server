@@ -48,6 +48,7 @@ packages:
   - lsb-release
   - software-properties-common
   - apt-transport-https
+  - jq
   # Security
   - ufw
   - fail2ban
@@ -230,21 +231,65 @@ write_files:
       pip install torch torchvision torchaudio --index-url "${TORCH_INDEX}"
 
       # ------------------------------------------------------------------
-      # Video2X — install from PyPI (includes CLI + web UI + bundled models)
+      # Video2X — install the prebuilt Linux binary (NOT a pip package!)
       # ------------------------------------------------------------------
-      echo "--- Installing Video2X ---"
-      # Install Video2X and its GPU-capable dependencies
-      pip install \
-        video2x \
-        realesrgan \
-        basicsr \
-        facexlib \
-        gfpgan \
-        opencv-python-headless \
-        ffmpeg-python \
-        flask \
-        flask-cors \
-        tqdm
+      # IMPORTANT: video2x is NOT distributed on PyPI ("No matching distribution
+      # found for video2x" was the root cause). Since the C++ rewrite (6.x) it is
+      # shipped as release artifacts on GitHub: an x86_64 AppImage for Linux
+      # (older 6.3.x also had .deb packages). We download the AppImage from the
+      # latest release, extract it (AppImages need FUSE which is often missing on
+      # headless VMs, so we use --appimage-extract instead of mounting), and link
+      # a 'video2x' launcher onto PATH.
+      echo "--- Installing Video2X (GitHub release binary) ---"
+
+      V2X_API='https://api.github.com/repos/k4yt3x/video2x/releases/latest'
+      V2X_APPIMAGE_URL="$(curl -fsSL "${V2X_API}" 2>/dev/null \
+        | jq -r '.assets[] | select(.name|test("(?i)x86_64.*\\.AppImage$")) | .browser_download_url' 2>/dev/null \
+        | head -1 || true)"
+      # Fallback to a known-good release if the API is rate-limited.
+      if [ -z "${V2X_APPIMAGE_URL}" ]; then
+        V2X_APPIMAGE_URL='https://github.com/k4yt3x/video2x/releases/download/6.4.0/Video2X-x86_64.AppImage'
+        echo "WARN: could not resolve latest video2x AppImage from API; using ${V2X_APPIMAGE_URL}"
+      fi
+
+      V2X_INSTALL_ROOT=/opt/video2x-app
+      mkdir -p "${V2X_INSTALL_ROOT}"
+      echo "Downloading Video2X AppImage: ${V2X_APPIMAGE_URL}"
+      curl -fsSL -o "${V2X_INSTALL_ROOT}/Video2X.AppImage" "${V2X_APPIMAGE_URL}"
+      chmod +x "${V2X_INSTALL_ROOT}/Video2X.AppImage"
+
+      # Extract the AppImage (avoids the FUSE requirement on headless servers).
+      rm -rf "${V2X_INSTALL_ROOT}/squashfs-root"
+      ( cd "${V2X_INSTALL_ROOT}" && ./Video2X.AppImage --appimage-extract >/dev/null 2>&1 ) || true
+
+      # Locate the real AppRun / video2x entrypoint and expose it as 'video2x'.
+      if [ -x "${V2X_INSTALL_ROOT}/squashfs-root/AppRun" ]; then
+        cat > /usr/local/bin/video2x <<'V2XWRAP'
+      #!/usr/bin/env bash
+      exec /opt/video2x-app/squashfs-root/AppRun "$@"
+      V2XWRAP
+        chmod +x /usr/local/bin/video2x
+      else
+        # Extraction failed (no FUSE userspace tools); run the AppImage directly.
+        # Requires libfuse2t64 on noble — installed below as a safety net.
+        cat > /usr/local/bin/video2x <<'V2XWRAP'
+      #!/usr/bin/env bash
+      exec /opt/video2x-app/Video2X.AppImage "$@"
+      V2XWRAP
+        chmod +x /usr/local/bin/video2x
+        DEBIAN_FRONTEND=noninteractive apt-get install -y libfuse2t64 2>/dev/null \
+          || DEBIAN_FRONTEND=noninteractive apt-get install -y libfuse2 2>/dev/null || true
+      fi
+
+      echo "Video2X CLI: $(command -v video2x || echo 'NOT FOUND')"
+      video2x --help >/dev/null 2>&1 \
+        && echo "Video2X binary is runnable." \
+        || echo "WARN: 'video2x --help' did not run cleanly — check GPU/Vulkan + AVX2 support."
+
+      # Lightweight Python deps for the Flask web UI wrapper only (the upscaler
+      # itself is the AppImage above, so no torch/realesrgan pip packages needed).
+      echo "--- Installing Flask web-UI dependencies ---"
+      pip install flask flask-cors tqdm
 
       # ------------------------------------------------------------------
       # Video2X workspace directories
@@ -390,13 +435,20 @@ write_files:
           }
           model_file = str(MODEL_DIR / model_map.get(data.get("model","realesrgan-x4plus"), "RealESRGAN_x4plus.pth"))
 
+          # Video2X 6.x CLI: -p <processor> -s <scale factor>.
+          # Map the legacy model names to current realesrgan model ids.
+          v2x_model_map = {
+              "realesrgan-x4plus":       "realesr-x4plus",
+              "realesrgan-x4plus-anime": "realesr-animevideov3",
+          }
+          v2x_model = v2x_model_map.get(data.get("model", "realesrgan-x4plus"), "realesr-x4plus")
           cmd = [
               "video2x",
               "-i", str(in_path),
               "-o", str(out_path),
-              "-h", str(int(data.get("scale", 4)) * 1080 if int(data.get("scale", 4)) <= 4 else 2160),
-              "-a", "realesrgan",
-              "-n", data.get("model", "realesrgan-x4plus"),
+              "-p", "realesrgan",
+              "-s", str(int(data.get("scale", 4))),
+              "--realesrgan-model", v2x_model,
           ]
 
           jobs[job_id] = {"status": "running", "cmd": " ".join(cmd), "output": ""}
@@ -560,8 +612,8 @@ write_files:
       Service         : systemctl status video2x
 
       CLI usage (as root or ${VIDEO2X_USER}):
-        source ${VENV_DIR}/bin/activate
-        video2x -i /path/to/input.mp4 -o /path/to/output.mp4 -h 2160 -a realesrgan
+        video2x -i /path/to/input.mp4 -o /path/to/output.mp4 -p realesrgan -s 4
+        # (video2x is the extracted GitHub-release AppImage at /opt/video2x-app)
 
       Next steps:
         1. Upload input video files to ${VIDEO2X_WORKSPACE}/input/
@@ -584,6 +636,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap exactly once
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/video2x-bootstrap.sh" ]
 

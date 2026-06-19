@@ -289,8 +289,31 @@ write_files:
           || echo "WARN: certbot deferred — DNS not pointed yet; re-run after DNS propagates"
         fi
       else
-        # No domain — disable Nginx entirely; Grafana is reachable on its port
-        systemctl disable --now nginx 2>/dev/null || true
+        # No domain — still run Nginx on port 80 as a plain reverse-proxy to
+        # Grafana so the UI is reachable on the standard HTTP port (no TLS).
+        cat > /etc/nginx/sites-available/grafana <<NGINXCONF
+      server {
+          listen 80 default_server;
+          listen [::]:80 default_server;
+          server_name _;
+
+          location / {
+              proxy_pass         http://127.0.0.1:${GRAFANA_PORT};
+              proxy_set_header   Host              \$host;
+              proxy_set_header   X-Real-IP         \$remote_addr;
+              proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto \$scheme;
+              proxy_http_version 1.1;
+              proxy_set_header   Upgrade           \$http_upgrade;
+              proxy_set_header   Connection        "upgrade";
+          }
+      }
+      NGINXCONF
+
+        ln -sf /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/grafana
+        rm -f /etc/nginx/sites-enabled/default
+        ufw allow 80/tcp
+        nginx -t && systemctl enable --now nginx && systemctl reload nginx
       fi
 
       # -----------------------------------------------------------------------
@@ -338,6 +361,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/grafana-bootstrap.sh" ]
 

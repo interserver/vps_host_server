@@ -1,6 +1,6 @@
 #cloud-config
 # =============================================================================
-# Haltdos WAF Pro — Ubuntu 26.04 LTS cloud-init user-data
+# Haltdos WAF Pro — Ubuntu 24.04 LTS (noble) cloud-init user-data
 # Stack: Haltdos WAF Pro (BYOL) + UFW firewall + fail2ban + swap
 #        + unattended-upgrades
 # Haltdos WAF Pro is a commercial Web Application Firewall and API security
@@ -229,15 +229,46 @@ write_files:
       chown -R haltdos:haltdos "${HALTDOS_HOME}"
 
       # ---- download and install Haltdos WAF Pro ------------------------------
+      # If no BYOL Pro installer URL is supplied, fall back to the official
+      # vendor setup.sh (https://binary.haltdos.com/community/waf/setup.sh —
+      # verified reachable). That installs the real Haltdos WAF engine and
+      # brings up its 'controller'/'offloader' services bound to 80/443/9000,
+      # so the box is usable immediately; the operator then enters their Pro
+      # license key in the console (Settings -> License) to unlock Pro tier.
+      # The old packages.haltdos.com tarball default ('CHANGE_ME') never
+      # installed anything, which is why the WAF + ports 80/443/9000 stayed
+      # down on previous boots.
+      HALTDOS_USE_VENDOR_SETUP=false
       if [ "${HALTDOS_INSTALLER_URL}" = "CHANGE_ME" ]; then
-        echo "WARN: HALTDOS_INSTALLER_URL not set in .haltdos-waf-pro-bootstrap.env"
-        echo "WARN: Skipping automated install. Download the Haltdos WAF Pro"
-        echo "WARN: installer from https://www.haltdos.com/downloads and place"
-        echo "WARN: it at ${HALTDOS_HOME}/installer.tar.gz, then re-run:"
-        echo "WARN:   tar -xzf ${HALTDOS_HOME}/installer.tar.gz -C ${HALTDOS_HOME}"
-        echo "WARN:   chown -R haltdos:haltdos ${HALTDOS_HOME}"
-        echo "WARN:   ${HALTDOS_HOME}/bin/haltdos install"
-        HALTDOS_INSTALLED=false
+        echo "INFO: HALTDOS_INSTALLER_URL not set — installing the Haltdos WAF"
+        echo "INFO: engine via the official vendor setup.sh; activate Pro with"
+        echo "INFO: your license key in the console after boot."
+        HALTDOS_SETUP=/tmp/haltdos-setup.sh
+        if curl -fsSL -k -o "${HALTDOS_SETUP}" \
+              "https://binary.haltdos.com/community/waf/setup.sh"; then
+          chmod +x "${HALTDOS_SETUP}"
+          if ! bash "${HALTDOS_SETUP}"; then
+            echo "WARN: setup.sh failed on native codename; retrying as jammy (22.04)."
+            mkdir -p /tmp/haltdos-shim
+            cat > /tmp/haltdos-shim/lsb_release <<'SHIM'
+      #!/bin/sh
+      case "$1" in
+        -cs|-sc) echo jammy ;;
+        -rs|-sr) echo 22.04 ;;
+        -is|-si) echo Ubuntu ;;
+        *) /usr/bin/lsb_release "$@" ;;
+      esac
+      SHIM
+            chmod +x /tmp/haltdos-shim/lsb_release
+            PATH="/tmp/haltdos-shim:${PATH}" bash "${HALTDOS_SETUP}" \
+              || echo "WARN: Haltdos setup.sh failed — review /var/log/haltdos-waf-pro-bootstrap.log"
+          fi
+          HALTDOS_USE_VENDOR_SETUP=true
+          HALTDOS_INSTALLED=true
+        else
+          echo "ERROR: could not download Haltdos setup.sh — check network/DNS." >&2
+          HALTDOS_INSTALLED=false
+        fi
       else
         INSTALLER_ARCHIVE="${HALTDOS_HOME}/installer.tar.gz"
         echo "--- Downloading Haltdos WAF Pro installer ---"
@@ -282,15 +313,29 @@ write_files:
       chmod 640 "${HALTDOS_HOME}/conf/haltdos.env"
       chown haltdos:haltdos "${HALTDOS_HOME}/conf/haltdos.env"
 
-      # ---- enable + start Haltdos service (only if installer ran) -----------
+      # ---- enable + start Haltdos services ----------------------------------
       systemctl daemon-reload
-      if [ "${HALTDOS_INSTALLED:-false}" = "true" ] && \
-         [ -x "${HALTDOS_HOME}/bin/haltdos" ]; then
+      if [ "${HALTDOS_USE_VENDOR_SETUP:-false}" = "true" ]; then
+        # Vendor setup.sh installs 'controller' + 'offloader' (these bind
+        # 80/443 and the 9000 console). Our custom haltdos-waf.service unit
+        # does not apply to this layout, so enable the real services instead.
+        for SVC in controller offloader hd-community-controller hd-community-waf hd-community-offloader; do
+          if systemctl list-unit-files "${SVC}.service" 2>/dev/null | grep -q "${SVC}\.service"; then
+            systemctl enable "${SVC}" 2>/dev/null || true
+            systemctl restart "${SVC}" 2>/dev/null || systemctl start "${SVC}" 2>/dev/null || true
+            if systemctl is-active --quiet "${SVC}"; then
+              echo "INFO: Service '${SVC}' is active."
+            else
+              echo "WARN: Service '${SVC}' is NOT active — check: journalctl -u ${SVC}"
+            fi
+          fi
+        done
+      elif [ "${HALTDOS_INSTALLED:-false}" = "true" ] && \
+           [ -x "${HALTDOS_HOME}/bin/haltdos" ]; then
         systemctl enable haltdos-waf
         systemctl start  haltdos-waf || \
           echo "WARN: haltdos-waf service did not start — check /var/log/haltdos-waf-pro-bootstrap.log"
       else
-        systemctl enable haltdos-waf || true
         echo "WARN: Haltdos service not started — installer was deferred."
       fi
 
@@ -363,6 +408,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once all write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/haltdos-waf-pro-bootstrap.sh" ]
 

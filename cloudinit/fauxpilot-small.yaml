@@ -283,8 +283,11 @@ write_files:
       echo "--- Cloning / updating Fauxpilot ---"
       mkdir -p "${FAUXPILOT_DIR}"
       if [ -d "${FAUXPILOT_DIR}/.git" ]; then
-        git -C "${FAUXPILOT_DIR}" pull --ff-only
+        git -C "${FAUXPILOT_DIR}" pull --ff-only || true
       else
+        # The dir may already exist (mkdir -p above, or a prior partial run)
+        # without a .git; git clone aborts on a non-empty dir, so clear it first.
+        rm -rf "${FAUXPILOT_DIR}"
         git clone https://github.com/fauxpilot/fauxpilot.git "${FAUXPILOT_DIR}"
       fi
 
@@ -495,6 +498,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap exactly once
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/fauxpilot-bootstrap.sh" ]
 

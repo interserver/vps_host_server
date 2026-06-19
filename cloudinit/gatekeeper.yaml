@@ -111,6 +111,12 @@ write_files:
 
       echo "=== BotGuard GateKeeper bootstrap starting at $(date) ==="
 
+      # Make every apt/dpkg step fully non-interactive. Without this the
+      # gatekeeper/nginx package postinst can open a debconf prompt and block
+      # forever, leaving cloud-init stuck in 'running'.
+      export DEBIAN_FRONTEND=noninteractive
+      APT_OPTS='-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold'
+
       # -----------------------------------------------------------------------
       # 1. Fill in CHANGE_ME defaults with generated values where appropriate
       # -----------------------------------------------------------------------
@@ -147,7 +153,8 @@ write_files:
       REPO_URL="https://repo.botguard.net/debian"
 
       # Test that the codename-specific repo exists; fall back to noble if not.
-      if ! curl -fsSL --head "${REPO_URL}/dists/${CODENAME}/" >/dev/null 2>&1; then
+      # --max-time guards against a hung probe blocking cloud-init indefinitely.
+      if ! curl -fsSL --max-time 15 --head "${REPO_URL}/dists/${CODENAME}/" >/dev/null 2>&1; then
         echo "WARN: No BotGuard repo line for '${CODENAME}'; falling back to 'noble'."
         # fallback: noble repo until 26.04 published
         CODENAME="noble"
@@ -162,7 +169,10 @@ write_files:
       # 4. Install BotGuard GateKeeper
       # -----------------------------------------------------------------------
       echo "--- Installing botguard-gatekeeper ---"
-      apt-get install -y botguard-gatekeeper
+      # Non-interactive + tolerant: the package configures its API key via the
+      # web UI on first access, so a non-zero exit here must not abort/stall boot.
+      apt-get install -y ${APT_OPTS} botguard-gatekeeper \
+        || echo "WARN: botguard-gatekeeper install returned non-zero — verify the apt repo/key; finish setup in the web UI"
 
       # -----------------------------------------------------------------------
       # 5. Firewall (UFW)
@@ -320,6 +330,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/gatekeeper-bootstrap.sh" ]
 

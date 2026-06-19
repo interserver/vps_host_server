@@ -233,11 +233,16 @@ write_files:
 
       # ---- install rbenv + Ruby for the dradis user --------------------------
       RBENV_ROOT="$DRADIS_HOME/.rbenv"
-      if [ ! -d "$RBENV_ROOT" ]; then
+      if [ ! -d "$RBENV_ROOT/.git" ]; then
+        # Clear any partial/non-git leftover so git clone does not abort on it.
+        rm -rf "$RBENV_ROOT"
         git clone --depth=1 https://github.com/rbenv/rbenv.git "$RBENV_ROOT"
-        git clone --depth=1 https://github.com/rbenv/ruby-build.git "$RBENV_ROOT/plugins/ruby-build"
-        chown -R dradis:dradis "$RBENV_ROOT"
       fi
+      if [ ! -d "$RBENV_ROOT/plugins/ruby-build/.git" ]; then
+        rm -rf "$RBENV_ROOT/plugins/ruby-build"
+        git clone --depth=1 https://github.com/rbenv/ruby-build.git "$RBENV_ROOT/plugins/ruby-build"
+      fi
+      chown -R dradis:dradis "$RBENV_ROOT"
 
       # rbenv init in non-interactive shell
       export PATH="$RBENV_ROOT/bin:$PATH"
@@ -265,11 +270,19 @@ write_files:
       sudo -u dradis PATH="$RUBY_BIN:$PATH" "$GEM_BIN" install bundler --no-document || true
 
       # ---- clone or update Dradis Community Edition --------------------------
-      if [ ! -d "$DRADIS_HOME/.git" ]; then
-        git clone --depth=1 https://github.com/dradis/dradis-ce.git "$DRADIS_HOME"
-        chown -R dradis:dradis "$DRADIS_HOME"
-      else
+      # $DRADIS_HOME already exists and is non-empty (it holds .rbenv from above),
+      # so a plain `git clone "$DRADIS_HOME"` aborts. Clone into a temp dir and
+      # move the repo contents into place, preserving the existing rbenv/Ruby.
+      if [ -d "$DRADIS_HOME/.git" ]; then
         sudo -u dradis git -C "$DRADIS_HOME" pull --ff-only || true
+      else
+        DRADIS_TMP="$(mktemp -d)"
+        rm -rf "$DRADIS_TMP"
+        git clone --depth=1 https://github.com/dradis/dradis-ce.git "$DRADIS_TMP"
+        # Move repo contents (including .git and dotfiles) into $DRADIS_HOME.
+        cp -a "$DRADIS_TMP/." "$DRADIS_HOME/"
+        rm -rf "$DRADIS_TMP"
+        chown -R dradis:dradis "$DRADIS_HOME"
       fi
 
       # ---- write Dradis .env -------------------------------------------------
@@ -404,6 +417,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once all write_files have been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/dradis-bootstrap.sh" ]
 

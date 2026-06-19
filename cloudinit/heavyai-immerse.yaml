@@ -1,6 +1,6 @@
 #cloud-config
 # =============================================================================
-# HEAVY.AI Immerse — Ubuntu 26.04 LTS cloud-init user-data
+# HEAVY.AI Immerse — Ubuntu 24.04 LTS (noble) cloud-init user-data
 # Stack: NVIDIA driver + CUDA toolkit + HEAVY.AI (HeavyDB + Immerse)
 #        UFW firewall + fail2ban + swap + unattended-upgrades
 # -----------------------------------------------------------------------------
@@ -239,195 +239,110 @@ write_files:
       export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
 
       # ------------------------------------------------------------------
-      # HEAVY.AI apt repository
-      # HEAVY.AI publishes a signed apt repo for LTS Ubuntu releases.
-      # fallback: noble repo until 26.04 published
+      # Install HEAVY.AI via the OFFICIAL Docker image
       # ------------------------------------------------------------------
-      log "Adding HEAVY.AI apt repository..."
+      # The old apt repo (releases.heavy.ai/.../apt) is retired — its S3
+      # bucket now returns HTTP 403 AccessDenied for the GPG key and all
+      # package paths, which is why the previous apt install 403'd. The
+      # current supported install for Free + Enterprise GPU is the Docker
+      # image, per https://docs.nvidia.com/heavyai (formerly docs.heavy.ai):
+      #     heavyai/heavyai-ee-cuda:latest   (run with --gpus=all)
+      # The "free" edition uses the SAME image plus a free license key you
+      # request from heavy.ai; it then unlocks the free tier inside Immerse.
+      # ------------------------------------------------------------------
+      log "Installing Docker CE + NVIDIA Container Toolkit for HEAVY.AI..."
 
-      HEAVYAI_KEYRING="/usr/share/keyrings/heavyai-keyring.gpg"
-      if [ ! -f "${HEAVYAI_KEYRING}" ]; then
-        curl -fsSL "https://releases.heavy.ai/GPG-KEY-heavyai" \
-          | gpg --dearmor -o "${HEAVYAI_KEYRING}"
-      fi
-
-      if [ ! -f /etc/apt/sources.list.d/heavyai.list ]; then
-        # fallback: noble repo until 26.04 published
-        cat > /etc/apt/sources.list.d/heavyai.list <<'HEAVYREPO'
-      deb [arch=amd64 signed-by=/usr/share/keyrings/heavyai-keyring.gpg] https://releases.heavy.ai/ee/apt/ubuntu noble main
-      HEAVYREPO
+      # --- Docker CE from the official Docker apt repo ---
+      if ! command -v docker >/dev/null 2>&1; then
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+          | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+        UBU_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME}}")"
+        cat > /etc/apt/sources.list.d/docker.list <<DOCKERREPO
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${UBU_CODENAME} stable
+      DOCKERREPO
         apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          docker-ce docker-ce-cli containerd.io \
+          docker-buildx-plugin docker-compose-plugin
+      fi
+      systemctl enable --now docker
+
+      # --- NVIDIA Container Toolkit (lets containers see the GPU) ---
+      if ! command -v nvidia-ctk >/dev/null 2>&1; then
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+          | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+          | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+          > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-container-toolkit || \
+          log "WARN: nvidia-container-toolkit install failed — GPU passthrough to Docker may not work until installed"
+        nvidia-ctk runtime configure --runtime=docker 2>/dev/null || true
+        systemctl restart docker || true
       fi
 
       # ------------------------------------------------------------------
-      # Install HEAVY.AI (HeavyDB + Immerse)
+      # Pull + run the HEAVY.AI image
       # ------------------------------------------------------------------
-      log "Installing HEAVY.AI Immerse ${HEAVYAI_VERSION} (${HEAVYAI_EDITION} edition)..."
+      log "Pulling HEAVY.AI image (${HEAVYAI_EDITION} edition, version ${HEAVYAI_VERSION})..."
 
-      if [ "${HEAVYAI_EDITION}" = "enterprise" ]; then
-        HEAVYAI_PKG="heavyai-ee-cuda"
+      # Both free and enterprise GPU tiers use the heavyai-ee-cuda image.
+      HEAVYAI_IMAGE_REPO="heavyai/heavyai-ee-cuda"
+      if [ -n "${HEAVYAI_VERSION:-}" ] && [ "${HEAVYAI_VERSION}" != "latest" ]; then
+        HEAVYAI_IMAGE="${HEAVYAI_IMAGE_REPO}:v${HEAVYAI_VERSION}"
       else
-        HEAVYAI_PKG="heavyai-cuda"
+        HEAVYAI_IMAGE="${HEAVYAI_IMAGE_REPO}:latest"
       fi
 
-      # Pin the requested version; fall back to latest if the pinned version
-      # is not available in the configured repo.
-      HEAVYAI_PKG_VERSIONED="${HEAVYAI_PKG}=${HEAVYAI_VERSION}"
-
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        "${HEAVYAI_PKG_VERSIONED}" 2>/dev/null || \
-        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          "${HEAVYAI_PKG}"
-
-      # ------------------------------------------------------------------
-      # Storage directory
-      # ------------------------------------------------------------------
-      log "Initialising HEAVY.AI storage at ${HEAVYAI_STORAGE}..."
-      mkdir -p "${HEAVYAI_STORAGE}"/{data,logs,exports,import}
-      chown -R "${HEAVYAI_USER}:${HEAVYAI_USER}" "${HEAVYAI_STORAGE}"
-      chmod -R 750 "${HEAVYAI_STORAGE}"
-
-      # ------------------------------------------------------------------
-      # heavyai.conf — main configuration
-      # ------------------------------------------------------------------
-      HEAVYAI_CONF="/etc/heavyai/heavyai.conf"
-      mkdir -p "$(dirname "${HEAVYAI_CONF}")"
-
-      cat > "${HEAVYAI_CONF}" <<HEAVYCONF
-      [db]
-      data = ${HEAVYAI_STORAGE}/data
-      port = ${HEAVYDB_PORT}
-      http-port = ${HEAVYDB_HTTP_PORT}
-      num-gpus = ${NUM_GPUS}
-      start-gpu = 0
-
-      [web]
-      port = ${IMMERSE_PORT}
-      servers-json = ${HEAVYAI_DIR}/servers.json
-      data = ${HEAVYAI_STORAGE}
-      enable-logs = true
-      log-dir = ${HEAVYAI_STORAGE}/logs
-      HEAVYCONF
-
-      chmod 640 "${HEAVYAI_CONF}"
-      chown root:"${HEAVYAI_USER}" "${HEAVYAI_CONF}"
-
-      # servers.json: tells Immerse how to reach HeavyDB
-      cat > "${HEAVYAI_DIR}/servers.json" <<SERVERS
-      [
-        {
-          "username": "${HEAVYAI_ADMIN_USER}",
-          "password": "${HEAVYAI_ADMIN_PASS}",
-          "database": "heavyai",
-          "master": true,
-          "host": "localhost",
-          "port": ${HEAVYDB_HTTP_PORT},
-          "https": false
-        }
-      ]
-      SERVERS
-      chmod 640 "${HEAVYAI_DIR}/servers.json"
-      chown root:"${HEAVYAI_USER}" "${HEAVYAI_DIR}/servers.json"
-
-      # ------------------------------------------------------------------
-      # Initialise the database (heavydb --initdb) — idempotent
-      # ------------------------------------------------------------------
-      if [ ! -f "${HEAVYAI_STORAGE}/data/catalogs/system_catalog" ] && \
-         [ ! -d "${HEAVYAI_STORAGE}/data/catalogs" ]; then
-        log "Initialising HeavyDB catalog..."
-        sudo -u "${HEAVYAI_USER}" "${HEAVYAI_DIR}/bin/heavydb" \
-          --data "${HEAVYAI_STORAGE}/data" \
-          --initdb || true
+      # Pin the requested version; fall back to :latest if that tag is absent;
+      # then, if the gated heavyai/* image is unavailable (it can require
+      # accepting the EULA / a Docker Hub login), fall back to the fully public
+      # legacy OmniSci OSS image, which uses the identical 6273-6278 port layout.
+      if ! docker pull "${HEAVYAI_IMAGE}" 2>/dev/null; then
+        log "WARN: tag ${HEAVYAI_IMAGE} not pullable — trying ${HEAVYAI_IMAGE_REPO}:latest"
+        HEAVYAI_IMAGE="${HEAVYAI_IMAGE_REPO}:latest"
+        if ! docker pull "${HEAVYAI_IMAGE}" 2>/dev/null; then
+          log "WARN: ${HEAVYAI_IMAGE} unavailable (gated image may need 'docker login'); falling back to public omnisci/core-os-cuda:latest"
+          HEAVYAI_IMAGE="omnisci/core-os-cuda:latest"
+          docker pull "${HEAVYAI_IMAGE}" || \
+            log "ERROR: could not pull any HEAVY.AI/OmniSci image — check Docker Hub access, then: docker pull heavyai/heavyai-ee-cuda:latest"
+        fi
       fi
 
-      # ------------------------------------------------------------------
-      # systemd service: heavydb (backend database + GPU engine)
-      # ------------------------------------------------------------------
-      log "Creating systemd services..."
-
-      cat > /etc/systemd/system/heavydb.service <<HEAVYDB_SVC
-      [Unit]
-      Description=HEAVY.AI HeavyDB GPU Database Engine
-      Documentation=https://docs.heavy.ai
-      After=network.target
-      Wants=network-online.target
-
-      [Service]
-      Type=simple
-      User=${HEAVYAI_USER}
-      Group=${HEAVYAI_USER}
-      WorkingDirectory=${HEAVYAI_DIR}
-      ExecStart=${HEAVYAI_DIR}/bin/heavydb \
-        --config ${HEAVYAI_CONF}
-      Restart=on-failure
-      RestartSec=10
-      TimeoutStartSec=300
-      StandardOutput=journal
-      StandardError=journal
-      Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64:${HEAVYAI_DIR}/lib"
-
-      [Install]
-      WantedBy=multi-user.target
-      HEAVYDB_SVC
+      # Persistent data dir on the host (bind-mounted into the container).
+      mkdir -p "${HEAVYAI_STORAGE}"
+      # HEAVY.AI container expects its storage at /var/lib/heavyai.
+      docker rm -f heavyai 2>/dev/null || true
+      docker run -d \
+        --name heavyai \
+        --restart unless-stopped \
+        --gpus all \
+        -v "${HEAVYAI_STORAGE}:/var/lib/heavyai" \
+        -p 127.0.0.1:${IMMERSE_PORT}:6273 \
+        -p 127.0.0.1:${HEAVYDB_PORT}:6274 \
+        -p 127.0.0.1:${HEAVYDB_HTTP_PORT}:6278 \
+        "${HEAVYAI_IMAGE}" \
+        || log "WARN: 'docker run' failed — a reboot to load the NVIDIA kernel module may be required, then: docker start heavyai"
 
       # ------------------------------------------------------------------
-      # systemd service: immerse (web visualisation front-end)
+      # Wait for the HEAVY.AI container to come up, then set the admin
+      # password via the in-container heavysql client.
       # ------------------------------------------------------------------
-      cat > /etc/systemd/system/heavyai-immerse.service <<IMMERSE_SVC
-      [Unit]
-      Description=HEAVY.AI Immerse Web Interface
-      Documentation=https://docs.heavy.ai
-      After=network.target heavydb.service
-      Requires=heavydb.service
-
-      [Service]
-      Type=simple
-      User=${HEAVYAI_USER}
-      Group=${HEAVYAI_USER}
-      WorkingDirectory=${HEAVYAI_DIR}
-      ExecStart=${HEAVYAI_DIR}/bin/immerse \
-        --port ${IMMERSE_PORT} \
-        --servers-json ${HEAVYAI_DIR}/servers.json \
-        --data ${HEAVYAI_STORAGE} \
-        --log-dir ${HEAVYAI_STORAGE}/logs
-      Restart=on-failure
-      RestartSec=10
-      TimeoutStartSec=120
-      StandardOutput=journal
-      StandardError=journal
-      Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      Environment="LD_LIBRARY_PATH=/usr/local/cuda/lib64:${HEAVYAI_DIR}/lib"
-
-      [Install]
-      WantedBy=multi-user.target
-      IMMERSE_SVC
-
-      systemctl daemon-reload
-      systemctl enable heavydb heavyai-immerse
-      systemctl start heavydb || log "WARNING: heavydb failed to start — GPU driver reboot may be required"
-      systemctl start heavyai-immerse || log "WARNING: immerse failed to start — check heavydb is running first"
-
-      # ------------------------------------------------------------------
-      # Set admin password via HeavyDB binary client (heavysql)
-      # Wait up to 30 s for HeavyDB to accept connections
-      # ------------------------------------------------------------------
-      log "Waiting for HeavyDB to accept connections..."
-      HEAVYSQL="${HEAVYAI_DIR}/bin/heavysql"
+      log "Waiting for HeavyDB (inside container) to accept connections..."
       for i in $(seq 1 30); do
-        if "${HEAVYSQL}" -p HyperInteractive \
-            --host localhost --port "${HEAVYDB_PORT}" \
-            --db heavyai -q "\\q" &>/dev/null 2>&1; then
+        if docker exec heavyai bin/heavysql -p HyperInteractive \
+            --db heavyai -q "\\q" >/dev/null 2>&1; then
           break
         fi
         sleep 2
       done
 
-      "${HEAVYSQL}" -p HyperInteractive \
-        --host localhost --port "${HEAVYDB_PORT}" \
+      docker exec heavyai bin/heavysql -p HyperInteractive \
         --db heavyai \
-        -q "ALTER USER ${HEAVYAI_ADMIN_USER} (password='${HEAVYAI_ADMIN_PASS}');" 2>/dev/null \
-        || log "WARN: Could not set admin password via heavysql — may need manual password change after reboot"
+        -q "ALTER USER ${HEAVYAI_ADMIN_USER} (password='${HEAVYAI_ADMIN_PASS}');" >/dev/null 2>&1 \
+        || log "WARN: Could not set admin password via heavysql — the default 'admin/HyperInteractive' may still apply; change it in Immerse after the container is healthy"
 
       # ------------------------------------------------------------------
       # Nginx reverse proxy
@@ -595,35 +510,33 @@ write_files:
       GPUs           : ${NUM_GPUS}
 
       -----------------------------------------------------------
-      Service management:
-        systemctl status heavydb
-        systemctl status heavyai-immerse
-        systemctl restart heavydb
-        systemctl restart heavyai-immerse
+      Deployment: official HEAVY.AI Docker image (heavyai/heavyai-ee-cuda)
+      Container management:
+        docker ps
+        docker logs -f heavyai
+        docker restart heavyai
+        docker stop heavyai ; docker start heavyai
+        docker exec -it heavyai bin/heavysql -p HyperInteractive --db heavyai
 
       Logs:
         /var/log/heavyai-bootstrap.log
-        journalctl -u heavydb -f
-        journalctl -u heavyai-immerse -f
-        ${HEAVYAI_STORAGE}/logs/
+        docker logs heavyai
 
-      Data directory : ${HEAVYAI_STORAGE}/data/
-      Import staging : ${HEAVYAI_STORAGE}/import/
-      Exports        : ${HEAVYAI_STORAGE}/exports/
+      Data directory : ${HEAVYAI_STORAGE}  (bind-mounted to /var/lib/heavyai)
 
       -----------------------------------------------------------
       Next steps:
-        1. If services did not start, reboot to activate the GPU driver:
+        1. If the container did not start, reboot to activate the GPU driver:
              reboot
-           Then verify:  nvidia-smi
+           Then verify:  nvidia-smi  &&  docker start heavyai
         2. Point ${APP_DOMAIN:-<your-domain>} DNS A-record to ${PUBLIC_IP}
         3. Enable TLS: set ENABLE_TLS=true and APP_DOMAIN in
              /root/.heavyai-bootstrap.env
            then run:    certbot --nginx -d <your-domain>
         4. Open the Immerse UI and log in with the admin credentials above.
-        5. Enterprise licences: place your key at
-             ${HEAVYAI_DIR}/heavyai.license
-           and restart heavydb.
+        5. Free edition: request a free license key from heavy.ai and enter it
+           in Immerse (Admin -> License). Enterprise: enter your purchased key.
+           Both run from the same heavyai/heavyai-ee-cuda image.
       ============================================================
       CREDS
 
@@ -633,11 +546,17 @@ write_files:
       log "Credentials written to /root/heavyai-credentials.txt"
       log "NOTE: A reboot is recommended to activate the NVIDIA kernel module."
       log "      After reboot verify: nvidia-smi"
-      log "      Then start services: systemctl start heavydb heavyai-immerse"
+      log "      Then start the container: docker start heavyai"
 
 # ----------------------------------------------------------------------------
 # Run the bootstrap exactly once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/heavyai-bootstrap.sh" ]
 
@@ -656,7 +575,7 @@ final_message: |
 
   After reboot:
     nvidia-smi                                  # confirm GPU detected
-    systemctl start heavydb heavyai-immerse     # start services if not running
+    docker start heavyai                         # start container if not running
 
   Access credentials and URLs:
     cat /root/heavyai-credentials.txt

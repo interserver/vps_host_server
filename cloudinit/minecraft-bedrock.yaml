@@ -177,19 +177,41 @@ write_files:
       # -----------------------------------------------------------------------
       echo "--- Downloading Minecraft Bedrock Dedicated Server ---"
 
-      # Fetch the download page to get the current release URL
-      BDS_PAGE=$(curl -fsSL \
-        -H 'Accept-Language: en-US,en;q=0.9' \
-        -A 'Mozilla/5.0 (X11; Linux x86_64)' \
-        'https://www.minecraft.net/en-us/download/server/bedrock')
+      # Mojang serves the current download links as JSON from the
+      # minecraft-services API. The endpoint returns 403 to bare/empty
+      # User-Agents, so we MUST send a real browser UA + Accept headers.
+      # The Linux server zip is the entry with downloadType "serverBedrockLinux".
+      # Ref: net-secondary.web.minecraft-services.net/api/v1.0/download/links
+      BDS_UA='Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0'
+      BDS_API_PRIMARY='https://net.web.minecraft-services.net/api/v1.0/download/links'
+      BDS_API_SECONDARY='https://net-secondary.web.minecraft-services.net/api/v1.0/download/links'
 
-      BDS_URL=$(echo "${BDS_PAGE}" | \
-        grep -oP 'https://[^"]+bedrock-server-[^"]+linux[^"]+\.zip' | \
-        head -1 || true)
+      fetch_bds_url() {
+        local api_url="$1"
+        curl -fsSL \
+          -A "${BDS_UA}" \
+          -H 'Accept: application/json' \
+          -H 'Accept-Language: en-US,en;q=0.9' \
+          "${api_url}" 2>/dev/null \
+          | jq -r '.result.links[] | select(.downloadType=="serverBedrockLinux") | .downloadUrl' 2>/dev/null \
+          | head -1
+      }
 
+      BDS_URL="$(fetch_bds_url "${BDS_API_PRIMARY}" || true)"
       if [ -z "${BDS_URL}" ]; then
-        echo "WARN: Could not auto-detect BDS download URL; trying fallback pattern."
-        BDS_URL=$(curl -fsSL 'https://bedrock.undnet.eu/latest' 2>/dev/null || true)
+        echo "WARN: primary download-links API failed; trying secondary endpoint."
+        BDS_URL="$(fetch_bds_url "${BDS_API_SECONDARY}" || true)"
+      fi
+
+      # Last-resort fallback: scrape the official download page with a real UA.
+      if [ -z "${BDS_URL}" ]; then
+        echo "WARN: JSON API unavailable; falling back to download-page scrape."
+        BDS_URL="$(curl -fsSL \
+          -A "${BDS_UA}" \
+          -H 'Accept-Language: en-US,en;q=0.9' \
+          'https://www.minecraft.net/en-us/download/server/bedrock' 2>/dev/null \
+          | grep -oE 'https://[^"]+bin-linux/bedrock-server-[^"]+\.zip' \
+          | head -1 || true)"
       fi
 
       if [ -z "${BDS_URL}" ]; then
@@ -395,6 +417,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once on first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/minecraft-bedrock-bootstrap.sh" ]
 

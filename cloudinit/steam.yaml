@@ -224,11 +224,28 @@ write_files:
       #    Anonymous login is valid for all free-to-play DS binaries.
       # -----------------------------------------------------------------------
       echo "--- Installing/updating App ${STEAM_APP_ID} via SteamCMD ---"
-      sudo -u "${STEAM_USER}" "${STEAMCMD_DIR}/steamcmd.sh" \
-        +login anonymous \
-        +force_install_dir "${GAME_DIR}" \
-        +app_update "${STEAM_APP_ID}" validate \
-        +quit
+      # SteamCMD must run with a real HOME owned by the steam user, otherwise it
+      # cannot create its ~/.steam and ~/Steam config dirs and fails with
+      # "Failed to install app '${STEAM_APP_ID}' (Missing configuration)".
+      # `sudo -u` alone keeps HOME=/root (unwritable by steam); use `sudo -H`
+      # (set HOME to the target user's home) and ensure the home dir exists and
+      # is owned. (-H avoids the login-shell arg re-parsing that `-i` can do.)
+      STEAM_HOME="/home/${STEAM_USER}"
+      mkdir -p "${STEAM_HOME}/.steam" "${STEAM_HOME}/Steam"
+      chown -R "${STEAM_USER}:${STEAM_USER}" "${STEAM_HOME}"
+      # First run self-updates SteamCMD; it can exit non-zero on the bootstrap
+      # update even when subsequent steps succeed, so retry once and tolerate the
+      # noisy first exit code under `set -e`.
+      run_steamcmd() {
+        sudo -H -u "${STEAM_USER}" env HOME="${STEAM_HOME}" \
+          "${STEAMCMD_DIR}/steamcmd.sh" \
+          +@sSteamCmdForcePlatformType linux \
+          +force_install_dir "${GAME_DIR}" \
+          +login anonymous \
+          +app_update "${STEAM_APP_ID}" validate \
+          +quit
+      }
+      run_steamcmd || { echo "First SteamCMD run returned non-zero, retrying..."; run_steamcmd || true; }
 
       # -----------------------------------------------------------------------
       # 7. Write a Source engine server.cfg (works for TF2/CS:S/CS:GO etc.)
@@ -402,6 +419,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once on first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/steam-bootstrap.sh" ]
 

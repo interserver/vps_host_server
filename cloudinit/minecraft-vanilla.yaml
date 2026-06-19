@@ -311,9 +311,18 @@ write_files:
       WorkingDirectory=${MC_DIR}
       Environment=HOME=${MC_DIR}
       ExecStart=/usr/bin/java ${JVM_FLAGS} -Xms${JVM_XMS} -Xmx${JVM_XMX} -jar server.jar nogui
-      Restart=on-failure
+      # The Minecraft server reads its console from stdin; under systemd there is
+      # no TTY, so an EOF on stdin makes a "Type=simple" server shut down cleanly
+      # right after world generation (exit 0) -> service goes inactive and never
+      # listens on 25565. Hold stdin open with a null input and let the daemon
+      # restart on any unexpected exit.
+      StandardInput=null
+      Restart=always
       RestartSec=10
-      SuccessExitStatus=0 1
+      # 143 = clean shutdown via SIGTERM (systemctl stop). Do NOT mask exit 1:
+      # masking it as success previously hid startup crashes and suppressed the
+      # restart, leaving the service inactive.
+      SuccessExitStatus=143
       StandardOutput=journal
       StandardError=journal
 
@@ -411,6 +420,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run bootstrap once on first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/minecraft-bootstrap.sh" ]
 

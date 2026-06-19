@@ -142,18 +142,30 @@ write_files:
       net.bridge.bridge-nf-call-ip6tables = 1
       net.ipv4.ip_forward                 = 1
       EOF
-      sysctl --system >/dev/null
+      sysctl --system >/dev/null 2>&1 || true
 
       # --- install k3s via official installer (single-server / control-plane) -
+      # Pin the stable channel and detach stdin (the installer is fed via a pipe;
+      # </dev/null keeps any prompt/read from consuming the piped script).
       if ! command -v k3s >/dev/null 2>&1; then
         curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_CHANNEL=stable \
           INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode=644" \
           K3S_TOKEN="${K3S_TOKEN}" \
-          sh -
+          sh -s - </dev/null
       fi
 
       # ensure k3s service is running and enabled
       systemctl enable --now k3s
+
+      # wait for the kubeconfig to be written by k3s (up to 120 s). Copying it
+      # before k3s creates it would abort the whole script under `set -e`.
+      echo "Waiting for k3s kubeconfig at /etc/rancher/k3s/k3s.yaml..."
+      for i in $(seq 1 24); do
+        [ -s /etc/rancher/k3s/k3s.yaml ] && break
+        echo "  kubeconfig attempt $i/24..."
+        sleep 5
+      done
 
       # wait for the node to become Ready (up to 120 s)
       echo "Waiting for k3s node to become Ready..."
@@ -174,20 +186,33 @@ write_files:
       # --- install Helm -------------------------------------------------------
       if ! command -v helm >/dev/null 2>&1; then
         curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
-          | bash
+          -o /tmp/get-helm-3
+        bash /tmp/get-helm-3 </dev/null
+        rm -f /tmp/get-helm-3
       fi
 
       # --- set up kubeconfig for root -----------------------------------------
       mkdir -p /root/.kube
-      cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
-      chmod 600 /root/.kube/config
+      if [ -s /etc/rancher/k3s/k3s.yaml ]; then
+        cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
+        chmod 600 /root/.kube/config
+      else
+        echo "WARN: k3s kubeconfig not found yet; falling back to /etc/rancher/k3s/k3s.yaml"
+      fi
 
-      # export for the remainder of this script
-      export KUBECONFIG=/root/.kube/config
+      # export for the remainder of this script (prefer root copy, else k3s path)
+      if [ -s /root/.kube/config ]; then
+        export KUBECONFIG=/root/.kube/config
+      else
+        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+      fi
 
-      echo "k3s version : $(k3s --version | head -1)"
-      echo "kubectl     : $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>/dev/null | head -1)"
-      echo "helm        : $(helm version --short)"
+      # Version banners — keep non-fatal. `kubectl version --short` was removed
+      # in newer kubectl (k3s bundles a recent one), so don't rely on it and
+      # never let these informational lines abort the script under `set -e`.
+      echo "k3s version : $(k3s --version 2>/dev/null | head -1 || true)"
+      echo "kubectl     : $(kubectl version --client 2>/dev/null | head -1 || true)"
+      echo "helm        : $(helm version --short 2>/dev/null || true)"
 
       # --- firewall: SSH + k3s API + NodePort HTTP/HTTPS ---------------------
       ufw allow OpenSSH
@@ -327,6 +352,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/k3s-bootstrap.sh" ]
 

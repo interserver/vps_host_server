@@ -214,10 +214,7 @@ write_files:
       # Create FileCloud data directory structure
       # ----------------------------------------------------------------
       echo "=== Creating FileCloud directory structure ==="
-      mkdir -p "${FC_DATA_DIR}"/{data,mongodb,logs,nginx-conf}
-
-      # Set permissions so www-data inside containers can write
-      chown -R 33:33 "${FC_DATA_DIR}/data" 2>/dev/null || true
+      mkdir -p "${FC_DATA_DIR}"/{data,mongodb,solr,html,logs}
       chmod -R 775 "${FC_DATA_DIR}"
 
       # ----------------------------------------------------------------
@@ -225,61 +222,40 @@ write_files:
       # FileCloud official Docker image: ghcr.io/filecloud/filecloud
       # Ref: https://www.filecloud.com/supportdocs/fcdoc/latest/server/filecloud-docker/
       # ----------------------------------------------------------------
+      # IMPORTANT: FileCloud ships a single ALL-IN-ONE Docker image
+      # (filecloud/fileclouddocker) that bundles Apache, MongoDB and Solr and
+      # runs systemd as PID 1. It is NOT a multi-service compose stack, and the
+      # previously-referenced "ghcr.io/filecloud/filecloud" image does not exist
+      # (the pull 404s and the stack never comes up). The container therefore
+      # needs --privileged and /lib/systemd/systemd as its command.
+      # Ref: https://docs.filecloud.com/fcdoc/latest/server/filecloud-administrator-guide/installing-filecloud-server/installation/filecloud-docker-installation
+      FC_IMAGE="filecloud/fileclouddocker:latest"
       echo "=== Writing FileCloud docker-compose.yml ==="
-      cat > "${FC_DATA_DIR}/docker-compose.yml" <<DCEOF
-      version: "3.9"
-
-      services:
-        mongodb:
-          image: mongo:6
-          container_name: filecloud-mongodb
-          restart: unless-stopped
-          environment:
-            MONGO_INITDB_ROOT_USERNAME: root
-            MONGO_INITDB_ROOT_PASSWORD: "${MONGO_ROOT_PASS}"
-            MONGO_INITDB_DATABASE: filecloud
-          volumes:
-            - ${FC_DATA_DIR}/mongodb:/data/db
-          networks:
-            - filecloud-net
-          healthcheck:
-            test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-
-        filecloud:
-          image: ghcr.io/filecloud/filecloud:latest
-          container_name: filecloud-app
-          restart: unless-stopped
-          depends_on:
-            mongodb:
-              condition: service_healthy
-          environment:
-            FC_MONGODB_HOST: mongodb
-            FC_MONGODB_PORT: "27017"
-            FC_MONGODB_ROOT_USER: root
-            FC_MONGODB_ROOT_PASSWORD: "${MONGO_ROOT_PASS}"
-            FC_MONGODB_USER: fcuser
-            FC_MONGODB_PASSWORD: "${MONGO_FC_PASS}"
-            FC_MONGODB_DB: filecloud
-            FC_URL: "http://localhost"
-            FC_ADMIN_PASSWORD: "${ADMIN_PASS}"
-          volumes:
-            - ${FC_DATA_DIR}/data:/var/www/html/files
-            - ${FC_DATA_DIR}/logs:/var/log/apache2
-          ports:
-            - "127.0.0.1:8080:80"
-          networks:
-            - filecloud-net
-
-      networks:
-        filecloud-net:
-          driver: bridge
-      DCEOF
-
-      # Fix indentation artifacts from heredoc inside script
-      sed -i 's/^      //' "${FC_DATA_DIR}/docker-compose.yml"
+      # Build the compose file with explicit column-0 echoes — a here-doc inside
+      # this indented cloud-config block plus a fixed sed-strip mangled the YAML
+      # list indentation and broke the compose file.
+      {
+      echo "services:"
+      echo "  filecloud:"
+      echo "    image: ${FC_IMAGE}"
+      echo "    container_name: filecloud-app"
+      echo "    restart: unless-stopped"
+      echo "    privileged: true"
+      echo "    command: /lib/systemd/systemd"
+      echo "    cgroup: host"
+      echo "    tmpfs:"
+      echo "      - /run"
+      echo "      - /run/lock"
+      echo "    volumes:"
+      echo "      - /sys/fs/cgroup:/sys/fs/cgroup:rw"
+      echo "      - ${FC_DATA_DIR}/data:/opt/fileclouddata"
+      echo "      - ${FC_DATA_DIR}/mongodb:/var/lib/mongodb"
+      echo "      - ${FC_DATA_DIR}/solr:/opt/solrfcdata/var/solr"
+      echo "      - ${FC_DATA_DIR}/html:/var/www/html"
+      echo "    ports:"
+      echo '      - "127.0.0.1:8080:80"'
+      echo '      - "127.0.0.1:8443:443"'
+      } > "${FC_DATA_DIR}/docker-compose.yml"
 
       # ----------------------------------------------------------------
       # Pull images and start FileCloud stack
@@ -287,7 +263,9 @@ write_files:
       echo "=== Pulling FileCloud Docker images (may take a few minutes) ==="
       cd "${FC_DATA_DIR}"
       docker compose pull || echo "WARN: docker compose pull had warnings — continuing"
-      docker compose up -d
+      # Never let a container start failure abort the bootstrap (BYOL product;
+      # operator finishes setup in the web wizard). cloud-init must still reach 'done'.
+      docker compose up -d || echo "WARN: docker compose up returned non-zero — check 'docker compose -f ${FC_DATA_DIR}/docker-compose.yml logs'"
 
       # ----------------------------------------------------------------
       # Nginx reverse proxy configuration
@@ -420,6 +398,12 @@ write_files:
 # ---------------------------------------------------------------------------
 # Run the bootstrap script exactly once at first boot
 # ---------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/filecloud-bootstrap.sh" ]
 

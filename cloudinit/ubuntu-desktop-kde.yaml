@@ -190,15 +190,30 @@ write_files:
       chmod 600 "${VNC_CFG}/passwd"
       chown -R "${DESKTOP_USER}:${DESKTOP_USER}" "$VNC_CFG"
 
-      # VNC xstartup — launch KDE Plasma
+      # VNC xstartup — launch KDE Plasma inside a fresh D-Bus session.
+      # Without dbus-launch the Plasma session dies immediately, leaving Xvnc
+      # with no client; under Type=forking systemd then times out.
       cat > "${VNC_CFG}/xstartup" <<'VNCSTART'
       #!/bin/sh
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
-      exec /bin/bash --login -c "startplasma-x11"
+      export XDG_SESSION_TYPE=x11
+      export DESKTOP_SESSION=plasma
+      [ -r /etc/X11/Xresources ] && xrdb /etc/X11/Xresources
+      exec dbus-launch --exit-with-session /bin/bash --login -c "startplasma-x11"
       VNCSTART
       chmod 755 "${VNC_CFG}/xstartup"
       chown "${DESKTOP_USER}:${DESKTOP_USER}" "${VNC_CFG}/xstartup"
+
+      # TigerVNC reads ~/.vnc/config for session defaults; provide one so the
+      # perl vncserver wrapper has explicit geometry/depth and binds publicly.
+      cat > "${VNC_CFG}/config" <<'VNCCONF'
+      geometry=1280x1024
+      depth=24
+      localhost=no
+      VNCCONF
+      chmod 644 "${VNC_CFG}/config"
+      chown "${DESKTOP_USER}:${DESKTOP_USER}" "${VNC_CFG}/config"
 
       # Create a systemd user service for vncserver so it starts on boot
       VNC_SVC_DIR="/etc/systemd/system"
@@ -212,9 +227,12 @@ write_files:
       User=${DESKTOP_USER}
       WorkingDirectory=${VNC_HOME}
       PIDFile=${VNC_HOME}/.vnc/%H:%i.pid
-      ExecStartPre=/bin/bash -c 'vncserver -kill :%i > /dev/null 2>&1 || :'
-      ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x1024 :%i
+      ExecStartPre=/bin/bash -c '/usr/bin/vncserver -kill :%i > /dev/null 2>&1 || :'
+      ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x1024 -localhost no -SecurityTypes VncAuth :%i
       ExecStop=/usr/bin/vncserver -kill :%i
+      Restart=on-failure
+      RestartSec=10
+      TimeoutStartSec=60
 
       [Install]
       WantedBy=multi-user.target
@@ -266,6 +284,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/kde-bootstrap.sh" ]
 

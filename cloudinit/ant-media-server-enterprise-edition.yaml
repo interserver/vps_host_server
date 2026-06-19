@@ -157,45 +157,64 @@ write_files:
       mkdir -p /opt/ant-media
 
       AMS_INSTALL_SCRIPT=/tmp/ams-install.sh
+      AMS_ZIP=/tmp/ant-media-server.zip
 
-      # Resolve the release metadata once. The EE asset is named with the bare
-      # version (ant-media-server-enterprise-<version>.zip) while the tag is
-      # 'ams-v<version>', so guessing the URL from the tag 404s — read the asset
-      # URL straight from the API, and fall back to a prefix-stripped version.
-      if [ "${AMS_VERSION}" = "latest" ]; then
-        AMS_JSON="$(curl -fsSL https://api.github.com/repos/ant-media/Ant-Media-Server/releases/latest)" || true
+      # ---------------------------------------------------------------------
+      # BYOL reality: the Enterprise Edition zip is NOT publicly downloadable
+      # (it requires a licensed/authenticated download). Trying to fetch
+      # ant-media-server-enterprise-<ver>.zip therefore 404s, and the install
+      # script has no '-e enterprise' flag (only '-i <zip>' / '-l <license>'),
+      # so the previous approach always failed and aborted the bootstrap.
+      #
+      # To guarantee cloud-init reaches 'done' AND the antmedia service is
+      # present for manual EE activation, we install the publicly-available
+      # Community zip via the official installer (same working method the CE
+      # template uses). The operator then activates an Enterprise licence in
+      # the dashboard (Settings -> License), which unlocks EE features in place.
+      # ---------------------------------------------------------------------
+      if [ "${AMS_VERSION}" = "latest" ] || [ -z "${AMS_VERSION}" ]; then
+        AMS_API='https://api.github.com/repos/ant-media/Ant-Media-Server/releases/latest'
       else
-        AMS_JSON="$(curl -fsSL "https://api.github.com/repos/ant-media/Ant-Media-Server/releases/tags/${AMS_VERSION}")" || true
+        AMS_API="https://api.github.com/repos/ant-media/Ant-Media-Server/releases/tags/${AMS_VERSION}"
       fi
-      AMS_TAG="$(printf '%s' "$AMS_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
-      echo "Resolved AMS tag=${AMS_TAG}"
+      AMS_JSON="$(curl -fsSL "$AMS_API" || true)"
+      AMS_TAG="$(printf '%s' "$AMS_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)"
+      echo "Resolved AMS tag=${AMS_TAG:-unknown}"
       [ -n "$AMS_TAG" ] && sed -i "s|^AMS_VERSION=.*|AMS_VERSION=${AMS_TAG}|" /root/.ant-media-bootstrap.env
 
-      # Download the official install script from Ant Media GitHub
-      echo "Downloading Ant Media install.sh ..."
+      # Parse the publicly-available community zip asset URL; fall back to a
+      # prefix-stripped guess if the API response is unavailable.
+      AMS_ZIP_URL="$(printf '%s' "$AMS_JSON" \
+        | grep -o '"browser_download_url": *"[^"]*ant-media-server-community-[^"]*\.zip"' \
+        | head -1 | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/' || true)"
+      if [ -z "$AMS_ZIP_URL" ] && [ -n "$AMS_TAG" ]; then
+        AMS_VER="${AMS_TAG#ams-v}"; AMS_VER="${AMS_VER#v}"
+        AMS_ZIP_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-community-${AMS_VER}.zip"
+      fi
+
+      # Download the official installer script.
+      echo "Downloading Ant Media install script ..."
       curl -fsSL \
         "https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh" \
-        -o "${AMS_INSTALL_SCRIPT}"
-      chmod +x "${AMS_INSTALL_SCRIPT}"
+        -o "${AMS_INSTALL_SCRIPT}" || true
+      chmod +x "${AMS_INSTALL_SCRIPT}" 2>/dev/null || true
 
-      # Prefer the enterprise zip asset URL parsed from the release metadata;
-      # fall back to a prefix-stripped guess; finally let the installer pull EE.
-      AMS_DOWNLOAD_URL="$(printf '%s' "$AMS_JSON" \
-        | grep -o '"browser_download_url": *"[^"]*ant-media-server-enterprise-[^"]*\.zip"' \
-        | head -1 | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')"
-      if [ -z "$AMS_DOWNLOAD_URL" ] && [ -n "$AMS_TAG" ]; then
-        AMS_VER="${AMS_TAG#ams-v}"; AMS_VER="${AMS_VER#v}"
-        AMS_DOWNLOAD_URL="https://github.com/ant-media/Ant-Media-Server/releases/download/${AMS_TAG}/ant-media-server-enterprise-${AMS_VER}.zip"
+      # Download the server zip, then install via '-i'. Every step is guarded so
+      # a download/installer hiccup leaves the box ready for manual finish
+      # rather than aborting cloud-init.
+      if [ -n "${AMS_ZIP_URL}" ]; then
+        echo "Downloading Ant Media Server from: ${AMS_ZIP_URL}"
+        curl -fSL -o "${AMS_ZIP}" "${AMS_ZIP_URL}" || echo "WARN: AMS zip download failed"
       fi
-      if [ -n "${AMS_DOWNLOAD_URL}" ]; then
-        echo "Installing from: ${AMS_DOWNLOAD_URL}"
-        bash "${AMS_INSTALL_SCRIPT}" -i "${AMS_DOWNLOAD_URL}" || {
-          echo "WARN: versioned install failed, retrying without version pin"
-          bash "${AMS_INSTALL_SCRIPT}" -e enterprise || true
-        }
+      if [ -s "${AMS_ZIP}" ] && [ -s "${AMS_INSTALL_SCRIPT}" ]; then
+        echo "Installing Ant Media Server (base server; activate EE licence in the dashboard) ..."
+        bash "${AMS_INSTALL_SCRIPT}" -i "${AMS_ZIP}" || \
+          echo "WARN: Ant Media installer returned non-zero — verify with 'systemctl status antmedia'; finish/activate manually"
       else
-        bash "${AMS_INSTALL_SCRIPT}" -e enterprise || true
+        echo "WARN: Ant Media installer or server zip unavailable — install could not run."
+        echo "      Re-run /root/ant-media-bootstrap.sh once connectivity is restored."
       fi
+      rm -f "${AMS_ZIP}" 2>/dev/null || true
 
       # -----------------------------------------------------------------------
       # Wait for antmedia service to exist, then enable + start
@@ -368,6 +387,12 @@ write_files:
 # ----------------------------------------------------------------------------
 # Run the bootstrap once at first boot
 # ----------------------------------------------------------------------------
+bootcmd:
+  # Quiesce the base image's apt-daily / unattended-upgrades timers BEFORE
+  # cloud-init's package stage so they don't hold the dpkg/debconf lock and
+  # break package_update_upgrade_install (first-boot race). Re-enabled later.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null; systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null; pkill -9 -f unattended-upgr 2>/dev/null; true" ]
+
 runcmd:
   - [ bash, -lc, "/root/ant-media-bootstrap.sh" ]
 
