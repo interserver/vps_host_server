@@ -254,10 +254,17 @@ write_files:
       set -euo pipefail
       exec > >(tee -a /var/log/nirvashare-bootstrap.log) 2>&1
       # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
-      #     makes postfix@-.service fail every boot); guarded no-op otherwise ---
+      #     makes postfix@-.service fail every boot); guarded no-op otherwise.
+      #     dpkg --reinstall won't recreate it (treated as a removed conffile),
+      #     so restore the file straight from the cached/downloaded .deb. ---
       if command -v dpkg >/dev/null 2>&1 && dpkg -s postfix >/dev/null 2>&1 && [ ! -f /etc/postfix/postfix-files ]; then
-        echo "Repairing corrupted postfix (restoring /etc/postfix/postfix-files)..."
-        DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y postfix || true
+        echo "Repairing corrupted postfix (restoring /etc/postfix/postfix-files from .deb)..."
+        _pf_deb="$(ls -t /var/cache/apt/archives/postfix_*.deb 2>/dev/null | head -1)"
+        if [ -z "$_pf_deb" ]; then
+          ( cd /tmp && DEBIAN_FRONTEND=noninteractive apt-get download postfix >/dev/null 2>&1 || true )
+          _pf_deb="$(ls -t /tmp/postfix_*.deb 2>/dev/null | head -1)"
+        fi
+        [ -n "$_pf_deb" ] && dpkg-deb --fsys-tarfile "$_pf_deb" | tar -C / -xf - ./etc/postfix/postfix-files ./etc/postfix/postfix-files.d 2>/dev/null || true
         systemctl reset-failed 'postfix@-.service' 2>/dev/null || true
         systemctl restart 'postfix@-.service' 2>/dev/null || systemctl restart postfix 2>/dev/null || true
       fi
