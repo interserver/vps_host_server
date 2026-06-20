@@ -306,6 +306,11 @@ write_files:
       # Firewall (UFW)
       # ------------------------------------------------------------------
       echo "Configuring UFW firewall..."
+      # Don't hard-depend on cloud-init's package stage having installed ufw
+      # (first-boot apt contention can skip it) — ensure it, then no-op if it
+      # still isn't available so the bootstrap never aborts here.
+      command -v ufw >/dev/null 2>&1 || { apt-get update -y || true; DEBIAN_FRONTEND=noninteractive apt-get install -y ufw || true; }
+      if command -v ufw >/dev/null 2>&1; then
       ufw --force reset
       ufw default deny incoming
       ufw default allow outgoing
@@ -314,6 +319,9 @@ write_files:
       ufw --force enable
       echo "UFW status:"
       ufw status verbose
+      else
+        echo "WARN: ufw not available — skipping firewall config (open ${WG_PORT}/udp manually)"
+      fi
 
       # ------------------------------------------------------------------
       # fail2ban
