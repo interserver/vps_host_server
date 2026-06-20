@@ -1,0 +1,24 @@
+Microweber (website builder / CMS) is installed and running on your VPS.
+
+Website:
+  http://{$ip}/
+Admin panel:
+  http://{$ip}/admin
+
+Admin login:
+  Username   : admin
+  Password   : {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Log in to the admin panel at http://{$ip}/admin with admin / {$password}.
+  2. If a browser installer appears, the DB credentials are in
+     /root/microweber-credentials.txt.
+  3. Point your domain DNS at {$ip}, set APP_DOMAIN/LE_EMAIL in
+     /root/.microweber-bootstrap.env, and re-run the bootstrap for HTTPS.
+  4. Build and publish your site from the drag-and-drop editor.
+  5. Full details: /root/microweber-credentials.txt

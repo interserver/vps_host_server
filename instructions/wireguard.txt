@@ -1,0 +1,18 @@
+WireGuard VPN is configured and running.
+
+WireGuard uses public-key authentication, not a web login or password.
+Pre-generated client configs are on the server.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. SSH in and view your server key, peer IPs, and config paths:
+       cat /root/wireguard-credentials.txt
+  2. Client configs live in /etc/wireguard/peers/ (one .conf per peer).
+     A matching .png QR code sits next to each config for the mobile app.
+  3. Import a .conf into any WireGuard client, or scan the QR code on mobile.
+  4. The VPN endpoint is {$ip}:51820/UDP (open through UFW).
+  5. Add more peers with `wg genkey` and a new [Peer] block, then
+       wg addconf wg0 <fragment.conf>

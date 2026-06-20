@@ -1,0 +1,15 @@
+Strapi (headless CMS, Node.js + PostgreSQL) is installed on your VPS.
+
+Admin panel: http://your-domain/admin  (https once TLS is issued)
+API base URL: http://your-domain/api
+Admin email (suggested): {$email}
+Let's Encrypt email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+NEXT STEPS: point your domain's A record to {$ip}. If TLS was deferred, run:
+  certbot --nginx -d your-domain
+Then open the admin panel and create your first admin user in the first-run
+wizard (Strapi sets the admin password there, not at provisioning time).
+Service: systemctl status strapi  ·  Logs: journalctl -u strapi -f
+Database credentials and secrets: /root/strapi-credentials.txt

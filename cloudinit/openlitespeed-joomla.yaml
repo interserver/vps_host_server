@@ -28,7 +28,7 @@ users:
 # repo inside the bootstrap script because the apt sources must be added first.
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - mariadb-server
   - mariadb-client
@@ -251,6 +251,11 @@ write_files:
       [ "$JOOMLA_ADMIN_PASS" = "CHANGE_ME" ] && JOOMLA_ADMIN_PASS="$(rand)"
       [ "$MYSQL_ROOT_PASS"  = "CHANGE_ME" ] && MYSQL_ROOT_PASS="$(rand)"
       [ "$OLS_ADMIN_PASS"   = "CHANGE_ME" ] && OLS_ADMIN_PASS="$(rand)"
+
+      # Prefer provisioner-supplied admin email + password (Joomla site admin login)
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && JOOMLA_ADMIN_PASS="$VPS_ADMIN_PASS"
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && JOOMLA_ADMIN_EMAIL="$VPS_ADMIN_EMAIL"
 
       # --------------------------------------------------------------------------
       # 1. Install OpenLiteSpeed + lsphp83 from LiteSpeed official repo
@@ -479,10 +484,11 @@ write_files:
       # --------------------------------------------------------------------------
       # 7. Set OLS WebAdmin password
       # --------------------------------------------------------------------------
-      if [ -f /usr/local/lsws/admin/misc/admpass.sh ]; then
-        /usr/local/lsws/admin/misc/admpass.sh admin "$OLS_ADMIN_PASS" 2>/dev/null || true
-      elif [ -f /usr/local/lsws/admin/conf/htpasswd ]; then
-        OLS_PASS_HASH="$(openssl passwd -apr1 "$OLS_ADMIN_PASS" 2>/dev/null || true)"
+      # admpass.sh ignores its args and PROMPTS interactively (hangs cloud-init
+      # forever: "password must be at least 6 charactors!"). Write the htpasswd
+      # entry directly/non-interactively instead.
+      OLS_PASS_HASH="$(/usr/local/lsws/admin/fcgi-bin/admin_php -q /usr/local/lsws/admin/misc/htpasswd.php "$OLS_ADMIN_PASS" 2>/dev/null || openssl passwd -apr1 "$OLS_ADMIN_PASS" 2>/dev/null || true)"
+      if [ -n "$OLS_PASS_HASH" ]; then
         echo "admin:${OLS_PASS_HASH}" > /usr/local/lsws/admin/conf/htpasswd
         chmod 600 /usr/local/lsws/admin/conf/htpasswd
       fi
@@ -580,11 +586,10 @@ write_files:
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/openlitespeed-joomla-bootstrap.sh" ]

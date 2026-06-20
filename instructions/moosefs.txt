@@ -1,0 +1,23 @@
+MooseFS is ready.
+
+The CGI web interface listens on localhost only (port 9425) for security.
+Reach it through an SSH tunnel:
+  ssh -L 9425:127.0.0.1:9425 root@{$ip}
+  (password: {$password})
+Then open in your browser:
+  http://127.0.0.1:9425/mfs.cgi
+
+Admin password: {$password}
+Admin / Let's Encrypt email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Mount the filesystem from a client (needs moosefs-client installed):
+  mfsmount /mnt/mfs -H {$ip}
+
+Next steps:
+  - Add chunk servers to grow capacity.
+  - Rotate the admin password after first login.
+  - Full credentials are saved on the server at /root/moosefs-credentials.txt

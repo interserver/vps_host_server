@@ -1,0 +1,23 @@
+ONLYOFFICE Workspace (collaborative office suite) is installed on your VPS.
+
+Web UI:
+  http://{$ip}/
+
+Admin login:
+  Username   : administrator
+  Password   : {$password}
+  Admin email: {$email}
+  Note: On first visit, complete the ONLYOFFICE portal wizard and set the
+        administrator password (use the one above when prompted).
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open http://{$ip}/ and complete the first-run portal wizard.
+  2. Sign in as administrator with {$password} and your email {$email}.
+  3. Point your domain DNS at {$ip}, set APP_DOMAIN/LE_EMAIL in
+     /root/.onlyoffice-bootstrap.env, and re-run the bootstrap for HTTPS.
+  4. Invite users, create documents, and set up Mail/CRM/Projects modules.
+  5. Full details: /root/onlyoffice-credentials.txt

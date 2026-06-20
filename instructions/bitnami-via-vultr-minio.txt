@@ -1,0 +1,22 @@
+MinIO object storage (S3-compatible) is installed and running on your VPS.
+
+Web console:
+  http://{$ip}:9001/   (MinIO console UI)
+
+S3 API endpoint:
+  http://{$ip}:9000/   (point S3 clients / SDKs here)
+
+Root login (console + API credentials):
+  Access Key (root user): see /root/minio-credentials.txt
+  Secret Key (password) : {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Log in to the console at http://{$ip}:9001/ with the root user and {$password}.
+  2. Create buckets and additional access keys for your applications.
+  3. To enable TLS, set APP_DOMAIN/LE_EMAIL in /root/.minio-bootstrap.env,
+     point DNS at {$ip}, then re-run certbot.
+  4. Full credentials (including the root user name): /root/minio-credentials.txt

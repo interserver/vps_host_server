@@ -26,7 +26,7 @@ users:
 # RPM repo (packages.adminbolt.com)
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - curl
   - wget
@@ -120,6 +120,11 @@ write_files:
       if [[ "$APP_DOMAIN" == "CHANGE_ME" ]]; then
         APP_DOMAIN="$SERVER_IP"
       fi
+
+      # Prefer provisioner-supplied admin email + password
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && ADMIN_PASS="$VPS_ADMIN_PASS"
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LE_EMAIL="$VPS_ADMIN_EMAIL"
 
       # ----------------------------------------------------------------
       # firewalld — start it first so AdminBolt's bolt-cli run-firewall-fix
@@ -247,11 +252,9 @@ write_files:
 # Run the bootstrap script once on first boot
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # AlmaLinux: enable EPEL + CRB before cloud-init's package stage so EPEL
+  # packages (fail2ban, certbot, etc.) resolve.
+  - [ cloud-init-per, instance, ci-epel-crb, sh, -c, "dnf -y install epel-release 2>/dev/null || true; dnf -y config-manager --set-enabled crb 2>/dev/null || dnf -y config-manager --set-enabled powertools 2>/dev/null || true; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/adminbolt-bootstrap.sh" ]

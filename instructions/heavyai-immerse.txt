@@ -1,0 +1,16 @@
+HEAVY.AI Immerse (GPU-accelerated analytics + dashboards) is installed on your VPS.
+
+Immerse UI (direct): http://{$ip}:6273/
+Immerse UI (proxied): http://{$ip}/   (or https://your-domain once TLS is set)
+Admin username: admin
+Admin password: {$password}
+Default database: heavyai
+Let's Encrypt email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT: This app REQUIRES an NVIDIA GPU VPS plan (Pascal+; 16 GB VRAM
+recommended). A reboot may be needed after first boot to load the GPU driver:
+verify with nvidia-smi, then: docker start heavyai
+Free edition: request a free license key from heavy.ai and enter it in Immerse
+(Admin > License). Full credentials: /root/heavyai-credentials.txt

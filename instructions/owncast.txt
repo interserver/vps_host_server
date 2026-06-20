@@ -1,0 +1,29 @@
+Owncast (self-hosted live streaming) is installed and running on your VPS.
+
+Web UI:
+  http://{$ip}/         (your stream / viewer page)
+Admin panel:
+  http://{$ip}/admin
+
+Admin login:
+  Username: admin
+  Password: {$password}
+
+Stream key (for OBS / broadcasting software):
+  See /root/owncast-credentials.txt
+
+OBS / broadcaster settings:
+  Service   : Custom
+  Server    : rtmp://{$ip}:1935/live
+  Stream Key: (from /root/owncast-credentials.txt)
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Log in to the admin panel at http://{$ip}/admin with admin / {$password}.
+  2. Configure your server name, logo, and stream details.
+  3. Add the RTMP server + stream key in OBS and go live.
+  4. Point a domain at {$ip} and enable TLS for a public HTTPS stream page.
+  5. Full details: /root/owncast-credentials.txt

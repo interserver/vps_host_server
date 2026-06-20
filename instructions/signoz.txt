@@ -1,0 +1,22 @@
+SigNoz is ready.
+
+Web UI:
+  http://{$ip}:8080/
+  (https://your-domain/ if a domain + TLS were configured)
+
+Admin account:
+  Email: {$email}
+  Password: {$password}
+
+If the admin account was not auto-created, register it at:
+  http://{$ip}:8080/signup
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Log in and point your instrumented services' OpenTelemetry OTLP exporters
+    at this server (gRPC/HTTP endpoints listed in the credentials file).
+  - Container logs: docker compose logs -f (from the SigNoz deploy directory)
+  - Full credentials are saved on the server at /root/signoz-credentials.txt

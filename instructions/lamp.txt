@@ -1,0 +1,18 @@
+Your LAMP stack (Apache + PHP + MariaDB) is ready.
+
+Web server:
+  http://{$ip}/   (https://your-domain/ once DNS is pointed and TLS is issued)
+  A phpinfo() landing page is served from /var/www/html/index.php.
+Let's Encrypt / admin email: {$email}
+
+There is no web admin panel. Manage the server over SSH:
+  ssh root@{$ip}   (password: {$password})
+
+Database (MariaDB): the root and application DB passwords are randomly
+generated. Find them on the server at /root/lamp-credentials.txt
+
+Next steps:
+  - Upload your site to /var/www/html (owned by www-data).
+  - Apache vhost: /etc/apache2/sites-available/lamp.conf
+  - For TLS, point a domain to {$ip}, then: certbot --apache -d your-domain
+  - Full credentials are saved on the server at /root/lamp-credentials.txt

@@ -1,0 +1,20 @@
+Immich (self-hosted photo/video backup) is installed and ready.
+
+Web access:
+  URL: http://{$ip}/  (https:// once Let's Encrypt TLS is issued)
+
+First login:
+  Create your admin account on the first visit to the URL above.
+  Suggested password: {$password}  (use this or your own when prompted)
+  Suggested admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}, then re-run
+     `certbot --nginx -d <domain>` to enable HTTPS.
+  2. Open the URL and create the first admin user.
+  3. Photos are stored in /opt/immich/library (back this up!).
+  4. Full details (DB, Redis pw) are in /root/immich-credentials.txt

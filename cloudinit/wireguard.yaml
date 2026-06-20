@@ -23,7 +23,7 @@ users:
 # Packages
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   # NOTE: do NOT list the 'wireguard' meta-package — on noble it pulls in
   # wireguard-dkms / kernel-module deps that fail in VPS/container kernels
@@ -126,6 +126,11 @@ write_files:
       # Helpers
       # ------------------------------------------------------------------
       rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24 || true; }
+
+      # Prefer provisioner-supplied values. WireGuard authenticates peers with
+      # public keys (no web/admin password or admin email var to override), so
+      # only the SSH root password (VPS_ADMIN_PASS) is the human login secret.
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
 
       # ------------------------------------------------------------------
       # Ensure the `wg` binary exists (wireguard-tools). cloud-init's
@@ -387,11 +392,10 @@ write_files:
 # runcmd — execute bootstrap once on first boot
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/wireguard-bootstrap.sh" ]

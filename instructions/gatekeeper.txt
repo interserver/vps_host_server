@@ -1,0 +1,22 @@
+BotGuard GateKeeper (WAF + bot detection) is ready.
+
+Admin / WAF proxy UI:
+  http://{$ip}/   (https://your-domain/ once DNS is pointed and TLS is issued)
+
+Admin login:
+  Username: botguard
+  Password: your BotGuard API key
+
+GateKeeper uses your BotGuard API key as both the service key and the web UI
+password. Obtain it at https://botguard.net/en/account/credentials and set
+BG_API_KEY in /root/.gatekeeper-bootstrap.env (or enter it in the web UI on
+first login).
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}.
+  2. Open http://{$ip}/ and log in as botguard with your BotGuard API key.
+  3. Full details are in /root/gatekeeper-credentials.txt on the server.

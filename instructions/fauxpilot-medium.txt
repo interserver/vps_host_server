@@ -1,0 +1,26 @@
+FauxPilot (self-hosted AI code completion) is ready on your VPS.
+
+Copilot proxy endpoint:   http://{$ip}:5000
+
+This is an unauthenticated code-completion endpoint (no admin login or
+password). Restrict access via the firewall or a reverse proxy if exposing it.
+
+IDE setup:
+  Install the "FauxPilot" VS Code extension (or any GitHub Copilot-compatible
+  extension that allows a custom endpoint) and set the server URL to:
+    http://{$ip}:5000
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Verify the GPU is visible:   nvidia-smi
+  2. Watch the model load:        journalctl -u fauxpilot -f
+     (the 6B model can take 5-15 min to load on first start)
+  3. Point your IDE extension at http://{$ip}:5000
+  4. To enable HTTPS, set APP_DOMAIN + ENABLE_TLS in
+     /root/.fauxpilot-bootstrap.env (LE email {$email}) and re-run the script.
+
+Notes / logs:  /root/fauxpilot-credentials.txt  ·  systemctl status fauxpilot
+
+REQUIRES an NVIDIA GPU with >= 16 GB VRAM.

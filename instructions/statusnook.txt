@@ -1,0 +1,19 @@
+Statusnook (status page + endpoint monitor) is installed on your VPS.
+
+Web UI:
+  https://{$ip}/   (Statusnook manages its own TLS on ports 80/443)
+
+Admin login:
+  Username: admin
+  Password: {$password}
+  Note: Set this password when completing the first-run setup wizard.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open https://{$ip}/ and complete the setup wizard using the password above.
+  2. Create your status page and add monitors.
+  3. Point your domain DNS at {$ip} for automatic TLS in standalone mode.
+  4. Full details: /root/statusnook-credentials.txt

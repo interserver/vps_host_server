@@ -27,7 +27,7 @@ users:
 # Packages — cloud-init installs these before runcmd runs
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - curl
   - wget
@@ -103,6 +103,12 @@ write_files:
         systemctl restart 'postfix@-.service' 2>/dev/null || systemctl restart postfix 2>/dev/null || true
       fi
       source /root/.coolify-bootstrap.env
+
+      # Prefer provisioner-supplied admin email (Coolify sets its admin
+      # password via the first-run browser registration wizard, so there is
+      # no admin password variable to override here).
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LE_EMAIL="$VPS_ADMIN_EMAIL"
 
       # ----------------------------------------------------------------
       # Helpers
@@ -280,11 +286,10 @@ write_files:
 # Run the bootstrap script exactly once at first boot
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/coolify-bootstrap.sh" ]

@@ -1,0 +1,22 @@
+Jamulus audio server is ready.
+
+There is no web login for Jamulus — musicians connect with the Jamulus desktop app.
+
+Connect:
+  1. Install Jamulus from https://jamulus.io
+  2. Open Jamulus -> Connect -> Manual Host Entry
+  3. Enter this server's address and port:
+       {$ip}:22124
+     (UDP port 22124 is the Jamulus default and is opened in the firewall.)
+
+SSH access (server management):
+  ssh root@{$ip}
+  (password: {$password})
+
+Service management:
+  systemctl status jamulus-server
+  systemctl restart jamulus-server
+  journalctl -u jamulus-server -f
+
+Notes:
+  - Connection info is saved on the server at /root/jamulus-credentials.txt

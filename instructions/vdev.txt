@@ -1,0 +1,13 @@
+VDev (code-server — VS Code in the browser) is installed on your VPS.
+
+Panel URL (usable now): http://{$ip}:8080
+Panel URL (domain): http://your-domain/  (https once TLS is issued)
+Password: {$password}
+Let's Encrypt email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+GETTING STARTED: open http://{$ip}:8080, enter the password above. Your workspace
+is at /home/coder/workspace. To enable HTTPS, point your domain to {$ip}, set
+ENABLE_TLS=true in /root/.vdev-bootstrap.env, then: certbot --nginx -d your-domain
+Service: systemctl status vdev-code-server  ·  Log: /var/log/vdev-bootstrap.log

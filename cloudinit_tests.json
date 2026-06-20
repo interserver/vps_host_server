@@ -5,7 +5,7 @@
   },
   "templates": {
     "3cx-phone-system": {
-      "base_image": "debian12.qcow2",
+      "base_image": "ubuntu24.qcow2",
       "services": [],
       "ports": [
         443,
@@ -179,7 +179,7 @@
       ]
     },
     "cloudpanel2-debian": {
-      "base_image": "debian13.qcow2",
+      "base_image": "ubuntu24.qcow2",
       "services": [],
       "ports": [],
       "http": [],

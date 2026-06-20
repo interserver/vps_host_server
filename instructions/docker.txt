@@ -1,0 +1,15 @@
+Docker CE + Compose with an Nginx-fronted demo container is ready.
+
+Demo app URL: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+The site is behind HTTP basic auth:
+  Username: admin
+  Password: {$password}
+Let's Encrypt email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Manage containers:
+  docker ps
+  docker compose -f /opt/docker-demo/docker-compose.yml logs -f
+Full details: /root/docker-credentials.txt

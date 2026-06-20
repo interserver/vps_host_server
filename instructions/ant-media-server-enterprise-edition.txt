@@ -1,0 +1,18 @@
+Ant Media Server (Enterprise Edition, BYOL) is installed and ready.
+
+Dashboard login:
+  URL (HTTP):  http://{$ip}:5080
+  URL (HTTPS): https://{$ip}:5443  (after TLS is configured)
+  Admin email:    {$email}
+  Admin password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open http://{$ip}:5080 and log in with the email/password above.
+  2. Activate your Enterprise license: Dashboard -> License
+     (EE requires a commercial key from https://antmedia.io/).
+  3. RTMP ingest: rtmp://{$ip}:1935/live
+  4. Full details are in /root/ant-media-credentials.txt

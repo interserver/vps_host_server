@@ -1,0 +1,19 @@
+Cloudron control panel is ready.
+
+Panel URL (by IP, usable now): https://{$ip}:4443
+Panel URL (by domain, after DNS): https://your-domain:4443
+
+Cloudron admin login:
+  Username: admin
+  Password: {$password}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Open https://{$ip}:4443 and accept the self-signed certificate warning.
+  2. Complete the Cloudron first-run setup wizard and set your domain.
+  3. Log in with the admin credentials above. Cloudron obtains its own TLS
+     certificate automatically once DNS points at {$ip}.
+  4. Full credentials are in /root/cloudron-credentials.txt on the server.

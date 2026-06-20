@@ -1,0 +1,15 @@
+k3s (lightweight Kubernetes, single-node) is installed on your VPS.
+
+Cluster API endpoint: https://{$ip}:6443
+Ingress (HTTP/HTTPS): http://{$ip}/  and  https://your-domain/ once TLS is set
+Let's Encrypt email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+Manage the cluster over SSH:
+  kubectl get nodes        # node status
+  kubectl get pods -A      # all pods
+  helm list -A             # installed charts
+kubeconfig is at /root/.kube/config (also /etc/rancher/k3s/k3s.yaml).
+To join an agent node, use the K3S_TOKEN in /root/k3s-credentials.txt.
+A smoke-test "hello" workload is deployed; remove it: kubectl delete ns hello

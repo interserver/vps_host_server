@@ -1,0 +1,20 @@
+Your ASP.NET (Kestrel + Nginx) VPS is ready.
+
+Web app:
+  http://{$ip}/        (HTTPS once you point a domain and TLS is issued)
+
+The .NET app runs under Kestrel on 127.0.0.1:5000 behind Nginx on port 80/443.
+There is no built-in web login; the generated admin/deployment secret is:
+  Password: {$password}
+LE / admin email: {$email}
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Next steps:
+  1. Point your domain's A record at {$ip}, then set APP_DOMAIN and LE_EMAIL in
+     /root/.aspnet-bootstrap.env and re-run certbot for HTTPS.
+  2. Deploy your own app into the app directory and restart the service:
+       systemctl restart aspnet
+       journalctl -u aspnet -f
+  3. Full details are in /root/aspnet-credentials.txt

@@ -1,0 +1,17 @@
+CloudPanel 2 is installed and ready.
+
+Admin panel login:
+  URL:      https://{$ip}:8443
+  Username: admin
+  Password: {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open the panel at https://{$ip}:8443 and accept the self-signed
+     certificate (or point a domain at {$ip} for Let's Encrypt TLS).
+  2. Log in and create your first site, database, and SSL certificate.
+  3. Full credentials (DB root) are in /root/cloudpanel-credentials.txt

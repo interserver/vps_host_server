@@ -1,0 +1,22 @@
+OpenClaw Gateway is installed natively on your VPS and runs as a systemd
+service (openclaw-gateway).
+
+Gateway listener:   127.0.0.1:18789  (loopback by default)
+Gateway token:      {$password}
+
+The gateway binds to loopback for safety. Reach it from your machine via an
+SSH tunnel, e.g.:
+  ssh -L 18789:127.0.0.1:18789 root@{$ip}
+then point your client at http://127.0.0.1:18789 using the token above.
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Add your model provider API keys (Anthropic / OpenAI / Gemini) in:
+       /etc/openclaw/openclaw.env
+  2. To expose the gateway on the LAN, set OPENCLAW_GATEWAY_BIND=lan in that
+     file (only after confirming a strong OPENCLAW_GATEWAY_TOKEN is set).
+  3. Apply changes:  systemctl restart openclaw-gateway
+  4. Status / logs:  systemctl status openclaw-gateway
+                     journalctl -u openclaw-gateway -f

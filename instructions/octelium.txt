@@ -1,0 +1,20 @@
+Octelium (zero-trust secure access platform) is installed and ready.
+
+The Octelium cluster authenticates with an auth token, not a web password.
+The token is generated at first boot and saved on the server.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. SSH in and read your cluster auth token:
+       cat /root/octelium-credentials.txt
+  2. Create the required DNS records (cluster will not work without them):
+       A     <your-domain>    -> {$ip}
+       CNAME *.<your-domain>  -> <your-domain>
+  3. From your local machine:
+       curl -fsSL https://octelium.com/install.sh | bash
+       octelium login --domain <your-domain> --auth-token <TOKEN>
+  4. WireGuard gateway: UDP 53820. LE/admin email used: {$email}.
+  5. Full details are in /root/octelium-credentials.txt

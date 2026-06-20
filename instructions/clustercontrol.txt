@@ -1,0 +1,20 @@
+ClusterControl is ready.
+
+Web UI:
+  http://{$ip}/clustercontrol
+  (https://your-domain/clustercontrol if a domain + TLS were configured)
+
+Admin login:
+  Username: admin
+  Password: {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Log in and register/import your existing database clusters, or deploy a new one.
+  - Add the ClusterControl SSH public key (shown in /root/clustercontrol-credentials.txt)
+    to each managed DB node so it can be controlled.
+  - Full credentials are saved on the server at /root/clustercontrol-credentials.txt

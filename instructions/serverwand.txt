@@ -1,0 +1,20 @@
+ServerWand is ready.
+
+ServerWand is a cloud-based (SaaS) control panel. There is no admin panel
+hosted on this server; you manage it from ServerWand's website.
+
+Panel URL: https://manage.serverwand.com
+Server IP: {$ip}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Log in to https://manage.serverwand.com
+  2. Create -> Server -> Custom / Other provider, and enter:
+       Host: {$ip}   User: root   Password: {$password}   Port: 22
+  3. ServerWand connects over SSH and installs Apache, MariaDB, PHP, Postfix,
+     etc., then manages sites, databases, SSL, and backups remotely.
+  4. After ServerWand deploys its key you may disable password SSH and rotate
+     the root password. Details are in /root/serverwand-credentials.txt.

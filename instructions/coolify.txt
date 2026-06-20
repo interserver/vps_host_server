@@ -1,0 +1,20 @@
+Coolify (self-hosted PaaS) is ready on your VPS.
+
+Dashboard:   http://{$ip}:8000/
+
+First-run setup:
+  Coolify creates the FIRST admin account in the browser. Open the dashboard
+  URL above and complete the registration wizard to set your own admin email
+  and password. (Suggested admin email: {$email})
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Open http://{$ip}:8000/ and register the first admin account.
+  2. Add this server (or a remote one) under Servers.
+  3. Set your domain under Settings -> Instance Settings; Coolify manages TLS
+     automatically via its built-in proxy.
+  4. Deploy apps, databases, and services from the UI.
+
+Notes / logs:  /root/coolify-credentials.txt  ·  systemctl status coolify

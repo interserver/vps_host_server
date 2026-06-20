@@ -1,0 +1,23 @@
+UTunnel VPN Server is ready on your VPS.
+
+Local admin panel:   https://{$ip}:60657
+Admin password:      {$password}
+LE / admin email:    {$email}
+
+Cloud dashboard:     https://www.utunnel.io/
+
+VPN ports:  1194/udp (OpenVPN)  ·  51820/udp (WireGuard)  ·  60656/tcp (API)
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Open https://{$ip}:60657 and log in with password {$password}
+     (accept the self-signed cert warning on first visit).
+  2. Sign in at https://www.utunnel.io/ and ADD this server to your UTunnel
+     account to manage VPN users and download client configs.
+  3. To secure the panel with a real cert, point a domain at {$ip} and set
+     APP_DOMAIN + ENABLE_TLS in /root/.utunnel-vpn-bootstrap.env (LE email
+     {$email}), then re-run /root/utunnel-vpn-bootstrap.sh.
+
+Credentials also saved to /root/utunnel-vpn-credentials.txt

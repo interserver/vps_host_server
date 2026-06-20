@@ -23,7 +23,7 @@ users:
 # Packages (base tooling; MongoDB itself is added via vendor repo in bootstrap)
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - apt-transport-https
   - gnupg
@@ -191,6 +191,10 @@ write_files:
 
       # Generate password if left as CHANGE_ME
       [ "${MONGO_ADMIN_PASS}" = "CHANGE_ME" ] && MONGO_ADMIN_PASS="$(rand)"
+
+      # Prefer provisioner-supplied admin password
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && MONGO_ADMIN_PASS="$VPS_ADMIN_PASS"
 
       # -----------------------------------------------------------------------
       # 1. Disable Transparent Huge Pages (MongoDB requirement)
@@ -390,11 +394,10 @@ write_files:
 # Run the bootstrap once write_files have been laid down
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/mongodb-bootstrap.sh" ]

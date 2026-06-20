@@ -1,0 +1,14 @@
+OpenLiteSpeed + Joomla is installed.
+
+Site URL:  http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+Joomla admin: http://{$ip}/administrator/
+  Username: admin
+  Password: {$password}
+  Admin email: {$email}
+
+OpenLiteSpeed WebAdmin: http://{$ip}:7080/  (username: admin; password saved in credentials file)
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Joomla path: /var/www/joomla    DB + WebAdmin passwords: /root/openlitespeed-joomla-credentials.txt

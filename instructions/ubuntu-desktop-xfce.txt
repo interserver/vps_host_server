@@ -1,0 +1,25 @@
+Ubuntu Desktop (XFCE) is ready.
+
+Desktop user:
+  Username: xfceuser
+  Password: {$password}
+
+RDP (Remote Desktop):
+  Host: {$ip}:3389
+  Client: Windows Remote Desktop, Remmina, or Microsoft Remote Desktop (macOS/iOS)
+  Log in with username "xfceuser" and password {$password}
+
+VNC:
+  Host: {$ip}:5901
+  Client: TigerVNC Viewer, RealVNC Viewer, or Remmina
+  (VNC uses its own password, shown in /root/ubuntu-desktop-xfce-credentials.txt)
+
+SSH access:
+  ssh xfceuser@{$ip}
+  (password: {$password})
+  Root: ssh root@{$ip} (password {$password})
+
+Next steps:
+  - Connect via RDP or VNC and start using the XFCE desktop.
+  - Change the desktop password after first login for security.
+  - Full credentials are saved on the server at /root/ubuntu-desktop-xfce-credentials.txt

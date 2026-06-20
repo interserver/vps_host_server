@@ -1,0 +1,18 @@
+ONLYOFFICE DocSpace is ready.
+
+Web UI:
+  http://{$ip}/      (https://your-domain/ if a domain + TLS were configured)
+
+On first visit you will see the DocSpace setup wizard. Use:
+  Admin email: {$email}
+  Admin password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Complete the first-run wizard with the email/password above.
+  - Point your domain at {$ip} and enable TLS for production use.
+  - Container logs: docker compose -f /opt/docspace/docker-compose.yml logs -f
+  - Full credentials are saved on the server at /root/docspace-credentials.txt

@@ -1,0 +1,25 @@
+ComfyUI (node-based Stable Diffusion UI) is installed and running on your VPS.
+
+Web UI:
+  http://{$ip}/          (served via nginx on port 80)
+  http://{$ip}:8188/     (direct ComfyUI port)
+
+Admin password:
+  {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Important: This app needs an NVIDIA GPU plan for accelerated inference.
+Without a GPU it falls back to CPU (very slow).
+
+Next steps:
+  1. Open the Web UI at http://{$ip}/ to load the default workflow.
+  2. Upload a checkpoint model to /opt/comfyui/models/checkpoints/ (via SSH/SCP),
+     then restart the service: systemctl restart comfyui
+  3. Outputs are saved in /opt/comfyui/output/; custom nodes go in
+     /opt/comfyui/custom_nodes/.
+  4. Point a domain at {$ip} and set ENABLE_TLS=true in
+     /root/.comfyui-bootstrap.env for HTTPS.
+  5. Full details: /root/comfyui-credentials.txt

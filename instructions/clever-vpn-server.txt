@@ -1,0 +1,19 @@
+Clever VPN Clustered Server (WireGuard-based VPN) is installed on your VPS.
+
+There is no web admin panel. WireGuard uses key-based peer configs, not a
+login password. 5 ready-to-use client configs are generated on first boot.
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+How to connect a client:
+  1. SSH in and run: cat /root/clever-vpn-credentials.txt
+     (shows the server public key, endpoint {$ip}:51820, and all peer configs)
+  2. Peer .conf files are in /etc/wireguard/peers/ — import any one into the
+     WireGuard app (desktop or mobile).
+  3. Each peer also has a QR code .png next to its .conf for quick mobile import.
+
+VPN port open: 51820/udp.
+Server config: /etc/wireguard/wg0.conf
+Status: wg show     Restart: systemctl restart wg-quick@wg0
+Full details are saved on the server at /root/clever-vpn-credentials.txt

@@ -1,0 +1,20 @@
+AzuraCast (web radio) is ready.
+
+Web UI:  http://{$ip}/  (https:// once your domain DNS is pointed and TLS is issued)
+
+AzuraCast admin login:
+  Email:    {$email}
+  Password: {$password}
+
+Radio listener streams: http://{$ip}:8000  (range :8000-8999)
+SFTP station uploads:   {$ip}:2022
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}.
+  2. Open the Web UI and finish the first-run setup wizard if prompted,
+     then log in with the admin email/password above.
+  3. Full credentials are in /root/azuracast-credentials.txt on the server.

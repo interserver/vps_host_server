@@ -1,0 +1,23 @@
+IceWarp Server 14 (mail & collaboration) is installed on your VPS.
+
+Admin Console:
+  https://your-domain:32000   (or https://{$ip}:32000 while DNS propagates)
+WebClient (webmail):
+  https://your-domain/   (or https://{$ip}/)
+
+Admin / Postmaster account: postmaster@your-mail-domain
+Admin password: {$password}
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT — IceWarp is a commercial product (BYOL):
+  1. Point your mail domain DNS A record to {$ip}.
+  2. Open the Admin Console: https://your-domain:32000
+  3. Log in as postmaster@your-mail-domain with the password above.
+  4. Go to System -> License -> Activate and enter your IceWarp license key.
+     Purchase or start a trial at https://www.icewarp.com/
+
+Mail ports open: 25, 465, 587 (SMTP) | 110, 995 (POP3) | 143, 993 (IMAP)
+Full credentials are saved on the server at /root/icewarp-credentials.txt

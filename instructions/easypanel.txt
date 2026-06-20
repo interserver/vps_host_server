@@ -1,0 +1,17 @@
+Your Easypanel server is ready.
+
+Dashboard (usable immediately by IP):
+  http://{$ip}:3000
+
+Log in with:
+  Admin email: {$email}
+  Password:    {$password}
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Next steps:
+  1. Open http://{$ip}:3000 and log in with the credentials above.
+  2. Point a domain at {$ip} to enable HTTPS for the panel and your apps.
+  3. Deploy apps/services from the Easypanel dashboard.
+  4. Full details are in /root/easypanel-credentials.txt

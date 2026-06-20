@@ -1,0 +1,26 @@
+Haltdos WAF Community Edition is installed on your VPS.
+
+Management console:
+  https://{$ip}:9000/   (HTTPS, self-signed cert — accept the browser warning)
+
+Admin login:
+  Password: {$password}
+  Note: Use this password during the first-run license registration + email OTP
+        in the console.
+
+WAF proxy (client traffic) listens on ports 80 and 443.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open https://{$ip}:9000/ and accept the self-signed certificate.
+  2. Complete the license registration and email OTP, using {$password} as your
+     initial admin password.
+  3. Add your protected site/domain in the console and route its DNS through
+     this server's IP {$ip}.
+  4. Point your domain at {$ip}, set APP_DOMAIN/LE_EMAIL in
+     /root/.haltdos-waf-bootstrap.env, and re-run the bootstrap for a Let's
+     Encrypt cert to import into the WAF SSL settings.
+  5. Full details: /root/haltdos-waf-credentials.txt

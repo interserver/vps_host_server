@@ -1,0 +1,13 @@
+Fauxpilot (CodeGen-350M) AI code-completion server is ready.
+NOTE: requires a GPU VPS plan (NVIDIA, >=6 GB VRAM). Reboot after first boot if the GPU driver was just installed, then: systemctl status fauxpilot
+
+OpenAI-compatible API base URL: http://{$ip}:5000/v1
+Engines endpoint: http://{$ip}:5000/v1/engines
+Let's Encrypt email: {$email}
+
+The API has no login/password. In VS Code install the "fauxpilot" extension and set fauxpilot.server to the API URL above.
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Full details: /root/fauxpilot-credentials.txt

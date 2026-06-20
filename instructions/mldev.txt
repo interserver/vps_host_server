@@ -1,0 +1,23 @@
+Your ML Development (JupyterLab + MLflow) server is ready.
+NOTE: This app is designed for an NVIDIA GPU VPS.
+
+JupyterLab:
+  http://{$ip}:8888/         (direct)
+  http://{$ip}/              (via Nginx; HTTPS once a domain + TLS are set up)
+MLflow:
+  http://{$ip}:5000/         (also at /mlflow/ behind Nginx)
+
+Log in to JupyterLab with:
+  Password: {$password}
+Admin / Let's Encrypt email: {$email}
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Next steps:
+  1. Open http://{$ip}:8888 and log in with the password above.
+  2. Pre-installed: PyTorch, TensorFlow, HuggingFace, scikit-learn, MLflow, etc.
+     Notebooks/datasets/models dirs live under the mldev install root.
+  3. Point a domain at {$ip} and set APP_DOMAIN + LE_EMAIL in
+     /root/.mldev-bootstrap.env, then re-run certbot for HTTPS.
+  4. Full details are in /root/mldev-credentials.txt

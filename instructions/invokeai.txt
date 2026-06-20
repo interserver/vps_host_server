@@ -1,0 +1,21 @@
+Your InvokeAI (Stable Diffusion web UI) server is ready.
+NOTE: This app requires an NVIDIA GPU VPS.
+
+Web UI:
+  http://{$ip}:9090/         (direct)
+  http://{$ip}/              (via Nginx; HTTPS once a domain + TLS are set up)
+
+InvokeAI has no built-in login by default. The generated reference password is:
+  Password: {$password}
+Admin / Let's Encrypt email: {$email}
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Next steps:
+  1. Open http://{$ip}:9090 in your browser.
+  2. Use the Model Manager to download checkpoints, or drop them in
+     the InvokeAI models directory under the install root.
+  3. Point a domain at {$ip} and set APP_DOMAIN + LE_EMAIL in
+     /root/.invokeai-bootstrap.env, then re-run certbot for HTTPS.
+  4. Full details are in /root/invokeai-credentials.txt

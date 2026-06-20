@@ -1,0 +1,24 @@
+Your CloudPanel 2 server is ready.
+
+Control panel:
+  https://{$ip}:8443
+
+Log in with:
+  Admin user:  admin
+  Admin email: {$email}
+  Password:    {$password}
+
+(If you configured a domain, you can also reach the panel at
+ https://your-domain:8443 once DNS points to {$ip}. Your browser will warn about
+ the self-signed cert until you add a real domain + Let's Encrypt.)
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Open firewall ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 8443 (panel).
+
+Next steps:
+  1. Open the panel URL above and log in.
+  2. Add your first site/database from the CloudPanel dashboard.
+  3. Change the admin password after first login.
+  4. Full details are in /root/cloudpanel2-credentials.txt

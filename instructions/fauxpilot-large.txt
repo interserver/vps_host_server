@@ -1,0 +1,26 @@
+FauxPilot (self-hosted AI code completion, 16B model) is installed on your VPS.
+
+API endpoint (OpenAI-compatible):
+  http://{$ip}/v1/completions
+  http://{$ip}/v1/engines/codegen/completions
+
+Admin API key:
+  {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Important: This app requires an NVIDIA GPU with >=24 GB VRAM and >=50 GB disk
+for the 16B model. The model weights download can take 30-60+ minutes, and a
+reboot may be needed to activate the NVIDIA driver.
+
+Next steps:
+  1. Verify the GPU and service:
+       ssh root@{$ip}  ->  nvidia-smi && systemctl status fauxpilot
+     If the service is not running, start it: systemctl start fauxpilot
+  2. Point your editor's Copilot/FauxPilot plugin at http://{$ip}/ using the
+     admin API key above.
+  3. Point a domain at {$ip} and set ENABLE_TLS=true in
+     /root/.fauxpilot-bootstrap.env for HTTPS.
+  4. Full details: /root/fauxpilot-credentials.txt

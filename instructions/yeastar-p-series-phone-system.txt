@@ -1,0 +1,21 @@
+Yeastar P-Series Phone System is ready.
+
+Management Console:
+  http://{$ip}:8088
+  (https://your-domain:8088 / port 443 if a domain + TLS were configured)
+
+Admin login:
+  Username: admin
+  Password: {$password}
+  (You set/confirm this during the first-boot web wizard.)
+  Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Open the management console and complete the first-boot wizard.
+  - This is a BYOL product: a valid Yeastar license is required for full features.
+    Obtain one at https://www.yeastar.com/pricing/ and activate it in the console.
+  - Full credentials are saved on the server at /root/yeastar-p-series-credentials.txt

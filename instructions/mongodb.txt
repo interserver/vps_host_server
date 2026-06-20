@@ -1,0 +1,21 @@
+MongoDB Community Edition is ready.
+
+Endpoint: mongodb://127.0.0.1:27017  (bound to localhost only — not exposed publicly)
+
+Admin login:
+  Username:      mongoadmin
+  Password:      {$password}
+  Auth database: admin
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Access from your workstation (SSH tunnel):
+  ssh -L 27017:127.0.0.1:27017 root@{$ip}
+  then: mongosh "mongodb://mongoadmin:{$password}@127.0.0.1:27017/admin"
+
+Next steps:
+  1. Use the SSH tunnel above, or change net.bindIp in /etc/mongod.conf to
+     expose it (secure it with the firewall first).
+  2. Full credentials are in /root/mongodb-credentials.txt on the server.

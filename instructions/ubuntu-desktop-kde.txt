@@ -1,0 +1,19 @@
+Ubuntu Desktop (KDE Plasma) is ready.
+
+Connect via RDP (Windows Remote Desktop / Remmina):
+  Host:     {$ip}:3389
+  Username: kdeuser
+  Password: {$password}
+
+Connect via VNC (TigerVNC / RealVNC / Remmina):
+  Host:     {$ip}:5901
+  VNC pass: see /root/kde-credentials.txt (separate 8-char VNC password)
+
+Server (SSH):
+  ssh kdeuser@{$ip}   (or: ssh root@{$ip})
+  Password: {$password}
+
+Next steps:
+  1. Connect over RDP to {$ip}:3389 with kdeuser / {$password}.
+  2. The VNC password is shown in /root/kde-credentials.txt on the server.
+  3. Full credentials are in /root/kde-credentials.txt on the server.

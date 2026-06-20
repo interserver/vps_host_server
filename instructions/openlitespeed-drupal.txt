@@ -1,0 +1,16 @@
+OpenLiteSpeed + Drupal 10 is installed on your VPS.
+
+Drupal site: http://your-domain/  (https once TLS is issued; by IP: http://{$ip}/)
+Drupal admin login: /user/login
+  Username: siteadmin
+  Password: {$password}
+  Admin email: {$email}
+
+OpenLiteSpeed WebAdmin: http://{$ip}:7080
+  Username: admin  ·  Password: see /root/openlitespeed-drupal-credentials.txt
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+NEXT STEP: point your domain's A record to {$ip} for TLS to work; if certbot was
+deferred, re-run: certbot certonly --webroot -w /var/www/drupal/web -d your-domain
+Database and all passwords are in /root/openlitespeed-drupal-credentials.txt

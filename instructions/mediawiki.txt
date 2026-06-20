@@ -1,0 +1,22 @@
+MediaWiki is ready.
+
+Wiki:
+  http://{$ip}/wiki/Main_Page
+  (https://your-domain/wiki/Main_Page if a domain + TLS were configured)
+
+Login page:
+  http://{$ip}/index.php?title=Special:UserLogin
+
+Admin (sysop) login:
+  Username: WikiAdmin
+  Password: {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Log in as WikiAdmin and configure your wiki (name, logo, permissions).
+  - Point your domain at {$ip} and enable TLS if not already done.
+  - Full credentials are saved on the server at /root/mediawiki-credentials.txt

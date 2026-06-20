@@ -1,0 +1,19 @@
+FASTPANEL is ready.
+
+Panel URL:
+  https://{$ip}:8888
+
+Admin login:
+  Username: admin
+  Password: {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Open the panel (accept the self-signed certificate warning on first visit).
+  - Add your website/domain and set up an SSL certificate from inside the panel.
+  - Open ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 8888 (panel).
+  - Full credentials are saved on the server at /root/fastpanel-credentials.txt

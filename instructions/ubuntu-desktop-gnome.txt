@@ -1,0 +1,20 @@
+Your Ubuntu Desktop (GNOME) remote-desktop server is ready.
+
+Connect with a remote-desktop client:
+  RDP:  {$ip}:3389   (Windows "Remote Desktop", Remmina, etc.)
+  VNC:  {$ip}:5901   (any VNC viewer)
+
+Desktop login:
+  Username: desktopuser
+  Password: {$password}
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Next steps:
+  1. Open your RDP or VNC client and connect to {$ip} using the username
+     desktopuser and the password above.
+  2. For better security, tunnel VNC over SSH instead of exposing 5901:
+       ssh -L 5901:127.0.0.1:5901 root@{$ip}
+     then point your VNC viewer at localhost:5901.
+  3. Full details are in /root/ubuntu-desktop-gnome-credentials.txt

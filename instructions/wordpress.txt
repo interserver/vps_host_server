@@ -1,0 +1,18 @@
+WordPress is ready.
+
+Site URL:    http://{$ip}/  (https:// once your domain DNS is pointed and TLS is issued)
+Admin panel: http://{$ip}/wp-admin/
+
+WordPress admin login:
+  Username: siteadmin
+  Password: {$password}
+  Email:    {$email}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}.
+  2. Log in at /wp-admin/ and change the site title, theme, and plugins.
+  3. Full generated credentials (DB, MySQL root) are in /root/wp-credentials.txt on the server.

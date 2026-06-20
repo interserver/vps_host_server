@@ -1,0 +1,21 @@
+Magento 2 is ready.
+
+Storefront:
+  http://{$ip}/      (https://your-domain/ if a domain + TLS were configured)
+
+Admin panel:
+  http://{$ip}/admin/
+
+Admin login:
+  Username: admin
+  Password: {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Log in to /admin/ and complete store setup (currency, taxes, payment methods).
+  - Point your domain at {$ip}, then enable TLS if not already done.
+  - Full credentials are saved on the server at /root/magento-credentials.txt

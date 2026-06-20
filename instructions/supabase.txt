@@ -1,0 +1,13 @@
+Supabase self-hosted is ready.
+
+Dashboard (Studio): http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+  Username: supabase
+  Password: {$password}
+API base URL: http://{$ip}/   (endpoints: /rest/v1/, /auth/v1/, /storage/v1/, /realtime/v1/)
+Let's Encrypt email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Anon/service_role keys, JWT secret and Postgres password are saved on the server at /root/supabase-credentials.txt.
+Manage: cd /opt/supabase/docker && docker compose ps

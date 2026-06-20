@@ -1,0 +1,22 @@
+OpenLiteSpeed + Node.js is installed and ready.
+
+Site:
+  URL:          http://{$ip}/  (https:// once Let's Encrypt TLS is issued)
+  Health check: http://{$ip}/health
+
+OpenLiteSpeed WebAdmin console:
+  URL:      http://{$ip}:8088
+  Username: admin
+  Password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open the WebAdmin console at http://{$ip}:8088 and log in as admin.
+  2. Edit your app at /var/www/nodejsapp/index.js, then:
+       systemctl restart nodejsapp
+  3. Point a domain at {$ip} for TLS; LE email used: {$email}.
+  4. Lock down port 8088 to your IP after setup.
+  5. Full details are in /root/openlitespeednodejs-credentials.txt

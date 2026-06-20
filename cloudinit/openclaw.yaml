@@ -7,7 +7,7 @@
 # =============================================================================
 
 package_update: true
-package_upgrade: true
+package_upgrade: false
 
 packages:
   - curl
@@ -140,6 +140,23 @@ write_files:
 
       install -d -m 0700 /root/.openclaw /root/.openclaw/workspace
 
+      # --- Prefer provisioner-supplied secret as the gateway token ---
+      # The gateway token lives in /etc/openclaw/openclaw.env (read by the
+      # systemd unit via EnvironmentFile). If the provisioner supplied the VPS
+      # root password, use it as OPENCLAW_GATEWAY_TOKEN instead of the placeholder
+      # so the gateway has a strong token on first boot.
+      if [ -r /etc/vps-provision.env ]; then
+        . /etc/vps-provision.env
+        if [ -n "${VPS_ADMIN_PASS:-}" ] && [ -f /etc/openclaw/openclaw.env ]; then
+          if grep -q '^OPENCLAW_GATEWAY_TOKEN=' /etc/openclaw/openclaw.env; then
+            sed -i "s|^OPENCLAW_GATEWAY_TOKEN=.*|OPENCLAW_GATEWAY_TOKEN=${VPS_ADMIN_PASS}|" /etc/openclaw/openclaw.env
+          else
+            echo "OPENCLAW_GATEWAY_TOKEN=${VPS_ADMIN_PASS}" >> /etc/openclaw/openclaw.env
+          fi
+          echo "Set OPENCLAW_GATEWAY_TOKEN from provisioner-supplied password."
+        fi
+      fi
+
       # --- start the gateway as a systemd service (straight on the VPS) ---
       systemctl daemon-reload
       systemctl enable --now openclaw-gateway.service
@@ -186,11 +203,10 @@ write_files:
 # Run the native bootstrap once the files above have been laid down
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/openclaw-bootstrap.sh" ]

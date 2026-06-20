@@ -1,0 +1,17 @@
+Miniconda with JupyterLab is installed and ready.
+
+JupyterLab login:
+  URL:      http://{$ip}:8888
+  Password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open http://{$ip}:8888 and log in with the password above.
+  2. Activate the ML conda env from a shell:
+       source /opt/miniconda3/etc/profile.d/conda.sh && conda activate ml
+  3. GPU/CUDA workloads require a GPU VPS plan; check with `nvidia-smi`.
+  4. For optional TLS, point a domain at {$ip}; LE email used: {$email}.
+  5. Full details are in /root/miniconda-credentials.txt

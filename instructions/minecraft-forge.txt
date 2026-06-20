@@ -1,0 +1,15 @@
+Minecraft Forge server (Java Edition 1.20.1 + Forge 47.x) is installed on your VPS.
+
+Connect in Minecraft Java Edition to:  {$ip}:25565
+
+RCON (remote admin console):
+  Host: localhost:25575  (from the server)
+  Password: {$password}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+Make yourself an operator after joining with your Java username:
+  rcon-cli -H localhost -p 25575 -P "{$password}" op YOUR_USERNAME
+Install mods by dropping .jar files in /opt/minecraft/forge-server/mods/
+then: systemctl restart minecraft-forge
+Service: systemctl status minecraft-forge  ·  Logs: journalctl -u minecraft-forge -f

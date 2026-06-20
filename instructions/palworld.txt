@@ -1,0 +1,28 @@
+Palworld Dedicated Server is ready on your VPS.
+
+Server address:   {$ip}:8211
+Game port:        8211  (UDP)
+Query port:       27015 (UDP)
+RCON port:        25575 (TCP)
+Admin / RCON password:  {$password}
+
+How to connect:
+  1. Open Palworld on Steam.
+  2. Multiplayer -> Join Multiplayer Game (Dedicated).
+  3. Server Address:  {$ip}:8211
+  4. Enter the server password if one was set, then join.
+
+RCON management:
+  Connect any RCON client to {$ip}:25575
+  Password: {$password}
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Edit settings:
+       /opt/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+     then restart:  systemctl restart palworld
+  2. Status / logs:  systemctl status palworld  ·  journalctl -u palworld -f
+
+Connection info also saved to /root/palworld-credentials.txt

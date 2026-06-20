@@ -1,0 +1,23 @@
+Minecraft Bedrock Dedicated Server is ready on your VPS.
+
+Server address:   {$ip}
+Port:             19132  (UDP, IPv4)   ·   19133 (UDP, IPv6)
+
+How to connect:
+  1. Open Minecraft (Bedrock Edition) on any device.
+  2. Go to Play -> Servers -> Add Server.
+  3. Server Address:  {$ip}
+     Port:            19132
+  4. Save and join.
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Edit server settings:  /opt/minecraft-bedrock/server.properties
+     then restart:          systemctl restart minecraft-bedrock
+  2. World data lives in:   /opt/minecraft-bedrock/worlds/
+  3. Status / logs:         systemctl status minecraft-bedrock
+                            journalctl -u minecraft-bedrock -f
+
+Connection info also saved to /root/minecraft-bedrock-credentials.txt

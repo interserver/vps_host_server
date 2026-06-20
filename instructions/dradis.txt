@@ -1,0 +1,18 @@
+Dradis Framework (collaborative security reporting) is installed on your VPS.
+
+Web UI:
+  http://{$ip}/   (https://your-domain/ once DNS + TLS are configured)
+
+Login:
+  Dradis Community Edition uses a single SHARED password for all users.
+  Shared password: {$password}
+  Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Next steps:
+  - Open the Web UI, enter the shared password above, then set up your team/projects.
+  - For TLS, point a domain to {$ip}, then: certbot --nginx -d your-domain
+  - Full credentials are saved on the server at /root/dradis-credentials.txt
+  - Service control: systemctl status|restart dradis  (logs: journalctl -u dradis -f)

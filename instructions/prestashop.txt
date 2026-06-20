@@ -1,0 +1,11 @@
+PrestaShop store is installed.
+
+Store URL: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+Back office (admin panel): the /admin folder is renamed to a random admin_XXXXXXXX/ path for security - find the exact URL in the credentials file on the server.
+  Admin email: {$email}
+  Admin password: {$password}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Install path: /var/www/prestashop    Admin URL + DB passwords: /root/prestashop-credentials.txt

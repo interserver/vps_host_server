@@ -1,0 +1,25 @@
+OpenVPN Access Server is ready.
+
+Admin Web UI:
+  https://{$ip}:943/admin
+  (https://your-domain:943/admin if a domain + TLS were configured)
+
+Client portal (download your VPN profile):
+  https://{$ip}:943/
+
+Admin login:
+  Username: openvpn
+  Password: {$password}
+  Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Log in to the Admin Web UI and finish configuration.
+  - Install the OpenVPN Connect client from https://openvpn.net/client/ and
+    connect to the client portal above to import your profile.
+  - This is a BYOL product: the free tier allows 2 simultaneous connections.
+    Add a license under Configuration -> Licensing to unlock more.
+  - Full credentials are saved on the server at /root/openvpn-access-server-credentials.txt

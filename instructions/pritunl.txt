@@ -1,0 +1,22 @@
+Pritunl (enterprise VPN server, OpenVPN/WireGuard) is installed on your VPS.
+
+Admin Panel:
+  https://{$ip}/   (or https://your-domain/ once DNS + TLS are configured)
+Admin username: pritunl
+Admin password: {$password}
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+FIRST-TIME SETUP:
+  1. Open https://{$ip}/ (accept the self-signed cert warning).
+  2. Enter the one-time Setup Key shown in /root/pritunl-credentials.txt
+     (or run on the server: pritunl setup-key).
+  3. Log in with the username/password above.
+  4. Create an Organization -> User -> Server, attach the org, add a
+     route (e.g. 0.0.0.0/0), and start the server.
+  5. Users download their .ovpn / WireGuard profile from the client portal.
+
+VPN port open: 1194/udp (default).  Admin/client portal: 443/tcp.
+Full credentials are saved on the server at /root/pritunl-credentials.txt

@@ -1,0 +1,22 @@
+Jitsi Meet (video conferencing) is installed and running on your VPS.
+
+Meeting URL:
+  http://{$ip}/        (or https:// once a domain + TLS is configured)
+
+Start a meeting:
+  Open the URL above, type any room name, and share that room link with
+  participants. No admin account or login is required — this is an open,
+  public meeting server by default.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Point a domain (e.g. meet.example.com) DNS at {$ip}.
+  2. Set APP_DOMAIN and LE_EMAIL in /root/.jitsi-bootstrap.env, then re-run the
+     bootstrap to obtain a Let's Encrypt certificate (required for camera/mic
+     access in browsers over HTTPS).
+  3. To restrict who can start meetings, set ENABLE_AUTH=1 in the env file and
+     re-run the bootstrap.
+  4. Internal service secrets and details: /root/jitsi-credentials.txt

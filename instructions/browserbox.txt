@@ -1,0 +1,13 @@
+BrowserBox (remote browser isolation) is installed on your VPS.
+
+Access: open the personal login link printed after install. It is saved on the
+server at /home/bbxuser/.config/dosaygo/bbpro/login.link and shown in
+/root/browserbox-credentials.txt — the link itself contains the auth token.
+Base URL (until link is ready): https://{$ip}:8080/
+Let's Encrypt / terms email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT: BrowserBox requires a valid product key (purchase at browserbox.io).
+If not yet set, run:  sudo -u bbxuser bbx certify YOUR_KEY
+Point a domain at {$ip} for proper TLS, then restart: sudo -u bbxuser bbx start

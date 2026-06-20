@@ -1,0 +1,14 @@
+NirvaShare secure file-sharing platform is ready.
+
+Admin Console: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+User App:      http://{$ip}/userapp
+Let's Encrypt email: {$email}
+
+First login (default - change immediately):
+  Username: admin
+  Password: admin
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+The PostgreSQL DB password and full details are saved on the server at /root/nirvashare-credentials.txt.

@@ -1,0 +1,19 @@
+Laravel is installed and ready.
+
+Application:
+  URL: http://{$ip}/  (https:// once Let's Encrypt TLS is issued)
+
+Note: a fresh Laravel install has no built-in web admin login. You build
+your own authentication. The server's root account is your only login until
+then.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}, then re-run
+     `certbot --nginx` on the server to enable HTTPS (registered to {$email}).
+  2. Deploy your code into /var/www/laravel and run your migrations.
+  3. Queue worker: `supervisorctl start laravel-worker:*`
+  4. App key, DB, and MySQL root creds are in /root/laravel-credentials.txt

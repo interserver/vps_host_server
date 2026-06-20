@@ -1,0 +1,22 @@
+Haltdos WAF Pro is ready on your VPS.
+
+Management console:   https://{$ip}:9000
+Admin username:       admin
+Password:             {$password}
+LE / notices email:   {$email}
+
+WAF proxy ports:  80/tcp (HTTP)  ·  443/tcp (HTTPS)
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Open https://{$ip}:9000 and log in as admin with the password above
+     (accept the self-signed certificate warning on first visit).
+  2. Activate your license: Settings -> License -> Activate, then enter your
+     Haltdos WAF Pro license key (a valid BYOL license is required —
+     https://www.haltdos.com).
+  3. Add your protected backends and point your site traffic through this WAF.
+
+Notes / logs:  /root/haltdos-waf-pro-credentials.txt
+               systemctl status haltdos-waf

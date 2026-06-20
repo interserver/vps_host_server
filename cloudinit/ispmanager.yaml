@@ -27,7 +27,7 @@ users:
 # Packages — minimal bootstrap set; ISPmanager installer pulls its own deps
 # ---------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - curl
   - wget
@@ -120,6 +120,10 @@ write_files:
       # Resolve secrets — generate if placeholder left in place
       # ----------------------------------------------------------------
       [[ "${ADMIN_PASS}" == "CHANGE_ME" ]] && ADMIN_PASS="$(rand)"
+
+      # Prefer provisioner-supplied admin password
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && ADMIN_PASS="$VPS_ADMIN_PASS"
 
       # ----------------------------------------------------------------
       # Unattended-upgrades — security updates only
@@ -323,11 +327,10 @@ write_files:
 # Run the bootstrap script exactly once at first boot
 # ---------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/ispmanager-bootstrap.sh" ]

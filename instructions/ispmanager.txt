@@ -1,0 +1,18 @@
+ISPmanager 6 control panel is ready.
+
+Panel URL: https://{$ip}:1500/ispmgr  (accept the self-signed cert warning)
+
+Panel login:
+  Username: root
+  Password: {$password}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Open https://{$ip}:1500/ispmgr and log in with root / {$password}.
+  2. ISPmanager is a commercial product (BYOL). Activate your licence under
+     Settings -> Licence Manager after first login.
+  3. Point your domain's DNS at {$ip} before enabling TLS for hosted sites.
+  4. Full credentials are in /root/ispmanager-credentials.txt on the server.

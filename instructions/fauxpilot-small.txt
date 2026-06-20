@@ -1,0 +1,14 @@
+FauxPilot (self-hosted AI code-completion, CodeGen-2B) is installed on your VPS.
+
+API endpoint (direct): http://{$ip}:5000
+API endpoint (proxied): http://{$ip}/   (or https://your-domain once TLS is set)
+API key (Bearer token): {$password}
+Let's Encrypt email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT: This app REQUIRES an NVIDIA GPU VPS plan (>=8 GB VRAM). First boot
+can take 10-20 min while the model downloads. Verify GPU: nvidia-smi
+Test API: curl http://{$ip}:5000/v1/engines -H "Authorization: Bearer {$password}"
+In your IDE's FauxPilot/Copilot-compatible plugin, set server to http://{$ip}:5000
+and apiKey to the key above. Full details: /root/fauxpilot-credentials.txt

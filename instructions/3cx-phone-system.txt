@@ -1,0 +1,13 @@
+3CX Phone System (PBX) is installed on your VPS.
+
+Management Console: http://{$ip}:5015  (or https://your-domain:443 once TLS is set up)
+Admin username: admin
+Setup wizard password: {$password}
+Let's Encrypt / admin email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT: 3CX requires a valid license key. Open the Management Console,
+complete the Setup Wizard, and enter your license key (free STARTUP or paid).
+For TLS, point a domain to {$ip}, then run: certbot certonly --standalone -d your-domain
+Full credentials are saved on the server at /root/3cx-credentials.txt

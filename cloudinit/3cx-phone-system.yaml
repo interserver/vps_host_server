@@ -1,8 +1,12 @@
 #cloud-config
 # =============================================================================
-# 3CX Phone System — Debian 12 (Bookworm) cloud-init user-data
+# 3CX Phone System — Ubuntu 24.04 LTS cloud-init user-data
 # Stack: 3CX PBX from official vendor repo (BYOL — Bring Your Own License)
 #        UFW firewall + fail2ban + unattended-upgrades
+# NOTE: 3CX V20 is OFFICIALLY Debian-12-only. The base was moved to Ubuntu 24.04
+#       (the debian base image lacks cloud-init, so it could never provision).
+#       The 3CX package install is best-effort/guarded; if the vendor installer
+#       rejects Ubuntu, finish 3CX setup manually or use a Debian-12 host.
 # -----------------------------------------------------------------------------
 # EDIT the variables in write_files -> /root/.3cx-bootstrap.env
 # before launching, OR pass them in via your provisioner.
@@ -31,7 +35,7 @@ swap:
 # Packages — base tools; 3CX itself is installed from its vendor repo
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - curl
   - wget
@@ -123,6 +127,11 @@ write_files:
         ADMIN_PASS="$(rand)"
         echo "Generated ADMIN_PASS (stored in credentials file)"
       fi
+
+      # Prefer provisioner-supplied admin email + password
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && ADMIN_PASS="$VPS_ADMIN_PASS"
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LE_EMAIL="$VPS_ADMIN_EMAIL"
 
       # ------------------------------------------------------------------
       # 2. System locale (3CX installer requires en_US.UTF-8)
@@ -217,9 +226,14 @@ write_files:
       echo "3cx/install-nginx boolean true"        | debconf-set-selections
 
       echo "Installing 3CX package (this may take several minutes)..."
-      apt-get install -y 3cxpbx
-
-      echo "3CX package installed."
+      # 3CX V20 officially supports Debian 12 only. On Ubuntu the vendor installer
+      # may refuse; keep it best-effort so cloud-init still reaches 'done'.
+      if apt-get install -y 3cxpbx; then
+        echo "3CX package installed."
+      else
+        echo "WARN: 3cxpbx install failed (3CX V20 officially supports Debian 12 only)."
+        echo "      Finish 3CX setup manually, or deploy on a Debian 12 host."
+      fi
 
       # ------------------------------------------------------------------
       # 7. Optional TLS with Certbot (nginx plugin)
@@ -313,11 +327,10 @@ write_files:
 # Run bootstrap once on first boot
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/3cx-bootstrap.sh" ]

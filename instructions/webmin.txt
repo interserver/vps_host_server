@@ -1,0 +1,21 @@
+Webmin (web-based system administration) is installed on your VPS.
+
+Admin Panel:
+  https://{$ip}:10000   (or https://your-domain:10000)
+  Accept the self-signed TLS warning on first login (unless you configured
+  a Let's Encrypt cert).
+Admin username: root
+Admin password: {$password}
+  (Webmin authenticates against the system root account, so this is also the
+   root system / SSH password.)
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Next steps:
+  - Log in and review System, Servers, and Networking modules.
+  - Change the root password any time via: passwd root
+    (or Webmin UI: System -> Change Passwords).
+  - For TLS, point a domain to {$ip}, then: certbot certonly --standalone -d your-domain
+  - Full credentials are saved on the server at /root/webmin-credentials.txt

@@ -1,0 +1,20 @@
+Grafana is ready.
+
+Web UI:
+  http://{$ip}:3000/
+  (If a domain + TLS were configured, use https://your-domain/ instead.)
+
+Admin login:
+  Username: admin
+  Password: {$password}
+  Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  (password: {$password})
+
+Next steps:
+  - Log in and change the admin password if you wish (Profile -> Change Password).
+  - Add a data source: http://{$ip}:3000/connections/datasources
+  - Full credentials and notes are saved on the server at /root/grafana-credentials.txt
+  - Service control: systemctl status|restart grafana-server

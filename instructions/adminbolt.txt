@@ -1,0 +1,11 @@
+AdminBolt Hosting Control Panel is ready.
+
+Panel URL: https://{$ip}:8443
+Admin login uses single-sign-on (no password prompt). Generate an SSO login link by SSH-ing in and running:
+  bolt-cli admin-sso-generate
+Admin email (for SSL / notifications): {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+The SSO URL and full details are saved on the server at /root/adminbolt-credentials.txt.

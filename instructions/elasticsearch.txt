@@ -1,0 +1,23 @@
+Elasticsearch is ready.
+
+Endpoint: http://127.0.0.1:9200  (bound to localhost only — not exposed publicly)
+
+Built-in superuser login:
+  Username: elastic
+  Password: {$password}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Access from your workstation (SSH tunnel):
+  ssh -L 9200:127.0.0.1:9200 root@{$ip}
+  then open http://localhost:9200 in your browser.
+
+Quick health check (run on the server):
+  curl -u elastic:'{$password}' http://127.0.0.1:9200/_cluster/health?pretty
+
+Next steps:
+  1. Use the SSH tunnel above, or set network.host in
+     /etc/elasticsearch/elasticsearch.yml to expose it (secure it first).
+  2. Full credentials are in /root/elasticsearch-credentials.txt on the server.

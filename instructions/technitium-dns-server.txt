@@ -1,0 +1,18 @@
+Technitium DNS Server is installed and ready.
+
+Web admin login:
+  URL (HTTP):  http://{$ip}:5380
+  URL (HTTPS): https://{$ip}:53443  (accept self-signed cert until TLS is set)
+  Username: admin
+  Password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open http://{$ip}:5380 and log in as admin with the password above.
+  2. Configure forwarders, blocklists, and DNS zones.
+  3. Point your clients' DNS server to {$ip} (port 53 UDP+TCP).
+  4. For TLS, point a domain at {$ip}; LE email used: {$email}.
+  5. Full details are in /root/technitium-dns-server-credentials.txt

@@ -1,0 +1,21 @@
+FileCloud (enterprise file sharing / sync) is installed on your VPS.
+
+Web UI:
+  http://{$ip}/   (https://your-domain/ once DNS + TLS are configured)
+Admin username: admin
+Admin password: {$password}
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT — FileCloud is BYOL (Bring Your Own License):
+  1. Open the Web UI and complete the FileCloud setup wizard.
+  2. Enter your license key when prompted.
+     Get a trial or purchased license at https://www.filecloud.com
+  3. Change the admin password after first login.
+
+Next steps:
+  - For TLS, point a domain to {$ip}, then: certbot --nginx -d your-domain
+  - Full credentials are saved on the server at /root/filecloud-credentials.txt
+  - Container control: docker compose -f /opt/filecloud/docker-compose.yml logs

@@ -1,0 +1,14 @@
+Keitaro Tracker is installed (commercial app - bring your own license).
+
+Access URL: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+On first visit you will:
+  1. Enter your Keitaro license key (purchase at https://keitaro.io/)
+  2. Create the admin username and password
+  3. Configure your tracking domain
+Suggested admin password: {$password}
+Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Service: kctl status / kctl restart    Full details: /root/keitaro-credentials.txt

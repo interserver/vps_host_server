@@ -1,0 +1,14 @@
+CyberPanel (OpenLiteSpeed-based hosting control panel) is installed on your VPS.
+
+CyberPanel UI: https://{$ip}:8090
+Admin username: admin
+Admin password: {$password}
+Admin email: {$email}
+
+OpenLiteSpeed WebAdmin: https://{$ip}:7080  (credentials set separately by CyberPanel)
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+Note: accept the self-signed TLS warning on first login, then add your domains.
+CyberPanel also manages CSF/iptables; see Security > Firewall in the panel.
+Full credentials are saved on the server at /root/cyberpanel-credentials.txt

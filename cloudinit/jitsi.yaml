@@ -23,7 +23,7 @@ users:
 # Packages
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - apt-transport-https
   - ca-certificates
@@ -450,6 +450,12 @@ write_files:
       [ "$JIBRI_RECORDER_PASSWORD" = "CHANGE_ME" ] && JIBRI_RECORDER_PASSWORD="$(rand)"
       [ "$JIBRI_XMPP_PASSWORD"    = "CHANGE_ME" ] && JIBRI_XMPP_PASSWORD="$(rand)"
 
+      # Prefer provisioner-supplied admin email + password
+      # Jitsi has no human admin login (public meeting server) — no password to map.
+      # Only the Let's Encrypt email is taken from the provisioner.
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LE_EMAIL="$VPS_ADMIN_EMAIL"
+
       # --- install Docker CE via official script (distro-agnostic) ---------------
       if ! command -v docker >/dev/null 2>&1; then
         # fallback: noble repo until 26.04 published
@@ -597,11 +603,10 @@ write_files:
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/jitsi-bootstrap.sh" ]

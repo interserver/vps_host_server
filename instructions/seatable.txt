@@ -1,0 +1,21 @@
+Your SeaTable server is ready.
+
+Web UI:
+  http://{$ip}/        (HTTPS via Caddy once a domain is pointed)
+
+Log in with:
+  Admin email: {$email}
+  Password:    {$password}
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Open firewall ports: 22 (SSH), 80 (HTTP), 443 (HTTPS via Caddy).
+
+Next steps:
+  1. Open the web UI and sign in with the admin email + password above.
+  2. Point a domain at {$ip} and set APP_DOMAIN + ENABLE_TLS=true in
+     /root/.seatable-bootstrap.env; Caddy will auto-issue Let's Encrypt certs.
+  3. Manage the stack: cd /opt/seatable-compose && docker compose ps
+  4. Change the admin password after first login.
+  5. Full details are in /root/seatable-credentials.txt

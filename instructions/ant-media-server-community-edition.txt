@@ -1,0 +1,22 @@
+Ant Media Server Community Edition is installed on your VPS.
+
+Dashboard:
+  https://your-domain/   (once DNS + TLS are configured)
+  Direct access: http://{$ip}:5080/
+Admin username: admin
+Admin password: {$password}
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Streaming ports (open in the firewall):
+  1935/tcp  RTMP        4444/tcp  RTMPS
+  5080/tcp  HTTP        5443/tcp  HTTPS
+  50000-60000/udp  WebRTC
+
+Next steps:
+  - Log in at the dashboard and create your first application/stream.
+  - For TLS, point a domain to {$ip}, then: certbot --nginx -d your-domain
+  - Full credentials are saved on the server at /root/ant-media-credentials.txt
+  - Service control: systemctl status|restart antmedia

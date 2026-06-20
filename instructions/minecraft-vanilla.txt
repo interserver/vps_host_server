@@ -1,0 +1,20 @@
+Your Minecraft Vanilla (Java Edition) server is ready.
+
+How to connect:
+  1. Launch Minecraft Java Edition.
+  2. Multiplayer -> Add Server -> {$ip}:25565
+Game port open: 25565 (TCP + UDP).
+
+There is no web admin panel and no login password for players (online-mode
+is on, so Mojang/Microsoft accounts are used). Manage the server over SSH:
+  ssh root@{$ip}   (password: {$password})
+
+RCON (remote console) is enabled on localhost only; its password is randomly
+generated — see /root/minecraft-credentials.txt:
+  mcrcon -H 127.0.0.1 -P 25575 -p '<rcon-password>'
+
+Next steps:
+  - Service control: systemctl status|restart minecraft-server
+  - Logs: journalctl -u minecraft-server -f
+  - Server files: /opt/minecraft/  (config: server.properties)
+  - Full details are saved on the server at /root/minecraft-credentials.txt

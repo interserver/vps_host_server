@@ -1,0 +1,20 @@
+Joomla is ready on your VPS.
+
+Site:          http://{$ip}/
+Admin panel:   http://{$ip}/administrator/
+Admin user:    admin
+Password:      {$password}
+Admin email:   {$email}
+
+Once your domain's DNS points at {$ip}, switch to HTTPS:
+  certbot --nginx
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Log in to the admin panel at /administrator/ with the user and password
+     above.
+  2. Point your domain to {$ip} and enable TLS.
+  3. Configure your site name, template, and extensions.
+  4. Full credentials (DB, MySQL root) are in /root/joomla-credentials.txt

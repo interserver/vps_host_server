@@ -1,0 +1,18 @@
+Your Node.js runtime + Nginx reverse proxy is ready.
+
+App URL:
+  http://{$ip}/   (https://your-domain/ once DNS is pointed and TLS is issued)
+Health check: http://{$ip}/health
+Let's Encrypt / admin email: {$email}
+
+There is no web admin panel. Manage the server over SSH:
+  ssh root@{$ip}   (password: {$password})
+
+The starter app lives at /var/www/nodejs-app/index.js.
+Edit it, then restart: systemctl restart nodejs-app
+(The app secret APP_SECRET is randomly generated; see the credentials file.)
+
+Next steps:
+  - For TLS, point a domain to {$ip}, then: certbot --nginx -d your-domain
+  - Full credentials are saved on the server at /root/nodejs-credentials.txt
+  - Logs: journalctl -u nodejs-app -f

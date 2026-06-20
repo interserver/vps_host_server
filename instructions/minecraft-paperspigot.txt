@@ -1,0 +1,15 @@
+Your Minecraft PaperSpigot server is running.
+
+Connect (Java Edition): {$ip}:25565
+Bedrock/Geyser (UDP):   {$ip}:19132  (requires the Geyser plugin)
+
+Remote console (RCON) is bound to localhost only:
+  RCON port: 25575
+  RCON password: {$password}
+  Connect: mcrcon -H 127.0.0.1 -P 25575 -p "{$password}"
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Server files: /opt/minecraft/server/    Logs: journalctl -u minecraft -f
+Manage: systemctl restart minecraft     Full details: /root/minecraft-credentials.txt

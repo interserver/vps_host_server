@@ -1,0 +1,25 @@
+OpenLiteSpeed + Django is installed on your VPS.
+
+App URL:
+  http://{$ip}/   (https://your-domain/ once DNS is pointed and TLS is issued)
+Django admin:
+  http://{$ip}/admin/
+
+OpenLiteSpeed WebAdmin console:
+  http://{$ip}:7080/
+  WebAdmin username: admin
+  WebAdmin password: {$password}
+
+Django superuser:
+  Username: admin
+  Password: see /root/openlitespeeddjango-credentials.txt
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Next steps:
+  - Your Django project lives in /var/www/django-app (venv at venv/).
+  - Gunicorn service: systemctl status|restart gunicorn-django
+  - For TLS, point a domain to {$ip}, then: certbot certonly --standalone -d your-domain
+  - Full credentials are saved on the server at /root/openlitespeeddjango-credentials.txt

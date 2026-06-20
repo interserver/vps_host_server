@@ -126,17 +126,39 @@ scp_to() { # scp_to <localfile> <remotepath>
 # -----------------------------------------------------------------------------
 # resolve the list of templates to test
 # -----------------------------------------------------------------------------
-declare -a TEMPLATES=()
-if [ "$#" -gt 0 ]; then
-  for a in "$@"; do
-    a="$(basename "$a")"; a="${a%.yaml}"
-    TEMPLATES+=("$a")
-  done
+# Parse --groups N / --group K (split the work across N servers; run only group K,
+# 1-based) out of the args; remaining args are explicit template names.
+GROUPS=1; GROUP=1
+declare -a POSARGS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --groups) GROUPS="$2"; shift 2 ;;
+    --groups=*) GROUPS="${1#*=}"; shift ;;
+    --group) GROUP="$2"; shift 2 ;;
+    --group=*) GROUP="${1#*=}"; shift ;;
+    *) POSARGS+=("$1"); shift ;;
+  esac
+done
+case "$GROUPS$GROUP" in *[!0-9]*) err "--groups/--group must be integers"; exit 1;; esac
+[ "$GROUPS" -ge 1 ] 2>/dev/null || { err "--groups must be >= 1"; exit 1; }
+{ [ "$GROUP" -ge 1 ] && [ "$GROUP" -le "$GROUPS" ]; } 2>/dev/null || { err "--group must be 1..$GROUPS"; exit 1; }
+
+declare -a ALLT=()
+if [ "${#POSARGS[@]}" -gt 0 ]; then
+  for a in "${POSARGS[@]}"; do a="$(basename "$a")"; ALLT+=("${a%.yaml}"); done
 else
-  while IFS= read -r t; do TEMPLATES+=("$t"); done < <(
+  while IFS= read -r t; do ALLT+=("$t"); done < <(
     python3 -c 'import json,sys;[print(k) for k in json.load(open(sys.argv[1]))["templates"]]' "$REGISTRY")
 fi
+# Round-robin slice into GROUPS; keep only group GROUP (balances slow templates).
+declare -a TEMPLATES=()
+idx=0
+for t in "${ALLT[@]}"; do
+  if [ "$(( idx % GROUPS + 1 ))" -eq "$GROUP" ]; then TEMPLATES+=("$t"); fi
+  idx=$((idx+1))
+done
 [ "${#TEMPLATES[@]}" -gt 0 ] || { err "no templates to test"; exit 1; }
+[ "$GROUPS" -gt 1 ] && log "Group $GROUP/$GROUPS: ${#TEMPLATES[@]} of ${#ALLT[@]} templates"
 
 RUN_TS="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR="$RESULTS_ROOT/$RUN_TS"

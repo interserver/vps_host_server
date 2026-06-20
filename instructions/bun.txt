@@ -1,0 +1,13 @@
+Your Bun runtime + Nginx server is ready.
+
+App URL: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+Health check: http://{$ip}/health
+Let's Encrypt email: {$email}
+
+The demo app lives at /var/www/bun-app/index.ts (edit it, then: systemctl restart bun-app).
+App secret (APP_SECRET): {$password}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Full details: /root/bun-credentials.txt   Logs: journalctl -u bun-app -f

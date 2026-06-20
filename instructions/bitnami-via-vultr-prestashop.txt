@@ -1,0 +1,20 @@
+PrestaShop is ready on your VPS.
+
+Store front:   http://{$ip}/
+Admin panel:   http://{$ip}/admin/  (the admin folder is renamed to a random
+               admin_XXXXXXXX suffix for security — see the exact URL in
+               /root/prestashop-credentials.txt on the server)
+Admin email:   {$email}
+Password:      {$password}
+
+Once your domain's DNS points at {$ip}, re-run certbot to switch to HTTPS:
+  certbot --nginx
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Log in to the admin panel with the email and password above.
+  2. Point your domain to {$ip} and enable TLS.
+  3. Configure your store name, currency, and payment methods.
+  4. Full credentials (DB, MySQL root) are in /root/prestashop-credentials.txt

@@ -1,0 +1,21 @@
+ONLYOFFICE Docs (Document Server) is ready.
+
+Service URL:  http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+Healthcheck:  http://{$ip}/healthcheck
+
+ONLYOFFICE Docs is a back-end document-editing server with no end-user login;
+it is driven by an integration app (Nextcloud, Seafile, ownCloud, etc.).
+
+JWT / admin secret (use this in your integration app):
+  {$password}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}.
+  2. In your Nextcloud/Seafile/ownCloud ONLYOFFICE plugin, set the server URL to
+     http(s)://{$ip}/ and supply the JWT secret above.
+  3. Full credentials (DB, RabbitMQ, JWT) are in
+     /root/onlyoffice-credentials.txt on the server.

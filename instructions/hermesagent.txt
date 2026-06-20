@@ -1,0 +1,15 @@
+Hermes Agent (NousResearch) is ready.
+
+Dashboard URL: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+  Username: admin
+  Password: {$password}
+OpenAI-compatible API gateway: http://{$ip}/api/
+Let's Encrypt email: {$email}
+
+Add an LLM provider key from the dashboard, or:
+  docker exec -it hermes hermes model
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Your API bearer key and full details are saved on the server at /root/hermesagent-credentials.txt.

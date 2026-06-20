@@ -1,0 +1,21 @@
+N99panel (hosting control panel) is installed on your VPS.
+
+Panel URL:
+  https://{$ip}:8443/   (HTTPS, self-signed cert until a domain + TLS is set)
+
+Admin login:
+  Password: {$password}
+  Note: The N99panel installer also writes its own admin username/URL to
+        /root/n99p-admin.txt — check there for the exact login details.
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. A valid N99panel licence key is required. Set N99PANEL_LICENSE in
+     /root/.n99panel-bootstrap.env and re-run /root/n99panel-bootstrap.sh if the
+     install did not complete.
+  2. Open https://{$ip}:8443/ and log in (accept the self-signed cert warning).
+  3. Set APP_DOMAIN/LE_EMAIL in the env file to enable a Let's Encrypt cert.
+  4. Full details: /root/n99panel-credentials.txt and /root/n99p-admin.txt

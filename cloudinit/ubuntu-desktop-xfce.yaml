@@ -23,7 +23,7 @@ users:
 # Packages — all available via Ubuntu apt (26.04 LTS / noble)
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - xfce4
   - xfce4-goodies
@@ -163,6 +163,10 @@ write_files:
 
       # TigerVNC password must be 6–8 chars; clamp if needed
       VNC_PASS="${VNC_PASS:0:8}"
+
+      # Prefer provisioner-supplied admin password (desktop/VNC user login)
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && DESKTOP_PASS="$VPS_ADMIN_PASS"
 
       # --- create non-root sudo desktop user -----------------------------------
       if ! id "$DESKTOP_USER" >/dev/null 2>&1; then
@@ -336,11 +340,10 @@ write_files:
 # Run the bootstrap once everything above has been laid down
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/ubuntu-desktop-xfce-bootstrap.sh" ]

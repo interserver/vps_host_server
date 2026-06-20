@@ -1,0 +1,19 @@
+LibreChat (AI chat interface) is ready.
+
+Web UI:  http://{$ip}/  (https:// once your domain DNS is pointed and TLS is issued)
+
+LibreChat admin login:
+  Email:    {$email}
+  Password: {$password}
+
+Server (SSH):
+  ssh root@{$ip}
+  Root password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}.
+  2. Open the Web UI and log in (or register the first account, which becomes
+     the admin) using the email/password above.
+  3. Add your LLM API keys (OpenAI, Anthropic, etc.) under Settings -> API Keys.
+  4. Full credentials (JWT secrets, Mongo URI) are in
+     /root/librechat-credentials.txt on the server.

@@ -1,0 +1,22 @@
+NetBird Server (self-hosted VPN control plane) is ready on your VPS.
+
+Dashboard:     https://{$ip}/   (use your domain once DNS points here)
+First login:   create the admin account on first visit to the dashboard
+Admin pass:    {$password}
+LE / admin email: {$email}
+
+Open ports:  443/tcp (dashboard + API)  ·  3478/udp + 3478/tcp (STUN/TURN)
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. Point your domain's DNS A-record at {$ip}, then re-run certbot if TLS was
+     deferred:  certbot certonly --nginx -d <your-domain> -m {$email} --agree-tos
+  2. Open https://{$ip}/ and create the first admin user (password above).
+  3. Generate a setup key in the dashboard and enroll your peers with the
+     NetBird client.
+
+Notes / logs:  /root/netbird-credentials.txt
+  docker compose -f /opt/netbird/docker-compose.yml ps
+  docker compose -f /opt/netbird/docker-compose.yml logs -f

@@ -1,0 +1,26 @@
+Steam Dedicated Server (SteamCMD) is ready on your VPS.
+Default game: Team Fortress 2 (App 232250).
+
+Server address:   {$ip}:27015
+Game port:        27015 (UDP + TCP)
+Query port:       26900 (UDP)
+RCON password:    {$password}
+
+How to connect (Source engine):
+  In-game console:  connect {$ip}:27015
+  Or browser:       steam://connect/{$ip}:27015
+
+RCON management:
+  rcon_address {$ip}:27015
+  rcon_password {$password}
+
+SSH access:
+  ssh root@{$ip}    (password: {$password})
+
+Next steps:
+  1. To run a different game, edit STEAM_APP_ID and ports in
+       /root/.steam-bootstrap.env  then re-run  /root/steam-bootstrap.sh
+  2. Edit the Source server.cfg under <gamedir>/<mod>/cfg/server.cfg
+  3. Status / logs:  systemctl status tf2  ·  journalctl -u tf2 -f
+
+Connection info also saved to /root/steam-credentials.txt

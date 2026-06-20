@@ -1,0 +1,15 @@
+Nextcloud (self-hosted files, calendar, contacts, office) is installed on your VPS
+via the All-in-One (AIO) installer.
+
+Nextcloud URL: http://your-domain/  (https once TLS is issued)
+AIO management UI: https://127.0.0.1:8443  (localhost only — reach via SSH tunnel:
+  ssh -L 8443:127.0.0.1:8443 root@{$ip}  then open https://localhost:8443 )
+AIO master password: {$password}
+Let's Encrypt email: {$email}
+
+SSH access:  ssh root@{$ip}   (password: {$password})
+
+NEXT STEPS: point your domain's A record to {$ip}. In the AIO UI, log in with the
+master password, enter your domain, and click "Start containers". Then open
+http(s)://your-domain/ and create your Nextcloud admin account in the first-run
+wizard. Full credentials: /root/nextcloud-credentials.txt

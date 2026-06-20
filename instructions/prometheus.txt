@@ -1,0 +1,19 @@
+Prometheus (with Node Exporter) is installed and ready.
+
+Web access (via nginx reverse proxy with HTTP basic auth):
+  URL:      http://{$ip}/  (https:// once Let's Encrypt TLS is issued)
+  Username: admin
+  Password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open http://{$ip}/ and log in with admin / the password above.
+  2. Prometheus listens on 127.0.0.1:9090; Node Exporter on 127.0.0.1:9100
+     (reachable only via the authenticated nginx proxy).
+  3. For TLS, point a domain at {$ip} and run `certbot --nginx -d <domain>`;
+     LE email used: {$email}.
+  4. Edit scrape targets in /etc/prometheus/prometheus.yml.
+  5. Full details are in /root/prometheus-credentials.txt

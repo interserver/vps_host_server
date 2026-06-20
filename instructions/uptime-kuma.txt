@@ -1,0 +1,20 @@
+Uptime Kuma is installed and running on your VPS.
+
+Web UI:
+  http://{$ip}/        (served via nginx on port 80)
+  http://{$ip}:3001/   (direct, always available)
+
+Admin login:
+  Username: admin
+  Password: {$password}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Open the Web UI and log in with admin / {$password}.
+  2. Add your first monitor (HTTP, TCP, ping, etc.) from the dashboard.
+  3. Optional: point a domain at {$ip}, set APP_DOMAIN in
+     /root/.uptime-kuma-bootstrap.env and re-run the bootstrap to enable TLS.
+  4. Full details: /root/uptime-kuma-credentials.txt

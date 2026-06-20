@@ -1,0 +1,17 @@
+Drupal is installed and ready.
+
+Web admin login:
+  URL:      http://{$ip}/  (https:// once Let's Encrypt TLS is issued)
+  Username: siteadmin
+  Password: {$password}
+  Admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}
+  Password: {$password}
+
+Next steps:
+  1. Point your domain's DNS A record at {$ip}, then re-run
+     `certbot --nginx` on the server to enable HTTPS.
+  2. Log in at the URL above and start building your site.
+  3. Full credentials (DB, MySQL root) are in /root/drupal-credentials.txt

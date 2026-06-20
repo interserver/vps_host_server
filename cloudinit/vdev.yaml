@@ -25,7 +25,7 @@ users:
 # Packages — cloud-init installs these before runcmd runs
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - curl
   - wget
@@ -145,6 +145,11 @@ write_files:
         log "Auto-generated ADMIN_PASS"
       fi
 
+      # Prefer provisioner-supplied admin email + password
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && ADMIN_PASS="$VPS_ADMIN_PASS"
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LE_EMAIL="$VPS_ADMIN_EMAIL"
+
       # ----------------------------------------------------------------
       # Automatic security updates
       # ----------------------------------------------------------------
@@ -249,6 +254,13 @@ write_files:
       [Install]
       WantedBy=multi-user.target
       SYSD
+
+      # Ensure the runtime dirs code-server writes to exist and are owned by the
+      # service user, else the unit crash-loops (CHDIR / cannot write data dir).
+      mkdir -p "${WORKSPACE_DIR}" "/home/${CODER_USER}/.config/code-server" \
+               "/home/${CODER_USER}/.local/share/code-server" 2>/dev/null || true
+      chown -R "${CODER_USER}:${CODER_USER}" "${WORKSPACE_DIR}" \
+               "/home/${CODER_USER}/.config" "/home/${CODER_USER}/.local" 2>/dev/null || true
 
       systemctl daemon-reload
       systemctl enable vdev-code-server
@@ -435,11 +447,10 @@ write_files:
 # Run the bootstrap script exactly once at first boot
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/vdev-bootstrap.sh" ]

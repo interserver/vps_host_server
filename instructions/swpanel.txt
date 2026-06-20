@@ -1,0 +1,21 @@
+SWPanel Self-Hosted (hosting control panel) is installed on your VPS.
+
+Admin Panel:
+  https://{$ip}:3203   (or https://your-domain:3203)
+Admin password: {$password}
+Let's Encrypt / admin email: {$email}
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+IMPORTANT — Activate your license:
+  1. Find your Installation Token ID in /root/swpanel-credentials.txt
+     (panel install runs in the background for several minutes after boot).
+  2. Go to https://go.swpanel.com/activate/
+  3. Choose "Manual installation" / "Ya tengo mi Token ID".
+  4. Enter the Token ID and click "Verificar Token ID".
+  5. Select your license and click "Activar SWPanel ahora".
+
+Hosted-site ports open: 80/tcp, 443/tcp.  Panel: 3203/tcp.
+Full credentials are saved on the server at /root/swpanel-credentials.txt
+Installer log: /root/nohup.out

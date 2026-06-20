@@ -27,7 +27,7 @@ users:
 # because the Ubuntu 26.04 packages may lag or require vendor repos)
 # ----------------------------------------------------------------------------
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
   - curl
   - wget
@@ -176,6 +176,11 @@ write_files:
         SECRET_KEY_BASE="$(rand)$(rand)$(rand)"
         sed -i "s|^SECRET_KEY_BASE=.*|SECRET_KEY_BASE=${SECRET_KEY_BASE}|" /root/.openlitespeedrails-bootstrap.env
       fi
+
+      # Prefer provisioner-supplied admin email + password
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      [ -n "${VPS_ADMIN_PASS:-}" ] && OLS_ADMIN_PASS="$VPS_ADMIN_PASS"
+      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LE_EMAIL="$VPS_ADMIN_EMAIL"
 
       # -----------------------------------------------------------------------
       # 1. OpenLiteSpeed — install via the official LiteSpeed apt repo
@@ -428,9 +433,12 @@ write_files:
       mkdir -p /usr/local/lsws/logs
       mkdir -p /usr/local/lsws/${APP_NAME}/logs
 
-      # Set OLS admin password
-      if [ -f /usr/local/lsws/admin/misc/admpass.sh ]; then
-        /usr/local/lsws/admin/misc/admpass.sh "${OLS_ADMIN_USER}" "${OLS_ADMIN_PASS}" 2>/dev/null || true
+      # Set OLS admin password non-interactively (admpass.sh ignores args and
+      # prompts, hanging cloud-init: "password must be at least 6 charactors!").
+      OLS_PASS_HASH="$(/usr/local/lsws/admin/fcgi-bin/admin_php -q /usr/local/lsws/admin/misc/htpasswd.php "${OLS_ADMIN_PASS}" 2>/dev/null || openssl passwd -apr1 "${OLS_ADMIN_PASS}" 2>/dev/null || true)"
+      if [ -n "$OLS_PASS_HASH" ]; then
+        echo "${OLS_ADMIN_USER}:${OLS_PASS_HASH}" > /usr/local/lsws/admin/conf/htpasswd
+        chmod 600 /usr/local/lsws/admin/conf/htpasswd
       fi
 
       # Virtual host config — proxy to Puma socket
@@ -644,11 +652,10 @@ write_files:
 # runcmd — run the bootstrap once at first boot
 # ----------------------------------------------------------------------------
 bootcmd:
-  # Stop the base image's apt-daily / unattended-upgrades TIMERS from firing at
-  # first boot so they don't hold the dpkg lock during cloud-init's package
-  # stage. Masking timers only — NO process killing (that corrupts dpkg and a
-  # -f match would kill this very command). cloud-init already waits for the lock.
-  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl mask apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true; true" ]
+  # Free the dpkg/apt lock before cloud-init's package stage: gracefully stop
+  # (SIGTERM, NOT kill -9) unattended-upgrades + apt-daily so they release the
+  # lock, and mask the timers/services so they don't restart this boot.
+  - [ cloud-init-per, instance, ci-apt-quiesce, sh, -c, "systemctl stop unattended-upgrades.service apt-daily.service apt-daily-upgrade.service 2>/dev/null; systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null; true" ]
 
 runcmd:
   - [ bash, -lc, "/root/openlitespeedrails-bootstrap.sh" ]

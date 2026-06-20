@@ -1,0 +1,18 @@
+Your Odoo server is ready.
+
+Web UI:
+  http://{$ip}/        (HTTPS once a domain is pointed and TLS is issued)
+  Odoo runs on port 8069 behind Nginx on port 80/443.
+
+On first visit Odoo asks you to create a database. Use the master password:
+  Master password: {$password}
+Then create your admin login (email + password) for that database.
+
+Server (root) access:
+  ssh root@{$ip}     (password: {$password})
+
+Next steps:
+  1. Open http://{$ip} and create your first database using the master password.
+  2. Point a domain at {$ip}, set APP_DOMAIN + ENABLE_TLS=true in
+     /root/.odoo-bootstrap.env, and run certbot for HTTPS.
+  3. Full details (master + DB password) are in /root/odoo-credentials.txt

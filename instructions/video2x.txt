@@ -1,0 +1,14 @@
+Video2X GPU video upscaler is ready.
+NOTE: requires a GPU VPS plan (NVIDIA, >=8 GB VRAM); without one upscaling falls back to CPU and is very slow.
+
+Web UI: http://{$ip}/   (https:// once your domain DNS is pointed and TLS is issued)
+  The submit form requires the admin password: {$password}
+Let's Encrypt email: {$email}
+
+Workflow: upload videos to /var/lib/video2x/input/, submit a job in the UI, download from /var/lib/video2x/output/.
+CLI: video2x -i input.mp4 -o output.mp4 -p realesrgan -s 4
+
+SSH access:
+  ssh root@{$ip}   (password: {$password})
+
+Service: systemctl status video2x    Full details: /root/video2x-credentials.txt
