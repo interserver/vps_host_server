@@ -190,21 +190,22 @@ write_files:
       #    GateKeeper proxies HTTP/HTTPS; its management UI is the same :80/:443
       # -----------------------------------------------------------------------
       echo "--- Configuring UFW firewall ---"
-      ufw --force reset
-      ufw default deny incoming
-      ufw default allow outgoing
-
-      # SSH
-      ufw allow 22/tcp comment 'SSH'
-
-      # HTTP — GateKeeper WAF proxy + initial web UI access
-      ufw allow 80/tcp comment 'GateKeeper HTTP'
-
-      # HTTPS — GateKeeper WAF proxy + TLS management UI
-      ufw allow 443/tcp comment 'GateKeeper HTTPS'
-
-      ufw --force enable
-      ufw status verbose
+      # The cloud-init packages: stage can lose the first-boot apt-lock race and
+      # skip ufw; install it here (idempotent) and guard the block so a missing
+      # ufw never aborts the bootstrap with "ufw: command not found".
+      command -v ufw >/dev/null 2>&1 || { apt-get update -qq || true; apt-get install -y ufw || true; }
+      if command -v ufw >/dev/null 2>&1; then
+        ufw --force reset
+        ufw default deny incoming
+        ufw default allow outgoing
+        ufw allow 22/tcp comment 'SSH'
+        ufw allow 80/tcp comment 'GateKeeper HTTP'
+        ufw allow 443/tcp comment 'GateKeeper HTTPS'
+        ufw --force enable
+        ufw status verbose
+      else
+        echo "WARN: ufw unavailable; skipping firewall configuration"
+      fi
 
       # -----------------------------------------------------------------------
       # 6. fail2ban — protect SSH

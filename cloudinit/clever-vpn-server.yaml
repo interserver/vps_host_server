@@ -352,13 +352,21 @@ write_files:
       # Firewall (UFW) — SSH + WireGuard UDP only
       # ------------------------------------------------------------------
       echo "Configuring UFW..."
-      ufw --force reset
-      ufw default deny incoming
-      ufw default allow outgoing
-      ufw allow 22/tcp   comment 'SSH'
-      ufw allow "${WG_PORT}/udp" comment 'Clever VPN / WireGuard'
-      ufw --force enable
-      ufw status verbose
+      # cloud-init's packages: stage can lose the first-boot apt-lock race and skip
+      # ufw; install it here (idempotent) and guard the block so a missing ufw never
+      # aborts the bootstrap with "ufw: command not found".
+      command -v ufw >/dev/null 2>&1 || { apt-get update -qq || true; apt-get install -y ufw || true; }
+      if command -v ufw >/dev/null 2>&1; then
+        ufw --force reset
+        ufw default deny incoming
+        ufw default allow outgoing
+        ufw allow 22/tcp   comment 'SSH'
+        ufw allow "${WG_PORT}/udp" comment 'Clever VPN / WireGuard'
+        ufw --force enable
+        ufw status verbose
+      else
+        echo "WARN: ufw unavailable; skipping firewall configuration"
+      fi
 
       # ------------------------------------------------------------------
       # fail2ban — protect SSH
