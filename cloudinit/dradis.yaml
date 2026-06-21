@@ -327,6 +327,18 @@ write_files:
           '$BUNDLE_BIN' install --jobs=\"\$(nproc)\" --retry=3
         " 2>&1
 
+      # ---- database config ---------------------------------------------------
+      # dradis-ce ships only config/database.yml.template (SQLite, self-contained:
+      # storage/production.sqlite3). Without config/database.yml, Rails aborts
+      # both db:create AND every server boot with "Could not load database
+      # configuration. No such file - [config/database.yml]". Copy it into place
+      # and pre-create storage/ before db:create/db:migrate run.
+      if [ ! -f "$DRADIS_HOME/config/database.yml" ]; then
+        cp "$DRADIS_HOME/config/database.yml.template" "$DRADIS_HOME/config/database.yml"
+      fi
+      mkdir -p "$DRADIS_HOME/storage"
+      chown -R dradis:dradis "$DRADIS_HOME/config/database.yml" "$DRADIS_HOME/storage"
+
       # ---- precompile assets + setup DB --------------------------------------
       sudo -u dradis \
         HOME="$DRADIS_HOME" \
