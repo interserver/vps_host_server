@@ -150,14 +150,17 @@ write_files:
       sysctl --system >/dev/null 2>&1 || true
 
       # --- install k3s via official installer (single-server / control-plane) -
-      # Pin the stable channel and detach stdin (the installer is fed via a pipe;
-      # </dev/null keeps any prompt/read from consuming the piped script).
+      # Pin the stable channel. The installer script is fed to `sh` via the curl
+      # pipe (sh's stdin). Do NOT add `</dev/null` here: it overrides the pipe so
+      # sh reads the script from /dev/null (empty), exits immediately, and curl
+      # dies with a write error (exit 23) -> set -e aborts the whole bootstrap
+      # before k3s is ever installed. The k3s installer is non-interactive.
       if ! command -v k3s >/dev/null 2>&1; then
         curl -sfL https://get.k3s.io | \
           INSTALL_K3S_CHANNEL=stable \
           INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode=644" \
           K3S_TOKEN="${K3S_TOKEN}" \
-          sh -s - </dev/null
+          sh -s -
       fi
 
       # ensure k3s service is running and enabled
