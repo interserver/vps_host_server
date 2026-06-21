@@ -199,10 +199,15 @@ write_files:
       # fallback: noble repo until 26.04 published
       # -----------------------------------------------------------------------
       if ! command -v mysqld >/dev/null 2>&1 && ! command -v mariadbd >/dev/null 2>&1; then
+        # NOTE: do NOT pass --skip-key-import — without the imported keyring the
+        # maxscale repo this adds is unsigned and `apt-get update` dies with
+        # NO_PUBKEY, aborting the bootstrap. Let repo_setup import keys to the
+        # keyring path its sources reference.
         wget -qO- https://downloads.mariadb.com/MariaDB/mariadb_repo_setup \
-          | bash -s -- --mariadb-server-version="mariadb-11.4" --skip-key-import \
+          | bash -s -- --mariadb-server-version="mariadb-11.4" \
                        --os-type=ubuntu --os-version=noble
-        # Import MariaDB key separately (repo setup may have done it)
+        # Belt-and-suspenders: also drop the key in trusted.gpg.d in case a source
+        # line lacks an explicit signed-by.
         wget -qO- https://supplychain.mariadb.com/MariaDB-Server-GPG-KEY \
           | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg 2>/dev/null || true
         apt-get update -q
