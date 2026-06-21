@@ -59,9 +59,13 @@ SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"          # private key; .pub is inje
 SSH_USER="${SSH_USER:-root}"
 
 # --- timeouts (seconds) ------------------------------------------------------
-BOOT_TIMEOUT="${BOOT_TIMEOUT:-600}"      # wait for ssh to come up
-CLOUDINIT_TIMEOUT="${CLOUDINIT_TIMEOUT:-2400}"  # wait for cloud-init to finish (40m)
-SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-10}"
+BOOT_TIMEOUT="${BOOT_TIMEOUT:-900}"      # wait for ssh to come up (15m)
+CLOUDINIT_TIMEOUT="${CLOUDINIT_TIMEOUT:-5400}"  # wait for cloud-init to finish (90m — heavy installers: cloudpanel, technitium, big docker stacks)
+SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-20}"
+# How many consecutive empty/unknown cloud-init status polls (15s each) before
+# declaring it stuck. Heavy dpkg/apt load can make `cloud-init status` over SSH
+# return empty transiently, so be generous: 40 polls = 10 min.
+CI_STUCK_POLLS="${CI_STUCK_POLLS:-40}"
 
 # --- behaviour ---------------------------------------------------------------
 SYNC_TEMPLATES="${SYNC_TEMPLATES:-1}"    # copy yaml into CLOUDINIT_DEST before create
@@ -302,7 +306,7 @@ for slug in "${TEMPLATES[@]}"; do
             disabled)            warn "[$slug] cloud-init reports 'disabled'"; break ;;
             running)             ci_empty=0 ;;                       # still working, keep waiting
             *)  ci_empty=$((ci_empty+1))                             # unknown/empty/not-run
-                [ "$ci_empty" -ge 12 ] && { warn "[$slug] cloud-init stuck in '${ci_state:-unknown}' for ~3m"; break; } ;;
+                [ "$ci_empty" -ge "$CI_STUCK_POLLS" ] && { warn "[$slug] cloud-init stuck in '${ci_state:-unknown}' for ~$((CI_STUCK_POLLS*15/60))m"; break; } ;;
           esac
           sleep 15
         done
