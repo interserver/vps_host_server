@@ -326,15 +326,22 @@ write_files:
       systemctl enable --now cmon-events 2>/dev/null || true
 
       # -----------------------------------------------------------------------
-      # Install Certbot and configure Apache TLS
+      # Web frontend: ClusterControl Ops-C (the install-cc default) serves its
+      # UI via cmon-proxy (ccmgr) directly on 80/443 — Apache is NOT used.
+      # install-cc pulls apache2 in as a dependency and enables it, but it then
+      # fails to bind 80/443 (already held by cmon-proxy) and shows up as a
+      # failed unit. Stop + disable + reset-failed + mask it so it neither
+      # conflicts nor trips the no_failed_units health check.
       # -----------------------------------------------------------------------
-      if ! command -v certbot >/dev/null 2>&1; then
-        DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-apache
-      fi
+      systemctl disable --now apache2 2>/dev/null || true
+      systemctl reset-failed apache2 2>/dev/null || true
+      systemctl mask apache2 2>/dev/null || true
 
-      # Enable mod_ssl and mod_rewrite for Apache
-      a2enmod ssl rewrite headers 2>/dev/null || true
-      systemctl enable --now apache2 2>/dev/null || true
+      # certbot (standalone) so the operator can obtain a real cert later;
+      # cmon-proxy serves a self-signed cert on :443 until then.
+      if ! command -v certbot >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y certbot || true
+      fi
 
       # -----------------------------------------------------------------------
       # Firewall — SSH + HTTP (redirect to HTTPS) + HTTPS + cmon RPC
@@ -357,15 +364,13 @@ write_files:
       systemctl enable --now fail2ban
 
       # -----------------------------------------------------------------------
-      # TLS via Let's Encrypt (non-fatal if DNS not pointed yet)
+      # TLS: cmon-proxy (the Ops-C web server) serves HTTPS on :443 with a
+      # self-signed cert out of the box — there is no Apache vhost to run
+      # `certbot --apache` against. To use a Let's Encrypt cert once
+      # ${APP_DOMAIN} resolves here: stop cmon-proxy, run
+      #   certbot certonly --standalone -d ${APP_DOMAIN}
+      # then point cmon-proxy at the issued cert (or upload it in the UI).
       # -----------------------------------------------------------------------
-      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN}" ]; then
-        certbot --apache --non-interactive --agree-tos \
-          -m "${LE_EMAIL}" \
-          -d "${APP_DOMAIN}" \
-          --redirect \
-          || echo "WARN: certbot deferred — DNS not pointed yet. Re-run: certbot --apache -d ${APP_DOMAIN}"
-      fi
 
       # -----------------------------------------------------------------------
       # Generate SSH keypair for ClusterControl to manage remote nodes

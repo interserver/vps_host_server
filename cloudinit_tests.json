@@ -216,7 +216,7 @@
         "cmon-ssh",
         "cmon-cloud",
         "cmon-events",
-        "apache2"
+        "cmon-proxy"
       ],
       "ports": [],
       "http": [],
