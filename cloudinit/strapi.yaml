@@ -307,14 +307,18 @@ write_files:
           cd '${APP_DIR}'
           npx --yes create-strapi-app@latest . \
             --no-run \
+            --skip-cloud \
+            --no-example \
+            --js \
+            --use-npm \
+            --no-git-init \
             --dbclient=postgres \
             --dbhost=127.0.0.1 \
             --dbport=5432 \
             --dbname='${DB_NAME}' \
             --dbusername='${DB_USER}' \
             --dbpassword='${DB_PASS}' \
-            --dbssl=false \
-            --skip-cloud
+            --dbssl=false </dev/null
         "
       else
         echo "Strapi project already exists, skipping create-strapi-app"
