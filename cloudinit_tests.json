@@ -1215,7 +1215,7 @@
         "pritunl"
       ],
       "ports": [
-        1194
+        443
       ],
       "http": [],
       "commands": [],
