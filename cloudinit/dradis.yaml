@@ -90,7 +90,7 @@ write_files:
 
       # Installation paths
       DRADIS_HOME="/opt/dradis"
-      RUBY_VERSION="3.3.3"
+      RUBY_VERSION="3.4.6"   # must match dradis-ce .ruby-version / Gemfile `ruby '3.4.6'` (else bundle install aborts on a Ruby version mismatch)
 
   # --- Nginx reverse-proxy vhost (HTTP only; certbot upgrades to HTTPS) -------
   - path: /etc/nginx/sites-available/dradis.conf

@@ -180,28 +180,22 @@ write_files:
       AUTOEOF
 
       # ------------------------------------------------------------------
-      # 4. Install ASP.NET Core 8 runtime (required by Technitium DNS Server)
-      #    IMPORTANT: As of Ubuntu 24.04 (noble), Microsoft NO LONGER publishes
-      #    .NET to packages.microsoft.com — .NET ships in the Ubuntu archive.
-      #    The old packages.microsoft.com 'noble' repo does NOT exist and was the
-      #    root cause of "Failed to install ASP.NET Core Runtime".
-      #    Technitium needs the ASP.NET Core runtime (aspnetcore-runtime-8.0),
-      #    which is in Ubuntu's universe component — no Microsoft repo required.
-      #    NOTE: the official Technitium install.sh (step 5) also installs/verifies
-      #    the correct .NET runtime itself, so this pre-install is best-effort.
+      # 4. .NET runtime — installed ENTIRELY by the official Technitium
+      #    installer (step 5), NOT from the Ubuntu archive.
+      #    The current Technitium install.sh requires ASP.NET Core **10.0**
+      #    (dotnetRuntime="Microsoft.AspNetCore.App 10.0.") and installs it to
+      #    /opt/dotnet, symlinking /usr/bin/dotnet — but ONLY if /usr/bin/dotnet
+      #    does not already exist. Pre-installing aspnetcore-runtime-8.0 from the
+      #    Ubuntu archive (the archive only ships 8.0, not 10.0) creates that
+      #    /usr/bin/dotnet -> 8.0 symlink, which SHADOWS Technitium's 10.0 in
+      #    /opt/dotnet: the installer's `dotnet --list-runtimes` recheck then
+      #    sees only 8.0, the "10.0." grep fails, and it aborts with
+      #    "Failed to install ASP.NET Core Runtime" (the real root cause).
+      #    So we deliberately do NOT install dotnet here.
       # ------------------------------------------------------------------
-      echo "Installing ASP.NET Core 8 runtime from the Ubuntu archive..."
-
+      echo "Updating apt metadata (dotnet 10 is installed by the Technitium installer)..."
       add-apt-repository -y universe || true
       apt-get update -y
-
-      if ! command -v dotnet >/dev/null 2>&1; then
-        apt-get install -y aspnetcore-runtime-8.0 \
-          || apt-get install -y dotnet-runtime-8.0 \
-          || echo "WARN: pre-install of ASP.NET Core runtime failed; relying on Technitium install.sh"
-      fi
-      DOTNET_VER="$(dotnet --version 2>/dev/null || echo 'unknown')"
-      echo ".NET runtime version: ${DOTNET_VER}"
 
       # ------------------------------------------------------------------
       # 5. Download and run the official Technitium DNS Server installer
