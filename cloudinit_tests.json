@@ -1273,12 +1273,10 @@
     "signoz": {
       "base_image": "",
       "services": [
-        "signoz",
-        "nginx"
+        "signoz"
       ],
       "ports": [
-        80,
-        3301,
+        8080,
         4317,
         4318
       ],

@@ -290,7 +290,11 @@ write_files:
       sed -i "s|docker/docker-compose.yaml|${UNIT_COMPOSE_REL}|g" \
         /etc/systemd/system/signoz.service
       systemctl daemon-reload
-      systemctl enable signoz
+      # enable --now (not just enable): start the unit this boot too, so
+      # `systemctl is-active signoz` reports active(exited) (Type=oneshot +
+      # RemainAfterExit=yes). ExecStart is `docker compose up -d`, idempotent
+      # with the inline `up` above. Without --now the unit stays inactive/dead.
+      systemctl enable --now signoz
 
       # -----------------------------------------------------------------------
       # 6. Wait for SigNoz UI to become reachable (up to 5 minutes)
