@@ -363,8 +363,15 @@ write_files:
         echo "deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg arch=amd64] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main" \
           > /etc/apt/sources.list.d/opensearch.list
         apt-get update -qq
+        # The opensearch.yml we pre-placed via write_files collides with the
+        # package's conffile -> dpkg prompts interactively ("opensearch.yml
+        # (Y/I/N/O/D/Z)?") and FAILS the install. Stash ours, install with
+        # non-interactive confold/confdef, then restore our config afterward.
+        [ -f /etc/opensearch/opensearch.yml ] && mv /etc/opensearch/opensearch.yml /tmp/opensearch.yml.ours
         OPENSEARCH_INITIAL_ADMIN_PASSWORD="$(rand)$(rand)Aa1!" \
-          DEBIAN_FRONTEND=noninteractive apt-get install -y opensearch || true
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold opensearch || true
+        [ -f /tmp/opensearch.yml.ours ] && mv -f /tmp/opensearch.yml.ours /etc/opensearch/opensearch.yml
       fi
 
       # Configure JVM heap (half of total RAM, min 512m max 4g)
