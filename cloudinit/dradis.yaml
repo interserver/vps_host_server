@@ -314,18 +314,18 @@ write_files:
       chmod 755 /usr/local/bin/dradis-start.sh
 
       # ---- bundle install ----------------------------------------------------
+      # Bundler 4.0 REMOVED the install-time flags --without/--deployment/--path
+      # (they now error out). Set them as local config first, then plain install.
       sudo -u dradis \
-        HOME="$DRADIS_HOME" \
-        RBENV_ROOT="$RBENV_ROOT" \
-        PATH="$RUBY_BIN:$PATH" \
+        HOME="$DRADIS_HOME" RBENV_ROOT="$RBENV_ROOT" PATH="$RUBY_BIN:$PATH" \
         RAILS_ENV=production \
-        "$BUNDLE_BIN" install \
-          --without development test \
-          --deployment \
-          --jobs="$(nproc)" \
-          --retry=3 \
-          --path="$DRADIS_HOME/vendor/bundle" \
-        2>&1
+        sh -c "
+          cd '$DRADIS_HOME' || cd \"\$(dirname '$DRADIS_HOME/Gemfile')\"
+          '$BUNDLE_BIN' config set --local without 'development test'
+          '$BUNDLE_BIN' config set --local deployment true
+          '$BUNDLE_BIN' config set --local path '$DRADIS_HOME/vendor/bundle'
+          '$BUNDLE_BIN' install --jobs=\"\$(nproc)\" --retry=3
+        " 2>&1
 
       # ---- precompile assets + setup DB --------------------------------------
       sudo -u dradis \

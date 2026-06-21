@@ -281,6 +281,35 @@ write_files:
       # --- enable and start Redis ---
       systemctl enable --now redis-server
 
+      # --- Mailpit dev mail catcher (SMTP 1025 / web 8025) -------------------
+      # Laravel's .env mails to 127.0.0.1:1025; install Mailpit so mail is
+      # captured locally instead of failing. Non-fatal if the download fails.
+      if ! command -v mailpit >/dev/null 2>&1; then
+        curl -fsSL https://raw.githubusercontent.com/axllent/mailpit/develop/install.sh | sh -s -- 2>&1 \
+          || { curl -fsSL -o /tmp/mailpit.tar.gz \
+                 "https://github.com/axllent/mailpit/releases/latest/download/mailpit-linux-amd64.tar.gz" \
+               && tar -xzf /tmp/mailpit.tar.gz -C /usr/local/bin mailpit && rm -f /tmp/mailpit.tar.gz; }
+      fi
+      MAILPIT_BIN="$(command -v mailpit || echo /usr/local/bin/mailpit)"
+      if [ -x "$MAILPIT_BIN" ]; then
+        id -u mailpit >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin mailpit || true
+        cat > /etc/systemd/system/mailpit.service <<MPUNIT
+      [Unit]
+      Description=Mailpit dev SMTP catcher
+      After=network.target
+      [Service]
+      ExecStart=${MAILPIT_BIN} --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025
+      User=mailpit
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
+      MPUNIT
+        systemctl daemon-reload
+        systemctl enable --now mailpit 2>/dev/null || echo "WARN: mailpit failed to start"
+      else
+        echo "WARN: mailpit not installed — mail capture on :1025 unavailable"
+      fi
+
       # --- install Laravel via Composer ---
       mkdir -p "$(dirname "$LARAVEL_PATH")"
       if [ ! -f "${LARAVEL_PATH}/composer.json" ]; then
@@ -322,7 +351,7 @@ write_files:
       REDIS_PORT=6379
 
       MAIL_MAILER=smtp
-      MAIL_HOST=mailpit
+      MAIL_HOST=127.0.0.1
       MAIL_PORT=1025
       MAIL_USERNAME=null
       MAIL_PASSWORD=null
