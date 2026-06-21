@@ -299,7 +299,7 @@ write_files:
       CREDS
       chmod 600 /root/odoo-credentials.txt
 
-      echo "[odoo-bootstrap] complete at $(date -u)"
+      echo "=== odoo bootstrap complete at $(date -u) ==="
       echo "[odoo-bootstrap] credentials saved to /root/odoo-credentials.txt"
 
 bootcmd:
