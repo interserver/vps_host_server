@@ -183,13 +183,21 @@ write_files:
       echo "${CHUNKSERVER_DATA_DIR}" > /etc/mfs/mfshdd.cfg
       chown mfs:mfs /etc/mfs/mfshdd.cfg
 
+      # MooseFS chunkserver/metalogger REFUSE to connect to a master at
+      # 127.0.0.1/localhost ("can't be used for connecting with master, use ip
+      # address of network controller") — they must use a routable IP. The
+      # master binds all interfaces by default, so point them at this VM's
+      # primary IP.
+      MASTER_IP="$(hostname -I | awk '{print $1}')"
+      [ -n "$MASTER_IP" ] || MASTER_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
+
       # MASTER_PORT must be the master's MATOCS port (9420). CSSERV_LISTEN_PORT
       # is the chunkserver's OWN data-serving port (9422) and must NOT collide
       # with MASTER_PORT.
       cat > /etc/mfs/mfschunkserver.cfg <<CSCFG
       WORKING_USER = mfs
       WORKING_GROUP = mfs
-      MASTER_HOST = 127.0.0.1
+      MASTER_HOST = ${MASTER_IP}
       MASTER_PORT = 9420
       HDD_CONF_FILENAME = /etc/mfs/mfshdd.cfg
       CSSERV_LISTEN_HOST = 0.0.0.0
@@ -203,7 +211,7 @@ write_files:
         cat > /etc/mfs/mfsmetalogger.cfg <<MLCFG
       WORKING_USER = mfs
       WORKING_GROUP = mfs
-      MASTER_HOST = 127.0.0.1
+      MASTER_HOST = ${MASTER_IP}
       MASTER_PORT = 9419
       MLCFG
       fi
