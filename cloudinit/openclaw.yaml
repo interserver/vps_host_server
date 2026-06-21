@@ -62,7 +62,10 @@ write_files:
       EnvironmentFile=/etc/openclaw/openclaw.env
       # Bind mode + port come from openclaw.env (default loopback:18789).
       # Binding beyond loopback is refused by OpenClaw unless a token is set.
-      ExecStart=/usr/local/bin/openclaw gateway --bind ${OPENCLAW_GATEWAY_BIND} --port ${OPENCLAW_GATEWAY_PORT}
+      # --allow-unconfigured: start/listen without a completed `openclaw onboard`
+      # (which needs an LLM API key + TTY); without it the gateway runs but never
+      # binds 18789. The operator runs `openclaw onboard` later to add a model.
+      ExecStart=/usr/local/bin/openclaw gateway --bind ${OPENCLAW_GATEWAY_BIND} --port ${OPENCLAW_GATEWAY_PORT} --allow-unconfigured
       Restart=always
       RestartSec=5
       TimeoutStopSec=30
