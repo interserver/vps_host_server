@@ -340,38 +340,33 @@ write_files:
       chown -R dradis:dradis "$DRADIS_HOME/config/database.yml" "$DRADIS_HOME/storage"
 
       # ---- precompile assets + setup DB --------------------------------------
+      # IMPORTANT: run from INSIDE $DRADIS_HOME. `rails` resolves the app root
+      # from the current directory; without the cd, db:migrate ran against no
+      # app and left an empty database, so the server crash-looped with
+      # "Could not find table 'configurations'". (cd mirrors the bundle block.)
       sudo -u dradis \
-        HOME="$DRADIS_HOME" \
-        RBENV_ROOT="$RBENV_ROOT" \
-        PATH="$RUBY_BIN:$PATH" \
+        HOME="$DRADIS_HOME" RBENV_ROOT="$RBENV_ROOT" PATH="$RUBY_BIN:$PATH" \
         RAILS_ENV=production \
         SECRET_KEY_BASE="$DRADIS_SHARED_SECRET" \
         DRADIS_SHARED_SECRET="$DRADIS_SHARED_SECRET" \
-        "$BUNDLE_BIN" exec --gemfile="$DRADIS_HOME/Gemfile" \
-        rails assets:precompile db:create db:migrate \
+        sh -c "cd '$DRADIS_HOME' && '$BUNDLE_BIN' exec rails assets:precompile db:create db:migrate" \
         2>&1
 
       # ---- set initial shared_password via Dradis rake task ------------------
       # Dradis uses a single shared password for all users (Community Edition).
       sudo -u dradis \
-        HOME="$DRADIS_HOME" \
-        RBENV_ROOT="$RBENV_ROOT" \
-        PATH="$RUBY_BIN:$PATH" \
+        HOME="$DRADIS_HOME" RBENV_ROOT="$RBENV_ROOT" PATH="$RUBY_BIN:$PATH" \
         RAILS_ENV=production \
         SECRET_KEY_BASE="$DRADIS_SHARED_SECRET" \
         DRADIS_SHARED_SECRET="$DRADIS_SHARED_SECRET" \
-        "$BUNDLE_BIN" exec --gemfile="$DRADIS_HOME/Gemfile" \
-        rails dradis:reset:all SHARED_PASS="$DRADIS_ADMIN_PASS" \
+        sh -c "cd '$DRADIS_HOME' && '$BUNDLE_BIN' exec rails dradis:reset:all SHARED_PASS='$DRADIS_ADMIN_PASS'" \
         2>&1 || \
       sudo -u dradis \
-        HOME="$DRADIS_HOME" \
-        RBENV_ROOT="$RBENV_ROOT" \
-        PATH="$RUBY_BIN:$PATH" \
+        HOME="$DRADIS_HOME" RBENV_ROOT="$RBENV_ROOT" PATH="$RUBY_BIN:$PATH" \
         RAILS_ENV=production \
         SECRET_KEY_BASE="$DRADIS_SHARED_SECRET" \
         DRADIS_SHARED_SECRET="$DRADIS_SHARED_SECRET" \
-        "$BUNDLE_BIN" exec --gemfile="$DRADIS_HOME/Gemfile" \
-        rails db:seed \
+        sh -c "cd '$DRADIS_HOME' && '$BUNDLE_BIN' exec rails db:seed" \
         2>&1 || true
 
       chown -R dradis:dradis "$DRADIS_HOME"
