@@ -311,6 +311,7 @@ write_files:
             --no-example \
             --js \
             --use-npm \
+            --install \
             --no-git-init \
             --dbclient=postgres \
             --dbhost=127.0.0.1 \
