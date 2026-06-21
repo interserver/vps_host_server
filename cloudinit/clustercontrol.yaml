@@ -258,6 +258,23 @@ write_files:
       systemctl restart mariadb
 
       # -----------------------------------------------------------------------
+      # CRITICAL: make install-cc REUSE this MariaDB instead of installing its
+      # own mysql-server 8.0 — on Ubuntu noble install-cc installs mysql-server
+      # unless it detects a DB already running, and mysql 8.0 then refuses to
+      # start on MariaDB's datadir (/etc/mysql/FROZEN), so cmon never comes up.
+      # install-cc's probe checks /usr/sbin/mysqld FIRST and runs `ps -C mysqld`.
+      # MariaDB ships /usr/sbin/mysqld as a COMPAT SYMLINK but its daemon process
+      # is `mariadbd`, so the probe fails and install-cc concludes "no DB running".
+      # Remove the compat symlink so the probe falls through to its
+      # `/usr/sbin/mariadbd` + `ps -C mariadbd` branch, which succeeds -> install-cc
+      # sets use_existing_mysql and reuses MariaDB (authenticating with
+      # S9S_ROOT_PASSWORD = the root password set above).
+      # -----------------------------------------------------------------------
+      rm -f /usr/sbin/mysqld
+      systemctl is-active --quiet mariadb || systemctl start mariadb
+      for _i in $(seq 1 15); do pgrep -x mariadbd >/dev/null 2>&1 && break; sleep 2; done
+
+      # -----------------------------------------------------------------------
       # Install ClusterControl via the official Severalnines install-cc script
       # https://severalnines.com/downloads/cmon/install-cc  (verified reachable)
       # This is the current, supported method — it adds the correct apt repos
