@@ -371,7 +371,14 @@ write_files:
         OPENSEARCH_INITIAL_ADMIN_PASSWORD="$(rand)$(rand)Aa1!" \
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
             -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold opensearch || true
-        [ -f /tmp/opensearch.yml.ours ] && mv -f /tmp/opensearch.yml.ours /etc/opensearch/opensearch.yml
+        if [ -f /tmp/opensearch.yml.ours ]; then
+          mv -f /tmp/opensearch.yml.ours /etc/opensearch/opensearch.yml
+          # our write_files copy is root:root 0640; the opensearch service runs as
+          # the 'opensearch' user and must be able to read its config or it fails
+          # to start (and then the magento install can't reach :9200).
+          chown root:opensearch /etc/opensearch/opensearch.yml 2>/dev/null || true
+          chmod 0640 /etc/opensearch/opensearch.yml 2>/dev/null || true
+        fi
       fi
 
       # Configure JVM heap (half of total RAM, min 512m max 4g)
