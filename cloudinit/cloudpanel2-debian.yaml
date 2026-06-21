@@ -236,18 +236,30 @@ write_files:
       fi
 
       # -----------------------------------------------------------------
-      # memcached remediation: CloudPanel pulls in memcached, whose stock
-      # /etc/memcached.conf binds ::1. The VM has no IPv6 loopback, so memcached
-      # exits 71/OSERR ("Cannot assign requested address") and shows as a failed
-      # unit. Drop the ::1 listen line so it binds 127.0.0.1 only, then restart.
+      # memcached remediation: /etc/memcached.conf binds ::1, but the VM has no
+      # IPv6 loopback, so memcached exits 71/OSERR ("Cannot assign requested
+      # address"). A one-shot sed is NOT enough — CloudPanel/apt rewrites
+      # memcached.conf AFTER this point (re-adding ::1). Install an ExecStartPre
+      # drop-in that strips the ::1 listen line on EVERY memcached start.
       # -----------------------------------------------------------------
       if systemctl list-unit-files 2>/dev/null | grep -q '^memcached\.service'; then
-          if [ -f /etc/memcached.conf ]; then
-              sed -i '/^[[:space:]]*-l[[:space:]]\+::1[[:space:]]*$/d' /etc/memcached.conf
-          fi
+          cat > /usr/local/sbin/memcached-no-ipv6.sh <<'MCSH'
+      #!/bin/sh
+      # Strip the ::1 listen line so memcached binds 127.0.0.1 only on hosts
+      # without an IPv6 loopback. Idempotent; runs as memcached ExecStartPre.
+      [ -f /etc/memcached.conf ] && sed -i '/^[[:space:]]*-l[[:space:]]\+::1[[:space:]]*$/d' /etc/memcached.conf
+      exit 0
+      MCSH
+          chmod +x /usr/local/sbin/memcached-no-ipv6.sh
+          mkdir -p /etc/systemd/system/memcached.service.d
+          cat > /etc/systemd/system/memcached.service.d/no-ipv6-bind.conf <<'MCDROP'
+      [Service]
+      ExecStartPre=/usr/local/sbin/memcached-no-ipv6.sh
+      MCDROP
+          systemctl daemon-reload 2>/dev/null || true
           systemctl reset-failed memcached.service 2>/dev/null || true
-          systemctl enable memcached.service 2>/dev/null || true
-          systemctl restart memcached.service 2>/dev/null \
+          systemctl enable --now memcached.service 2>/dev/null \
+              || systemctl restart memcached.service 2>/dev/null \
               || echo "WARN: memcached failed to restart — check journalctl -u memcached"
       fi
 
