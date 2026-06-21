@@ -367,6 +367,10 @@ write_files:
       chmod 600 /root/moosefs-credentials.txt
 
       echo "[moosefs-bootstrap] Done at $(date)"
+      # Standard completion marker the remote check greps for ("=== <app>
+      # bootstrap complete ==="). Without it the check reports "no completion
+      # marker" even though every service is up.
+      echo "=== moosefs bootstrap complete ==="
       echo "[moosefs-bootstrap] Credentials written to /root/moosefs-credentials.txt"
 
 bootcmd:

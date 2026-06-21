@@ -217,7 +217,11 @@ write_files:
       [ -z "$JAMULUS_BIN" ] && JAMULUS_BIN="$(command -v jamulus 2>/dev/null || command -v Jamulus 2>/dev/null || echo /usr/bin/jamulus)"
       echo "Using Jamulus binary: ${JAMULUS_BIN}"
       JAMULUS_OPTS="--server --nogui"
-      JAMULUS_OPTS="${JAMULUS_OPTS} --servername \"${SERVER_NAME}\""
+      # NOTE: do NOT pass --servername — several Jamulus builds (incl. the one
+      # apt installs on noble) reject it ("Unknown option '--servername'"),
+      # which crash-loops the service. The server name is optional/cosmetic for
+      # an unlisted server, so omit it. (Public listings carry it via
+      # --serverinfo, set only when REGISTER_PUBLIC=true.)
       JAMULUS_OPTS="${JAMULUS_OPTS} --numchannels ${MAX_CHANNELS}"
       JAMULUS_OPTS="${JAMULUS_OPTS} --port ${JAMULUS_PORT}"
 

@@ -1495,11 +1495,9 @@
     "wireguard": {
       "base_image": "",
       "services": [
-        "wg-quick@"
+        "wg-quick@wg0"
       ],
-      "ports": [
-        51820
-      ],
+      "ports": [],
       "http": [],
       "commands": [],
       "files": [

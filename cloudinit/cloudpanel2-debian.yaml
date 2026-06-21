@@ -236,6 +236,22 @@ write_files:
       fi
 
       # -----------------------------------------------------------------
+      # memcached remediation: CloudPanel pulls in memcached, whose stock
+      # /etc/memcached.conf binds ::1. The VM has no IPv6 loopback, so memcached
+      # exits 71/OSERR ("Cannot assign requested address") and shows as a failed
+      # unit. Drop the ::1 listen line so it binds 127.0.0.1 only, then restart.
+      # -----------------------------------------------------------------
+      if systemctl list-unit-files 2>/dev/null | grep -q '^memcached\.service'; then
+          if [ -f /etc/memcached.conf ]; then
+              sed -i '/^[[:space:]]*-l[[:space:]]\+::1[[:space:]]*$/d' /etc/memcached.conf
+          fi
+          systemctl reset-failed memcached.service 2>/dev/null || true
+          systemctl enable memcached.service 2>/dev/null || true
+          systemctl restart memcached.service 2>/dev/null \
+              || echo "WARN: memcached failed to restart — check journalctl -u memcached"
+      fi
+
+      # -----------------------------------------------------------------
       # Certbot TLS (deferred gracefully if DNS not ready)
       # -----------------------------------------------------------------
       if [ "${ENABLE_TLS:-true}" = "true" ] && \
