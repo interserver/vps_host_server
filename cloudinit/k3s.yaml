@@ -264,8 +264,10 @@ write_files:
         --wait --timeout=5m || echo "WARN: ingress-nginx install timed out — retry: helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx"
 
       # --- deploy a smoke-test "hello" workload (removable) ------------------
-      kubectl create namespace hello --dry-run=client -o yaml | kubectl apply -f -
-      kubectl apply -n hello -f - <<'MANIFEST'
+      # NON-FATAL: this is just a demo; a hiccup here must never fail provisioning
+      # (the test only requires the k3s service to be up).
+      kubectl create namespace hello --dry-run=client -o yaml | kubectl apply -f - || true
+      kubectl apply -n hello -f - <<'MANIFEST' || echo "WARN: hello smoke-test apply failed (non-fatal)"
       apiVersion: apps/v1
       kind: Deployment
       metadata:
@@ -309,7 +311,10 @@ write_files:
           kubernetes.io/ingress.class: nginx
       spec:
         rules:
-          - host: APP_DOMAIN_PLACEHOLDER
+          # valid lowercase RFC-1123 placeholder so `kubectl apply` accepts it;
+          # patched to the real ${APP_DOMAIN} right after (uppercase placeholders
+          # are rejected by the API server and aborted the whole bootstrap).
+          - host: placeholder.example.com
             http:
               paths:
                 - path: /
