@@ -188,7 +188,7 @@ write_files:
 
       fetch_bds_url() {
         local api_url="$1"
-        curl -fsSL \
+        curl -fsSL --http1.1 --retry 3 --retry-delay 2 --retry-all-errors \
           -A "${BDS_UA}" \
           -H 'Accept: application/json' \
           -H 'Accept-Language: en-US,en;q=0.9' \
@@ -206,7 +206,7 @@ write_files:
       # Last-resort fallback: scrape the official download page with a real UA.
       if [ -z "${BDS_URL}" ]; then
         echo "WARN: JSON API unavailable; falling back to download-page scrape."
-        BDS_URL="$(curl -fsSL \
+        BDS_URL="$(curl -fsSL --http1.1 --retry 3 --retry-delay 2 --retry-all-errors \
           -A "${BDS_UA}" \
           -H 'Accept-Language: en-US,en;q=0.9' \
           'https://www.minecraft.net/en-us/download/server/bedrock' 2>/dev/null \
@@ -222,7 +222,7 @@ write_files:
 
       echo "Downloading: ${BDS_URL}"
       TMPZIP="/tmp/bedrock-server.zip"
-      curl -fsSL -o "${TMPZIP}" "${BDS_URL}"
+      curl -fsSL --http1.1 --retry 3 --retry-delay 2 --retry-all-errors -o "${TMPZIP}" "${BDS_URL}"
 
       # -----------------------------------------------------------------------
       # 4. Install / upgrade idempotently (preserve existing worlds + config)
