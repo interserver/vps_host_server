@@ -195,7 +195,7 @@ write_files:
 
       mkdir -p /usr/share/keyrings
       if [ ! -f /usr/share/keyrings/openvpn-as-archive-keyring.gpg ]; then
-        wget -qO- "https://as-repository.openvpn.net/as/repo.gpg" \
+        wget -qO- "https://as-repository.openvpn.net/as-repo-public.asc" \
           | gpg --dearmor \
           > /usr/share/keyrings/openvpn-as-archive-keyring.gpg
       fi

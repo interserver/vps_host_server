@@ -45,7 +45,7 @@ packages:
   - git
   - htop
   - build-essential
-  - python3-is-python
+  - python-is-python3
   - libpq-dev
 
 # ----------------------------------------------------------------------------
@@ -295,6 +295,8 @@ write_files:
       if [ ! -f "${APP_DIR}/package.json" ]; then
         # Create Strapi project as www-data, non-interactive
         sudo -u www-data -H bash -c "
+          export HOME='${APP_DIR}'
+          export npm_config_cache='${APP_DIR}/.npm-cache'
           cd '${APP_DIR}'
           npx create-strapi-app@latest . \
             --no-run \
@@ -341,6 +343,8 @@ write_files:
       # ------------------------------------------------------------------
       if [ ! -d "${APP_DIR}/build" ]; then
         sudo -u www-data -H bash -c "
+          export HOME='${APP_DIR}'
+          export npm_config_cache='${APP_DIR}/.npm-cache'
           cd '${APP_DIR}'
           export HOST=127.0.0.1
           export PORT=${APP_PORT}

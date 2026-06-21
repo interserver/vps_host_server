@@ -109,6 +109,13 @@ write_files:
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
+      # dotnet/Technitium installer invoke `dotnet --list-runtimes`; without HOME
+      # set (cloud-init runs scripts with no HOME) those calls error, so the
+      # Technitium installer fails to detect the already-installed ASP.NET Core
+      # runtime and re-tries its own install, which fails. Export HOME first.
+      export HOME="${HOME:-/root}"
+      export DOTNET_CLI_HOME="${DOTNET_CLI_HOME:-/root}"
+      export DOTNET_CLI_TELEMETRY_OPTOUT=1
       exec > >(tee -a /var/log/technitium-dns-server-bootstrap.log) 2>&1
       # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
       #     makes postfix@-.service fail every boot); guarded no-op otherwise.

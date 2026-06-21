@@ -40,7 +40,6 @@ packages:
   - php-soap
   - php-imagick
   - php-json
-  - php-fileinfo
   - certbot
   - python3-certbot-nginx
   - ufw

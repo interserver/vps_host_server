@@ -201,23 +201,36 @@ write_files:
       # ------------------------------------------------------------------
       echo "Adding 3CX repository..."
 
-      # Fetch and store the 3CX GPG key
+      # Fetch and store the 3CX GPG key. 3CX V20 officially supports Debian 12
+      # only and the public key endpoint is not guaranteed to exist; keep the
+      # whole repo-add best-effort (guarded against set -e/pipefail) so a dead
+      # key URL or unsupported distro does NOT abort cloud-init before 'done'.
       mkdir -p /usr/share/keyrings
+      _3cx_repo_ok=0
       if [ ! -f /usr/share/keyrings/3cx-archive-keyring.gpg ]; then
-        wget -qO- "https://repo.3cx.com/key.gpg" \
-          | gpg --dearmor \
-          > /usr/share/keyrings/3cx-archive-keyring.gpg
+        if wget -qO- "https://repo.3cx.com/key.gpg" 2>/dev/null \
+             | gpg --dearmor > /usr/share/keyrings/3cx-archive-keyring.gpg 2>/dev/null \
+           && [ -s /usr/share/keyrings/3cx-archive-keyring.gpg ]; then
+          _3cx_repo_ok=1
+        else
+          rm -f /usr/share/keyrings/3cx-archive-keyring.gpg
+          echo "WARN: could not fetch the 3CX GPG key (repo.3cx.com); skipping the 3CX apt repo."
+          echo "      3CX V20 supports Debian 12 only — finish setup manually or deploy on Debian 12."
+        fi
+      else
+        _3cx_repo_ok=1
       fi
-
-      # Add the repo (pinned to Debian Bookworm arm)
-      cat > /etc/apt/sources.list.d/3cx.list <<'SRCEOF'
-      deb [signed-by=/usr/share/keyrings/3cx-archive-keyring.gpg] https://repo.3cx.com/3cx bookworm main
-      SRCEOF
 
       # Suppress interactive prompts during package install
       export DEBIAN_FRONTEND=noninteractive
 
-      apt-get update -y
+      if [ "$_3cx_repo_ok" = "1" ]; then
+        # Add the repo (pinned to Debian Bookworm)
+        cat > /etc/apt/sources.list.d/3cx.list <<'SRCEOF'
+      deb [signed-by=/usr/share/keyrings/3cx-archive-keyring.gpg] https://repo.3cx.com/3cx bookworm main
+      SRCEOF
+        apt-get update -y || true
+      fi
 
       # Pre-seed debconf so the 3CX installer runs non-interactively.
       # The installer will still require a license key to be entered

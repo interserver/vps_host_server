@@ -42,9 +42,7 @@ packages:
   - php-zip
   - php-bcmath
   - php-json
-  - php-opcache
-  - php-dom
-  - php-simplexml
+  - php8.3-opcache
   - php-ldap
   - php-bz2
   - certbot

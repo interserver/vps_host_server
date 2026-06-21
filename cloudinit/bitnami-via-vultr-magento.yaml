@@ -294,6 +294,9 @@ write_files:
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
+      export HOME="${HOME:-/root}"
+      export COMPOSER_HOME="${COMPOSER_HOME:-/root/.composer}"
+      export COMPOSER_ALLOW_SUPERUSER=1
       exec > >(tee -a /var/log/magento-bootstrap.log) 2>&1
       # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
       #     makes postfix@-.service fail every boot); guarded no-op otherwise.

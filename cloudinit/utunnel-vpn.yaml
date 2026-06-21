@@ -61,7 +61,6 @@ packages:
   - iproute2
   - jq
   - iptables
-  - iptables-persistent
   - python3-certbot
   - certbot
 
@@ -132,6 +131,18 @@ write_files:
         systemctl restart 'postfix@-.service' 2>/dev/null || systemctl restart postfix 2>/dev/null || true
       fi
       source /root/.utunnel-vpn-bootstrap.env
+
+      # --- iptables-persistent: installed HERE (removed from cloud-init
+      #     packages:) to dodge the first-boot debconf/dpkg lock race its
+      #     postinst hits during the package stage. Preseed answers, force a
+      #     noninteractive frontend, and wait for any apt/dpkg lock to clear. ---
+      export DEBIAN_FRONTEND=noninteractive
+      echo 'iptables-persistent iptables-persistent/autosave_v4 boolean true' | debconf-set-selections
+      echo 'iptables-persistent iptables-persistent/autosave_v6 boolean true' | debconf-set-selections
+      _apt_wait() { for _i in $(seq 1 60); do fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/debconf/config.dat >/dev/null 2>&1 || break; sleep 5; done; }
+      _apt_wait
+      apt-get install -y iptables-persistent netfilter-persistent \
+        || { _apt_wait; apt-get install -y iptables-persistent netfilter-persistent; } || true
 
       # ------------------------------------------------------------------
       # Helper: generate a random 24-char alphanumeric string.

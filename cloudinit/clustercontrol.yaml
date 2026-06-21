@@ -201,7 +201,7 @@ write_files:
       if ! command -v mysqld >/dev/null 2>&1 && ! command -v mariadbd >/dev/null 2>&1; then
         wget -qO- https://downloads.mariadb.com/MariaDB/mariadb_repo_setup \
           | bash -s -- --mariadb-server-version="mariadb-11.4" --skip-key-import \
-                       --os-type=ubuntu --os-codename=noble
+                       --os-type=ubuntu --os-version=noble
         # Import MariaDB key separately (repo setup may have done it)
         wget -qO- https://supplychain.mariadb.com/MariaDB-Server-GPG-KEY \
           | gpg --dearmor -o /etc/apt/trusted.gpg.d/mariadb.gpg 2>/dev/null || true

@@ -42,10 +42,7 @@ packages:
   - php-zip
   - php-bcmath
   - php-json
-  - php-opcache
-  - php-dom
-  - php-simplexml
-  - php-pdo
+  - php8.3-opcache
   - certbot
   - python3-certbot-nginx
   - ufw

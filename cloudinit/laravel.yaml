@@ -41,9 +41,7 @@ packages:
   - php-intl
   - php-zip
   - php-bcmath
-  - php-opcache
-  - php-dom
-  - php-fileinfo
+  - php8.3-opcache
   - php-redis
   - redis-server
   - certbot

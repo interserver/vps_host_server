@@ -45,7 +45,7 @@ packages:
   - php-imagick
   - php-bcmath
   - php-redis
-  - php-opcache
+  - php8.3-opcache
   - redis-server
   - certbot
   - python3-certbot-nginx

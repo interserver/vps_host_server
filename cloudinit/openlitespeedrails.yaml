@@ -47,7 +47,7 @@ packages:
   - libyaml-dev
   - libffi-dev
   - libgdbm-dev
-  - libncurses5-dev
+  - libncurses-dev
   - libbz2-dev
   - postgresql
   - postgresql-contrib

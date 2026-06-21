@@ -44,7 +44,7 @@ packages:
   - libxslt1-dev
   - libffi-dev
   - libgdbm-dev
-  - libncurses5-dev
+  - libncurses-dev
   - automake
   - libtool
   - bison

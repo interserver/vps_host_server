@@ -37,10 +37,7 @@ packages:
   - php-intl
   - php-zip
   - php-bcmath
-  - php-dom
   - php-json
-  - php-fileinfo
-  - php-ctype
   - certbot
   - python3-certbot-nginx
   - ufw
@@ -166,6 +163,9 @@ write_files:
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
+      export HOME="${HOME:-/root}"
+      export COMPOSER_HOME="${COMPOSER_HOME:-/root/.composer}"
+      export COMPOSER_ALLOW_SUPERUSER=1
       exec > >(tee -a /var/log/flarum-bootstrap.log) 2>&1
       # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
       #     makes postfix@-.service fail every boot); guarded no-op otherwise.

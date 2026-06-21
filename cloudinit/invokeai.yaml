@@ -59,7 +59,7 @@ packages:
   - pkg-config
   - libssl-dev
   - libffi-dev
-  - libglib2.0-0
+  - libglib2.0-0t64
   - libsm6
   - libxrender1
   - libxext6
