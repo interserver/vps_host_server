@@ -229,12 +229,17 @@ for slug in "${TEMPLATES[@]}"; do
   template_arg="cloud-init:${base_image}:${yaml}"
   log "[$slug] template arg: $template_arg"
 
-  # 1. sync yaml to where provirted reads it
+  # 1. DELETE any stale local template so provirted re-downloads the
+  #    authoritative copy from the control panel / DB. (Copying the repo file
+  #    here can shadow a DB-side fix: provirted reuses an existing
+  #    /vz/templates/cloudinit/<app>.yaml as-is and only auto-downloads when it
+  #    is ABSENT — so a leftover copy makes a create run the OLD template even
+  #    after the DB was updated.)
   if [ "$SYNC_TEMPLATES" = "1" ]; then
     mkdir -p "$CLOUDINIT_DEST" 2>/dev/null || true
-    cp -f "$src" "$CLOUDINIT_DEST/$yaml" 2>/dev/null \
-      && log "[$slug] synced yaml -> $CLOUDINIT_DEST/$yaml" \
-      || warn "[$slug] could not copy yaml to $CLOUDINIT_DEST (need root?); relying on existing copy"
+    rm -f "$CLOUDINIT_DEST/$yaml" 2>/dev/null \
+      && log "[$slug] removed stale $CLOUDINIT_DEST/$yaml — provirted will re-download it from the DB" \
+      || warn "[$slug] could not remove $CLOUDINIT_DEST/$yaml (need root?)"
   fi
 
   # 2. clean any prior VPS in the test slot

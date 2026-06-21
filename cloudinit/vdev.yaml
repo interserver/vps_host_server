@@ -197,6 +197,10 @@ write_files:
       else
         curl -fsSL https://code-server.dev/install.sh -o /tmp/cs-install.sh
         # The official installer auto-detects Ubuntu/noble and installs the .deb.
+        # HOME is unset under cloud-init's runcmd; the installer dereferences
+        # $HOME under `set -u` and aborts ("HOME: parameter not set") → code-server
+        # never installs and the unit fails 203/EXEC. Provide HOME explicitly.
+        export HOME="${HOME:-/root}"
         sh /tmp/cs-install.sh || { echo "WARN: code-server install.sh returned non-zero — retrying with standalone method"; sh /tmp/cs-install.sh --method standalone || true; }
         rm -f /tmp/cs-install.sh
         log "code-server installed: $(cs_version)"
