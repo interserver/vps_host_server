@@ -201,6 +201,11 @@ write_files:
       # Single-node discovery (avoids "waiting for master" timeout on 1-node)
       grep -q '^discovery.type' "${ES_YML}" \
         || echo "discovery.type: single-node" >> "${ES_YML}"
+      # ES 8.x install-time security auto-config appends cluster.initial_master_nodes
+      # and discovery.seed_hosts; both are ILLEGAL alongside discovery.type=single-node
+      # ("setting [cluster.initial_master_nodes] is not allowed ...") and make ES refuse
+      # to boot. Remove them so single-node start succeeds.
+      sed -i '/^cluster\.initial_master_nodes:/d; /^discovery\.seed_hosts:/d' "${ES_YML}"
 
       # Disable X-Pack security prompts (security is still ON — just no interactive wizard)
       grep -q '^xpack.security.enabled' "${ES_YML}" \
