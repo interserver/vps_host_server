@@ -379,9 +379,12 @@ write_files:
       }
 
       server {
-          listen 443 ssl;
-          listen [::]:443 ssl;
-          http2  on;
+          # NOTE: use the "listen ... http2" form (works on nginx 1.24 shipped by
+          # Ubuntu 24.04). The standalone "http2 on;" directive only exists in
+          # nginx >= 1.25.1 and makes 1.24 fail `nginx -t` ("unknown directive
+          # http2"), which kept nginx from starting → 443 never listened.
+          listen 443 ssl http2;
+          listen [::]:443 ssl http2;
           server_name ${APP_DOMAIN};
 
           ssl_certificate     /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem;
