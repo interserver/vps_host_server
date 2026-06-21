@@ -219,7 +219,7 @@ write_files:
           mkdir -p /etc/systemd/system/memcached.service.d
           cat > /etc/systemd/system/memcached.service.d/no-ipv6-bind.conf <<'MCDROP'
       [Service]
-      ExecStartPre=/usr/local/sbin/memcached-no-ipv6.sh
+      ExecStartPre=+/usr/local/sbin/memcached-no-ipv6.sh
       MCDROP
           systemctl daemon-reload 2>/dev/null || true
           systemctl reset-failed memcached.service 2>/dev/null || true
