@@ -206,27 +206,39 @@ write_files:
       # sed is NOT enough: CloudPanel/apt rewrites memcached.conf AFTER this
       # point (re-adding ::1). So install an ExecStartPre drop-in that strips the
       # ::1 listen line on EVERY memcached start — immune to later rewrites.
+      # NOTE: install the drop-in UNCONDITIONALLY (no list-unit-files guard).
+      # CloudPanel's installer registers/starts memcached at a point where the
+      # unit is not yet visible to `systemctl list-unit-files` when this block
+      # runs, so the old guard silently skipped the entire remediation (drop-in
+      # absent, memcached left binding ::1 -> 71/OSERR). The drop-in only takes
+      # effect when memcached starts, so installing it early is harmless.
       # ----------------------------------------------------------------
-      if systemctl list-unit-files 2>/dev/null | grep -q '^memcached\.service'; then
-          cat > /usr/local/sbin/memcached-no-ipv6.sh <<'MCSH'
+      mkdir -p /usr/local/sbin /etc/systemd/system/memcached.service.d
+      cat > /usr/local/sbin/memcached-no-ipv6.sh <<'MCSH'
       #!/bin/sh
       # Strip the ::1 listen line so memcached binds 127.0.0.1 only on hosts
       # without an IPv6 loopback. Idempotent; runs as memcached ExecStartPre.
       [ -f /etc/memcached.conf ] && sed -i '/^[[:space:]]*-l[[:space:]]\+::1[[:space:]]*$/d' /etc/memcached.conf
       exit 0
       MCSH
-          chmod +x /usr/local/sbin/memcached-no-ipv6.sh
-          mkdir -p /etc/systemd/system/memcached.service.d
-          cat > /etc/systemd/system/memcached.service.d/no-ipv6-bind.conf <<'MCDROP'
+      chmod +x /usr/local/sbin/memcached-no-ipv6.sh
+      cat > /etc/systemd/system/memcached.service.d/no-ipv6-bind.conf <<'MCDROP'
       [Service]
       ExecStartPre=+/usr/local/sbin/memcached-no-ipv6.sh
       MCDROP
-          systemctl daemon-reload 2>/dev/null || true
-          systemctl reset-failed memcached.service 2>/dev/null || true
-          systemctl enable --now memcached.service 2>/dev/null \
-              || systemctl restart memcached.service 2>/dev/null \
-              || echo "WARN: memcached failed to restart — check journalctl -u memcached"
-      fi
+      systemctl daemon-reload 2>/dev/null || true
+      # Wait up to 60s for CloudPanel to register memcached.service, then strip
+      # ::1 directly and (re)start so any failed initial start is cleared.
+      for _i in $(seq 1 12); do
+          systemctl list-unit-files 2>/dev/null | grep -q '^memcached\.service' && break
+          sleep 5
+      done
+      /usr/local/sbin/memcached-no-ipv6.sh 2>/dev/null || true
+      systemctl daemon-reload 2>/dev/null || true
+      systemctl reset-failed memcached.service 2>/dev/null || true
+      systemctl enable --now memcached.service 2>/dev/null \
+          || systemctl restart memcached.service 2>/dev/null \
+          || echo "WARN: memcached failed to restart — check journalctl -u memcached"
 
       if ! command -v clpctl >/dev/null 2>&1; then
           echo "WARN: clpctl not found after ${TIMEOUT}s — installer may have failed"
