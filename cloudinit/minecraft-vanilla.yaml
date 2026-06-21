@@ -40,7 +40,9 @@ packages:
   - git
   - jq
   - screen
-  - openjdk-21-jre-headless
+  # Java 25: the latest Minecraft server.jar is compiled for class-file v69
+  # (Java 25) and crashes on Java 21 with UnsupportedClassVersionError.
+  - openjdk-25-jre-headless
 
 # ----------------------------------------------------------------------------
 # Swap (survive build-time memory spikes)

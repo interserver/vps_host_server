@@ -231,8 +231,11 @@ write_files:
       # Forge generates the spawn area on first start (~60-90s) before it binds
       # the game port. Wait for the port (restart once if it died on first run)
       # so the service is genuinely up before the bootstrap completes.
+      # Wait for BOTH the game port and the RCON port (25575) — RCON binds ~55s
+      # after the game port, so breaking on the game port alone races the check.
       for i in $(seq 1 30); do
-        ss -ltn 2>/dev/null | grep -q ":${SERVER_PORT} " && break
+        if ss -ltn 2>/dev/null | grep -q ":${SERVER_PORT} " \
+           && ss -ltn 2>/dev/null | grep -q ":25575 "; then break; fi
         if ! systemctl is-active --quiet minecraft-forge; then
           systemctl reset-failed minecraft-forge 2>/dev/null || true
           systemctl start minecraft-forge 2>/dev/null || true
