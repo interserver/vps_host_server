@@ -259,60 +259,41 @@ write_files:
         echo "Flarum project directory already exists, skipping create-project."
       fi
 
-      # --- generate config.php for Flarum ---
+      # --- run Flarum installer (non-interactive, via install config file) ---
+      # Flarum's `install` command accepts ONLY --file=<yaml> (there are NO
+      # --site-title/--admin-username/--admin-password flags — passing them errors
+      # out, which is why install never ran and the `settings` table was missing).
+      # The file is an INSTALL config (baseUrl/databaseConfiguration/adminUser/
+      # settings) — NOT the runtime config.php; the installer writes config.php itself.
       PROTO="http"
       [ "$ENABLE_TLS" = "true" ] && PROTO="https"
 
-      cat > "${FLARUM_PATH}/config.php" <<PHPEOF
-      <?php return [
-          'debug'    => false,
-          'database' => [
-              'driver'    => 'mysql',
-              'host'      => 'localhost',
-              'port'      => '3306',
-              'database'  => '${DB_NAME}',
-              'username'  => '${DB_USER}',
-              'password'  => '${DB_PASS}',
-              'charset'   => 'utf8mb4',
-              'collation' => 'utf8mb4_unicode_ci',
-              'prefix'    => '',
-              'strict'    => false,
-              'engine'    => 'InnoDB',
-          ],
-          'url'   => '${PROTO}://${APP_DOMAIN}',
-          'paths' => [
-              'api'   => 'api',
-              'admin' => 'admin',
-          ],
-      ];
-      PHPEOF
+      INSTALL_YAML="${FLARUM_PATH}/.flarum-install.yaml"
+      cat > "${INSTALL_YAML}" <<YAMLEOF
+      debug: false
+      baseUrl: ${PROTO}://${APP_DOMAIN}
+      databaseConfiguration:
+        driver: mysql
+        host: localhost
+        port: 3306
+        database: ${DB_NAME}
+        username: ${DB_USER}
+        password: '${DB_PASS}'
+        prefix: ''
+      adminUser:
+        username: ${ADMIN_USER}
+        password: '${ADMIN_PASS}'
+        passwordConfirmation: '${ADMIN_PASS}'
+        email: ${ADMIN_EMAIL}
+      settings:
+        forum_title: '${FLARUM_FORUM_TITLE}'
+      YAMLEOF
+      chown www-data:www-data "${INSTALL_YAML}"
+      chmod 600 "${INSTALL_YAML}"
 
-      # --- run Flarum installer via CLI ---
       cd "$FLARUM_PATH"
-      sudo -u www-data php flarum install \
-        --file="${FLARUM_PATH}/config.php" \
-        --site-title="${FLARUM_FORUM_TITLE}" \
-        --admin-email="${ADMIN_EMAIL}" \
-        --admin-username="${ADMIN_USER}" \
-        --admin-password="${ADMIN_PASS}" 2>&1 || {
-        echo "WARN: flarum install command failed; attempting JSON-based install..."
-        # Fallback: provide install data as JSON via stdin
-        sudo -u www-data php flarum install <<JSONEOF
-      {
-        "siteTitle": "${FLARUM_FORUM_TITLE}",
-        "mysqlHost": "localhost",
-        "mysqlPort": "3306",
-        "mysqlDatabase": "${DB_NAME}",
-        "mysqlUsername": "${DB_USER}",
-        "mysqlPassword": "${DB_PASS}",
-        "mysqlPrefix": "",
-        "adminUsername": "${ADMIN_USER}",
-        "adminEmail": "${ADMIN_EMAIL}",
-        "adminPassword": "${ADMIN_PASS}",
-        "adminPasswordConfirmation": "${ADMIN_PASS}"
-      }
-      JSONEOF
-      }
+      sudo -u www-data php flarum install --file="${INSTALL_YAML}" 2>&1
+      rm -f "${INSTALL_YAML}"
 
       # --- fix ownership + permissions ---
       chown -R www-data:www-data "$FLARUM_PATH"

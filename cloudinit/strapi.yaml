@@ -292,13 +292,20 @@ write_files:
       mkdir -p "${APP_DIR}"
       chown -R www-data:www-data "${APP_DIR}"
 
+      # npm HOME/cache MUST live OUTSIDE ${APP_DIR}: create-strapi-app aborts (and
+      # never writes package.json) if its target dir "." is non-empty, and pointing
+      # the npm cache inside ${APP_DIR} drops a .npm-cache there before scaffolding.
+      STRAPI_HOME="/var/www/.strapi-home"
+      mkdir -p "${STRAPI_HOME}/.npm-cache"
+      chown -R www-data:www-data "${STRAPI_HOME}"
+
       if [ ! -f "${APP_DIR}/package.json" ]; then
         # Create Strapi project as www-data, non-interactive
         sudo -u www-data -H bash -c "
-          export HOME='${APP_DIR}'
-          export npm_config_cache='${APP_DIR}/.npm-cache'
+          export HOME='${STRAPI_HOME}'
+          export npm_config_cache='${STRAPI_HOME}/.npm-cache'
           cd '${APP_DIR}'
-          npx create-strapi-app@latest . \
+          npx --yes create-strapi-app@latest . \
             --no-run \
             --dbclient=postgres \
             --dbhost=127.0.0.1 \
@@ -343,8 +350,8 @@ write_files:
       # ------------------------------------------------------------------
       if [ ! -d "${APP_DIR}/build" ]; then
         sudo -u www-data -H bash -c "
-          export HOME='${APP_DIR}'
-          export npm_config_cache='${APP_DIR}/.npm-cache'
+          export HOME='${STRAPI_HOME}'
+          export npm_config_cache='${STRAPI_HOME}/.npm-cache'
           cd '${APP_DIR}'
           export HOST=127.0.0.1
           export PORT=${APP_PORT}
