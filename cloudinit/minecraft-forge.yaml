@@ -196,6 +196,10 @@ write_files:
       Description=Minecraft Forge Server
       After=network.target
       Documentation=https://files.minecraftforge.net/
+      # First boot can crash a couple of times while Forge finishes laying down
+      # its libraries; without this, systemd's default start-limit gives up and
+      # leaves the unit inactive. 0 = never rate-limit restarts.
+      StartLimitIntervalSec=0
 
       [Service]
       Type=simple
@@ -223,6 +227,18 @@ write_files:
       systemctl daemon-reload
       systemctl enable minecraft-forge
       systemctl start minecraft-forge
+
+      # Forge generates the spawn area on first start (~60-90s) before it binds
+      # the game port. Wait for the port (restart once if it died on first run)
+      # so the service is genuinely up before the bootstrap completes.
+      for i in $(seq 1 30); do
+        ss -ltn 2>/dev/null | grep -q ":${SERVER_PORT} " && break
+        if ! systemctl is-active --quiet minecraft-forge; then
+          systemctl reset-failed minecraft-forge 2>/dev/null || true
+          systemctl start minecraft-forge 2>/dev/null || true
+        fi
+        sleep 10
+      done
 
       # --- UFW firewall ---
       ufw --force reset

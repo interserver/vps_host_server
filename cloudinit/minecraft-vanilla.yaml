@@ -309,6 +309,9 @@ write_files:
       Description=Minecraft Vanilla Server (${MC_VERSION})
       After=network.target
       Documentation=https://minecraft.net
+      # Don't let systemd's default start-limit permanently stop the unit while
+      # the server settles on first boot. 0 = never rate-limit restarts.
+      StartLimitIntervalSec=0
 
       [Service]
       Type=simple
@@ -381,6 +384,17 @@ write_files:
       systemctl daemon-reload
       systemctl enable minecraft-server.service
       systemctl start minecraft-server.service || true
+
+      # Wait for the server to generate the world and bind the game port on first
+      # boot (restart once if it died) so it is genuinely up at test time.
+      for i in $(seq 1 30); do
+        ss -ltn 2>/dev/null | grep -q ":25565 " && break
+        if ! systemctl is-active --quiet minecraft-server.service; then
+          systemctl reset-failed minecraft-server.service 2>/dev/null || true
+          systemctl start minecraft-server.service 2>/dev/null || true
+        fi
+        sleep 10
+      done
 
       # -----------------------------------------------------------------------
       # 12. Write credentials / connection info

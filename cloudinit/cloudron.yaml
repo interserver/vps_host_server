@@ -208,6 +208,17 @@ write_files:
       log "Cloudron platform installed (a reboot is recommended to apply all settings)."
 
       # ----------------------------------------------------------------
+      # unbound-resolvconf.service fails on this VM ("Failed to set DNS
+      # configuration: Link lo is loopback device") and is left in a failed
+      # state -> trips the no-failed-units check. Cloudron runs unbound bound to
+      # 127.0.0.1 directly and manages /etc/resolv.conf itself, so the
+      # resolvconf update helper is unnecessary here. Stop + mask it + clear the
+      # failed state.
+      systemctl stop unbound-resolvconf.service 2>/dev/null || true
+      systemctl mask unbound-resolvconf.service 2>/dev/null || true
+      systemctl reset-failed unbound-resolvconf.service 2>/dev/null || true
+
+      # ----------------------------------------------------------------
       # Wait for Cloudron web UI to become reachable (up to 3 min)
       # ----------------------------------------------------------------
       log "Waiting for Cloudron admin UI on port 4443..."
