@@ -38,10 +38,13 @@ packages:
   - ca-certificates
   - gnupg2
   - sudo
-  - fail2ban
-  - dnf-automatic
   - firewalld
   - python3
+  # NOTE: fail2ban + dnf-automatic are EPEL packages. They are intentionally NOT
+  # in this list: cloud-init's package stage can run before EPEL is reachable
+  # (bootcmd's `dnf install epel-release` may have no network yet), and a single
+  # unresolved package fails the WHOLE `dnf install`, aborting all packages. The
+  # bootstrap (runcmd, network up) enables EPEL and installs them instead.
 
 # ----------------------------------------------------------------------------
 # Swap — 2 GiB to survive MariaDB + PHP memory spikes during bootstrap
@@ -155,17 +158,29 @@ write_files:
       firewall-cmd --reload
 
       # ----------------------------------------------------------------
+      # EPEL packages (network is up here, unlike bootcmd) — install the EPEL
+      # tools that were deliberately kept out of the cloud-init packages: list.
+      # ----------------------------------------------------------------
+      dnf -y install epel-release 2>/dev/null || true
+      dnf -y config-manager --set-enabled crb 2>/dev/null || \
+        dnf -y config-manager --set-enabled powertools 2>/dev/null || true
+      dnf -y install fail2ban dnf-automatic 2>/dev/null || true
+
+      # ----------------------------------------------------------------
       # fail2ban
       # ----------------------------------------------------------------
       systemctl enable --now fail2ban || true
 
       # ----------------------------------------------------------------
       # dnf-automatic — security-only updates, applied automatically
+      # (guarded: skip cleanly if the package/config isn't present)
       # ----------------------------------------------------------------
-      sed -i 's/^upgrade_type\s*=.*/upgrade_type = security/'       /etc/dnf/automatic.conf
-      sed -i 's/^apply_updates\s*=.*/apply_updates = yes/'          /etc/dnf/automatic.conf
-      sed -i 's/^download_updates\s*=.*/download_updates = yes/'    /etc/dnf/automatic.conf
-      systemctl enable --now dnf-automatic.timer
+      if [ -f /etc/dnf/automatic.conf ]; then
+        sed -i 's/^upgrade_type\s*=.*/upgrade_type = security/'       /etc/dnf/automatic.conf
+        sed -i 's/^apply_updates\s*=.*/apply_updates = yes/'          /etc/dnf/automatic.conf
+        sed -i 's/^download_updates\s*=.*/download_updates = yes/'    /etc/dnf/automatic.conf
+        systemctl enable --now dnf-automatic.timer || true
+      fi
 
       # ----------------------------------------------------------------
       # Disable SELinux (AdminBolt installer requires it disabled)

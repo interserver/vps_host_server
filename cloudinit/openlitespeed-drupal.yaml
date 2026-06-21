@@ -46,6 +46,14 @@ packages:
   - apt-transport-https
   - software-properties-common
   - composer
+  # the apt 'composer' package runs under the system php-cli (NOT lsphp), so it
+  # needs ext-dom/xml/mbstring/curl/gd/zip or `composer create-project drupal/...`
+  # aborts with "requires ext-dom" / "ext-*" missing.
+  - php-xml
+  - php-mbstring
+  - php-curl
+  - php-gd
+  - php-zip
 
 # ----------------------------------------------------------------------------
 # Swap (helps small instances survive OLS + MariaDB memory spikes)

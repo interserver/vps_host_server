@@ -494,10 +494,11 @@
     "haltdos-waf-community": {
       "base_image": "",
       "services": [
-        "hd-community-waf",
         "controller"
       ],
-      "ports": [],
+      "ports": [
+        9000
+      ],
       "http": [],
       "commands": [],
       "files": [
