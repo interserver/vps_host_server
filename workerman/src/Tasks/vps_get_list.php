@@ -40,7 +40,7 @@ return function ($stdObject, $params) {
 				//$veid = str_replace(array('windows', 'linux'), array('', ''), $veid);
 				$status = $parts[1];
 				$out = `export PATH="/usr/local/bin:/usr/local/sbin:\$PATH:/bin:/usr/bin:/sbin:/usr/sbin";virsh dumpxml $name`;
-				$xml = $stdObject->xml2array($out, 1, 'attribute');
+				$xml = $stdObject->call('xml2array', $out, 1, 'attribute');
 				$server = array(
 					'type' => 'kvm',
 					'veid' => $veid,

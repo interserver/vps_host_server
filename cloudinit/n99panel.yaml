@@ -202,44 +202,35 @@ write_files:
       log "UFW configured."
 
       # -----------------------------------------------------------------
-      # N99panel official installer
+      # N99panel official installer (mid-install / 14-day free trial)
       # Ref: https://docs.n99panel.com/doku.php?id=n99panel-installation
       #
       # The installer downloads from https://dl.n99panel.com/ and places
       # its runtime under /var/rt-n99p/.  Completion is signalled by the
       # file /var/rt-n99p/installation_completed.
       #
-      # The installer may prompt for a licence key.  We pass it via the
-      # N99PANEL_LICENSE environment variable and/or stdin so the install
-      # proceeds non-interactively when a valid key is configured.
+      # We use the mid-install script with the 'mid cd6ed54c06b1ded4' trial
+      # token, which provisions a 14-day free trial and runs non-interactively
+      # (no licence key needed up front).
       # -----------------------------------------------------------------
-      log "Downloading N99panel installer..."
+      log "Downloading N99panel installer (mid-install, 14-day free trial)..."
       command -v curl >/dev/null 2>&1 || apt-get install -y curl
 
-      curl -sSfL \
-        https://dl.n99panel.com/downloads/n99panel-install.sh \
-        -o /tmp/n99panel-install.sh
-      chmod +x /tmp/n99panel-install.sh
+      curl -o /tmp/n99panel-mid-install.sh -s \
+        https://dl.n99panel.com/downloads/n99panel-mid-install.sh
+      chmod +x /tmp/n99panel-mid-install.sh
 
-      log "Running N99panel installer (this may take 5–30 minutes)..."
+      log "Running N99panel mid-installer (this may take 5–30 minutes)..."
 
       export DEBIAN_FRONTEND=noninteractive
       INSTALL_EXIT=0
-      if [ "${N99PANEL_LICENSE:-CHANGE_ME}" != "CHANGE_ME" ]; then
-        # Pass the licence key non-interactively via stdin and env.
-        export N99PANEL_LICENSE
-        echo "${N99PANEL_LICENSE}" | bash /tmp/n99panel-install.sh </dev/stdin || INSTALL_EXIT=$?
-      else
-        log "WARN: N99PANEL_LICENSE is not set — running installer non-interactively."
-        log "      Set N99PANEL_LICENSE in /root/.n99panel-bootstrap.env and re-run to finish licensing."
-        # CRITICAL: redirect stdin from /dev/null so the installer can NEVER
-        # block waiting for a licence key on the console (that left cloud-init
-        # stuck in 'running'). Any prompt gets EOF and the installer continues
-        # or exits — either way the bootstrap proceeds to 'done'.
-        bash /tmp/n99panel-install.sh </dev/null || INSTALL_EXIT=$?
-      fi
+      # 'mid cd6ed54c06b1ded4' provisions a 14-day free trial licence — no
+      # licence key required up front. stdin from /dev/null so the installer can
+      # NEVER block waiting on a console prompt (that left cloud-init stuck in
+      # 'running'). Any prompt gets EOF and the bootstrap proceeds to 'done'.
+      bash /tmp/n99panel-mid-install.sh mid cd6ed54c06b1ded4 </dev/null || INSTALL_EXIT=$?
 
-      rm -f /tmp/n99panel-install.sh
+      rm -f /tmp/n99panel-mid-install.sh
 
       if [ "$INSTALL_EXIT" -ne 0 ]; then
         log "WARN: N99panel installer exited with code ${INSTALL_EXIT}."

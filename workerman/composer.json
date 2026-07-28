@@ -15,24 +15,21 @@
 		}
 	],
 	"require": {
-		"php": ">=5.3.0",
+		"php": ">=8.2",
 		"ext-curl": "*",
 		"ext-pcntl": "*",
 		"ext-posix": "*",
-		"detain/phpsysinfo": "dev-main",
-		"react/child-process": "*",
-		"react/event-loop": "*",
-		"react/http": "*",
-		"roave/security-advisories": "dev-master",
-		"workerman/workerman": "^4.0@stable",
-		"workerman/globaldata": "dev-master"
+		"detain/phpsysinfo": "dev-main#c4910834b753f8929f2e8a4429be9466a29e46b5",
+		"react/child-process": "^0.6.7",
+		"react/event-loop": "^1.6.0",
+		"react/http": "^1.11.0",
+		"workerman/workerman": "^5.2",
+		"workerman/globaldata": "^1.0.6"
 	},
 	"require-dev": {
-		"phpunit/phpunit": "*",
-		"vlucas/phpdotenv": "*",
-		"codeclimate/php-test-reporter": "dev-master",
-		"satooshi/php-coveralls": "*",
-		"codacy/coverage": "dev-master"
+		"phpunit/phpunit": "^11.0",
+		"vlucas/phpdotenv": "^5.6",
+		"roave/security-advisories": "dev-master"
 	},
 	"suggest": {
                 "ext-ev": "*",

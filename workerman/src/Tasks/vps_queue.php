@@ -9,7 +9,9 @@ return function ($stdObject, $cmds) {
 			Worker::safeEcho(`$cmd`);
 		} else {
 			if (!isset($browser)) {
-				$loop = Worker::getEventLoop();
+				// Worker::getEventLoop() is not a React LoopInterface under Workerman v5;
+				// use the bridge so React\Http runs on Workerman's live event loop.
+				$loop = \MyAdmin\VpsHost\ReactLoopBridge::instance();
 				$browser = new React\Http\Browser($loop);
 			}
 			$browser->get('https://myvps.interserver.net/vps_queue.php?action='.$cmd)->then(function (Psr\Http\Message\ResponseInterface $response) {
