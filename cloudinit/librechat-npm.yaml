@@ -930,13 +930,13 @@ write_files:
       export HOME=/root
       if ! command -v bun &>/dev/null; then
         log "Installing bun for LibreChat monorepo builds..."
-        curl -fsSL https://bun.sh/install | BUN_INSTALL=/opt/bun bash 2>&1 | tail -5
+        curl -fsSL https://bun.sh/install | BUN_INSTALL=/opt/bun bash 2>&1
       fi
       export BUN_INSTALL="/opt/bun"
       export PATH="$BUN_INSTALL/bin:$PATH"
       if [ -f "${LIBRECHAT_DIR}/package.json" ] && grep -q '"b:data-schemas"' "${LIBRECHAT_DIR}/package.json" 2>/dev/null; then
         log "Building @librechat/data-schemas with bun..."
-        cd "${LIBRECHAT_DIR}" && bun install 2>&1 | tail -5 || bun install 2>&1 | tail -5
+        cd "${LIBRECHAT_DIR}" && bun install 2>&1 || bun install 2>&1
         cd "${LIBRECHAT_DIR}" && bun run b:data-schemas 2>&1 | tail -10
       fi
 
@@ -989,7 +989,6 @@ write_files:
       log "Miniconda Python 3.10 environment ready."
 
       # --------------------------------------------------------------------------
-      # 13c. Stable Diffusion WebUI (A1111 fork)
       # --------------------------------------------------------------------------
       # --------------------------------------------------------------------------
       # 13c. Stable Diffusion WebUI (A1111 fork)
@@ -999,7 +998,7 @@ write_files:
       log "Cloning/installing Stable Diffusion WebUI..."
       if [ ! -d /opt/stable-diffusion-webui/.git ]; then
         rm -rf /opt/stable-diffusion-webui
-        git clone --depth=1 https://github.com/AUTOMATIC1111/stable-diffusion-webui.git /opt/stable-diffusion-webui 2>&1 | tail -3
+        git clone --depth=1 https://github.com/AUTOMATIC1111/stable-diffusion-webui.git /opt/stable-diffusion-webui
         rm -rf /opt/stable-diffusion-webui/venv
       fi
       # Make webui-user.sh executable
@@ -1021,7 +1020,7 @@ write_files:
       # Clone SearXNG if not present
       if [ ! -d /opt/searxng/.git ]; then
         rm -rf /opt/searxng
-        git clone --depth 1 https://github.com/searxng/searxng.git /opt/searxng 2>&1 | tail -3
+        git clone --depth 1 https://github.com/searxng/searxng.git /opt/searxng 2>&1
       fi
       # Install SearXNG in a virtual environment (bypasses debian python package conflicts)
       if [ ! -f /opt/searxng/venv/bin/python ]; then
