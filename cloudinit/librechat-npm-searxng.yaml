@@ -3,7 +3,7 @@
 # LibreChat (npm) "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
 # Stack: Node.js 24 + MongoDB 8 + LibreChat (from source)
 #        + Meilisearch 1.35 (host) + PostgreSQL 16 + pgvector
-#        + Redis (cache/sessions)
+#        + Redis (cache/sessions) + SearXNG (web search)
 #        + Stable Diffusion WebUI (A1111 fork, CPU mode)
 #        + Miniconda Python 3.10
 #        + Nginx + UFW firewall + fail2ban + swap + unattended-upgrades
@@ -41,7 +41,7 @@ swap:
 # PostgreSQL 16 + pgvector installed via PGDG apt repo in bootstrap.
 # Meilisearch installed via official binary in bootstrap.
 # Redis installed via apt in bootstrap.
-# Miniconda, Stable Diffusion WebUI installed in bootstrap.
+# Miniconda, SearXNG, Stable Diffusion WebUI installed in bootstrap.
 # ----------------------------------------------------------------------------
 package_update: true
 package_upgrade: false
@@ -136,6 +136,10 @@ write_files:
       REDIS_HOST="127.0.0.1"
       USE_REDIS="true"
       REDIS_URI="redis://127.0.0.1:6379"
+
+      # SearXNG (self-hosted web search)
+      SEARXNG_PORT="8888"
+      SEARXNG_INSTANCE_URL="http://127.0.0.1:8888"
 
       # Stable Diffusion WebUI (A1111 fork, CPU mode)
       SD_WEBUI_PORT="7860"
@@ -243,8 +247,8 @@ write_files:
       User=meilisearch
       Group=meilisearch
       Environment="MEILI_ENV=production"
-      Environment="MEILI_MASTER_KEY=${MEILI_MASTER_KEY}"
-      ExecStart=/usr/local/bin/meilisearch --db-path /var/lib/meilisearch --env production --http-addr 127.0.0.1:7700 --master-key "${MEILI_MASTER_KEY}"
+      EnvironmentFile=/etc/meilisearch.env
+      ExecStart=/usr/local/bin/meilisearch --config-file-path /etc/meilisearch.toml
       Restart=on-failure
       RestartSec=5
       StandardOutput=journal
@@ -271,6 +275,10 @@ write_files:
       db_path = "/var/lib/meilisearch"
       log_dir = "/var/log/meilisearch"
       env = "production"
+
+      [http]
+      host = "127.0.0.1"
+      port = 7700
   # --------------------------------------------------------------------------
   # (f) Redis systemd service
   # --------------------------------------------------------------------------
@@ -287,7 +295,7 @@ write_files:
       Type=simple
       User=redis
       Group=redis
-      ExecStart=/usr/bin/redis-server /etc/redis/redis.conf --daemonize yes
+      ExecStart=/usr/bin/redis-server /etc/redis/redis.conf --supervised systemd --daemonize no
       Restart=on-failure
       RestartSec=5
       StandardOutput=journal
@@ -322,7 +330,50 @@ write_files:
       maxmemory-policy allkeys-lru
 
   # --------------------------------------------------------------------------
-  # (i) Stable Diffusion WebUI launch script
+  # (h) SearXNG systemd service
+  # --------------------------------------------------------------------------
+  - path: /etc/systemd/system/searxng.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=SearXNG meta search engine
+      After=network.target
+      Wants=network.target
+
+      [Service]
+      Type=simple
+      User=searxng
+      Group=searxng
+      Environment="SEARXNG_SECRET=$(openssl rand -hex 32)"
+      ExecStart=/opt/searxng/venv/bin/searxng-shotgun --host 127.0.0.1 --port 8888
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=searxng
+      NoNewPrivileges=true
+      PrivateTmp=true
+      ProtectSystem=strict
+      ProtectHome=true
+      ReadWritePaths=/opt/searxng /var/log/searxng
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --------------------------------------------------------------------------
+  # (i) SearXNG limiter.toml (silences botdetection warning at startup)
+  # --------------------------------------------------------------------------
+  - path: /etc/searxng/limiter.toml
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [botdetection]
+      ignore_self = false
+      search_form_post = false
+
+  # --------------------------------------------------------------------------
+  # (j) Stable Diffusion WebUI launch script
   # --------------------------------------------------------------------------
   - path: /opt/webui-user.sh
     permissions: '0755'
@@ -550,7 +601,6 @@ write_files:
     content: |
       #!/usr/bin/env bash
       set -euo pipefail
-      set -x
       exec > >(tee -a /var/log/librechat-npm-bootstrap.log) 2>&1
 
       # --- repair corrupted base-image postfix (missing /etc/postfix/postfix-files
@@ -936,8 +986,6 @@ write_files:
       if ! /opt/miniconda/envs/sd/bin/python -c "import torch" 2>/dev/null; then
         /opt/miniconda/envs/sd/bin/pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu 2>&1 | tail -3
       fi
-      # Ensure setuptools and wheel are installed (needed for CLIP and other pip packages)
-      /opt/miniconda/envs/sd/bin/pip install --quiet setuptools wheel 2>&1 | tail -3
       log "Miniconda Python 3.10 environment ready."
 
       # --------------------------------------------------------------------------
@@ -961,6 +1009,56 @@ write_files:
       # Enable SD service (it won't start until first model download, which is fine)
       systemctl enable stable-diffusion
       log "Stable Diffusion WebUI installed. First run will download models (~10-20 min)."
+
+      # --------------------------------------------------------------------------
+      # 13d. SearXNG (self-hosted web search)
+      # --------------------------------------------------------------------------
+      log "Setting up SearXNG..."
+      id -u searxng &>/dev/null || useradd --system --home /opt/searxng --shell /usr/sbin/nologin searxng
+      mkdir -p /opt/searxng /var/log/searxng
+      chown searxng:searxng /opt/searxng /var/log/searxng
+      # Clone SearXNG if not present
+      if [ ! -d /opt/searxng/.git ]; then
+        rm -rf /opt/searxng
+        git clone --depth 1 https://github.com/searxng/searxng.git /opt/searxng 2>&1
+      fi
+      # Install SearXNG in a virtual environment (bypasses debian python package conflicts)
+      if [ ! -f /opt/searxng/venv/bin/python ]; then
+        python3 -m venv /opt/searxng/venv
+      fi
+      /opt/searxng/venv/bin/pip install -q --upgrade pip 2>&1 | tail -2
+      /opt/searxng/venv/bin/pip install -q searxng 2>&1 | tail -3
+      # Disable problematic engines at source level (prevents HTTP 403 crashes at startup)
+      sed -i 's/^from.*wikidata.*import/#from wikidata import/' /opt/searxng/searxng/engines/__init__.py 2>/dev/null || true
+      sed -i 's/^from.*ahmia.*import/#from ahmia import/' /opt/searxng/searxng/engines/__init__.py 2>/dev/null || true
+      sed -i 's/^from.*torch.*import/#from torch import/' /opt/searxng/searxng/engines/__init__.py 2>/dev/null || true
+      sed -i "s/^_enable_wikidata = True/_enable_wikidata = False/" /opt/searxng/searxng/engines/__init__.py 2>/dev/null || true
+      sed -i "s/^_enable_ahmia = True/_enable_ahmia = False/" /opt/searxng/searxng/engines/__init__.py 2>/dev/null || true
+      # Write limiter.toml
+      mkdir -p /etc/searxng
+      cat > /etc/searxng/limiter.toml <<-'LIMITER'
+      [botdetection]
+      ignore_self = false
+      search_form_post = false
+      LIMITER
+      chown searxng:searxng /etc/searxng/limiter.toml
+      chmod 644 /etc/searxng/limiter.toml
+      # Generate random secret
+      SEARXNG_SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 48)
+      sed -i "s/^SEARXNG_SECRET = .*/SEARXNG_SECRET = '${SEARXNG_SECRET}'/" /opt/searxng/searxng/settings.yml 2>/dev/null || true
+      # Fix bind in settings.yml
+      sed -i 's/^    bind_address: "0.0.0.0"/    bind_address: "127.0.0.1"/' /opt/searxng/searxng/settings.yml 2>/dev/null || true
+      chown -R searxng:searxng /opt/searxng
+      systemctl enable searxng
+      systemctl start searxng
+      sleep 5
+      for i in $(seq 1 10); do
+        if curl -sf http://127.0.0.1:8888 &>/dev/null; then
+          log "SearXNG is running."
+          break
+        fi
+        sleep 2
+      done
 
       # --------------------------------------------------------------------------
       # 14. Create .env from .env.example and add required overrides
@@ -1004,6 +1102,8 @@ write_files:
         echo "# Redis (cache/sessions)"
         echo "USE_REDIS=true"
         echo "REDIS_URI=redis://127.0.0.1:${REDIS_PORT}"
+        echo "# SearXNG (web search)"
+        echo "SEARXNG_INSTANCE_URL=http://127.0.0.1:${SEARXNG_PORT}"
         echo "# Stable Diffusion API"
         echo "SD_WEBUI_URL=http://127.0.0.1:${SD_WEBUI_PORT}"
       } >> "${LIBRECHAT_DIR}/.env"
@@ -1058,35 +1158,20 @@ write_files:
       mkdir -p "${NPM_HOME}" "${NPM_CACHE}"
       chown -R librechat:librechat /opt/librechat
 
-      # Pin rimraf to v5 to prevent ESM/brace-expansion crash with Node.js v24
-      # Write patch script as outer bootstrap (avoids sudo/bash quoting hell)
-      cat > /tmp/patch-rimraf.js <<'RIMRAFSCRIPT'
-const fs = require('fs');
-const pkg = JSON.parse(fs.readFileSync('/opt/librechat/package.json', 'utf8'));
-pkg.dependencies = pkg.dependencies || {};
-pkg.dependencies.rimraf = '5';
-fs.writeFileSync('/opt/librechat/package.json', JSON.stringify(pkg, null, 2));
-console.log('Patched package.json with rimraf@5');
-RIMRAFSCRIPT
-      chmod +x /tmp/patch-rimraf.js
-      cd '${LIBRECHAT_DIR}'
-      npm install rimraf@5
-      sudo -u librechat node /tmp/patch-rimraf.js
-      rm -f /tmp/patch-rimraf.js
-      sudo -u librechat -H bash -c '
-        export HOME='/opt/librechat/.npm-home'
-        export npm_config_cache='/opt/librechat/.npm-cache'
+      sudo -u librechat -H bash -c "
+        export HOME='${NPM_HOME}'
+        export npm_config_cache='${NPM_CACHE}'
         export NODE_ENV=production
         export HOST=0.0.0.0
         export PORT=${LIBRECHAT_PORT}
-        export JWT_SECRET='\''${JWT_SECRET}'\''
-        export JWT_REFRESH_SECRET='\''${JWT_REFRESH_SECRET}'\''
-        export CREDS_KEY='\''${CREDS_KEY}'\''
-        export CREDS_IV='\''${CREDS_IV}'\''
-        export MONGO_URI='\''mongodb://127.0.0.1:27017/${MONGO_DB_NAME}'\''
-        cd '\''${LIBRECHAT_DIR}'\''
-        npm run reinstall 2>&1 | head -5 || log "WARN: npm run reinstall had warnings or errors — check log below"
-      ' || log "WARN: npm run reinstall had warnings or errors — check log below"
+        export JWT_SECRET='${JWT_SECRET}'
+        export JWT_REFRESH_SECRET='${JWT_REFRESH_SECRET}'
+        export CREDS_KEY='${CREDS_KEY}'
+        export CREDS_IV='${CREDS_IV}'
+        export MONGO_URI='mongodb://127.0.0.1:27017/${MONGO_DB_NAME}'
+        cd '${LIBRECHAT_DIR}'
+        npm run reinstall
+      " || log "WARN: npm run reinstall had warnings or errors — check log below"
 
       # Re-assert ownership after npm operations
       chown -R librechat:librechat "${LIBRECHAT_DIR}"
@@ -1176,7 +1261,7 @@ RIMRAFSCRIPT
 
       Stack: Node.js 24 + MongoDB 8 + LibreChat (from source)
              + Meilisearch 1.35 (host) + PostgreSQL 16 + pgvector
-             + Redis (cache/sessions)
+             + Redis (cache/sessions) + SearXNG (web search)
              + Stable Diffusion WebUI (A1111 fork, CPU mode)
              + Miniconda Python 3.10
              + Nginx reverse proxy + UFW + fail2ban + unattended-upgrades
@@ -1210,6 +1295,10 @@ RIMRAFSCRIPT
         Host : 127.0.0.1:6379
         URI  : redis://127.0.0.1:6379
 
+      SearXNG (self-hosted web search):
+        URL  : http://127.0.0.1:8888
+        Port : 8888
+
       Stable Diffusion WebUI (A1111 fork, CPU mode):
         URL   : http://127.0.0.1:7860
         Port  : 7860
@@ -1242,6 +1331,8 @@ RIMRAFSCRIPT
                         journalctl -u meilisearch -f
         Redis         : systemctl status redis
                         journalctl -u redis -f
+        SearXNG       : systemctl status searxng
+                        journalctl -u searxng -f
         StableDiffusion: systemctl status stable-diffusion
                         journalctl -u stable-diffusion -f
         PostgreSQL    : su - postgres -c "psql -d librechat_vectordb"
@@ -1258,8 +1349,9 @@ RIMRAFSCRIPT
              sudo systemctl restart librechat-npm
         6. Meilisearch runs on port 7700 — configure RAG settings in LibreChat
         7. Vector DB runs on port 5432 — ensure your RAG pipeline uses these credentials
-         8. Redis runs on port 6379 — enabled for cache/sessions in LibreChat
-         9. Stable Diffusion WebUI runs on port 7860 — configure SD endpoint in LibreChat
+        8. Redis runs on port 6379 — enabled for cache/sessions in LibreChat
+        9. SearXNG runs on port 8888 — configure as search provider in LibreChat
+       10. Stable Diffusion WebUI runs on port 7860 — configure SD endpoint in LibreChat
       ============================================================
       CREDS
       # Substitute placeholders
@@ -1307,7 +1399,7 @@ final_message: |
 
   Stack: Node.js 24 + MongoDB 8.0 (host) + LibreChat (from source)
          + Meilisearch 1.35.1 (host) + PostgreSQL 16 + pgvector
-         + Redis (cache/sessions)
+         + Redis (cache/sessions) + SearXNG (web search)
          + Stable Diffusion WebUI (A1111 fork, CPU mode)
          + Miniconda Python 3.10
          + Nginx reverse proxy + UFW + fail2ban + unattended-upgrades
@@ -1323,6 +1415,8 @@ final_message: |
     journalctl -u meilisearch -f
     systemctl status redis
     journalctl -u redis -f
+    systemctl status searxng
+    journalctl -u searxng -f
     systemctl status stable-diffusion
     journalctl -u stable-diffusion -f
 
