@@ -936,7 +936,7 @@ write_files:
       export PATH="$BUN_INSTALL/bin:$PATH"
       if [ -f "${LIBRECHAT_DIR}/package.json" ] && grep -q '"b:data-schemas"' "${LIBRECHAT_DIR}/package.json" 2>/dev/null; then
         log "Building @librechat/data-schemas with bun..."
-        cd "${LIBRECHAT_DIR}" && bun install --frozen-lockfile 2>&1 | tail -5 || bun install 2>&1 | tail -5
+        cd "${LIBRECHAT_DIR}" && bun install 2>&1 | tail -5 || bun install 2>&1 | tail -5
         cd "${LIBRECHAT_DIR}" && bun run b:data-schemas 2>&1 | tail -10
       fi
 
