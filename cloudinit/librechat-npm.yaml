@@ -203,8 +203,8 @@ write_files:
     content: |
       [Unit]
       Description=LibreChat (npm) backend server
-      After=network.target mongod.service meilisearch.service redis.service
-      Wants=network.target mongod.service meilisearch.service redis.service
+      After=network.target mongod.service meilisearch.service redis.service searxng.service
+      Wants=network.target mongod.service meilisearch.service redis.service searxng.service
 
       [Service]
       Type=simple
@@ -243,7 +243,7 @@ write_files:
     owner: root:root
     content: |
       [Unit]
-      Description=Meilisearch 1.35 (host) — search/RAG engine
+      Description=Meilisearch (host) — search/RAG engine for LibreChat
       After=network.target
       Wants=network.target
 
@@ -254,6 +254,9 @@ write_files:
       # NOTE: systemd does NOT expand ${VAR} in Environment= from the invoking
       # shell — the real key is delivered via this file, written by the bootstrap.
       EnvironmentFile=/etc/meilisearch.env
+      # cwd matters: Meilisearch resolves relative dump/snapshot paths against it,
+      # and ProtectSystem=strict leaves / read-only.
+      WorkingDirectory=/var/lib/meilisearch
       ExecStart=/usr/local/bin/meilisearch
       Restart=on-failure
       RestartSec=5
@@ -266,7 +269,7 @@ write_files:
       PrivateTmp=true
       ProtectSystem=strict
       ProtectHome=true
-      ReadWritePaths=/var/lib/meilisearch /var/log/meilisearch
+      ReadWritePaths=/var/lib/meilisearch
 
       [Install]
       WantedBy=multi-user.target
@@ -1085,49 +1088,105 @@ write_files:
       # --------------------------------------------------------------------------
       log "Installing Meilisearch 1.35.1..."
 
-      # Create meilisearch user and directories
-      id meilisearch &>/dev/null || useradd --system --shell /bin/false --home-dir /var/lib/meilisearch --groups nogroup meilisearch
-      mkdir -p /var/lib/meilisearch /var/log/meilisearch
-      chown -R meilisearch:meilisearch /var/lib/meilisearch /var/log/meilisearch
+      # Create meilisearch user and data directories.
+      # -U so the matching group exists; Group=meilisearch in the unit and the
+      # chown below both depend on it. (No supplementary groups needed — it only
+      # ever touches its own data dir.)
+      id meilisearch &>/dev/null || useradd --system -U --shell /usr/sbin/nologin --home-dir /var/lib/meilisearch meilisearch
+      mkdir -p /var/lib/meilisearch /var/lib/meilisearch/dumps /var/lib/meilisearch/snapshots
+      chown -R meilisearch:meilisearch /var/lib/meilisearch
 
-      # Download and install Meilisearch binary (v1.35.1)
+      # ------------------------------------------------------------------------
+      # Download the Meilisearch binary.
+      #
+      # Version is pinned to match what LibreChat itself ships
+      # (getmeili/meilisearch:v1.35.1 in its docker-compose). Meilisearch's index
+      # format is version-specific — upstream even namespaces its data volume by
+      # version — so do NOT bump this independently of LibreChat.
+      # ------------------------------------------------------------------------
       MEILI_VERSION="1.35.1"
-      MEILI_ARCH="linux-amd64"
-      if [ ! -f /usr/local/bin/meilisearch ]; then
-        curl -fsSL "https://github.com/meilisearch/meilisearch/releases/download/v${MEILI_VERSION}/meilisearch-${MEILI_ARCH}" \
-          -o /usr/local/bin/meilisearch
-        chmod +x /usr/local/bin/meilisearch
-        chown root:root /usr/local/bin/meilisearch
+      case "$(uname -m)" in
+        x86_64)          MEILI_ARCH="linux-amd64" ;;
+        aarch64|arm64)   MEILI_ARCH="linux-aarch64" ;;
+        *)               MEILI_ARCH="linux-amd64"
+                         log "WARN: unrecognised arch $(uname -m) — trying linux-amd64" ;;
+      esac
+
+      # Re-download when missing OR when the on-disk binary is a different
+      # version; a plain [ ! -f ] guard would pin the host to whatever landed
+      # first, including a truncated file from a failed download.
+      MEILI_HAVE=""
+      if [ -x /usr/local/bin/meilisearch ]; then
+        MEILI_HAVE="$(/usr/local/bin/meilisearch --version 2>/dev/null | awk '{print $NF}' || true)"
+      fi
+      if [ "${MEILI_HAVE}" != "${MEILI_VERSION}" ]; then
+        log "Downloading Meilisearch v${MEILI_VERSION} (${MEILI_ARCH})..."
+        # Stage in a temp file so an interrupted transfer can never leave a
+        # half-written binary sitting at the final path.
+        _meili_tmp="$(mktemp /tmp/meilisearch.XXXXXX)"
+        if curl -fsSL --retry 3 --retry-delay 2 \
+             "https://github.com/meilisearch/meilisearch/releases/download/v${MEILI_VERSION}/meilisearch-${MEILI_ARCH}" \
+             -o "${_meili_tmp}"; then
+          chmod 0755 "${_meili_tmp}"
+          if "${_meili_tmp}" --version >/dev/null 2>&1; then
+            mv -f "${_meili_tmp}" /usr/local/bin/meilisearch
+            chown root:root /usr/local/bin/meilisearch
+            log "Meilisearch binary installed: $(/usr/local/bin/meilisearch --version 2>&1 | head -1)"
+          else
+            rm -f "${_meili_tmp}"
+            log "WARN: downloaded Meilisearch binary would not execute (wrong arch?) — search will be unavailable"
+          fi
+        else
+          rm -f "${_meili_tmp}"
+          log "WARN: Meilisearch download failed — search will be unavailable"
+        fi
+      else
+        log "Meilisearch v${MEILI_VERSION} already installed."
       fi
 
-      # Write Meilisearch environment file with master key
+      # Write Meilisearch environment file with master key.
+      # systemd reads EnvironmentFile as root before dropping to User=, so 0600
+      # root:root is correct here and keeps the master key unreadable otherwise.
       cat > /etc/meilisearch.env <<-'MEILIEV'
       MEILI_MASTER_KEY=MEILI_MASTER_KEY_PLACEHOLDER
       MEILI_DB_PATH=/var/lib/meilisearch
       MEILI_ENV=production
       MEILI_HTTP_ADDR=127.0.0.1:MEILI_PORT_PLACEHOLDER
       MEILI_NO_ANALYTICS=true
+      MEILI_DUMP_DIR=/var/lib/meilisearch/dumps
+      MEILI_SNAPSHOT_DIR=/var/lib/meilisearch/snapshots
       MEILIEV
       sed -i "s|MEILI_MASTER_KEY_PLACEHOLDER|${MEILI_MASTER_KEY}|" /etc/meilisearch.env
       sed -i "s|MEILI_PORT_PLACEHOLDER|${MEILI_PORT}|" /etc/meilisearch.env
       chmod 600 /etc/meilisearch.env
       chown root:root /etc/meilisearch.env
 
-      # Enable and start Meilisearch
-      log "Starting Meilisearch service..."
-      systemctl daemon-reload
-      systemctl enable meilisearch
-      systemctl start meilisearch || log "WARN: meilisearch start returned non-zero — check journalctl -u meilisearch"
+      # Enable and start Meilisearch (only if the binary actually made it down —
+      # enabling a unit whose ExecStart is missing just produces a boot failure
+      # loop on every subsequent reboot).
+      if [ -x /usr/local/bin/meilisearch ]; then
+        log "Starting Meilisearch service..."
+        systemctl daemon-reload
+        systemctl enable meilisearch
+        systemctl restart meilisearch || log "WARN: meilisearch start returned non-zero — check journalctl -u meilisearch"
 
-      # Wait for Meilisearch to be ready
-      for _i in $(seq 1 10); do
-        if curl -sf "http://127.0.0.1:${MEILI_PORT}/health" >/dev/null 2>&1; then
-          log "Meilisearch is up."
-          break
+        # Wait for Meilisearch to be ready (/health needs no auth)
+        MEILI_READY=0
+        for _i in $(seq 1 10); do
+          if curl -sf "http://127.0.0.1:${MEILI_PORT}/health" >/dev/null 2>&1; then
+            MEILI_READY=1
+            log "Meilisearch is up."
+            break
+          fi
+          log "  attempt ${_i}/10 ..."
+          sleep 3
+        done
+        if [ "${MEILI_READY}" -eq 0 ]; then
+          log "WARN: Meilisearch not responding on ${MEILI_PORT} — check journalctl -u meilisearch"
         fi
-        log "  attempt ${_i}/10 ..."
-        sleep 3
-      done
+      else
+        log "WARN: /usr/local/bin/meilisearch missing — skipping service start"
+      fi
 
       # --------------------------------------------------------------------------
       # 11. Create librechat system user (already created via cloud-init users block,
@@ -1298,7 +1357,10 @@ write_files:
         echo "DOMAIN_SERVER=http://${APP_DOMAIN:-localhost}"
         echo "PROXY_PREFIX=1"
         echo "APP_TITLE=LibreChat"
-        echo "# Meilisearch (search/RAG)"
+        echo "# Meilisearch (search/RAG) — SEARCH=true is the master switch;"
+        echo "# without it LibreChat ignores MEILI_HOST entirely."
+        echo "SEARCH=true"
+        echo "MEILI_NO_ANALYTICS=true"
         echo "MEILI_HOST=http://127.0.0.1:${MEILI_PORT}"
         echo "MEILI_MASTER_KEY=${MEILI_MASTER_KEY}"
         echo "# Vector DB (PostgreSQL + pgvector for RAG)"
@@ -1336,6 +1398,8 @@ write_files:
       MONGO_URI=MONGO_URI_PLACEHOLDER
       OPENAI_API_KEY=OPENAI_API_KEY_PLACEHOLDER
       ANTHROPIC_API_KEY=ANTHROPIC_API_KEY_PLACEHOLDER
+      SEARCH=true
+      MEILI_NO_ANALYTICS=true
       MEILI_HOST=http://127.0.0.1:MEILI_PORT_PLACEHOLDER
       MEILI_MASTER_KEY=MEILI_MASTER_KEY_PLACEHOLDER
       VECTOR_DB_HOST=127.0.0.1
