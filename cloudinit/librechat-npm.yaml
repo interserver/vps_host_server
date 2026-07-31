@@ -1048,12 +1048,20 @@ write_files:
       # "example.com" produces an app that points at somebody else's domain.
       case "${APP_DOMAIN}" in
         ""|CHANGE_ME|example.com)
-          if [ -n "${VPS_HOSTNAME:-}" ]; then
+          # Prefer VPS_HOSTNAME only when it is a real DNS name. Provisioners
+          # hand out bare hostnames like "vps3453950", which resolve only inside
+          # the box via /etc/hosts — using one for DOMAIN_CLIENT would give
+          # customers password-reset and callback links their browser cannot
+          # resolve. The public IP is reachable, so it wins in that case.
+          if printf '%s' "${VPS_HOSTNAME:-}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$'; then
             APP_DOMAIN="${VPS_HOSTNAME}"
             log "APP_DOMAIN unset — using provisioner hostname: ${APP_DOMAIN}"
           elif [ -n "${VPS_IP:-}" ]; then
             APP_DOMAIN="${VPS_IP}"
             log "APP_DOMAIN unset — using provisioner IP: ${APP_DOMAIN}"
+          elif [ -n "${VPS_HOSTNAME:-}" ]; then
+            APP_DOMAIN="${VPS_HOSTNAME}"
+            log "APP_DOMAIN unset — no public IP; falling back to hostname: ${APP_DOMAIN}"
           fi
           ;;
       esac
