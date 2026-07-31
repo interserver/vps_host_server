@@ -3,7 +3,7 @@
 # LibreChat (npm) "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
 # Stack: Node.js 24 + MongoDB 8 + LibreChat (from source)
 #        + Meilisearch 1.35 (host) + PostgreSQL 16 + pgvector
-#        + Redis (cache/sessions) + SearXNG (web search)
+#        + Redis (cache/sessions) + SearXNG (web search) + RAG API
 #        + Stable Diffusion WebUI (A1111 fork, CPU mode)
 #        + Miniconda Python 3.10
 #        + Nginx + UFW firewall + fail2ban + swap + unattended-upgrades
@@ -127,6 +127,9 @@ write_files:
       MEILI_PORT="7700"
       MEILI_MASTER_KEY="CHANGE_ME"
 
+      # RAG API (file uploads / retrieval — LibreChat reads RAG_API_URL)
+      RAG_PORT="8000"
+
       # Vector DB (PostgreSQL + pgvector for RAG)
       VECTOR_DB_PORT="5432"
       VECTOR_DB_NAME="librechat_vectordb"
@@ -152,6 +155,15 @@ write_files:
     permissions: '0644'
     owner: root:root
     content: |
+      # Standard nginx websocket idiom: "upgrade" only when the client asked for
+      # it, empty otherwise. Hardcoding `Connection upgrade` on every request
+      # also defeats the upstream keepalive pool below, since a connection
+      # flagged for upgrade cannot be reused.
+      map $http_upgrade $connection_upgrade {
+          default upgrade;
+          ''      '';
+      }
+
       upstream librechat_backend {
           server 127.0.0.1:LIBRECHAT_PORT_PLACEHOLDER;
           keepalive 32;
@@ -177,7 +189,7 @@ write_files:
               proxy_http_version 1.1;
               # WebSocket / SSE support (LibreChat streams responses)
               proxy_set_header   Upgrade $http_upgrade;
-              proxy_set_header   Connection 'upgrade';
+              proxy_set_header   Connection $connection_upgrade;
               proxy_set_header   Host $host;
               proxy_set_header   X-Real-IP $remote_addr;
               proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -651,6 +663,9 @@ write_files:
       # pulls an unrelated pre-alpha MCP package and yields no webapp at all.
       # Upstream's supported install is an editable install from the git tree.
       # ------------------------------------------------------------------------
+      # Checkout is chowned to searxng below but git runs here as root — without
+      # this the re-run pull dies on "detected dubious ownership".
+      git config --global --add safe.directory "${SEARXNG_DIR}" 2>/dev/null || true
       if [ -d "${SEARXNG_DIR}/.git" ]; then
         log "SearXNG already cloned — pulling latest..."
         git -C "${SEARXNG_DIR}" pull --ff-only || log "WARN: git pull failed — using existing checkout"
@@ -756,6 +771,176 @@ write_files:
       log "SearXNG setup complete on port ${SEARXNG_PORT}."
 
   # --------------------------------------------------------------------------
+  # (s) RAG API systemd service (LibreChat file-upload / retrieval backend)
+  # --------------------------------------------------------------------------
+  - path: /etc/systemd/system/rag-api.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=LibreChat RAG API (file uploads, embeddings, retrieval)
+      After=network.target postgresql.service
+      Wants=network.target
+
+      [Service]
+      Type=simple
+      User=ragapi
+      Group=ragapi
+      WorkingDirectory=/opt/rag-api
+      EnvironmentFile=/etc/rag-api.env
+      ExecStart=/opt/rag-api/venv/bin/python main.py
+      Restart=on-failure
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=rag-api
+      # Local embedding models load slowly on first start
+      TimeoutStartSec=600
+
+      # Hardening
+      NoNewPrivileges=true
+      PrivateTmp=true
+      ProtectSystem=strict
+      ProtectHome=true
+      ReadWritePaths=/opt/rag-api
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # --------------------------------------------------------------------------
+  # (t) RAG API install script
+  #
+  # Separate script with its own `set -e`, invoked with `|| log WARN` — RAG is
+  # an enhancement and must never abort the boot.
+  # --------------------------------------------------------------------------
+  - path: /root/setup-rag-api.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # setup-rag-api.sh — installs danny-avila/rag_api against the local pgvector DB
+      set -euo pipefail
+
+      source /root/.librechat-npm-bootstrap.env
+
+      log() { echo "[setup-rag-api] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      RAG_PORT="${RAG_PORT:-8000}"
+      RAG_DIR="/opt/rag-api"
+      RAG_VENV="${RAG_DIR}/venv"
+
+      log "Installing RAG API system dependencies..."
+      # pandoc/libgl/libglib are required by `unstructured` for document parsing
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python3-dev python3-venv pandoc netcat-openbsd libgl1 libglib2.0-0 \
+        libxml2-dev libxslt1-dev zlib1g-dev libffi-dev libssl-dev
+
+      id -u ragapi &>/dev/null || useradd --system -U --home-dir "${RAG_DIR}" --shell /usr/sbin/nologin ragapi
+      mkdir -p "${RAG_DIR}" "${RAG_DIR}/uploads" "${RAG_DIR}/nltk_data"
+
+      git config --global --add safe.directory "${RAG_DIR}" 2>/dev/null || true
+      if [ -d "${RAG_DIR}/.git" ]; then
+        log "RAG API already cloned — pulling latest..."
+        git -C "${RAG_DIR}" pull --ff-only || log "WARN: git pull failed — using existing checkout"
+      else
+        # Clone to scratch then move in: ${RAG_DIR} already holds uploads/ and
+        # nltk_data/, and git clone refuses a non-empty destination.
+        _rag_src="$(mktemp -d /tmp/rag-api-src.XXXXXX)"
+        rm -rf "${_rag_src}"
+        git clone --depth 1 https://github.com/danny-avila/rag_api.git "${_rag_src}"
+        cp -a "${_rag_src}/." "${RAG_DIR}/"
+        rm -rf "${_rag_src}"
+      fi
+
+      log "Creating RAG API virtualenv..."
+      [ -x "${RAG_VENV}/bin/python" ] || python3 -m venv "${RAG_VENV}"
+      "${RAG_VENV}/bin/pip" install -q --upgrade pip setuptools wheel
+
+      # Install CPU-only torch FIRST so sentence_transformers does not drag in
+      # the multi-gigabyte CUDA build on a machine with no GPU.
+      log "Installing CPU-only torch (no GPU on standard VPS plans)..."
+      "${RAG_VENV}/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
+
+      log "Installing RAG API requirements (several minutes)..."
+      "${RAG_VENV}/bin/pip" install -q -r "${RAG_DIR}/requirements.txt"
+
+      # Pre-download NLTK corpora so `unstructured` does not fetch them at
+      # runtime — the service runs under ProtectSystem=strict and would fail.
+      log "Downloading NLTK data..."
+      "${RAG_VENV}/bin/python" -m nltk.downloader -d "${RAG_DIR}/nltk_data" \
+        punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng \
+        || log "WARN: NLTK download had issues — some document types may fail"
+
+      # ------------------------------------------------------------------------
+      # Embeddings provider.
+      #
+      # Default to local sentence-transformers so file uploads work on a box
+      # with no API key at all. If the operator supplied a real OpenAI key,
+      # prefer it: it is faster and avoids loading a model into RAM.
+      # ------------------------------------------------------------------------
+      if [ -n "${OPENAI_API_KEY:-}" ] && [ "${OPENAI_API_KEY}" != "CHANGE_ME" ]; then
+        RAG_EMBED_PROVIDER="openai"
+        RAG_EMBED_MODEL="text-embedding-3-small"
+        log "Using OpenAI embeddings (API key present)."
+      else
+        RAG_EMBED_PROVIDER="huggingface"
+        RAG_EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+        log "No OpenAI key — using local sentence-transformers embeddings."
+      fi
+
+      log "Writing /etc/rag-api.env..."
+      cat > /etc/rag-api.env <<-RAGENV
+      RAG_HOST=127.0.0.1
+      RAG_PORT=${RAG_PORT}
+      VECTOR_DB_TYPE=pgvector
+      DB_HOST=127.0.0.1
+      DB_PORT=${VECTOR_DB_PORT}
+      POSTGRES_DB=${VECTOR_DB_NAME}
+      POSTGRES_USER=${VECTOR_DB_USER}
+      POSTGRES_PASSWORD=${VECTOR_DB_PASS}
+      # The vector extension is created by setup-pgvector.sh as the postgres
+      # superuser; ${VECTOR_DB_USER} cannot CREATE EXTENSION, so skip it here.
+      PGVECTOR_CREATE_EXTENSION=False
+      # Must match LibreChat's JWT_SECRET — the RAG API only verifies tokens
+      # that LibreChat signed.
+      JWT_SECRET=${JWT_SECRET}
+      EMBEDDINGS_PROVIDER=${RAG_EMBED_PROVIDER}
+      EMBEDDINGS_MODEL=${RAG_EMBED_MODEL}
+      RAG_OPENAI_API_KEY=${OPENAI_API_KEY}
+      RAG_UPLOAD_DIR=${RAG_DIR}/uploads
+      COLLECTION_NAME=librechat
+      NLTK_DATA=${RAG_DIR}/nltk_data
+      SCARF_NO_ANALYTICS=true
+      RAGENV
+      chown root:ragapi /etc/rag-api.env
+      chmod 640 /etc/rag-api.env
+
+      chown -R ragapi:ragapi "${RAG_DIR}"
+
+      log "Starting RAG API..."
+      systemctl daemon-reload
+      systemctl enable rag-api
+      systemctl restart rag-api
+
+      RAG_READY=0
+      for _i in $(seq 1 30); do
+        if curl -sf -o /dev/null "http://127.0.0.1:${RAG_PORT}/docs" 2>/dev/null \
+           || curl -sf -o /dev/null "http://127.0.0.1:${RAG_PORT}/health" 2>/dev/null; then
+          RAG_READY=1
+          log "RAG API is up on port ${RAG_PORT}."
+          break
+        fi
+        log "  attempt ${_i}/30 ..."
+        sleep 5
+      done
+      if [ "${RAG_READY}" -eq 0 ]; then
+        log "WARN: RAG API did not answer on ${RAG_PORT} — check journalctl -u rag-api"
+        exit 1
+      fi
+
+      log "RAG API setup complete (provider=${RAG_EMBED_PROVIDER})."
+
+  # --------------------------------------------------------------------------
   # (r) Main bootstrap script
   # --------------------------------------------------------------------------
   - path: /root/librechat-npm-bootstrap.sh
@@ -794,6 +979,7 @@ write_files:
       REDIS_PORT="${REDIS_PORT:-6379}"
       SEARXNG_PORT="${SEARXNG_PORT:-8888}"
       SD_WEBUI_PORT="${SD_WEBUI_PORT:-7860}"
+      RAG_PORT="${RAG_PORT:-8000}"
 
       # --------------------------------------------------------------------------
       # SIGPIPE-safe random generators
@@ -838,9 +1024,34 @@ write_files:
         LIBRECHAT_ADMIN_PASS="${VPS_ADMIN_PASS}"
         log "Using provisioner-supplied admin password."
       fi
+      # The provisioner also supplies VPS_HOSTNAME / VPS_IP. If APP_DOMAIN is
+      # still the stock placeholder, adopt one of those: LibreChat builds
+      # DOMAIN_CLIENT / DOMAIN_SERVER from it (used for generated links, CORS and
+      # email callbacks) and nginx uses it for server_name, so leaving it as
+      # "example.com" produces an app that points at somebody else's domain.
+      case "${APP_DOMAIN}" in
+        ""|CHANGE_ME|example.com)
+          if [ -n "${VPS_HOSTNAME:-}" ]; then
+            APP_DOMAIN="${VPS_HOSTNAME}"
+            log "APP_DOMAIN unset — using provisioner hostname: ${APP_DOMAIN}"
+          elif [ -n "${VPS_IP:-}" ]; then
+            APP_DOMAIN="${VPS_IP}"
+            log "APP_DOMAIN unset — using provisioner IP: ${APP_DOMAIN}"
+          fi
+          ;;
+      esac
+
       # Persist whatever we settled on so re-runs and operators see the same values
       persist LIBRECHAT_ADMIN_EMAIL "${LIBRECHAT_ADMIN_EMAIL}"
       persist LE_EMAIL "${LE_EMAIL}"
+      persist APP_DOMAIN "${APP_DOMAIN}"
+
+      # Let's Encrypt can only issue for a real DNS name — not a bare IP and not
+      # a dotless hostname. Requires a letters-only TLD, which excludes IPv4.
+      APP_DOMAIN_IS_FQDN=0
+      if printf '%s' "${APP_DOMAIN}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$'; then
+        APP_DOMAIN_IS_FQDN=1
+      fi
 
       # --------------------------------------------------------------------------
       # Auto-generate secrets for any value still set to CHANGE_ME
@@ -1003,7 +1214,15 @@ write_files:
       # --------------------------------------------------------------------------
       # 6. Create MongoDB admin user with random password
       # --------------------------------------------------------------------------
-      if [ "${MONGO_READY}" -eq 1 ]; then
+      if [ "${MONGO_READY}" -eq 1 ] && mongosh --quiet --port "${MONGO_PORT}" \
+             --username "${MONGO_ADMIN_USER}" --password "${MONGO_ADMIN_PASS}" \
+             --authenticationDatabase admin --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
+        # Re-run against a host where step 7 already switched auth on: the
+        # persisted credentials work, so there is nothing to create. Without
+        # this the unauthenticated getUser() below is rejected and the run
+        # reports a misleading "admin user creation returned non-zero".
+        log "MongoDB admin user already present and credentials valid — skipping."
+      elif [ "${MONGO_READY}" -eq 1 ]; then
         log "Creating MongoDB admin user..."
         # Write the init script to a file, substitute the real credentials into
         # it, THEN run it. The heredoc delimiter is quoted so that nothing here
@@ -1084,6 +1303,16 @@ write_files:
       bash /root/setup-pgvector.sh
 
       # --------------------------------------------------------------------------
+      # 9b. RAG API — LibreChat's file-upload / retrieval backend.
+      #
+      # Needs the pgvector database above, so it runs immediately after. Optional
+      # component: a failure here costs file uploads, not the whole boot.
+      # --------------------------------------------------------------------------
+      log "Setting up RAG API..."
+      bash /root/setup-rag-api.sh \
+        || log "WARN: RAG API setup failed — file uploads/retrieval will be unavailable"
+
+      # --------------------------------------------------------------------------
       # 10. Install Meilisearch 1.35 (host service for search/RAG)
       # --------------------------------------------------------------------------
       log "Installing Meilisearch 1.35.1..."
@@ -1093,7 +1322,12 @@ write_files:
       # chown below both depend on it. (No supplementary groups needed — it only
       # ever touches its own data dir.)
       id meilisearch &>/dev/null || useradd --system -U --shell /usr/sbin/nologin --home-dir /var/lib/meilisearch meilisearch
-      mkdir -p /var/lib/meilisearch /var/lib/meilisearch/dumps /var/lib/meilisearch/snapshots
+      # The database MUST live in its own subdirectory. MEILI_DB_PATH is scanned
+      # at startup to infer the DB version, so if dumps/ and snapshots/ sit
+      # directly inside it Meilisearch aborts with "failed to infer the version
+      # of the database" and crash-loops. This mirrors upstream's own default
+      # layout (db_path = "./data.ms" alongside dumps/ and snapshots/).
+      mkdir -p /var/lib/meilisearch/data.ms /var/lib/meilisearch/dumps /var/lib/meilisearch/snapshots
       chown -R meilisearch:meilisearch /var/lib/meilisearch
 
       # ------------------------------------------------------------------------
@@ -1149,7 +1383,7 @@ write_files:
       # root:root is correct here and keeps the master key unreadable otherwise.
       cat > /etc/meilisearch.env <<-'MEILIEV'
       MEILI_MASTER_KEY=MEILI_MASTER_KEY_PLACEHOLDER
-      MEILI_DB_PATH=/var/lib/meilisearch
+      MEILI_DB_PATH=/var/lib/meilisearch/data.ms
       MEILI_ENV=production
       MEILI_HTTP_ADDR=127.0.0.1:MEILI_PORT_PLACEHOLDER
       MEILI_NO_ANALYTICS=true
@@ -1203,11 +1437,23 @@ write_files:
       # 12. Clone LibreChat from GitHub
       # --------------------------------------------------------------------------
       log "Cloning LibreChat from GitHub..."
+      # The checkout is owned by librechat but git runs here as root, which trips
+      # git's "detected dubious ownership" guard and would break the pull path on
+      # every re-run. Allow it explicitly.
+      git config --global --add safe.directory "${LIBRECHAT_DIR}" 2>/dev/null || true
       if [ -d "${LIBRECHAT_DIR}/.git" ]; then
         log "LibreChat already cloned — pulling latest..."
         git -C "${LIBRECHAT_DIR}" pull --ff-only || log "WARN: git pull had issues — continuing"
       else
-        git clone --depth 1 https://github.com/danny-avila/LibreChat.git "${LIBRECHAT_DIR}"
+        # ${LIBRECHAT_DIR} is the librechat user's home, so cloud-init has
+        # already seeded it from /etc/skel (.bashrc, .profile, .ssh) and
+        # `git clone` refuses a non-empty destination. Clone to a scratch dir
+        # and move the tree in, which also tolerates a half-finished earlier run.
+        _lc_src="$(mktemp -d /tmp/librechat-src.XXXXXX)"
+        rm -rf "${_lc_src}"
+        git clone --depth 1 https://github.com/danny-avila/LibreChat.git "${_lc_src}"
+        cp -a "${_lc_src}/." "${LIBRECHAT_DIR}/"
+        rm -rf "${_lc_src}"
       fi
 
       chown -R librechat:librechat "${LIBRECHAT_DIR}"
@@ -1243,9 +1489,13 @@ write_files:
       DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confold" redis-server
       sed -i "s|^port REDIS_PORT_PLACEHOLDER|port ${REDIS_PORT}|" /etc/redis/redis.conf
       # The package ships its own redis-server.service and starts it on install.
-      # It would hold 127.0.0.1:6379 and our redis.service would fail to bind,
-      # so retire it before enabling ours.
+      # It would hold 127.0.0.1:6379 and our redis.service would fail to bind.
+      # Mask rather than merely disable: a disabled unit can still be pulled in
+      # as a dependency, fail to bind the port ours already owns, and sit in the
+      # failed state forever.
       systemctl disable --now redis-server 2>/dev/null || true
+      systemctl mask redis-server 2>/dev/null || true
+      systemctl reset-failed redis-server 2>/dev/null || true
       systemctl daemon-reload
       systemctl enable redis
       systemctl start redis || log "WARN: redis start returned non-zero — check journalctl -u redis"
@@ -1355,7 +1605,6 @@ write_files:
         echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
         echo "DOMAIN_CLIENT=http://${APP_DOMAIN:-localhost}"
         echo "DOMAIN_SERVER=http://${APP_DOMAIN:-localhost}"
-        echo "PROXY_PREFIX=1"
         echo "APP_TITLE=LibreChat"
         echo "# Meilisearch (search/RAG) — SEARCH=true is the master switch;"
         echo "# without it LibreChat ignores MEILI_HOST entirely."
@@ -1363,9 +1612,9 @@ write_files:
         echo "MEILI_NO_ANALYTICS=true"
         echo "MEILI_HOST=http://127.0.0.1:${MEILI_PORT}"
         echo "MEILI_MASTER_KEY=${MEILI_MASTER_KEY}"
-        echo "# Vector DB (PostgreSQL + pgvector for RAG)"
-        echo "RAG_PORT=8000"
-        echo "RAG_API_URL=http://127.0.0.1:8000"
+        echo "# RAG API (file uploads / retrieval) backed by pgvector"
+        echo "RAG_API_URL=http://127.0.0.1:${RAG_PORT}"
+        echo "RAG_PORT=${RAG_PORT}"
         echo "VECTOR_DB_HOST=127.0.0.1"
         echo "VECTOR_DB_PORT=${VECTOR_DB_PORT}"
         echo "VECTOR_DB_NAME=${VECTOR_DB_NAME}"
@@ -1382,6 +1631,33 @@ write_files:
 
       chmod 600 "${LIBRECHAT_DIR}/.env"
       chown librechat:librechat "${LIBRECHAT_DIR}/.env"
+
+      # --------------------------------------------------------------------------
+      # 14b. librechat.yaml — the app config (separate from .env)
+      #
+      # Without this file every start logs
+      #   "Config file YAML format is invalid: ENOENT ... librechat.yaml"
+      # and the web-search tool has nothing to bind SearXNG to. Seed it from the
+      # checked-in example so `version:` always matches the cloned release
+      # rather than a number hardcoded here that drifts.
+      # --------------------------------------------------------------------------
+      log "Writing librechat.yaml..."
+      if [ -f "${LIBRECHAT_DIR}/librechat.example.yaml" ]; then
+        cp -f "${LIBRECHAT_DIR}/librechat.example.yaml" "${LIBRECHAT_DIR}/librechat.yaml"
+      else
+        printf 'version: 1.3.13\ncache: true\n' > "${LIBRECHAT_DIR}/librechat.yaml"
+      fi
+      if ! grep -q '^webSearch:' "${LIBRECHAT_DIR}/librechat.yaml"; then
+        {
+          echo ""
+          echo "# --- appended by librechat-npm-bootstrap.sh ---"
+          echo "# Point the web-search tool at the local SearXNG instance."
+          echo "# \${SEARXNG_INSTANCE_URL} is resolved from the environment at runtime."
+          echo "webSearch:"
+          echo "  searxngInstanceUrl: \"\${SEARXNG_INSTANCE_URL}\""
+        } >> "${LIBRECHAT_DIR}/librechat.yaml"
+      fi
+      chown librechat:librechat "${LIBRECHAT_DIR}/librechat.yaml"
 
       # --------------------------------------------------------------------------
       # 15. Write runtime environment file for systemd service
@@ -1410,6 +1686,8 @@ write_files:
       USE_REDIS=true
       REDIS_URI=redis://127.0.0.1:REDIS_PORT_PLACEHOLDER
       SEARXNG_INSTANCE_URL=http://127.0.0.1:SEARXNG_PORT_PLACEHOLDER
+      RAG_API_URL=http://127.0.0.1:RAG_PORT_PLACEHOLDER
+      RAG_PORT=RAG_PORT_PLACEHOLDER
       ENVFILE
       # Substitute actual values
       sed -i "s|LIBRECHAT_PORT_PLACEHOLDER|${LIBRECHAT_PORT}|" /etc/librechat.env
@@ -1420,6 +1698,7 @@ write_files:
       sed -i "s|VECTOR_DB_USER_PLACEHOLDER|${VECTOR_DB_USER}|" /etc/librechat.env
       sed -i "s|REDIS_PORT_PLACEHOLDER|${REDIS_PORT}|" /etc/librechat.env
       sed -i "s|SEARXNG_PORT_PLACEHOLDER|${SEARXNG_PORT}|" /etc/librechat.env
+      sed -i "s|RAG_PORT_PLACEHOLDER|${RAG_PORT}|g" /etc/librechat.env
       sed -i "s|JWT_SECRET_PLACEHOLDER|${JWT_SECRET}|" /etc/librechat.env
       sed -i "s|JWT_REFRESH_SECRET_PLACEHOLDER|${JWT_REFRESH_SECRET}|" /etc/librechat.env
       sed -i "s|CREDS_KEY_PLACEHOLDER|${CREDS_KEY}|" /etc/librechat.env
@@ -1431,48 +1710,58 @@ write_files:
       chmod 600 /etc/librechat.env
 
       # --------------------------------------------------------------------------
-      # 16. npm run reinstall — installs dependencies AND builds the frontend
-      #    (run as librechat user)
+      # 16. Install dependencies and build the frontend (as the librechat user)
+      #
+      # This replaces an earlier `npm run reinstall` piped through `head -5`.
+      # Three separate faults made that build a no-op:
+      #   * `| head -5` — head exits after five lines, the build takes SIGPIPE and
+      #     dies in about a second. client/dist was never produced and the backend
+      #     crash-looped on MODULE_NOT_FOUND: librechat-data-provider.
+      #   * the nested `bash -c '... '\''${VAR}'\'' ...'` quoting: the preceding
+      #     export HOME='...' lines flip quote parity, so every ${VAR} after them
+      #     reached the inner shell as a LITERAL — including ${LIBRECHAT_DIR},
+      #     which produced "cd: ${LIBRECHAT_DIR}: No such file or directory".
+      #   * `npm run reinstall` is LibreChat's updater (node config/update.js),
+      #     not the install path. `npm ci` + `npm run frontend` is what a fresh
+      #     checkout needs, and `frontend` is exactly what builds the workspace
+      #     packages the backend imports.
       # --------------------------------------------------------------------------
-      log "Running npm run reinstall (this may take several minutes)..."
+      log "Installing LibreChat dependencies and building the frontend (several minutes)..."
 
-      # npm HOME/cache must be set to a writable location outside the app dir
-      NPM_HOME="/opt/librechat/.npm-home"
       NPM_CACHE="/opt/librechat/.npm-cache"
-      mkdir -p "${NPM_HOME}" "${NPM_CACHE}"
+      mkdir -p "${NPM_CACHE}"
       chown -R librechat:librechat /opt/librechat
 
-      # Pin rimraf to v5 to prevent ESM/brace-expansion crash with Node.js v24
-      # Write patch script as outer bootstrap (avoids sudo/bash quoting hell)
-      cat > /tmp/patch-rimraf.js <<'RIMRAFSCRIPT'
-      const fs = require('fs');
-      const pkg = JSON.parse(fs.readFileSync('/opt/librechat/package.json', 'utf8'));
-      pkg.dependencies = pkg.dependencies || {};
-      pkg.dependencies.rimraf = '5';
-      fs.writeFileSync('/opt/librechat/package.json', JSON.stringify(pkg, null, 2));
-      console.log('Patched package.json with rimraf@5');
-      RIMRAFSCRIPT
-      chmod +x /tmp/patch-rimraf.js
-      # NB: double quotes — single quotes would make this a literal path and the
-      # cd would fail, aborting the whole bootstrap under `set -e`.
-      cd "${LIBRECHAT_DIR}"
-      npm install rimraf@5
-      sudo -u librechat node /tmp/patch-rimraf.js
-      rm -f /tmp/patch-rimraf.js
-      sudo -u librechat -H bash -c '
-        export HOME='/opt/librechat/.npm-home'
-        export npm_config_cache='/opt/librechat/.npm-cache'
-        export NODE_ENV=production
-        export HOST=0.0.0.0
-        export PORT='\''${LIBRECHAT_PORT}'\''
-        export JWT_SECRET='\''${JWT_SECRET}'\''
-        export JWT_REFRESH_SECRET='\''${JWT_REFRESH_SECRET}'\''
-        export CREDS_KEY='\''${CREDS_KEY}'\''
-        export CREDS_IV='\''${CREDS_IV}'\''
-        export MONGO_URI='\''${MONGO_URI}'\''
-        cd '\''${LIBRECHAT_DIR}'\''
-        npm run reinstall 2>&1 | head -5 || log "WARN: npm run reinstall had warnings or errors — check log below"
-      ' || log "WARN: npm run reinstall had warnings or errors — check log below"
+      # Run npm as the librechat user with an explicit environment. `env` keeps
+      # expansion in THIS shell, so there is no nested-quoting parity to get
+      # wrong. NODE_ENV is deliberately not "production" here: that would make
+      # npm skip devDependencies and the client build needs vite. The service
+      # sets NODE_ENV=production at runtime via /etc/librechat.env.
+      lc_npm() {
+        ( cd "${LIBRECHAT_DIR}" && sudo -u librechat -H env \
+            HOME=/opt/librechat \
+            npm_config_cache="${NPM_CACHE}" \
+            npm_config_fund=false \
+            npm_config_audit=false \
+            npm_config_update_notifier=false \
+            "$@" </dev/null )
+      }
+
+      # npm ci is reproducible but requires package.json and package-lock.json to
+      # agree; fall back to npm install if the checkout ever drifts.
+      lc_npm npm ci \
+        || lc_npm npm install \
+        || log "WARN: dependency install failed — LibreChat will not start"
+
+      # Do NOT pipe this anywhere that can exit early (see above).
+      lc_npm npm run frontend \
+        || log "WARN: frontend build failed — the web UI may not load"
+
+      if [ -d "${LIBRECHAT_DIR}/client/dist" ]; then
+        log "Frontend build present at ${LIBRECHAT_DIR}/client/dist."
+      else
+        log "WARN: ${LIBRECHAT_DIR}/client/dist missing — the web UI will not render"
+      fi
 
       # Re-assert ownership after npm operations
       chown -R librechat:librechat "${LIBRECHAT_DIR}"
@@ -1498,12 +1787,23 @@ write_files:
       systemctl enable librechat-npm
       systemctl start librechat-npm || log "WARN: librechat-npm start returned non-zero — check journalctl -u librechat-npm"
 
-      # Wait briefly and confirm service is running
-      sleep 5
-      if systemctl is-active --quiet librechat-npm; then
-        log "LibreChat service is running."
-      else
-        log "WARN: librechat-npm service may not be running — check journalctl -u librechat-npm"
+      # Wait for the backend to actually answer. A flat `sleep 5` reported
+      # success while the unit was still in "activating", and reported failure
+      # for a service that simply had not finished booting yet.
+      LC_READY=0
+      for _i in $(seq 1 24); do
+        if curl -sf -o /dev/null "http://127.0.0.1:${LIBRECHAT_PORT}/health" 2>/dev/null \
+           || curl -sf -o /dev/null "http://127.0.0.1:${LIBRECHAT_PORT}/" 2>/dev/null; then
+          LC_READY=1
+          log "LibreChat is answering on port ${LIBRECHAT_PORT}."
+          break
+        fi
+        log "  librechat attempt ${_i}/24 ..."
+        sleep 5
+      done
+      if [ "${LC_READY}" -eq 0 ]; then
+        log "WARN: LibreChat did not answer on ${LIBRECHAT_PORT} — check journalctl -u librechat-npm"
+        journalctl -u librechat-npm --no-pager -n 30 2>&1 | tail -30 || true
       fi
 
       # --------------------------------------------------------------------------
@@ -1552,7 +1852,7 @@ write_files:
       # --------------------------------------------------------------------------
       # 21. Certbot TLS (optional — never fails the boot if DNS not pointed yet)
       # --------------------------------------------------------------------------
-      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN:-}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ] && [ "${APP_DOMAIN}" != "example.com" ]; then
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN_IS_FQDN}" -eq 1 ]; then
         log "Requesting Let's Encrypt certificate for ${APP_DOMAIN}..."
         certbot --nginx --non-interactive --agree-tos \
           --email "${LE_EMAIL}" \
@@ -1560,7 +1860,7 @@ write_files:
           --redirect \
           || echo "WARN: certbot deferred — DNS not yet pointing here"
       else
-        log "Skipping Certbot (ENABLE_TLS=${ENABLE_TLS} or APP_DOMAIN not configured)"
+        log "Skipping Certbot (ENABLE_TLS=${ENABLE_TLS}, APP_DOMAIN=${APP_DOMAIN} is not a DNS name)"
       fi
 
       # --------------------------------------------------------------------------
@@ -1574,7 +1874,11 @@ write_files:
 
       PROTO="http"
       WEB_HOST="${APP_DOMAIN:-${PUBLIC_IP}}"
-      if [ "${ENABLE_TLS}" = "true" ] && [ -n "${APP_DOMAIN:-}" ] && [ "${APP_DOMAIN}" != "CHANGE_ME" ] && [ "${APP_DOMAIN}" != "example.com" ]; then
+      # Only advertise https if certbot could actually have issued a cert, and
+      # only if it really did — otherwise the credentials file hands the customer
+      # a URL that refuses to connect.
+      if [ "${ENABLE_TLS}" = "true" ] && [ "${APP_DOMAIN_IS_FQDN}" -eq 1 ] \
+         && [ -d "/etc/letsencrypt/live/${APP_DOMAIN}" ]; then
         PROTO="https"
       fi
 
@@ -1586,7 +1890,7 @@ write_files:
 
       Stack: Node.js 24 + MongoDB 8 + LibreChat (from source)
              + Meilisearch 1.35 (host) + PostgreSQL 16 + pgvector
-             + Redis (cache/sessions) + SearXNG (web search)
+             + Redis (cache/sessions) + SearXNG (web search) + RAG API
              + Stable Diffusion WebUI (A1111 fork, CPU mode)
              + Miniconda Python 3.10
              + Nginx reverse proxy + UFW + fail2ban + unattended-upgrades
@@ -1619,6 +1923,14 @@ write_files:
       Redis (cache/sessions for LibreChat):
         Host : 127.0.0.1:REDIS_PORT_PLACEHOLDER
         URI  : redis://127.0.0.1:REDIS_PORT_PLACEHOLDER
+
+      RAG API (file uploads, embeddings, retrieval):
+        URL      : http://127.0.0.1:RAG_PORT_PLACEHOLDER
+        Config   : /etc/rag-api.env
+        Uploads  : /opt/rag-api/uploads
+        Notes    : Backed by the pgvector database above. Uses local
+                   sentence-transformers embeddings when no OpenAI key is
+                   set, so uploads work without any API key.
 
       SearXNG (self-hosted web search for LibreChat):
         URL      : http://127.0.0.1:SEARXNG_PORT_PLACEHOLDER
@@ -1660,6 +1972,8 @@ write_files:
                         journalctl -u redis -f
         SearXNG       : systemctl status searxng
                         journalctl -u searxng -f
+        RAG API       : systemctl status rag-api
+                        journalctl -u rag-api -f
         StableDiffusion: systemctl status stable-diffusion
                         journalctl -u stable-diffusion -f
         PostgreSQL    : su - postgres -c "psql -d VECTOR_DB_NAME_PLACEHOLDER"
@@ -1678,7 +1992,8 @@ write_files:
         7. Vector DB runs on port VECTOR_DB_PORT_PLACEHOLDER — ensure your RAG pipeline uses these credentials
         8. Redis runs on port REDIS_PORT_PLACEHOLDER — enabled for cache/sessions in LibreChat
         9. SearXNG runs on port SEARXNG_PORT_PLACEHOLDER — enable Web Search in LibreChat settings
-       10. Stable Diffusion WebUI runs on port SD_WEBUI_PORT_PLACEHOLDER — configure SD endpoint in LibreChat
+       10. RAG API runs on port RAG_PORT_PLACEHOLDER — powers file uploads and retrieval
+       11. Stable Diffusion WebUI runs on port SD_WEBUI_PORT_PLACEHOLDER — configure SD endpoint in LibreChat
       ============================================================
       CREDS
       # Substitute placeholders
@@ -1700,6 +2015,7 @@ write_files:
       sed -i "s|VECTOR_DB_USER_PLACEHOLDER|${VECTOR_DB_USER}|g" /root/librechat-npm-credentials.txt
       sed -i "s|REDIS_PORT_PLACEHOLDER|${REDIS_PORT}|g" /root/librechat-npm-credentials.txt
       sed -i "s|SEARXNG_PORT_PLACEHOLDER|${SEARXNG_PORT}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|RAG_PORT_PLACEHOLDER|${RAG_PORT}|g" /root/librechat-npm-credentials.txt
       sed -i "s|SD_WEBUI_PORT_PLACEHOLDER|${SD_WEBUI_PORT}|g" /root/librechat-npm-credentials.txt
       sed -i "s|JWT_SECRET_PLACEHOLDER|${JWT_SECRET}|g" /root/librechat-npm-credentials.txt
       sed -i "s|JWT_REFRESH_SECRET_PLACEHOLDER|${JWT_REFRESH_SECRET}|g" /root/librechat-npm-credentials.txt
@@ -1736,7 +2052,7 @@ final_message: |
 
   Stack: Node.js 24 + MongoDB 8.0 (host) + LibreChat (from source)
          + Meilisearch 1.35.1 (host) + PostgreSQL 16 + pgvector
-         + Redis (cache/sessions) + SearXNG (web search)
+         + Redis (cache/sessions) + SearXNG (web search) + RAG API
          + Stable Diffusion WebUI (A1111 fork, CPU mode)
          + Miniconda Python 3.10
          + Nginx reverse proxy + UFW + fail2ban + unattended-upgrades
@@ -1754,6 +2070,8 @@ final_message: |
     journalctl -u redis -f
     systemctl status searxng
     journalctl -u searxng -f
+    systemctl status rag-api
+    journalctl -u rag-api -f
     systemctl status stable-diffusion
     journalctl -u stable-diffusion -f
 
