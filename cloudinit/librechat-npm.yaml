@@ -3,7 +3,7 @@
 # LibreChat (npm) "one-click app" — Ubuntu 26.04 LTS cloud-init user-data
 # Stack: Node.js 24 + MongoDB 8 + LibreChat (from source)
 #        + Meilisearch 1.35 (host) + PostgreSQL 16 + pgvector
-#        + Redis (cache/sessions)
+#        + Redis (cache/sessions) + SearXNG (web search)
 #        + Stable Diffusion WebUI (A1111 fork, CPU mode)
 #        + Miniconda Python 3.10
 #        + Nginx + UFW firewall + fail2ban + swap + unattended-upgrades
@@ -22,9 +22,11 @@ timezone: UTC
 users:
   - default
   - name: librechat
-    groups: [sudo, www-data]
+    # Home must match WorkingDirectory/HOME in librechat-npm.service; the default
+    # /home/librechat is unreachable under ProtectHome=true.
+    homedir: /opt/librechat
+    groups: [www-data]
     shell: /bin/bash
-    sudo: ['ALL=(ALL) NOPASSWD:ALL']
 
 # ----------------------------------------------------------------------------
 # Swap (2 GB helps survive npm installs / MongoDB startup on tight-memory VMs)
@@ -41,7 +43,7 @@ swap:
 # PostgreSQL 16 + pgvector installed via PGDG apt repo in bootstrap.
 # Meilisearch installed via official binary in bootstrap.
 # Redis installed via apt in bootstrap.
-# Miniconda, Stable Diffusion WebUI installed in bootstrap.
+# Miniconda, SearXNG, Stable Diffusion WebUI installed in bootstrap.
 # ----------------------------------------------------------------------------
 package_update: true
 package_upgrade: false
@@ -137,6 +139,9 @@ write_files:
       USE_REDIS="true"
       REDIS_URI="redis://127.0.0.1:6379"
 
+      # SearXNG (self-hosted web search backend for LibreChat)
+      SEARXNG_PORT="8888"
+
       # Stable Diffusion WebUI (A1111 fork, CPU mode)
       SD_WEBUI_PORT="7860"
 
@@ -207,6 +212,10 @@ write_files:
       Group=librechat
       WorkingDirectory=/opt/librechat
       EnvironmentFile=/etc/librechat.env
+      # ProtectHome=true hides /home, so npm must not fall back to ~librechat for
+      # its cache/config — point HOME at the install dir, which is in ReadWritePaths.
+      Environment=HOME=/opt/librechat
+      Environment=npm_config_cache=/opt/librechat/.npm-cache
       ExecStart=/usr/bin/npm run backend
       Restart=on-failure
       RestartSec=10
@@ -242,9 +251,10 @@ write_files:
       Type=simple
       User=meilisearch
       Group=meilisearch
-      Environment="MEILI_ENV=production"
-      Environment="MEILI_MASTER_KEY=${MEILI_MASTER_KEY}"
-      ExecStart=/usr/local/bin/meilisearch --db-path /var/lib/meilisearch --env production --http-addr 127.0.0.1:7700 --master-key "${MEILI_MASTER_KEY}"
+      # NOTE: systemd does NOT expand ${VAR} in Environment= from the invoking
+      # shell — the real key is delivered via this file, written by the bootstrap.
+      EnvironmentFile=/etc/meilisearch.env
+      ExecStart=/usr/local/bin/meilisearch
       Restart=on-failure
       RestartSec=5
       StandardOutput=journal
@@ -261,16 +271,11 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
-  # --------------------------------------------------------------------------
-  # (e) Meilisearch config (TOML)
-  # --------------------------------------------------------------------------
-  - path: /etc/meilisearch.toml
-    permissions: '0644'
-    owner: root:root
-    content: |
-      db_path = "/var/lib/meilisearch"
-      log_dir = "/var/log/meilisearch"
-      env = "production"
+  # (e) Meilisearch is configured entirely through /etc/meilisearch.env, which
+  #     the bootstrap writes and meilisearch.service loads. There is deliberately
+  #     no /etc/meilisearch.toml — a second config file that nothing loads would
+  #     just mislead whoever edits it.
+
   # --------------------------------------------------------------------------
   # (f) Redis systemd service
   # --------------------------------------------------------------------------
@@ -284,10 +289,13 @@ write_files:
       Wants=network.target
 
       [Service]
-      Type=simple
+      # redis.conf sets "supervised systemd" + "daemonize no", so redis stays in
+      # the foreground and reports readiness over sd_notify. Passing
+      # --daemonize yes here would fork and exit, and systemd would reap the unit.
+      Type=notify
       User=redis
       Group=redis
-      ExecStart=/usr/bin/redis-server /etc/redis/redis.conf --daemonize yes
+      ExecStart=/usr/bin/redis-server /etc/redis/redis.conf
       Restart=on-failure
       RestartSec=5
       StandardOutput=journal
@@ -312,6 +320,7 @@ write_files:
     owner: root:root
     content: |
       bind 127.0.0.1
+      port REDIS_PORT_PLACEHOLDER
       protected-mode yes
       daemonize no
       supervised systemd
@@ -320,6 +329,46 @@ write_files:
       logfile /var/log/redis/redis.log
       maxmemory 256mb
       maxmemory-policy allkeys-lru
+
+  # --------------------------------------------------------------------------
+  # (h) SearXNG systemd service (LibreChat's web-search backend)
+  #
+  # Runs under granian, which is what SearXNG upstream ships in its own
+  # container. All tuning comes from /etc/searxng/searxng.env — systemd does not
+  # expand $(...) or ${VAR} in Environment=, so anything dynamic (the secret,
+  # the port) must arrive through an EnvironmentFile written at boot.
+  # --------------------------------------------------------------------------
+  - path: /etc/systemd/system/searxng.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=SearXNG meta search engine (LibreChat web search)
+      After=network.target
+      Wants=network.target
+
+      [Service]
+      Type=simple
+      User=searxng
+      Group=searxng
+      WorkingDirectory=/opt/searxng
+      EnvironmentFile=/etc/searxng/searxng.env
+      ExecStart=/opt/searxng/venv/bin/granian searx.webapp:app
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=searxng
+
+      # Hardening
+      NoNewPrivileges=true
+      PrivateTmp=true
+      ProtectSystem=strict
+      ProtectHome=true
+      ReadWritePaths=/opt/searxng /var/log/searxng
+
+      [Install]
+      WantedBy=multi-user.target
 
   # --------------------------------------------------------------------------
   # (i) Stable Diffusion WebUI launch script
@@ -513,33 +562,195 @@ write_files:
       # --------------------------------------------------------------------------
       log "Creating vector database and user..."
 
-      su - postgres -c "psql" <<-'PSQLJS'
+      # The SQL is written to a temp file and the real values substituted in,
+      # rather than interpolated by the shell. A quoted heredoc is required here
+      # because the DO block uses $$ dollar-quoting, which an unquoted heredoc
+      # would expand to the shell's PID. Previously this meant the role was
+      # created with the LITERAL password 'CHANGE_ME' while LibreChat was handed
+      # the generated one, so every RAG/vector connection failed to authenticate.
+      _pgsql="$(mktemp /tmp/pgvector-setup.XXXXXX.sql)"
+      cat > "${_pgsql}" <<-'PSQLJS'
       -- Create user if not exists
       DO $$
       BEGIN
-        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'librechat_vec') THEN
-          CREATE ROLE librechat_vec WITH LOGIN PASSWORD 'CHANGE_ME';
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'VECTOR_DB_USER_PLACEHOLDER') THEN
+          CREATE ROLE VECTOR_DB_USER_PLACEHOLDER WITH LOGIN PASSWORD 'VECTOR_DB_PASS_PLACEHOLDER';
+        ELSE
+          ALTER ROLE VECTOR_DB_USER_PLACEHOLDER WITH LOGIN PASSWORD 'VECTOR_DB_PASS_PLACEHOLDER';
         END IF;
       END
       $$;
 
       -- Create database if not exists
-      SELECT 'CREATE DATABASE librechat_vectordb'
-      WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'librechat_vectordb')\gexec
+      SELECT 'CREATE DATABASE VECTOR_DB_NAME_PLACEHOLDER'
+      WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'VECTOR_DB_NAME_PLACEHOLDER')\gexec
 
       -- Grant privileges
-      GRANT ALL PRIVILEGES ON DATABASE librechat_vectordb TO librechat_vec;
+      GRANT ALL PRIVILEGES ON DATABASE VECTOR_DB_NAME_PLACEHOLDER TO VECTOR_DB_USER_PLACEHOLDER;
 
       -- Enable vector extension in the database
-      \c librechat_vectordb
+      \c VECTOR_DB_NAME_PLACEHOLDER
       CREATE EXTENSION IF NOT EXISTS vector;
-      GRANT ALL ON SCHEMA public TO librechat_vec;
+      GRANT ALL ON SCHEMA public TO VECTOR_DB_USER_PLACEHOLDER;
       PSQLJS
 
+      sed -i "s|VECTOR_DB_USER_PLACEHOLDER|${VECTOR_DB_USER}|g" "${_pgsql}"
+      sed -i "s|VECTOR_DB_NAME_PLACEHOLDER|${VECTOR_DB_NAME}|g" "${_pgsql}"
+      sed -i "s|VECTOR_DB_PASS_PLACEHOLDER|${VECTOR_DB_PASS}|g" "${_pgsql}"
+      chown postgres:postgres "${_pgsql}"
+      chmod 600 "${_pgsql}"
+      su - postgres -c "psql -f ${_pgsql}" || log "WARN: pgvector SQL returned non-zero"
+      rm -f "${_pgsql}"
+
       log "PostgreSQL + pgvector setup complete."
-      log "  Database: librechat_vectordb"
-      log "  User: librechat_vec"
-      log "  Port: 5432"
+      log "  Database: ${VECTOR_DB_NAME}"
+      log "  User: ${VECTOR_DB_USER}"
+      log "  Port: ${VECTOR_DB_PORT}"
+
+  # --------------------------------------------------------------------------
+  # (j) SearXNG install script
+  #
+  # Deliberately a separate script with its own `set -e`: SearXNG is an optional
+  # enhancement, and the caller invokes it with `|| log WARN` so that a failure
+  # here degrades to "no web search" instead of aborting the whole boot (which
+  # is what happened in the earlier searxng build of this template).
+  # --------------------------------------------------------------------------
+  - path: /root/setup-searxng.sh
+    permissions: '0700'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # setup-searxng.sh — installs SearXNG from source into a venv and starts it
+      set -euo pipefail
+
+      source /root/.librechat-npm-bootstrap.env
+
+      log() { echo "[setup-searxng] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      SEARXNG_PORT="${SEARXNG_PORT:-8888}"
+      SEARXNG_DIR="/opt/searxng"
+      SEARXNG_VENV="${SEARXNG_DIR}/venv"
+
+      log "Installing SearXNG build dependencies..."
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python3-dev python3-venv python3-babel \
+        libxml2-dev libxslt1-dev zlib1g-dev libffi-dev libssl-dev
+
+      # -U so the matching 'searxng' group is created deterministically — the
+      # chown/systemd Group= below depend on it existing.
+      id -u searxng &>/dev/null || useradd --system -U --home-dir "${SEARXNG_DIR}" --shell /usr/sbin/nologin searxng
+      mkdir -p "${SEARXNG_DIR}" /var/log/searxng /etc/searxng
+
+      # ------------------------------------------------------------------------
+      # Source checkout.
+      #
+      # NOTE: there is no SearXNG search engine on PyPI — `pip install searxng`
+      # pulls an unrelated pre-alpha MCP package and yields no webapp at all.
+      # Upstream's supported install is an editable install from the git tree.
+      # ------------------------------------------------------------------------
+      if [ -d "${SEARXNG_DIR}/.git" ]; then
+        log "SearXNG already cloned — pulling latest..."
+        git -C "${SEARXNG_DIR}" pull --ff-only || log "WARN: git pull failed — using existing checkout"
+      else
+        # Keep the venv if a previous run left one behind
+        rm -rf "${SEARXNG_DIR}/searx" "${SEARXNG_DIR}/.git"
+        git clone --depth 1 https://github.com/searxng/searxng.git "${SEARXNG_DIR}/.searxng-src"
+        cp -a "${SEARXNG_DIR}/.searxng-src/." "${SEARXNG_DIR}/"
+        rm -rf "${SEARXNG_DIR}/.searxng-src"
+      fi
+
+      log "Creating SearXNG virtualenv..."
+      [ -x "${SEARXNG_VENV}/bin/python" ] || python3 -m venv "${SEARXNG_VENV}"
+
+      # Build prerequisites first, per upstream's installation guide
+      "${SEARXNG_VENV}/bin/pip" install -q --upgrade pip setuptools wheel
+      "${SEARXNG_VENV}/bin/pip" install -q --upgrade pyyaml msgspec typing-extensions pybind11
+
+      log "Installing SearXNG (editable) and the granian app server..."
+      "${SEARXNG_VENV}/bin/pip" install -q --use-pep517 --no-build-isolation -e "${SEARXNG_DIR}"
+      # granian lives in requirements-server.txt, not requirements.txt
+      if [ -f "${SEARXNG_DIR}/requirements-server.txt" ]; then
+        "${SEARXNG_VENV}/bin/pip" install -q -r "${SEARXNG_DIR}/requirements-server.txt"
+      else
+        "${SEARXNG_VENV}/bin/pip" install -q granian
+      fi
+
+      # ------------------------------------------------------------------------
+      # Settings.
+      #
+      # `use_default_settings: true` layers these few keys over upstream's
+      # settings.yml, so we never have to sed-patch their file (every such patch
+      # in the previous template silently missed and left defaults in place).
+      #
+      # `json` in formats is REQUIRED — LibreChat queries /search?format=json and
+      # SearXNG ships with html only, so without this every search 403s.
+      # ------------------------------------------------------------------------
+      log "Writing /etc/searxng/settings.yml..."
+      SEARXNG_SECRET="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 64 || true)"
+      cat > /etc/searxng/settings.yml <<-SEARXSETTINGS
+      use_default_settings: true
+      general:
+        instance_name: "LibreChat Search"
+        enable_metrics: false
+      server:
+        secret_key: "${SEARXNG_SECRET}"
+        bind_address: "127.0.0.1"
+        port: ${SEARXNG_PORT}
+        # limiter/public_instance off: bot detection would block API clients.
+        limiter: false
+        public_instance: false
+        image_proxy: false
+        # Upstream defaults to POST, which makes GET /search?format=json return
+        # 405. POST exists to keep queries out of logs/referrers on PUBLIC
+        # instances; this one is bound to 127.0.0.1 for LibreChat only.
+        method: "GET"
+      search:
+        safe_search: 0
+        formats:
+          - html
+          - json
+      SEARXSETTINGS
+      chown root:searxng /etc/searxng/settings.yml
+      chmod 640 /etc/searxng/settings.yml
+
+      log "Writing /etc/searxng/searxng.env..."
+      cat > /etc/searxng/searxng.env <<-SEARXENV
+      SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+      GRANIAN_INTERFACE=wsgi
+      GRANIAN_HOST=127.0.0.1
+      GRANIAN_PORT=${SEARXNG_PORT}
+      GRANIAN_PROCESS_NAME=searxng
+      GRANIAN_WEBSOCKETS=false
+      GRANIAN_BLOCKING_THREADS=4
+      SEARXENV
+      chown root:searxng /etc/searxng/searxng.env
+      chmod 640 /etc/searxng/searxng.env
+
+      chown -R searxng:searxng "${SEARXNG_DIR}" /var/log/searxng
+
+      log "Starting SearXNG..."
+      systemctl daemon-reload
+      systemctl enable searxng
+      systemctl restart searxng
+
+      # Confirm it actually answers JSON — a 200 on / only proves the web app is
+      # up, not that the format LibreChat needs is enabled.
+      SEARXNG_READY=0
+      for _i in $(seq 1 15); do
+        if curl -sf "http://127.0.0.1:${SEARXNG_PORT}/search?q=test&format=json" >/dev/null 2>&1; then
+          SEARXNG_READY=1
+          log "SearXNG is up and serving JSON."
+          break
+        fi
+        log "  attempt ${_i}/15 ..."
+        sleep 3
+      done
+      if [ "${SEARXNG_READY}" -eq 0 ]; then
+        log "WARN: SearXNG did not answer a JSON search — check journalctl -u searxng"
+        exit 1
+      fi
+
+      log "SearXNG setup complete on port ${SEARXNG_PORT}."
 
   # --------------------------------------------------------------------------
   # (r) Main bootstrap script
@@ -571,6 +782,16 @@ write_files:
 
       source /root/.librechat-npm-bootstrap.env
 
+      # Defaults for keys that may be missing from an env file written by an
+      # older revision of this template. Without these, `set -u` would abort the
+      # whole bootstrap on a re-run rather than just using the stock port.
+      MONGO_PORT="${MONGO_PORT:-27017}"
+      MEILI_PORT="${MEILI_PORT:-7700}"
+      VECTOR_DB_PORT="${VECTOR_DB_PORT:-5432}"
+      REDIS_PORT="${REDIS_PORT:-6379}"
+      SEARXNG_PORT="${SEARXNG_PORT:-8888}"
+      SD_WEBUI_PORT="${SD_WEBUI_PORT:-7860}"
+
       # --------------------------------------------------------------------------
       # SIGPIPE-safe random generators
       # --------------------------------------------------------------------------
@@ -579,48 +800,88 @@ write_files:
 
       log() { echo "[librechat-npm-bootstrap] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
 
+      # Write a value back into the operator env file. Values there are QUOTED
+      # ("CHANGE_ME"), so a naive s|^KEY=CHANGE_ME|...| never matches and the
+      # generated secret is silently lost — on the next run everything would be
+      # regenerated and Mongo auth / JWT sessions would break. Match the whole
+      # line instead, and escape sed metacharacters in the replacement so a
+      # provisioner password containing & | or \ cannot corrupt the file.
+      persist() {
+        local _k="$1" _v="$2" _esc
+        _esc="$(printf '%s' "${_v}" | sed -e 's/[&|\\]/\\&/g')"
+        sed -i "s|^${_k}=.*|${_k}=\"${_esc}\"|" /root/.librechat-npm-bootstrap.env
+      }
+
       log "=== LibreChat (npm) bootstrap started ==="
 
       # --------------------------------------------------------------------------
+      # Provisioner-supplied admin credentials
+      #
+      # The provisioner exports VPS_ADMIN_EMAIL / VPS_ADMIN_PASS (and/or drops
+      # them in /etc/vps-provision.env). These are the credentials the customer
+      # is handed, so they must become the LibreChat login and the Let's Encrypt
+      # contact. This runs BEFORE the CHANGE_ME generation below so a supplied
+      # password is kept verbatim instead of being replaced by a random one.
+      # Machine-only secrets (JWT, Mongo admin, Meili key, vector DB) are never
+      # taken from here — they stay generated.
+      # --------------------------------------------------------------------------
+      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
+      if [ -n "${VPS_ADMIN_EMAIL:-}" ]; then
+        LIBRECHAT_ADMIN_EMAIL="${VPS_ADMIN_EMAIL}"
+        LE_EMAIL="${VPS_ADMIN_EMAIL}"
+        log "Using provisioner-supplied admin email."
+      fi
+      if [ -n "${VPS_ADMIN_PASS:-}" ]; then
+        LIBRECHAT_ADMIN_PASS="${VPS_ADMIN_PASS}"
+        log "Using provisioner-supplied admin password."
+      fi
+      # Persist whatever we settled on so re-runs and operators see the same values
+      persist LIBRECHAT_ADMIN_EMAIL "${LIBRECHAT_ADMIN_EMAIL}"
+      persist LE_EMAIL "${LE_EMAIL}"
+
+      # --------------------------------------------------------------------------
       # Auto-generate secrets for any value still set to CHANGE_ME
+      #
+      # These are machine-only credentials the customer never types. Each is
+      # written back to the env file so a second run of this script reuses them
+      # rather than rotating them out from under the running services.
       # --------------------------------------------------------------------------
       if [ "${JWT_SECRET}" = "CHANGE_ME" ]; then
         JWT_SECRET="$(rand_hex)"
-        sed -i "s|^JWT_SECRET=CHANGE_ME|JWT_SECRET=${JWT_SECRET}|" /root/.librechat-npm-bootstrap.env
+        persist JWT_SECRET "${JWT_SECRET}"
       fi
       if [ "${JWT_REFRESH_SECRET}" = "CHANGE_ME" ]; then
         JWT_REFRESH_SECRET="$(rand_hex)"
-        sed -i "s|^JWT_REFRESH_SECRET=CHANGE_ME|JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}|" /root/.librechat-npm-bootstrap.env
+        persist JWT_REFRESH_SECRET "${JWT_REFRESH_SECRET}"
       fi
       if [ "${CREDS_KEY}" = "CHANGE_ME" ]; then
         CREDS_KEY="$(rand_hex)"
-        sed -i "s|^CREDS_KEY=CHANGE_ME|CREDS_KEY=${CREDS_KEY}|" /root/.librechat-npm-bootstrap.env
+        persist CREDS_KEY "${CREDS_KEY}"
       fi
       if [ "${CREDS_IV}" = "CHANGE_ME" ]; then
         CREDS_IV="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c 32 || true)"
-        sed -i "s|^CREDS_IV=CHANGE_ME|CREDS_IV=${CREDS_IV}|" /root/.librechat-npm-bootstrap.env
+        persist CREDS_IV "${CREDS_IV}"
       fi
       if [ "${MONGO_ADMIN_PASS}" = "CHANGE_ME" ]; then
         MONGO_ADMIN_PASS="$(rand)"
-        sed -i "s|^MONGO_ADMIN_PASS=CHANGE_ME|MONGO_ADMIN_PASS=${MONGO_ADMIN_PASS}|" /root/.librechat-npm-bootstrap.env
-      fi
-      if [ "${LIBRECHAT_ADMIN_PASS}" = "CHANGE_ME" ]; then
-        LIBRECHAT_ADMIN_PASS="$(rand)"
-        sed -i "s|^LIBRECHAT_ADMIN_PASS=CHANGE_ME|LIBRECHAT_ADMIN_PASS=${LIBRECHAT_ADMIN_PASS}|" /root/.librechat-npm-bootstrap.env
+        persist MONGO_ADMIN_PASS "${MONGO_ADMIN_PASS}"
       fi
       if [ "${MEILI_MASTER_KEY}" = "CHANGE_ME" ]; then
         MEILI_MASTER_KEY="$(rand_hex)"
-        sed -i "s|^MEILI_MASTER_KEY=CHANGE_ME|MEILI_MASTER_KEY=${MEILI_MASTER_KEY}|" /root/.librechat-npm-bootstrap.env
+        persist MEILI_MASTER_KEY "${MEILI_MASTER_KEY}"
       fi
       if [ "${VECTOR_DB_PASS}" = "CHANGE_ME" ]; then
         VECTOR_DB_PASS="$(rand)"
-        sed -i "s|^VECTOR_DB_PASS=CHANGE_ME|VECTOR_DB_PASS=${VECTOR_DB_PASS}|" /root/.librechat-npm-bootstrap.env
+        persist VECTOR_DB_PASS "${VECTOR_DB_PASS}"
       fi
 
-      # Prefer provisioner-supplied admin credentials
-      [ -r /etc/vps-provision.env ] && . /etc/vps-provision.env
-      [ -n "${VPS_ADMIN_EMAIL:-}" ] && LIBRECHAT_ADMIN_EMAIL="$VPS_ADMIN_EMAIL"
-      [ -n "${VPS_ADMIN_PASS:-}" ] && LIBRECHAT_ADMIN_PASS="$VPS_ADMIN_PASS"
+      # The customer-facing login password: provisioner value wins, otherwise
+      # generate one. Either way persist it — it is printed in the credentials
+      # file and used to create the LibreChat account in step 18b.
+      if [ "${LIBRECHAT_ADMIN_PASS}" = "CHANGE_ME" ]; then
+        LIBRECHAT_ADMIN_PASS="$(rand)"
+      fi
+      persist LIBRECHAT_ADMIN_PASS "${LIBRECHAT_ADMIN_PASS}"
 
       # --------------------------------------------------------------------------
       # 1. Disable Transparent Huge Pages (MongoDB requirement)
@@ -741,11 +1002,17 @@ write_files:
       # --------------------------------------------------------------------------
       if [ "${MONGO_READY}" -eq 1 ]; then
         log "Creating MongoDB admin user..."
-        mongosh --quiet --port "${MONGO_PORT}" <<-'MONGOJS'
-      use admin
-      if (db.getUser("mongoadmin") === null) {
-        db.createUser({
-          user: "mongoadmin",
+        # Write the init script to a file, substitute the real credentials into
+        # it, THEN run it. The heredoc delimiter is quoted so that nothing here
+        # is expanded by the shell (which would leak the password into `set -x`
+        # output); the sed pass below is what injects the real values.
+        # `use admin` is a REPL-only helper and is not valid in a script file —
+        # getSiblingDB() is the scripted equivalent.
+        cat > /tmp/mongo-init.js <<-'MONGOJS'
+      var adminDb = db.getSiblingDB("admin");
+      if (adminDb.getUser("MONGO_ADMIN_USER_PLACEHOLDER") === null) {
+        adminDb.createUser({
+          user: "MONGO_ADMIN_USER_PLACEHOLDER",
           pwd:  "MONGO_ADMIN_PASS_PLACEHOLDER",
           roles: [
             { role: "userAdminAnyDatabase", db: "admin" },
@@ -759,8 +1026,12 @@ write_files:
         print("Admin user already exists — skipping.");
       }
       MONGOJS
-      # Substitute the actual password into the script that was written above
-      sed -i "s|MONGO_ADMIN_PASS_PLACEHOLDER|${MONGO_ADMIN_PASS}|" /tmp/mongo-init.js 2>/dev/null || true
+        chmod 600 /tmp/mongo-init.js
+        sed -i "s|MONGO_ADMIN_USER_PLACEHOLDER|${MONGO_ADMIN_USER}|g" /tmp/mongo-init.js
+        sed -i "s|MONGO_ADMIN_PASS_PLACEHOLDER|${MONGO_ADMIN_PASS}|g" /tmp/mongo-init.js
+        mongosh --quiet --port "${MONGO_PORT}" /tmp/mongo-init.js \
+          || log "WARN: MongoDB admin user creation returned non-zero"
+        rm -f /tmp/mongo-init.js
       else
         log "WARN: Skipping admin user creation — mongod not ready"
       fi
@@ -792,13 +1063,16 @@ write_files:
       # 8. Create LibreChat database in MongoDB
       # --------------------------------------------------------------------------
       log "Creating LibreChat MongoDB database..."
+      # `use <db>` is a REPL helper and is a syntax error inside --eval; use
+      # getSiblingDB(). MongoDB creates a database lazily, so touch a collection
+      # to make it materialise.
       mongosh --quiet \
         --port "${MONGO_PORT}" \
         --username "${MONGO_ADMIN_USER}" \
         --password "${MONGO_ADMIN_PASS}" \
         --authenticationDatabase "admin" \
-        --eval "use ${MONGO_DB_NAME}; if (db.adminCommand({listDatabases:1}).ok === 1) { print('DB exists'); }" \
-        2>/dev/null || true
+        --eval "db.getSiblingDB('${MONGO_DB_NAME}').createCollection('_bootstrap'); print('Database ${MONGO_DB_NAME} ready.');" \
+        || log "WARN: could not pre-create ${MONGO_DB_NAME} — LibreChat will create it on first write"
 
       # --------------------------------------------------------------------------
       # 9. Install PostgreSQL 16 + pgvector (RAG vector database)
@@ -830,11 +1104,12 @@ write_files:
       cat > /etc/meilisearch.env <<-'MEILIEV'
       MEILI_MASTER_KEY=MEILI_MASTER_KEY_PLACEHOLDER
       MEILI_DB_PATH=/var/lib/meilisearch
-      MEILI_LOG_DIR=/var/log/meilisearch
       MEILI_ENV=production
+      MEILI_HTTP_ADDR=127.0.0.1:MEILI_PORT_PLACEHOLDER
       MEILI_NO_ANALYTICS=true
       MEILIEV
       sed -i "s|MEILI_MASTER_KEY_PLACEHOLDER|${MEILI_MASTER_KEY}|" /etc/meilisearch.env
+      sed -i "s|MEILI_PORT_PLACEHOLDER|${MEILI_PORT}|" /etc/meilisearch.env
       chmod 600 /etc/meilisearch.env
       chown root:root /etc/meilisearch.env
 
@@ -859,7 +1134,9 @@ write_files:
       #    but ensure it exists and has correct settings)
       # --------------------------------------------------------------------------
       log "Ensuring librechat user exists and has /opt/librechat directory..."
-      id librechat &>/dev/null || useradd --system --shell /bin/bash --home-dir /opt/librechat --groups sudo,www-data librechat
+      # No sudo group: this is a service account, and both `sudo -u librechat`
+      # calls later in this script run as root, so it needs no privileges of its own.
+      id librechat &>/dev/null || useradd --system --shell /bin/bash --home-dir /opt/librechat --groups www-data librechat
       mkdir -p /opt/librechat
       chown -R librechat:librechat /opt/librechat
 
@@ -900,18 +1177,43 @@ write_files:
       chmod 750 /var/lib/redis /var/log/redis
       touch /var/log/redis/redis.log
       chown redis:redis /var/log/redis/redis.log
-      # Install redis-server before enabling the service
-      DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confnew" redis-server
+      # Install redis-server before enabling the service.
+      # --force-confold keeps the /etc/redis/redis.conf written by write_files;
+      # --force-confnew would replace it with the packaged default and silently
+      # drop the maxmemory/eviction tuning below.
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confold" redis-server
+      sed -i "s|^port REDIS_PORT_PLACEHOLDER|port ${REDIS_PORT}|" /etc/redis/redis.conf
+      # The package ships its own redis-server.service and starts it on install.
+      # It would hold 127.0.0.1:6379 and our redis.service would fail to bind,
+      # so retire it before enabling ours.
+      systemctl disable --now redis-server 2>/dev/null || true
+      systemctl daemon-reload
       systemctl enable redis
-      systemctl start redis
+      systemctl start redis || log "WARN: redis start returned non-zero — check journalctl -u redis"
       # Verify
-      for i in $(seq 1 10); do
-        if redis-cli ping &>/dev/null; then
+      REDIS_READY=0
+      for _i in $(seq 1 10); do
+        if redis-cli -h 127.0.0.1 -p "${REDIS_PORT}" ping 2>/dev/null | grep -q PONG; then
+          REDIS_READY=1
           log "Redis is running."
           break
         fi
+        log "  redis attempt ${_i}/10 ..."
         sleep 2
       done
+      if [ "${REDIS_READY}" -eq 0 ]; then
+        log "WARN: Redis not responding on ${REDIS_PORT} — check journalctl -u redis"
+      fi
+
+      # --------------------------------------------------------------------------
+      # 13a. SearXNG (self-hosted web search backend for LibreChat)
+      #
+      # Optional component: run in its own script so that a failure logs a
+      # warning and the rest of the stack still comes up.
+      # --------------------------------------------------------------------------
+      log "Setting up SearXNG..."
+      bash /root/setup-searxng.sh \
+        || log "WARN: SearXNG setup failed — continuing without web search (see /var/log/librechat-npm-bootstrap.log)"
 
       # --------------------------------------------------------------------------
       # 13b. Miniconda (Python 3.10 for Stable Diffusion WebUI)
@@ -966,6 +1268,12 @@ write_files:
       # 14. Create .env from .env.example and add required overrides
       # --------------------------------------------------------------------------
       log "Configuring LibreChat .env..."
+
+      # Authentication is enabled on mongod in step 7, so every client URI must
+      # carry credentials and an authSource. rand() emits [A-Za-z0-9] only, so
+      # the password needs no percent-encoding here.
+      MONGO_URI="mongodb://${MONGO_ADMIN_USER}:${MONGO_ADMIN_PASS}@127.0.0.1:${MONGO_PORT}/${MONGO_DB_NAME}?authSource=admin"
+
       if [ -f "${LIBRECHAT_DIR}/.env.example" ]; then
         cp -f "${LIBRECHAT_DIR}/.env.example" "${LIBRECHAT_DIR}/.env"
       else
@@ -981,7 +1289,7 @@ write_files:
         echo "JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}"
         echo "CREDS_KEY=${CREDS_KEY}"
         echo "CREDS_IV=${CREDS_IV}"
-        echo "MONGO_URI=mongodb://127.0.0.1:27017/${MONGO_DB_NAME}"
+        echo "MONGO_URI=${MONGO_URI}"
         echo "ALLOW_REGISTRATION=true"
         echo "ALLOW_SOCIAL_LOGIN=false"
         echo "OPENAI_API_KEY=${OPENAI_API_KEY}"
@@ -1006,6 +1314,8 @@ write_files:
         echo "REDIS_URI=redis://127.0.0.1:${REDIS_PORT}"
         echo "# Stable Diffusion API"
         echo "SD_WEBUI_URL=http://127.0.0.1:${SD_WEBUI_PORT}"
+        echo "# SearXNG (web search provider — LibreChat reads SEARXNG_INSTANCE_URL)"
+        echo "SEARXNG_INSTANCE_URL=http://127.0.0.1:${SEARXNG_PORT}"
       } >> "${LIBRECHAT_DIR}/.env"
 
       chmod 600 "${LIBRECHAT_DIR}/.env"
@@ -1023,19 +1333,29 @@ write_files:
       JWT_REFRESH_SECRET=JWT_REFRESH_SECRET_PLACEHOLDER
       CREDS_KEY=CREDS_KEY_PLACEHOLDER
       CREDS_IV=CREDS_IV_PLACEHOLDER
-      MONGO_URI=mongodb://127.0.0.1:27017/librechat
+      MONGO_URI=MONGO_URI_PLACEHOLDER
       OPENAI_API_KEY=OPENAI_API_KEY_PLACEHOLDER
       ANTHROPIC_API_KEY=ANTHROPIC_API_KEY_PLACEHOLDER
-      MEILI_HOST=http://127.0.0.1:7700
+      MEILI_HOST=http://127.0.0.1:MEILI_PORT_PLACEHOLDER
       MEILI_MASTER_KEY=MEILI_MASTER_KEY_PLACEHOLDER
       VECTOR_DB_HOST=127.0.0.1
-      VECTOR_DB_PORT=5432
-      VECTOR_DB_NAME=librechat_vectordb
-      VECTOR_DB_USER=librechat_vec
+      VECTOR_DB_PORT=VECTOR_DB_PORT_PLACEHOLDER
+      VECTOR_DB_NAME=VECTOR_DB_NAME_PLACEHOLDER
+      VECTOR_DB_USER=VECTOR_DB_USER_PLACEHOLDER
       VECTOR_DB_PASS=VECTOR_DB_PASS_PLACEHOLDER
+      USE_REDIS=true
+      REDIS_URI=redis://127.0.0.1:REDIS_PORT_PLACEHOLDER
+      SEARXNG_INSTANCE_URL=http://127.0.0.1:SEARXNG_PORT_PLACEHOLDER
       ENVFILE
       # Substitute actual values
       sed -i "s|LIBRECHAT_PORT_PLACEHOLDER|${LIBRECHAT_PORT}|" /etc/librechat.env
+      sed -i "s|MONGO_URI_PLACEHOLDER|${MONGO_URI}|" /etc/librechat.env
+      sed -i "s|MEILI_PORT_PLACEHOLDER|${MEILI_PORT}|" /etc/librechat.env
+      sed -i "s|VECTOR_DB_PORT_PLACEHOLDER|${VECTOR_DB_PORT}|" /etc/librechat.env
+      sed -i "s|VECTOR_DB_NAME_PLACEHOLDER|${VECTOR_DB_NAME}|" /etc/librechat.env
+      sed -i "s|VECTOR_DB_USER_PLACEHOLDER|${VECTOR_DB_USER}|" /etc/librechat.env
+      sed -i "s|REDIS_PORT_PLACEHOLDER|${REDIS_PORT}|" /etc/librechat.env
+      sed -i "s|SEARXNG_PORT_PLACEHOLDER|${SEARXNG_PORT}|" /etc/librechat.env
       sed -i "s|JWT_SECRET_PLACEHOLDER|${JWT_SECRET}|" /etc/librechat.env
       sed -i "s|JWT_REFRESH_SECRET_PLACEHOLDER|${JWT_REFRESH_SECRET}|" /etc/librechat.env
       sed -i "s|CREDS_KEY_PLACEHOLDER|${CREDS_KEY}|" /etc/librechat.env
@@ -1061,15 +1381,17 @@ write_files:
       # Pin rimraf to v5 to prevent ESM/brace-expansion crash with Node.js v24
       # Write patch script as outer bootstrap (avoids sudo/bash quoting hell)
       cat > /tmp/patch-rimraf.js <<'RIMRAFSCRIPT'
-const fs = require('fs');
-const pkg = JSON.parse(fs.readFileSync('/opt/librechat/package.json', 'utf8'));
-pkg.dependencies = pkg.dependencies || {};
-pkg.dependencies.rimraf = '5';
-fs.writeFileSync('/opt/librechat/package.json', JSON.stringify(pkg, null, 2));
-console.log('Patched package.json with rimraf@5');
-RIMRAFSCRIPT
+      const fs = require('fs');
+      const pkg = JSON.parse(fs.readFileSync('/opt/librechat/package.json', 'utf8'));
+      pkg.dependencies = pkg.dependencies || {};
+      pkg.dependencies.rimraf = '5';
+      fs.writeFileSync('/opt/librechat/package.json', JSON.stringify(pkg, null, 2));
+      console.log('Patched package.json with rimraf@5');
+      RIMRAFSCRIPT
       chmod +x /tmp/patch-rimraf.js
-      cd '${LIBRECHAT_DIR}'
+      # NB: double quotes — single quotes would make this a literal path and the
+      # cd would fail, aborting the whole bootstrap under `set -e`.
+      cd "${LIBRECHAT_DIR}"
       npm install rimraf@5
       sudo -u librechat node /tmp/patch-rimraf.js
       rm -f /tmp/patch-rimraf.js
@@ -1078,12 +1400,12 @@ RIMRAFSCRIPT
         export npm_config_cache='/opt/librechat/.npm-cache'
         export NODE_ENV=production
         export HOST=0.0.0.0
-        export PORT=${LIBRECHAT_PORT}
+        export PORT='\''${LIBRECHAT_PORT}'\''
         export JWT_SECRET='\''${JWT_SECRET}'\''
         export JWT_REFRESH_SECRET='\''${JWT_REFRESH_SECRET}'\''
         export CREDS_KEY='\''${CREDS_KEY}'\''
         export CREDS_IV='\''${CREDS_IV}'\''
-        export MONGO_URI='\''mongodb://127.0.0.1:27017/${MONGO_DB_NAME}'\''
+        export MONGO_URI='\''${MONGO_URI}'\''
         cd '\''${LIBRECHAT_DIR}'\''
         npm run reinstall 2>&1 | head -5 || log "WARN: npm run reinstall had warnings or errors — check log below"
       ' || log "WARN: npm run reinstall had warnings or errors — check log below"
@@ -1119,6 +1441,30 @@ RIMRAFSCRIPT
       else
         log "WARN: librechat-npm service may not be running — check journalctl -u librechat-npm"
       fi
+
+      # --------------------------------------------------------------------------
+      # 18b. Create the admin account so the delivered credentials actually work
+      #
+      # Without this the customer is handed an email/password that no account
+      # uses — LibreChat would just wait for someone to self-register. create-user
+      # PROMPTS for any argument it is not given, so all four are passed and
+      # stdin is detached; otherwise a missing value would hang cloud-init.
+      # --------------------------------------------------------------------------
+      log "Creating LibreChat admin account for ${LIBRECHAT_ADMIN_EMAIL}..."
+      LC_ADMIN_NAME="${LIBRECHAT_ADMIN_EMAIL%%@*}"
+      # `env` rather than `sudo VAR=val ...`: sudoers env_reset can refuse
+      # command-line environment assignments, and this must not depend on policy.
+      ( cd "${LIBRECHAT_DIR}" && sudo -u librechat -H env \
+          HOME=/opt/librechat \
+          npm_config_cache=/opt/librechat/.npm-cache \
+          npm run create-user -- \
+            "${LIBRECHAT_ADMIN_EMAIL}" \
+            "${LC_ADMIN_NAME}" \
+            "${LC_ADMIN_NAME}" \
+            "${LIBRECHAT_ADMIN_PASS}" \
+            --email-verified=true \
+          </dev/null ) \
+        || log "WARN: create-user failed (account may already exist) — register at the web UI if needed"
 
       # --------------------------------------------------------------------------
       # 19. UFW firewall
@@ -1176,7 +1522,7 @@ RIMRAFSCRIPT
 
       Stack: Node.js 24 + MongoDB 8 + LibreChat (from source)
              + Meilisearch 1.35 (host) + PostgreSQL 16 + pgvector
-             + Redis (cache/sessions)
+             + Redis (cache/sessions) + SearXNG (web search)
              + Stable Diffusion WebUI (A1111 fork, CPU mode)
              + Miniconda Python 3.10
              + Nginx reverse proxy + UFW + fail2ban + unattended-upgrades
@@ -1189,33 +1535,39 @@ RIMRAFSCRIPT
       Backend direct : http://127.0.0.1:LIBRECHAT_PORT_PLACEHOLDER
 
       MongoDB (host service, auth enabled):
-        Host           : 127.0.0.1:27017
-        Database       : librechat
-        Admin user     : mongoadmin
+        Host           : 127.0.0.1:MONGO_PORT_PLACEHOLDER
+        Database       : MONGO_DB_NAME_PLACEHOLDER
+        Admin user     : MONGO_ADMIN_USER_PLACEHOLDER
         Admin password : MONGO_ADMIN_PASS_PLACEHOLDER
 
       Meilisearch (host service, search/RAG):
-        Host       : 127.0.0.1:7700
+        Host       : 127.0.0.1:MEILI_PORT_PLACEHOLDER
         Master key : MEILI_MASTER_KEY_PLACEHOLDER
-        Health URL : http://127.0.0.1:7700/health
+        Health URL : http://127.0.0.1:MEILI_PORT_PLACEHOLDER/health
 
       Vector DB (PostgreSQL 16 + pgvector, RAG):
-        Host     : 127.0.0.1:5432
-        Database : librechat_vectordb
-        User     : librechat_vec
+        Host     : 127.0.0.1:VECTOR_DB_PORT_PLACEHOLDER
+        Database : VECTOR_DB_NAME_PLACEHOLDER
+        User     : VECTOR_DB_USER_PLACEHOLDER
         Password : VECTOR_DB_PASS_PLACEHOLDER
         Extension: vector (enabled)
 
       Redis (cache/sessions for LibreChat):
-        Host : 127.0.0.1:6379
-        URI  : redis://127.0.0.1:6379
+        Host : 127.0.0.1:REDIS_PORT_PLACEHOLDER
+        URI  : redis://127.0.0.1:REDIS_PORT_PLACEHOLDER
+
+      SearXNG (self-hosted web search for LibreChat):
+        URL      : http://127.0.0.1:SEARXNG_PORT_PLACEHOLDER
+        Settings : /etc/searxng/settings.yml
+        Notes    : Bound to localhost only, reached via LibreChat's
+                   SEARXNG_INSTANCE_URL. JSON output format is enabled,
+                   which LibreChat's web search requires.
 
       Stable Diffusion WebUI (A1111 fork, CPU mode):
-        URL   : http://127.0.0.1:7860
-        Port  : 7860
+        URL   : http://127.0.0.1:SD_WEBUI_PORT_PLACEHOLDER
+        Port  : SD_WEBUI_PORT_PLACEHOLDER
         Notes : First run downloads models (~10-20 min). Run manually:
                   systemctl start stable-diffusion
-                  # Then open http://127.0.0.1:7860
 
       LibreChat .env credentials:
         JWT secret         : JWT_SECRET_PLACEHOLDER
@@ -1223,7 +1575,7 @@ RIMRAFSCRIPT
         Creds key          : CREDS_KEY_PLACEHOLDER
         Creds IV           : CREDS_IV_PLACEHOLDER
 
-      Admin account (first registered user becomes admin, or use email below):
+      Admin account (created automatically at boot — log in with these):
         Email    : LIBRECHAT_ADMIN_EMAIL_PLACEHOLDER
         Password : LIBRECHAT_ADMIN_PASS_PLACEHOLDER
 
@@ -1242,9 +1594,11 @@ RIMRAFSCRIPT
                         journalctl -u meilisearch -f
         Redis         : systemctl status redis
                         journalctl -u redis -f
+        SearXNG       : systemctl status searxng
+                        journalctl -u searxng -f
         StableDiffusion: systemctl status stable-diffusion
                         journalctl -u stable-diffusion -f
-        PostgreSQL    : su - postgres -c "psql -d librechat_vectordb"
+        PostgreSQL    : su - postgres -c "psql -d VECTOR_DB_NAME_PLACEHOLDER"
 
       Bootstrap log : /var/log/librechat-npm-bootstrap.log
 
@@ -1256,10 +1610,11 @@ RIMRAFSCRIPT
         4. Add LLM API keys via Settings → API Keys after login
         5. Rebuild after .env changes:
              sudo systemctl restart librechat-npm
-        6. Meilisearch runs on port 7700 — configure RAG settings in LibreChat
-        7. Vector DB runs on port 5432 — ensure your RAG pipeline uses these credentials
-         8. Redis runs on port 6379 — enabled for cache/sessions in LibreChat
-         9. Stable Diffusion WebUI runs on port 7860 — configure SD endpoint in LibreChat
+        6. Meilisearch runs on port MEILI_PORT_PLACEHOLDER — configure RAG settings in LibreChat
+        7. Vector DB runs on port VECTOR_DB_PORT_PLACEHOLDER — ensure your RAG pipeline uses these credentials
+        8. Redis runs on port REDIS_PORT_PLACEHOLDER — enabled for cache/sessions in LibreChat
+        9. SearXNG runs on port SEARXNG_PORT_PLACEHOLDER — enable Web Search in LibreChat settings
+       10. Stable Diffusion WebUI runs on port SD_WEBUI_PORT_PLACEHOLDER — configure SD endpoint in LibreChat
       ============================================================
       CREDS
       # Substitute placeholders
@@ -1270,8 +1625,18 @@ RIMRAFSCRIPT
       sed -i "s|WEB_HOST_PLACEHOLDER|${WEB_HOST}|g" /root/librechat-npm-credentials.txt
       sed -i "s|LIBRECHAT_PORT_PLACEHOLDER|${LIBRECHAT_PORT}|g" /root/librechat-npm-credentials.txt
       sed -i "s|MONGO_ADMIN_PASS_PLACEHOLDER|${MONGO_ADMIN_PASS}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|MONGO_ADMIN_USER_PLACEHOLDER|${MONGO_ADMIN_USER}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|MONGO_PORT_PLACEHOLDER|${MONGO_PORT}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|MONGO_DB_NAME_PLACEHOLDER|${MONGO_DB_NAME}|g" /root/librechat-npm-credentials.txt
       sed -i "s|MEILI_MASTER_KEY_PLACEHOLDER|${MEILI_MASTER_KEY}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|MEILI_PORT_PLACEHOLDER|${MEILI_PORT}|g" /root/librechat-npm-credentials.txt
       sed -i "s|VECTOR_DB_PASS_PLACEHOLDER|${VECTOR_DB_PASS}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|VECTOR_DB_PORT_PLACEHOLDER|${VECTOR_DB_PORT}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|VECTOR_DB_NAME_PLACEHOLDER|${VECTOR_DB_NAME}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|VECTOR_DB_USER_PLACEHOLDER|${VECTOR_DB_USER}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|REDIS_PORT_PLACEHOLDER|${REDIS_PORT}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|SEARXNG_PORT_PLACEHOLDER|${SEARXNG_PORT}|g" /root/librechat-npm-credentials.txt
+      sed -i "s|SD_WEBUI_PORT_PLACEHOLDER|${SD_WEBUI_PORT}|g" /root/librechat-npm-credentials.txt
       sed -i "s|JWT_SECRET_PLACEHOLDER|${JWT_SECRET}|g" /root/librechat-npm-credentials.txt
       sed -i "s|JWT_REFRESH_SECRET_PLACEHOLDER|${JWT_REFRESH_SECRET}|g" /root/librechat-npm-credentials.txt
       sed -i "s|CREDS_KEY_PLACEHOLDER|${CREDS_KEY}|g" /root/librechat-npm-credentials.txt
@@ -1307,7 +1672,7 @@ final_message: |
 
   Stack: Node.js 24 + MongoDB 8.0 (host) + LibreChat (from source)
          + Meilisearch 1.35.1 (host) + PostgreSQL 16 + pgvector
-         + Redis (cache/sessions)
+         + Redis (cache/sessions) + SearXNG (web search)
          + Stable Diffusion WebUI (A1111 fork, CPU mode)
          + Miniconda Python 3.10
          + Nginx reverse proxy + UFW + fail2ban + unattended-upgrades
@@ -1323,6 +1688,8 @@ final_message: |
     journalctl -u meilisearch -f
     systemctl status redis
     journalctl -u redis -f
+    systemctl status searxng
+    journalctl -u searxng -f
     systemctl status stable-diffusion
     journalctl -u stable-diffusion -f
 
