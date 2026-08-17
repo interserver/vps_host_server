@@ -110,6 +110,18 @@ uplinks_for() {
 	done
 }
 
+# Guest taps are matched by ebtables WILDCARD ("vnet+"), not by enumerating the
+# taps that happen to exist right now. libvirt hands out a fresh vnetN every time
+# a domain is created or restarted, so name-bound rules silently stop covering a
+# VPS the moment it is reinstalled -- which is exactly how vps2440582 ended up on
+# vnet14 with no rule on it. A wildcard covers every current and future tap.
+guest_patterns() {
+	echo "${GUEST_PREFIX}+"
+	echo "tap+"
+	echo "macvtap+"
+}
+
+# Live taps, for reporting only.
 guest_ports_for() {
 	local bridge="$1" port
 	for port in /sys/class/net/"$bridge"/brif/*; do
@@ -124,9 +136,13 @@ guest_ports_for() {
 # --- rule helpers -----------------------------------------------------------
 # ebtables has no -C, so match against the listing instead. -i is only valid in
 # INPUT/FORWARD; we use FORWARD so the host's own stack is untouched.
+# Interface names can contain '+' (the ebtables wildcard), which is an ERE
+# metacharacter, so escape before matching against the rule listing.
 rule_exists() {
-	local iface="$1"
-	ebtables -L FORWARD 2>/dev/null | grep -qE -- "-i ${iface} .*${RA_TYPE}"
+	local iface esc
+	iface="$1"
+	esc="$(printf '%s' "$iface" | sed 's/[][+.*^$()?{}|\\]/\\&/g')"
+	ebtables -L FORWARD 2>/dev/null | grep -qE -- "-i ${esc} .*${RA_TYPE}"
 }
 
 add_drop() {
@@ -193,26 +209,30 @@ do_status() {
 }
 
 do_apply() {
-	local bridge port
+	local bridge port pat
 	for bridge in $BRIDGES; do
 		log "bridge ${bridge}"
 		for port in $(uplinks_for "$bridge"); do
 			add_drop "$port" "uplink"
 		done
-		for port in $(guest_ports_for "$bridge"); do
-			add_drop "$port" "guest"
-		done
+	done
+	# Wildcards, so a reinstalled VPS on a brand new vnetN is covered without
+	# anyone having to remember to re-run this.
+	for pat in $(guest_patterns); do
+		add_drop "$pat" "guest wildcard"
 	done
 	set_accept_ra 0
 	log "done. Note: ebtables rules do NOT survive a reboot -- reapply from your boot path."
 }
 
+# Remove every RA-drop rule actually present, discovered from the ruleset itself
+# rather than from the interfaces that exist right now. A tap that has since gone
+# away (a reinstalled VPS moves vnetN) still has its rule sitting in the chain,
+# and enumerating live interfaces would never find it to delete it.
 do_remove() {
-	local bridge port
-	for bridge in $BRIDGES; do
-		for port in $(uplinks_for "$bridge") $(guest_ports_for "$bridge"); do
-			del_drop "$port"
-		done
+	local iface
+	for iface in $(ebtables -L FORWARD 2>/dev/null | grep -- "$RA_TYPE" | grep -oE -- '-i [^ ]+' | awk '{print $2}' | sort -u); do
+		del_drop "$iface"
 	done
 	set_accept_ra 1
 	log "removed."
