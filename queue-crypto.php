@@ -123,8 +123,20 @@ const QC_KEY_HEX_LEN = 64;
 /** The only cipher this protocol uses. */
 const QC_CIPHER = 'aes-256-gcm';
 
-/** Minimum decoded envelope payload: nonce + tag + at least one ciphertext byte. */
-const QC_MIN_RAW_LEN = QC_NONCE_LEN + QC_TAG_LEN + 1;
+/**
+ * Minimum decoded envelope payload: nonce + tag, with NO floor on the
+ * ciphertext.
+ *
+ * This used to demand one ciphertext byte on top, which silently broke every
+ * sealed EMPTY response: an idle get_new_vps / get_queue / server_list returns
+ * '', the panel seals it into exactly 28 raw bytes, and the strict floor of 29
+ * threw it out as "malformed" — dec exit 2, suspect flag, permanent downgrade
+ * to plaintext, on a host whose key was perfectly correct. AES-GCM
+ * authenticates a zero-length plaintext exactly as well as a longer one (the
+ * 16-byte tag still covers nonce + AAD), so the byte was never buying
+ * anything: an envelope that opens is still proof of the key.
+ */
+const QC_MIN_RAW_LEN = QC_NONCE_LEN + QC_TAG_LEN;
 
 /**
  * JSON flags for the sealed request plaintext, pinned identical to
@@ -692,6 +704,16 @@ function qc_cmd_selftest()
         qc_selftest_check('golden vector 5: wrong AAD fails the tag check', qc_decrypt_open(QC_GOLDEN_ENVELOPE, QC_GOLDEN_PSK_HEX, QC_GOLDEN_AAD . 'tampered') === null, $failures);
         $wrongKey = str_repeat('00', QC_KEY_HEX_LEN / 2);
         qc_selftest_check('golden vector 6: wrong key fails the tag check', qc_decrypt_open(QC_GOLDEN_ENVELOPE, $wrongKey, QC_GOLDEN_AAD) === null, $failures);
+        // Empty plaintext round trip: an idle queue handler returns '', and a
+        // sealed '' is exactly QC_NONCE_LEN + QC_TAG_LEN raw bytes. Pinned
+        // because a one-byte-too-strict floor here reads as "malformed
+        // envelope" and downgrades a correctly-keyed host to plaintext.
+        $emptyEnvelope = qc_encrypt('', QC_GOLDEN_PSK_HEX, QC_GOLDEN_AAD, (string) hex2bin(QC_GOLDEN_NONCE_HEX));
+        $emptyRaw = base64_decode(substr($emptyEnvelope, strlen(QC_PREFIX)), true);
+        qc_selftest_check('empty plaintext seals to exactly nonce+tag raw bytes', is_string($emptyRaw) && strlen($emptyRaw) === QC_NONCE_LEN + QC_TAG_LEN, $failures);
+        qc_selftest_check('empty plaintext envelope parses (no ciphertext-length floor)', qc_parse_envelope($emptyEnvelope) !== null, $failures);
+        qc_selftest_check('empty plaintext envelope opens back to the empty string', qc_decrypt_open($emptyEnvelope, QC_GOLDEN_PSK_HEX, QC_GOLDEN_AAD) === '', $failures);
+        qc_selftest_check('empty plaintext envelope still fails on a wrong key', qc_decrypt_open($emptyEnvelope, $wrongKey, QC_GOLDEN_AAD) === null, $failures);
 
         // Seal-shape JSON byte-parity: minimal request plaintext must use the
         // pinned flags and action-first key order the panel parser expects.
