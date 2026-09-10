@@ -7,10 +7,22 @@ template="$1"
 mac="00:16:3e:03:84:d9"
 
 export PATH="/usr/local/bin:/usr/local/sbin:$PATH:/usr/sbin:/sbin:/bin:/usr/bin";
+export base="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+export url="https://myvps.interserver.net/vps_queue.php"
+# install_progress goes through the shared shell choke-point, never a bare
+# curl — this callback used to reach the panel as outcome=legacy_plaintext
+# (warn=plaintext-from-keyed once the host is enrolled).
+if [ -r "$base/queue_lib.sh" ]; then
+  . "$base/queue_lib.sh"
+  queue_crypto_startup "$url"
+else
+  echo "queue_lib.sh missing from $base — install_progress stays legacy plaintext" >&2
+  function queue_request() { local a="$1"; shift; local e="$1"; shift; curl -s "$@" -d "action=$a" "$e" 2>/dev/null; }
+fi
 prlctl stop ${vps};
 prlctl delete ${vps};
 function iprogress() {
-  curl --connect-timeout 60 --max-time 240 -k -d action=install_progress -d progress=$1 -d server=${vps} 'https://myvps.interserver.net/vps_queue.php' < /dev/null > /dev/null 2>&1;
+  queue_request install_progress "$url" --connect-timeout 60 --max-time 240 -k --data-urlencode "progress=$1" --data-urlencode "server=${vps}" </dev/null >/dev/null 2>&1;
 }
 iprogress 10
 prlctl create ${vps} --vmtype ct --ostemplate ${template};

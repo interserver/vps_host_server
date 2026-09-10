@@ -7,6 +7,7 @@ VPS Hosting Server Daemon — provisions, monitors, and communicates with `myvps
 - **Primary CLI**: `provirted.phar` — all VPS lifecycle ops, VNC setup, cron tasks
 - **Daemon**: `workerman/` (Workerman 4.x, PHP ≥5.3) · entry: `workerman/start.php` · namespace: `MyAdmin\VpsHost\`
 - **Cron**: `vps_cron.sh` (VPS) · `qs_cron.sh` (QuickServers) · `vps_cron_daily.php`
+- **Queue transport**: `queue_lib.sh` — THE shell chokepoint for every queue POST (`queue_request <action> <endpoint> [curl flags...]`, capability probe, genkey, sealed bootstrap, suspect/6h cooldown), backed by `queue-crypto.php`. Source it; never `curl` a queue endpoint directly. PHP goes through `App\QueueGateway::sendRequest` in the phar instead.
 - **Workers**: `workerman/src/Workers/VpsServer.php` · `workerman/src/Workers/Task.php` · `workerman/src/Workers/GlobalData.php`
 - **Events**: `workerman/src/Events/` — `onMessage.php` · `onWorkerStart.php` · `setupTimers.php` · `onConnect.php` · `onClose.php`
 - **Tasks**: `workerman/src/Tasks/vps_queue.php` · `workerman/src/Tasks/vps_get_list.php` · `workerman/src/Tasks/vps_update_info.php`
@@ -72,6 +73,7 @@ workerman/update.sh
 - **VPS naming**: `vps{id}`, `windows{id}`, `linux{id}`, `qs{id}`
 - **MAC prefix**: `00:16:3E` for VPS, `00:0C:29` for QuickServers (see `unused/convert_id_to_mac.sh`)
 - **Central API**: `https://myvps.interserver.net/vps_queue.php` · `https://myvps.interserver.net/qs_queue.php` · `http://myvps.interserver.net:55151/queue.php`
+- **Queue enrolment**: PSK at `/etc/myadmin/queue.key` (override `QUEUE_KEY_FILE`), with `.suspect` / `.retry` companion stamps. `update_key` MUST be posted to the same endpoint the traffic uses — the panel keys the master per endpoint, so enrolling elsewhere leaves that master `key=none` and every request on the legacy plaintext path. Crypto CLI resolution: `$PANEL_CRYPT` override, else `/usr/local/bin/panel-crypt`, else the in-repo `queue-crypto.php`.
 - **Unused**: `unused/` contains deprecated scripts — do not reference or restore them
 - **Templates dir**: `templates/` — install and test scripts per virt type; `templates/test_*.sh` for smoke testing
 - **XML utility**: `xml2array.php` (root) and `workerman/src/Data/xml2array.php` — used to parse `virsh dumpxml` output

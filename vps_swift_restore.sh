@@ -9,6 +9,22 @@ fi
 export TERM=linux;
 #set -x
 url="https://myvps.interserver.net/vps_queue.php"
+# Queue POSTs go through the shared shell choke-point, never a bare curl —
+# these restore_status callbacks used to land on the panel as
+# outcome=legacy_plaintext (warn=plaintext-from-keyed once the host is keyed).
+if [ -r "$base/queue_lib.sh" ]; then
+	. "$base/queue_lib.sh"
+	queue_crypto_startup "$url"
+else
+	echo "queue_lib.sh missing from $base — restore_status stays legacy plaintext" >&2
+	function queue_request() { local a="$1"; shift; local e="$1"; shift; curl -s "$@" -d "action=$a" "$e" 2>/dev/null; }
+fi
+
+# restore_status callback for the vps being restored. $id was never assigned
+# anywhere in this script, so every one of these posted an empty vps_id.
+function restore_status() {
+	queue_request restore_status "$url" --connect-timeout 60 --max-time 600 -k --data-urlencode "vps_id=${sourceid}"
+}
 if [ "$(kpartx 2>&1 |grep sync)" = "" ]; then
 	kpartxopts=""
 else
@@ -33,14 +49,14 @@ if [ -e /etc/redhat-release ] && [ $(cat /etc/redhat-release| cut -d" " -f3 | cu
 fi;
 if [ "$(/admin/swift/c isls vps${sourceid} |grep "^${image}/")" = "" ]; then
 	echo "Backup does not exist"
-	curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+	restore_status
 	exit
 fi
 if which virsh >/dev/null 2>&1; then
   cd /
   if [ -e /${image} ]; then
 	echo "Invalid Image name - directory exists";
-	curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+	restore_status
 	exit;
   fi
   #if [ $# -gt 1 ]; then
@@ -53,7 +69,7 @@ if which virsh >/dev/null 2>&1; then
 else
   if [ -e /vz/${image} ]; then
 	echo "Invalid Image name - directory exists";
-	curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+	restore_status
 	exit;
   fi
   cd /vz
@@ -137,7 +153,7 @@ for i in $destids; do
 	fi
   fi
 done
-curl --connect-timeout 60 --max-time 600 -k -d action=restore_status -d vps_id=${id} "$url" 2>/dev/null
+restore_status
 #set -x
 if which virsh >/dev/null 2>&1; then
   for i in $(ls /dev/mapper/*p[0-9] 2>/dev/null | sed s#"/dev/mapper/vz-"#""#g | sed s#"/dev/mapper/"#""#g | sed s#"p[0-9]$"#""#g); do
