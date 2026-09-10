@@ -89,6 +89,22 @@ else
 fi
 
 echo
+cat <<'NOTE'
+
+panel-side reset (needed whenever the keys have drifted):
+  Admin UI: Host Server view -> "Revoke Queue Key" (QueueKeyAdmin::revoke,
+  NULLs both columns and stamps history), or by hand:
+
+    -- vps master vps:NNN
+    UPDATE vps_masters SET vps_queue_key=NULL, vps_queue_key_updated=NULL WHERE vps_id=NNN;
+    -- quickservers master qs:NNN  <-- table/column prefix is qs_, NOT quickservers_
+    UPDATE qs_masters  SET qs_queue_key=NULL,  qs_queue_key_updated=NULL  WHERE qs_id=NNN;
+
+  The module is 'quickservers' but settings['PREFIX'] is 'qs' (config.inc.php:275),
+  so a qs master lives in qs_masters. NULLing quickservers_* changes nothing and
+  is the usual reason a reset "does not take".
+NOTE
+
 echo "verdict:"
 if [ "$drift" -eq 1 ]; then
 	echo "  Key drift confirmed by provirted: the panel holds a different key for this"
