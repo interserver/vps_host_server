@@ -85,6 +85,11 @@ function crypto_send_payload() {
 function bootstrap_key() {
 	local endpoint="${1:-$url}"
 	local key=""
+	# Did the key file exist BEFORE genkey's create-if-absent ran? Only brand-new
+	# material is provably unknown to the panel, and only that case may refund the
+	# retry cooldown below.
+	local preexisted=1
+	[ -f "$KEYFILE" ] || preexisted=0
 	key=$(panel_crypt genkey 2>/dev/null)
 	if [ $? -ne 0 ] || [ ${#key} -ne 64 ]; then
 		cron_warn "authfail: panel-crypt genkey failed — staying legacy"
@@ -96,7 +101,17 @@ function bootstrap_key() {
 	Q1.*)
 		printf '%s' "$response" | panel_crypt dec update_key >/dev/null 2>&1
 		if [ $? -eq 0 ]; then
-			rm -f "$KEYFILE.suspect" "$KEYFILE.retry"
+			rm -f "$KEYFILE.suspect"
+			# The retry stamp is NOT refunded for a key the panel may already
+			# have held. Its quadrant (f) idempotence branch accepts a plaintext
+			# update_key carrying the key it already stores and seals the success
+			# marker with that same key — indistinguishable from a real first
+			# enrolment right here. Clearing the cooldown on that made the 6h gate
+			# unreachable: every 403 (dedup false positive, clock skew) set
+			# suspect, re-bootstrapped, "succeeded", cleared the stamp, and the
+			# next request 403'd straight back into it. queue_request drops the
+			# stamp once a sealed exchange actually round-trips instead.
+			[ $preexisted -eq 0 ] && rm -f "$KEYFILE.retry"
 			cron_warn "bootstrap: panel confirmed key (sealed update_key reply opened) — envelope mode active"
 			return 0
 		fi
@@ -185,6 +200,10 @@ function queue_request() {
 		panel_crypt dec "$action" <"$response_file" >"$plaintext_file" 2>/dev/null
 		local dec_rc=$?
 		if [ $dec_rc -eq 0 ]; then
+			# Proof the enrolment is good: we sealed a request, the panel opened
+			# it, and we opened its sealed reply. This is what earns back the
+			# re-bootstrap cooldown bootstrap_key no longer refunds on its own.
+			rm -f "$KEYFILE.retry"
 			cat "$plaintext_file"
 			rm -f "$response_file" "$plaintext_file"
 			return 0
