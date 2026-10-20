@@ -22,7 +22,7 @@
 		"detain/phpsysinfo": "dev-main#c4910834b753f8929f2e8a4429be9466a29e46b5",
 		"react/child-process": "^0.6.7",
 		"react/event-loop": "^1.6.0",
-		"react/http": "^1.11.0",
+		"react/http": "^1.11.1",
 		"workerman/workerman": "^5.2",
 		"workerman/globaldata": "^1.0.6"
 	},
@@ -32,8 +32,8 @@
 		"roave/security-advisories": "dev-master"
 	},
 	"suggest": {
-                "ext-ev": "*",
-                "ext-event": "*"
+		"ext-ev": "*",
+		"ext-event": "*"
 	},
 	"autoload": {
 		"psr-4": {
